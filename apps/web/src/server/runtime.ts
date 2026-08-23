@@ -18,26 +18,29 @@
  * an operator fixing a config typo expects.
  */
 
-import { createAuth  } from "./auth/instance"
-import type {Auth} from "./auth/instance";
-import { createAudit  } from "./audit"
-import type {Audit} from "./audit";
-import { loadConfig  } from "./config/loader"
-import type {LoadedConfig} from "./config/loader";
+import { createAuth } from "./auth/instance"
+import type { Auth } from "./auth/instance"
+import { createAudit } from "./audit"
+import { createMailer } from "./email/mailer"
+import type { Mailer } from "./email/mailer"
+import type { Audit } from "./audit"
+import { loadConfig } from "./config/loader"
+import type { LoadedConfig } from "./config/loader"
 import type { IdpConfig } from "./config/derive"
-import { createDb  } from "./db/client"
-import type {DbHandle} from "./db/client";
+import { createDb } from "./db/client"
+import type { DbHandle } from "./db/client"
 import { loadDevEnv } from "./dev-env"
-import { createLogger  } from "./logger"
-import type {Logger} from "./logger";
-import { runMigrationPhase, runStartup  } from "./startup"
-import type {StartupResult} from "./startup";
+import { createLogger } from "./logger"
+import type { Logger } from "./logger"
+import { runMigrationPhase, runStartup } from "./startup"
+import type { StartupResult } from "./startup"
 
 export interface Runtime {
   config: IdpConfig
   database: DbHandle
   auth: Auth
   audit: Audit
+  mailer: Mailer
   logger: Logger
   /** What the OPS-2 sequence did, for the log and `/admin/system`. */
   startup: StartupResult
@@ -94,7 +97,8 @@ export async function buildRuntime(): Promise<Runtime> {
     })
 
     // Safe to construct now: the tables the plugins touch on init exist.
-    const auth = createAuth({ config, database, logger })
+    const mailer = createMailer({ config, logger })
+    const auth = createAuth({ config, database, logger, mailer })
     const audit = createAudit(database, logger)
 
     const startup = await runStartup(
@@ -107,6 +111,7 @@ export async function buildRuntime(): Promise<Runtime> {
       database,
       auth,
       audit,
+      mailer,
       logger,
       startup,
       configDir: dir,

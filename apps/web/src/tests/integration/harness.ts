@@ -26,6 +26,7 @@ import type { RoleEntry } from "@/server/config/schema/roles-schema"
 import { createDb, quoteIdentifier } from "@/server/db/client"
 import type { DbHandle } from "@/server/db/client"
 import { runMigrations } from "@/server/db/migrate"
+import { createCaptureMailer } from "@/server/email/mailer"
 import { createLogger } from "@/server/logger"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -74,6 +75,8 @@ export interface TestContext {
   config: IdpConfig
   database: DbHandle
   auth: ReturnType<typeof createAuth>
+  /** Capture transport: every e-mail the run would have sent (FR-MAIL-1). */
+  mailer: ReturnType<typeof createCaptureMailer>
   schemaName: string
   /** Drops the schema and closes the pool. */
   teardown: () => Promise<void>
@@ -127,11 +130,9 @@ export async function createTestContext(
     unlocked: true,
   })
 
-  const auth = createAuth({
-    config,
-    database,
-    logger: createLogger({ level: "error", write: () => {} }),
-  })
+  const logger = createLogger({ level: "error", write: () => {} })
+  const mailer = createCaptureMailer(config, logger)
+  const auth = createAuth({ config, database, logger, mailer })
 
   // Better Auth starts its plugin `init()` as soon as the instance exists, and
   // the OAuth provider seeds `oauth_resource` there. Awaiting it means the
@@ -143,6 +144,7 @@ export async function createTestContext(
     config,
     database,
     auth,
+    mailer,
     schemaName,
     teardown: async () => {
       await database.sql.unsafe(

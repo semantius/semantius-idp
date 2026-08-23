@@ -16,13 +16,8 @@
 
 import type { DbHandle } from "./db/client"
 import type { AuditAction } from "./auth/plugins/idp-plugin"
-import {
-  anonymizeIp,
-  redactFields
-  
-  
-} from "./logger"
-import type {LogFields, Logger} from "./logger";
+import { anonymizeIp, redactFields } from "./logger"
+import type { LogFields, Logger } from "./logger"
 
 export type AuditOutcome = "success" | "failure" | "denied"
 
@@ -77,7 +72,7 @@ export function createAudit(database: DbHandle, logger: Logger): Audit {
         ipAddress: anonymizeIp(event.ipAddress) ?? null,
         userAgent: event.userAgent ?? null,
         requestId: event.requestId ?? null,
-        metadata: (metadata ?? null),
+        metadata: metadata ?? null,
         createdAt: new Date(),
       })
     } catch (error) {

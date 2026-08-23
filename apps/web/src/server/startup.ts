@@ -22,8 +22,8 @@
 
 import { createLocalAccountIssuer } from "@better-auth/core/db"
 
-import { createAudit  } from "./audit"
-import type {Audit} from "./audit";
+import { createAudit } from "./audit"
+import type { Audit } from "./audit"
 import type { IdpConfig } from "./config/derive"
 import { ConfigError } from "./config/errors"
 import type { DbHandle } from "./db/client"

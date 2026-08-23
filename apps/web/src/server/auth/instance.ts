@@ -22,10 +22,12 @@ import type { BetterAuthOptions } from "better-auth"
 
 import type { IdpConfig } from "../config/derive"
 import type { DbHandle } from "../db/client"
+import type { Mailer } from "../email/mailer"
 import type { Logger } from "../logger"
 import { APP_ROUTES, createBasePaths } from "../oidc/base-path"
 import { idpPlugin } from "./plugins/idp-plugin"
 import { buildDatabaseHooks } from "./options/database-hooks"
+import { buildEmailCallbacks } from "./options/email-callbacks"
 import { buildBeforeHook } from "./options/hooks"
 import { buildSocialProviders } from "./options/social"
 import { userAdditionalFields } from "./options/user-fields"
@@ -38,6 +40,11 @@ export interface AuthDeps {
    */
   database?: DbHandle
   logger?: Logger
+  /**
+   * Sends the FR-MAIL-1 templates. Omitted during schema generation, and a
+   * disabled mailer in degraded mode (FR-MAIL-2).
+   */
+  mailer?: Mailer
 }
 
 /** Seconds → the `maxAge`/`expiresIn` units Better Auth expects. */
@@ -48,6 +55,12 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
   const { config } = deps
   const paths = createBasePaths(config.base)
   const file = config.file
+  // FR-MAIL-2: without a transport there are no callbacks to register, so the
+  // features that depend on them cannot half-work.
+  const email =
+    deps.mailer && deps.mailer.enabled
+      ? buildEmailCallbacks({ config, mailer: deps.mailer })
+      : undefined
 
   return {
     appName: file.site.name,
@@ -77,6 +90,9 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
         // FR-ACCT-1: changing an address always verifies the new one. With no
         // transport the whole feature is hidden, so this never runs.
         enabled: config.emailEnabled,
+        ...(email
+          ? { sendChangeEmailConfirmation: email.sendChangeEmailConfirmation }
+          : {}),
       },
       deleteUser: {
         // FR-ACCT-1: no self-deletion; admins delete (FR-ADMIN-2).
@@ -99,6 +115,12 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
       // FR-AUTH-3: a completed reset revokes every other session. OAuth token
       // revocation is layered on in M8 through `onPasswordReset`.
       revokeSessionsOnPasswordReset: true,
+      ...(email
+        ? {
+            sendResetPassword: email.sendResetPassword,
+            onPasswordReset: email.onPasswordReset,
+          }
+        : {}),
       // FR-SIGNUP-2: a fresh sign-up is `pending` and must not be signed in.
       autoSignIn: false,
       // SEC-10: Better Auth's default scrypt hashing is kept.
@@ -111,6 +133,7 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
       // FR-SIGNUP-2: verification precedes approval, so verifying must not sign
       // the user in.
       autoSignInAfterVerification: false,
+      ...(email ? { sendVerificationEmail: email.sendVerificationEmail } : {}),
     },
 
     // ------------------------------------------------------------- accounts --

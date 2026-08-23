@@ -4,10 +4,10 @@ import { eq } from "drizzle-orm"
 
 import { runStartup, splitRoles } from "@/server/startup"
 import { createAudit } from "@/server/audit"
-import { createLogger  } from "@/server/logger"
-import type {LogFields} from "@/server/logger";
-import { createTestContext  } from "./harness"
-import type {TestContext} from "./harness";
+import { createLogger } from "@/server/logger"
+import type { LogFields } from "@/server/logger"
+import { createTestContext } from "./harness"
+import type { TestContext } from "./harness"
 
 /**
  * OPS-2 and FR-ADMIN-1.
@@ -34,12 +34,7 @@ describe("startup sequence (OPS-2)", () => {
           level: string
           msg: string
         } & LogFields
-        const {
-          level,
-          msg,
-          time: _t,
-          ...fields
-        } = record
+        const { level, msg, time: _t, ...fields } = record
         lines.push({ level, msg, fields })
       },
     })

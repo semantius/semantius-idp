@@ -1,0 +1,751 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "server": {
+      "type": "object",
+      "properties": {
+        "baseUrl": {
+          "type": "string",
+          "description": "Issuer. Scheme + host[:port] + optional path, no trailing slash. Every absolute URL the IdP emits derives from this value only."
+        },
+        "host": {
+          "default": "0.0.0.0",
+          "description": "Listen address. Also settable with HOST.",
+          "type": "string"
+        },
+        "port": {
+          "description": "Listen port. Also settable with PORT.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "trustProxy": {
+          "description": "Honour X-Forwarded-* from the immediate upstream (true) or from the listed CIDR ranges. Client IP is the rightmost untrusted hop.",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[0-9a-fA-F.:]+\\/\\d{1,3}$"
+              }
+            }
+          ]
+        },
+        "trustedOrigins": {
+          "description": "CSRF origin allow-list. Defaults to [server.baseUrl].",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "allowInsecureHttp": {
+          "description": "Permit a non-https baseUrl outside localhost. Development only.",
+          "type": "boolean"
+        },
+        "shutdownTimeoutSeconds": {
+          "description": "SIGTERM drain budget.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 300
+        }
+      },
+      "required": [
+        "baseUrl"
+      ],
+      "additionalProperties": false
+    },
+    "secret": {
+      "type": "string",
+      "description": "≥ 32 random bytes. Fallback env: BETTER_AUTH_SECRET. Must be a placeholder in production."
+    },
+    "database": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Postgres connection string. Fallback env: DATABASE_URL."
+        },
+        "schema": {
+          "default": "idp",
+          "description": "All IdP tables and the drizzle migrations table live here; nothing is created in `public`.",
+          "type": "string",
+          "pattern": "^[a-z_][a-z0-9_]*$"
+        },
+        "ssl": {
+          "description": "Overrides the connection string's sslmode. Defaults to `require` unless the host is localhost.",
+          "type": "string",
+          "enum": [
+            "disable",
+            "require",
+            "verify-full"
+          ]
+        },
+        "sslCa": {
+          "description": "PEM certificate authority, typically `${file:/run/secrets/ca.pem}`.",
+          "type": "string"
+        },
+        "poolMax": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "connectTimeoutSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300
+        },
+        "migrateOnBoot": {
+          "description": "Also settable with IDP_MIGRATE_ON_BOOT.",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "additionalProperties": false
+    },
+    "site": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Branding name; also the default TOTP issuer label."
+        },
+        "logo": {
+          "description": "Path under `branding/` or an absolute URL.",
+          "type": "string"
+        },
+        "favicon": {
+          "type": "string"
+        },
+        "supportEmail": {
+          "type": "string",
+          "format": "email",
+          "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+        },
+        "termsUrl": {
+          "type": "string"
+        },
+        "privacyUrl": {
+          "type": "string"
+        },
+        "theme": {
+          "default": "system",
+          "type": "string",
+          "enum": [
+            "system",
+            "light",
+            "dark"
+          ]
+        },
+        "defaultLocale": {
+          "default": "en-US",
+          "description": "Only `en-US` ships in v1 (FR-I18N-1).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "email": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "resend": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "apiKey": {
+              "description": "Absent ⇒ degraded mode: every e-mail feature is disabled (FR-MAIL-2).",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "from": {
+          "description": "Required whenever an API key is configured.",
+          "type": "string"
+        },
+        "replyTo": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "signUp": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Governs password and social registration alike (FR-SIGNUP-1).",
+          "type": "boolean"
+        },
+        "requireApproval": {
+          "description": "Self-registrations land as `pending` (FR-SIGNUP-2).",
+          "type": "boolean"
+        },
+        "allowedEmailDomains": {
+          "description": "Empty = no restriction. Admin-created users always bypass it.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "auth": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "requireEmailVerification": {
+          "description": "Gates password sign-in only. Forced false when e-mail is not configured.",
+          "type": "boolean"
+        },
+        "password": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "minLength": {
+              "type": "integer",
+              "minimum": 8,
+              "maximum": 128
+            },
+            "maxLength": {
+              "type": "integer",
+              "minimum": 12,
+              "maximum": 512
+            },
+            "breachCheck": {
+              "description": "Check the password against Have I Been Pwned at sign-up and change.",
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "passwordReset": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "tokenTtlMinutes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1440
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "session": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "expiresIn": {
+          "default": "7d",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "updateAge": {
+          "default": "1d",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "cookieCacheMinutes": {
+          "description": "Capped at 5 so revocations bite quickly (FR-AUTH-5).",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "freshAgeMinutes": {
+          "description": "Sensitive actions require a session fresher than this.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1440
+        },
+        "revokeOAuthTokensOnLogout": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "social": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "clientId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "clientSecret": {
+            "type": "string",
+            "minLength": 1
+          },
+          "syncProfile": {
+            "description": "Refresh profile fields from the provider on every sign-in (FR-SOC-4).",
+            "type": "boolean"
+          },
+          "allowedEmailDomains": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "tenantId": {
+            "description": "Required for `microsoft`: a tenant GUID or verified domain (FR-SOC-5).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "clientId",
+          "clientSecret"
+        ],
+        "additionalProperties": {}
+      }
+    },
+    "twoFactor": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "issuer": {
+          "description": "TOTP issuer label. Defaults to site.name.",
+          "type": "string"
+        },
+        "trustDeviceDays": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 365
+        }
+      },
+      "additionalProperties": false
+    },
+    "apiKeys": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "defaultExpiresIn": {
+          "default": "365d",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "maxExpiresIn": {
+          "default": "730d",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "tokenClientId": {
+          "default": "idp",
+          "description": "`azp` of JWTs exchanged from an API key (FR-KEY-3).",
+          "type": "string",
+          "minLength": 1
+        },
+        "tokenTtl": {
+          "default": 3600,
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "jwt": {
+      "type": "object",
+      "properties": {
+        "algorithm": {
+          "default": "ES256",
+          "description": "Neon validates ES256 and RS256 only; any other algorithm is rejected at startup.",
+          "type": "string",
+          "enum": [
+            "ES256",
+            "RS256"
+          ]
+        },
+        "audience": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ],
+          "description": "Default RFC 8707 resource, applied whenever a client sends no `resource` parameter. Becomes the JWT `aud`."
+        },
+        "includeUserData": {
+          "type": "boolean"
+        },
+        "userClaims": {
+          "description": "Subset selector over {email, name, given_name, family_name, roles}. Defaults to all of them.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "email",
+              "name",
+              "given_name",
+              "family_name",
+              "roles"
+            ]
+          }
+        },
+        "claims": {
+          "description": "Static claims merged into access tokens, e.g. `{ \"role\": \"authenticated\" }` for Neon/PostgREST.",
+          "default": {},
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          }
+        },
+        "claimsInIdToken": {
+          "type": "boolean"
+        },
+        "rotationInterval": {
+          "default": "90d",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "gracePeriod": {
+          "description": "Retired keys stay published for this long. Defaults to the longest token lifetime + 1 h.",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "sessionToken": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "ttl": {
+              "default": 3600,
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "oauth": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "accessTokenTtl": {
+          "default": "15m",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "idTokenTtl": {
+          "default": "1h",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "codeTtl": {
+          "default": "60s",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "refreshTokenTtl": {
+          "default": "30d",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "refreshTokenMaxLifetime": {
+          "default": "90d",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "identifier": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "allowedScopes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "accessTokenTtl": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "identifier"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "reconcile": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "prune": {
+              "description": "Delete rows for clients no longer in the file instead of disabling them (FR-OIDC-2).",
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "admin": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "adminRoles": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "bootstrap": {
+          "description": "Created once, iff no user holds an admin role (FR-ADMIN-1). Empty values skip bootstrap with a warning.",
+          "type": "object",
+          "properties": {
+            "email": {
+              "default": "",
+              "type": "string"
+            },
+            "password": {
+              "default": "",
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "allowImpersonation": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "rateLimit": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "storage": {
+          "default": "database",
+          "type": "string",
+          "enum": [
+            "database",
+            "memory"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "logging": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "level": {
+          "default": "info",
+          "type": "string",
+          "enum": [
+            "trace",
+            "debug",
+            "info",
+            "warn",
+            "error"
+          ]
+        },
+        "format": {
+          "default": "json",
+          "type": "string",
+          "enum": [
+            "json",
+            "pretty"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "cleanup": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "intervalMinutes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1440
+        }
+      },
+      "additionalProperties": false
+    },
+    "audit": {
+      "default": {},
+      "type": "object",
+      "properties": {
+        "retentionDays": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3650
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "server",
+    "secret",
+    "database",
+    "site",
+    "jwt"
+  ],
+  "additionalProperties": false,
+  "title": "semantius-idp config.json"
+}

@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Nightly dependency audit (SEC-9). Runs on the default branch only.
+    - cron: "17 3 * * *"
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Everything the IdP runs is executed by Bun; Node is only here for CI tooling.
+  BUN_VERSION: "1.3.12"
+  NODE_VERSION: "22"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Static checks — the fast gate every pull request has to clear first.
+  # ---------------------------------------------------------------------------
+  check:
+    if: github.event_name != 'schedule'
+    name: lint · typecheck · unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Refuse floating dependency ranges (SEC-9)
+        # Every dependency is pinned exactly; `latest` and `^`/`~` ranges are how
+        # a supply-chain change sneaks into a release.
+        run: bun run scripts/check-pinned-deps.ts
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Config JSON Schemas are up to date (CFG-1)
+        run: pnpm --filter web run config:schemas -- --check
+
+  # ---------------------------------------------------------------------------
+  # Nightly dependency audit (SEC-9).
+  # ---------------------------------------------------------------------------
+  audit:
+    if: github.event_name == 'schedule'
+    name: pnpm audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --audit-level moderate

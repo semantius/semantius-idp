@@ -1,0 +1,215 @@
+{
+  // Editor completion and inline validation. `$schema` is exempt from the
+  // unknown-key rule; every other unknown key is a startup error (CFG-1/5).
+  "$schema": "./config.schema.json",
+
+  // ---------------------------------------------------------------------
+  // Placeholders (CFG-2). Inside string values only, never in keys:
+  //
+  //   ${env:NAME}            required environment variable
+  //   ${env:NAME:-default}   with a default, also used when NAME is empty
+  //   ${file:/abs/path}      file contents, one trailing newline trimmed
+  //   $${                    a literal "${"
+  //
+  // In production (an https baseUrl) every secret MUST come from a
+  // placeholder — a literal secret in a config file is a startup error.
+  // ---------------------------------------------------------------------
+
+  "server": {
+    // The issuer. Scheme + host[:port] + optional path, no trailing slash.
+    // Everything absolute the IdP emits — discovery, e-mail links, social
+    // callbacks, cookie Path — derives from this and never from the Host
+    // header (SEC-1). A path is supported: "https://apps.example.com/idp".
+    "baseUrl": "${env:IDP_BASE_URL:-http://localhost:3000}",
+    "host": "0.0.0.0",
+    "port": 3000,
+
+    // Behind Caddy or any reverse proxy set this so X-Forwarded-* is honoured.
+    // `true` trusts the immediate upstream; a CIDR list trusts those ranges.
+    "trustProxy": false,
+
+    // CSRF origin allow-list. Defaults to [baseUrl]; add other origins only if
+    // a browser app on a different origin posts to the IdP.
+    // "trustedOrigins": ["https://apps.example.com"],
+
+    // Development only: allow a non-https baseUrl outside localhost.
+    "allowInsecureHttp": false,
+    "shutdownTimeoutSeconds": 10
+  },
+
+  // At least 32 random bytes: `openssl rand -base64 48`.
+  // Rotating it invalidates every session AND makes the encrypted signing keys
+  // in `jwks` undecryptable — see the key-rotation runbook before you do.
+  "secret": "${env:IDP_SECRET}",
+
+  "database": {
+    "url": "${env:DATABASE_URL}",
+    // Every table, including drizzle's migration bookkeeping, lives here.
+    // Nothing is created in `public`.
+    "schema": "idp",
+    // "ssl": "require",           // disable | require | verify-full
+    // "sslCa": "${file:/run/secrets/db_ca.pem}",
+    "poolMax": 10,
+    "connectTimeoutSeconds": 30,
+    "migrateOnBoot": true
+  },
+
+  "site": {
+    "name": "Example IdP",
+    // "logo": "branding/logo.svg",
+    // "favicon": "branding/favicon.ico",
+    // "supportEmail": "support@example.com",
+    // "termsUrl": "https://example.com/terms",
+    // "privacyUrl": "https://example.com/privacy",
+    "theme": "system",
+    "defaultLocale": "en-US"
+  },
+
+  // Without an API key the IdP runs in degraded mode: password reset, e-mail
+  // verification and all notifications are disabled and hidden in the UI, and
+  // `auth.requireEmailVerification` is forced to false (FR-MAIL-2).
+  "email": {
+    "resend": { "apiKey": "${env:RESEND_API_KEY:-}" },
+    "from": "Example IdP <idp@example.com>"
+    // "replyTo": "support@example.com"
+  },
+
+  "signUp": {
+    // Governs password *and* social registration. Off = invite-only: admins
+    // create accounts, and social sign-in works only for identities that
+    // already exist.
+    "enabled": false,
+    "requireApproval": true,
+    // "allowedEmailDomains": ["example.com"]
+    "allowedEmailDomains": []
+  },
+
+  "auth": {
+    "requireEmailVerification": true,
+    "password": { "minLength": 12, "maxLength": 128, "breachCheck": false },
+    "passwordReset": { "tokenTtlMinutes": 60 }
+  },
+
+  "session": {
+    "expiresIn": "7d",
+    "updateAge": "1d",
+    // Capped at 5 so a revocation takes effect quickly.
+    "cookieCacheMinutes": 5,
+    // Sensitive actions (password/e-mail change, 2FA, API keys, admin writes)
+    // require a session fresher than this, or a re-authentication.
+    "freshAgeMinutes": 15,
+    "revokeOAuthTokensOnLogout": false
+  },
+
+  // Any Better Auth built-in provider id. The callback URL is always
+  // {baseUrl}/api/auth/callback/<providerId>. Account linking does not exist:
+  // an identity is (providerId, provider subject) and nothing else.
+  "social": {
+    // "google": {
+    //   "enabled": true,
+    //   "clientId": "${env:GOOGLE_CLIENT_ID}",
+    //   "clientSecret": "${env:GOOGLE_CLIENT_SECRET}",
+    //   "syncProfile": true
+    // },
+    // "microsoft": {
+    //   "enabled": true,
+    //   "clientId": "${env:ENTRA_CLIENT_ID}",
+    //   "clientSecret": "${env:ENTRA_CLIENT_SECRET}",
+    //   // Required. A tenant GUID or a verified domain — "common",
+    //   // "organizations" and "consumers" are rejected.
+    //   "tenantId": "${env:ENTRA_TENANT_ID}"
+    // }
+  },
+
+  "twoFactor": {
+    "enabled": true,
+    // "issuer": "Example IdP",   // defaults to site.name
+    "trustDeviceDays": 30
+  },
+
+  "apiKeys": {
+    "enabled": true,
+    "defaultExpiresIn": "365d",
+    "maxExpiresIn": "730d",
+    // `azp` of a JWT exchanged from an API key.
+    "tokenClientId": "idp",
+    "tokenTtl": 3600
+  },
+
+  "jwt": {
+    // Neon and PostgREST validate ES256 and RS256 only.
+    "algorithm": "ES256",
+
+    // REQUIRED. The default RFC 8707 resource: it becomes the `aud` of every
+    // access token whose client sent no `resource` parameter, which is what
+    // makes tokens JWTs that Neon accepts out of the box. Usually the issuer.
+    "audience": "${env:IDP_BASE_URL:-http://localhost:3000}",
+
+    "includeUserData": true,
+    // "userClaims": ["email", "name", "given_name", "family_name", "roles"],
+
+    // Static claims merged into access tokens. Neon/Supabase RLS setups
+    // usually want a constant `role`; the per-user roles are the `roles` array.
+    "claims": {
+      // "role": "authenticated"
+    },
+    "claimsInIdToken": false,
+
+    "rotationInterval": "90d",
+    // Retired keys stay published this long. Defaults to the longest token
+    // lifetime + 1 h, which clears Neon's ≤ 1 h JWKS cache.
+    // "gracePeriod": "91d",
+
+    // TTL of the session-JWT from GET {baseUrl}/api/auth/token.
+    "sessionToken": { "ttl": 3600 }
+  },
+
+  "oauth": {
+    "accessTokenTtl": "15m",
+    "idTokenTtl": "1h",
+    "codeTtl": "60s",
+    "refreshTokenTtl": "30d",
+    "refreshTokenMaxLifetime": "90d",
+
+    // Clients may only reference scopes declared here.
+    "scopes": ["openid", "profile", "email", "offline_access"],
+
+    // Extra API audiences a client may request with `resource=`. The default
+    // audience above is registered automatically.
+    "resources": [
+      // { "identifier": "https://api.example.com",
+      //   "name": "Example API",
+      //   "allowedScopes": ["openid", "profile", "email"],
+      //   "accessTokenTtl": "5m" }
+    ],
+
+    // false: a client removed from oauth_clients.json is disabled and its
+    // tokens revoked. true: its rows are deleted instead.
+    "reconcile": { "prune": false }
+  },
+
+  "admin": {
+    "adminRoles": ["admin"],
+
+    // Created once, and only while no user holds an admin role. The account is
+    // active, verified and must change its password at first sign-in. Leave
+    // the variables unset after the first boot.
+    "bootstrap": {
+      "email": "${env:IDP_ADMIN_EMAIL:-}",
+      "password": "${env:IDP_ADMIN_PASSWORD:-}",
+      "name": "Bootstrap Admin"
+    },
+
+    "allowImpersonation": false
+  },
+
+  "rateLimit": {
+    "enabled": true,
+    // `database` survives restarts and is safe if a second replica appears.
+    "storage": "database"
+  },
+
+  "logging": { "level": "info", "format": "json" },
+  "cleanup": { "intervalMinutes": 60 },
+  "audit": { "retentionDays": 90 }
+}

@@ -1,0 +1,24 @@
+{
+  "$schema": "./roles.schema.json",
+
+  // The role catalog. Roles are labels for downstream applications — the IdP
+  // evaluates no permissions from them; it only decides who reaches /admin/*
+  // (via `admin.adminRoles` in config.json) and emits the user's roles as the
+  // `roles` array claim.
+  //
+  // Rules: names are unique and match ^[a-z0-9_-]{1,64}$ (no commas, because
+  // `user.role` stores several roles comma-separated), and exactly one entry
+  // sets `default: true` — that role is assigned at self-registration.
+  //
+  // Omit this file entirely to get the built-in catalog: admin + user(default).
+  // Editing it requires a restart. A role that disappears here is dropped from
+  // the claims of users who still carry it, with a warning at boot and a flag
+  // in the admin UI.
+
+  "roles": [
+    { "name": "admin", "description": "Full access to the admin UI and admin API." },
+    { "name": "user", "description": "Default role for every registered user.", "default": true }
+
+    // { "name": "billing", "description": "May read invoices in the billing app." }
+  ]
+}

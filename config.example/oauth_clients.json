@@ -1,0 +1,77 @@
+{
+  "$schema": "./oauth_clients.schema.json",
+
+  // This file is the source of truth for OAuth clients. At startup it is
+  // validated and reconciled into the database under an advisory lock:
+  // missing clients are inserted, changed ones updated (a changed secret is
+  // re-hashed, `createdAt` is preserved), and clients no longer listed here are
+  // disabled — or deleted when `oauth.reconcile.prune` is true — and their
+  // tokens and consents revoked. Dynamic client registration is off and the
+  // client CRUD endpoints are unreachable for every caller.
+  //
+  // Editing this file requires a restart.
+  //
+  // v1 supports the `authorization_code` (PKCE S256) and `refresh_token` grants
+  // only. There is no `client_credentials` and no `service` client type: for
+  // scripted access, issue the user a per-user API key and exchange it for a
+  // JWT at GET {baseUrl}/api/auth/token with an `x-api-key` header.
+
+  "clients": [
+    {
+      // Confidential server-side app. Authenticates at the token endpoint with
+      // client_secret_basic (default) or client_secret_post.
+      "clientId": "example-web",
+      "name": "Example Web App",
+      "type": "web",
+      "clientSecret": "${env:EXAMPLE_WEB_CLIENT_SECRET}",
+      "redirectUris": ["https://app.example.com/auth/callback"],
+      "postLogoutRedirectUris": ["https://app.example.com/"],
+      "scopes": ["openid", "profile", "email", "offline_access"],
+
+      // Optional: overrides jwt.audience for this client's access tokens.
+      // "audience": "https://api.example.com",
+
+      // File clients were configured by an admin, so consent is skipped
+      // unless the client asks for it with prompt=consent.
+      "skipConsent": true,
+      "enableEndSession": true
+    },
+
+    {
+      // Public single-page app: no secret, PKCE S256 required.
+      "clientId": "example-spa",
+      "name": "Example SPA",
+      "type": "spa",
+      "redirectUris": ["https://spa.example.com/callback", "http://localhost:5173/callback"],
+      "postLogoutRedirectUris": ["https://spa.example.com/"],
+      "scopes": ["openid", "profile", "email", "offline_access"]
+    },
+
+    {
+      // Native/mobile app. Private-use schemes and loopback redirects are
+      // allowed for this type only.
+      "clientId": "example-mobile",
+      "name": "Example Mobile",
+      "type": "native",
+      "redirectUris": ["com.example.app:/oauth2redirect", "http://127.0.0.1/callback"],
+      "enableEndSession": false,
+      "scopes": ["openid", "profile", "email", "offline_access"]
+    },
+
+    {
+      // First-party app: it runs on the *same host* as the IdP, so it shares
+      // the host-only session cookie and can call
+      // GET {baseUrl}/api/auth/token to obtain a JWT for the current session.
+      // Every redirect URI must be on the issuer origin — which is exactly why
+      // the sub-path deployment exists: put the IdP at
+      // https://apps.example.com/idp and the app at https://apps.example.com/dashboard.
+      "clientId": "example-firstparty",
+      "name": "Internal Dashboard",
+      "type": "web",
+      "firstParty": true,
+      "clientSecret": "${env:EXAMPLE_FIRSTPARTY_CLIENT_SECRET}",
+      "redirectUris": ["${env:IDP_ORIGIN:-http://localhost:3000}/dashboard/callback"],
+      "postLogoutRedirectUris": ["${env:IDP_ORIGIN:-http://localhost:3000}/dashboard"]
+    }
+  ]
+}

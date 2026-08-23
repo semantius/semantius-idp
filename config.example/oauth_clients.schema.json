@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "clients": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "clientId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "pattern": "^[A-Za-z0-9._~-]+$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "type": {
+            "type": "string"
+          },
+          "clientSecret": {
+            "description": "Confidential (`web`) clients only. Use a `${env:…}` placeholder; ≥ 32 characters.",
+            "type": "string"
+          },
+          "tokenEndpointAuthMethod": {
+            "type": "string",
+            "enum": [
+              "client_secret_basic",
+              "client_secret_post",
+              "none"
+            ]
+          },
+          "firstParty": {
+            "description": "Same-host app that may use the session-JWT endpoint (FR-OIDC-14).",
+            "type": "boolean"
+          },
+          "redirectUris": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "postLogoutRedirectUris": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "scopes": {
+            "description": "Must be a subset of `oauth.scopes`.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "audience": {
+            "description": "Per-client default audience; overrides `jwt.audience` for this client (FR-OIDC-6).",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          },
+          "grantTypes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "responseTypes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "const": "code"
+            }
+          },
+          "requirePKCE": {
+            "type": "boolean"
+          },
+          "skipConsent": {
+            "description": "File clients were configured by an admin, so consent is skipped by default.",
+            "type": "boolean"
+          },
+          "enableEndSession": {
+            "description": "Requires at least one `postLogoutRedirectUris` entry.",
+            "type": "boolean"
+          },
+          "resourceServer": {
+            "description": "May introspect tokens it is an audience for, not only its own (FR-OIDC-4).",
+            "type": "boolean"
+          },
+          "disabled": {
+            "type": "boolean"
+          },
+          "uri": {
+            "type": "string"
+          },
+          "icon": {
+            "type": "string"
+          },
+          "contacts": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "tos": {
+            "type": "string"
+          },
+          "policy": {
+            "type": "string"
+          },
+          "metadata": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string"
+            },
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "clientId",
+          "type"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false,
+  "title": "semantius-idp oauth_clients.json"
+}

@@ -3,7 +3,6 @@ node_modules
 dist
 dist-ssr
 *.local
-.env*
 .tanstack
 .wrangler
 .output
@@ -11,8 +10,21 @@ dist-ssr
 __unconfig*
 todos.json
 
+# env: never commit real values, but the example must be tracked
+.env
+.env.*
+!.env.example
+
+# local operator config (config.example/ is tracked)
+/config/
+
 # turbo
 .turbo
 
 # typescript
 *.tsbuildinfo
+
+# tests
+coverage
+playwright-report
+test-results

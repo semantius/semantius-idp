@@ -133,6 +133,12 @@ export async function createTestContext(
     logger: createLogger({ level: "error", write: () => {} }),
   })
 
+  // Better Auth starts its plugin `init()` as soon as the instance exists, and
+  // the OAuth provider seeds `oauth_resource` there. Awaiting it means the
+  // schema is still around when that query runs — the same reason the runtime
+  // migrates before constructing the instance at all.
+  await auth.$context
+
   return {
     config,
     database,

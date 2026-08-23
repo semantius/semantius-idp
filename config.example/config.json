@@ -44,8 +44,16 @@
 
   "database": {
     "url": "${env:DATABASE_URL}",
+
+    // Required when `url` points at a transaction-mode connection pooler
+    // (Neon's `-pooler` endpoint, PgBouncer): session advisory locks do not
+    // hold through one, and startup, migrations, the CLI and the cleanup job
+    // all rely on them. Give the direct endpoint here.
+    // "directUrl": "${env:DIRECT_DATABASE_URL}",
+
     // Every table, including drizzle's migration bookkeeping, lives here.
-    // Nothing is created in `public`.
+    // Nothing is created in `public`. Changing it is enough — the migrator
+    // retargets the committed SQL.
     "schema": "idp",
     // "ssl": "require",           // disable | require | verify-full
     // "sslCa": "${file:/run/secrets/db_ca.pem}",

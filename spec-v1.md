@@ -260,7 +260,8 @@ Template inventory (HTML + text, branded from `site.*`, links built from `baseUr
 | `server.shutdownTimeoutSeconds` | int | `10` | |
 | `secret` | string | — **req** | ≥ 32 random bytes; fallback env `BETTER_AUTH_SECRET`; placeholder-only in production. |
 | `database.url` | string | — **req** | Postgres connection string; fallback env `DATABASE_URL`; `sslmode` honoured. |
-| `database.schema` | string | `idp` | All IdP tables + drizzle migrations table live here; created on migrate; nothing in `public` (Q16, risk R8). |
+| `database.directUrl` | string | — | Connection string for every step that takes a **session advisory lock** — startup, migrations, `idp *`, the cleanup job. **Required when `database.url` points at a transaction-mode connection pooler** (Neon `-pooler`, PgBouncer): session locks do not hold through one (verified, S4/D27). Fallback env `DIRECT_DATABASE_URL`; startup warns when the URL looks pooled and this is unset. |
+| `database.schema` | string | `idp` | All IdP tables + drizzle migrations table live here; created on migrate; nothing in `public` (Q16, risk R8). Resolved at **runtime**: the Drizzle tables are built from this value and the migrator retargets the schema identifier in the committed SQL. |
 | `database.ssl` | enum | `require` off-localhost | `disable\|require\|verify-full`; overrides URL `sslmode` when set; `database.sslCa` (PEM or `${file:}`). |
 | `database.poolMax` | int | `10` | + `database.connectTimeoutSeconds`. |
 | `database.migrateOnBoot` | bool | `true` | Also env `IDP_MIGRATE_ON_BOOT`. |
@@ -438,6 +439,7 @@ Template inventory (HTML + text, branded from `site.*`, links built from `baseUr
 | D23 | Logout endpoint clears cookie; first-party = same-host client | FR-AUTH-6, FR-OIDC-14 |
 | D24 | Social profile-sync e-mail collision **blocks the sign-in** (neutral refusal + `social.profile_conflict`), rather than silently skipping the update | FR-SOC-4 |
 | D25 | **No** startup warning for "social enabled while sign-up off"; the "unverified open registration" warning stays | FR-SIGNUP-4 |
+| D27 | **`database.directUrl`** added: every advisory-locked step (startup, migrations, CLI, cleanup) uses it, and it is required whenever `database.url` is a transaction-mode pooler. Forced by spike S4, which showed session locks do not hold through Neon's `-pooler` endpoint while they do through the direct one | CFG-4, OPS-2/5/8, §13 R8 |
 | D26 | **No machine-to-machine support in v1**: the `client_credentials` grant, the `service` client type, `clientCredentialsScopes` and `oauth.m2mAccessTokenTtl` are removed; "API keys" = per-user keys (FR-KEY) only | §1.2/1.3, §2, §3, FR-OIDC-1/3/7, CFG-4, CFG-5, SEC-6, TST-4, DOC-3, supersedes D3 |
 
 ### 12.2 Q&A resolutions (owner, 2026-08-23)
@@ -489,6 +491,7 @@ V1 Better Auth latest = 1.7.1 · V2 no per-entity repository seam, no roles tabl
 | R6 | Approval/2FA/forced-change/consent continuation order with the pending authorize request held ≤ 10 min; async approval never resumes the flow. | — (design constraint; verify hooks support it). |
 | R7 | Profile sync without linking (update on `(providerId, accountId)`; collision skips update only) implementable via Better Auth hooks. | Custom post-sign-in sync step. |
 | R8 | `database.schema`: postgres driver `search_path` + drizzle-kit `migrationsSchema` keeps CLI output untouched and everything in `idp`. | Post-process generated schema to `pgSchema()`. |
+| ~~R8~~ | **Closed by spike S4 (2026-08-23).** `search_path` is *not* a workable mechanism: Neon's pooled endpoint silently drops the startup parameter. Resolved instead by generating schema-qualified tables from a factory taking `database.schema`, plus a migrator that retargets the schema identifier — see `docs/spikes/s4-schema-placement.md`. The same spike found session advisory locks do **not** hold through the pooler, which is why `database.directUrl` exists (D27). |
 | R9 | V8 client-field/option inventory read from `main` — re-verify against the installed 1.7.1 types before freezing the client JSON schema. | Adjust the schema mapping. |
 | R10 | Confirm auto-emitted claims (`jti`, `client_id`, `azp`, `sid`), the exact reserved list and the `customAccessTokenClaims` context (session/client available). | Add missing claims via a token-response hook. |
 | R11 | JWKS rotation publishes the new key before it signs. | Rotate = create + publish now, sign after a propagation delay ≥ Neon's 1 h cache. |

@@ -13,13 +13,14 @@
     "test": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
     "test:e2e": "playwright test",
-    "db:generate-schema": "better-auth generate --config src/server/auth/cli-config.ts --output src/server/db/schema/auth-schema.ts -y",
+    "db:generate-schema": "bun run scripts/generate-auth-schema.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun run src/cli/index.ts migrate",
     "config:schemas": "bun run scripts/export-json-schemas.ts"
   },
   "dependencies": {
     "@better-auth/api-key": "1.7.1",
+    "@better-auth/core": "1.7.1",
     "@better-auth/oauth-provider": "1.7.1",
     "@tailwindcss/vite": "4.3.0",
     "@tanstack/react-devtools": "0.10.5",
@@ -52,6 +53,7 @@
     "drizzle-kit": "0.31.10",
     "eslint": "9.39.4",
     "openid-client": "6.8.7",
+    "prettier": "3.8.3",
     "typescript": "6.0.3",
     "vite": "8.0.16",
     "vitest": "4.1.11"

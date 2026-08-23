@@ -108,6 +108,13 @@ const databaseSchema = z.strictObject({
     .string()
     .min(1)
     .describe("Postgres connection string. Fallback env: DATABASE_URL."),
+  directUrl: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "Connection string for steps that hold a session advisory lock — startup, migrations, the CLI and the cleanup job. Required when `database.url` points at a transaction-mode connection pooler (Neon's `-pooler` endpoint, PgBouncer), where session locks do not hold. Fallback env: DIRECT_DATABASE_URL."
+    ),
   schema: z
     .string()
     .regex(/^[a-z_][a-z0-9_]*$/, "Schema names must match [a-z_][a-z0-9_]*.")

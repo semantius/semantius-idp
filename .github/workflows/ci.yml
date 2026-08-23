@@ -58,6 +58,12 @@ jobs:
       - name: Config JSON Schemas are up to date (CFG-1)
         run: pnpm --filter web run config:schemas -- --check
 
+      - name: Database schema has not drifted (DM-1)
+        # Regenerates from the installed Better Auth and fails on any
+        # difference, so the committed migrations can never describe a schema
+        # the running code does not expect.
+        run: pnpm --filter web run db:generate-schema -- --check
+
   # ---------------------------------------------------------------------------
   # Nightly dependency audit (SEC-9).
   # ---------------------------------------------------------------------------

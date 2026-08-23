@@ -12,6 +12,7 @@
 
 import type { ConfigIssue, ConfigWarning } from "./errors"
 import { isLocalhostUrl } from "./derive"
+import { looksPooled } from "../db/client"
 import {
   RESERVED_CLAIM_NAMES,
   REJECTED_ENTRA_TENANTS,
@@ -76,6 +77,15 @@ export function runCrossChecks(input: CrossCheckInput): CrossCheckResult {
       pointer: "/secret",
       message: "`secret` must be at least 32 characters (32 random bytes).",
       hint: "Generate one with `openssl rand -base64 48`.",
+    })
+  }
+
+  // -------------------------------------------------------------- database --
+  if (looksPooled(config.database.url) && !config.database.directUrl) {
+    warnings.push({
+      code: "database.pooled_without_direct_url",
+      message:
+        "`database.url` looks like a transaction-mode connection pooler. Session advisory locks do not hold through one, so two instances starting together could migrate, reconcile or bootstrap concurrently. Set `database.directUrl` to the direct (non-pooled) endpoint.",
     })
   }
 

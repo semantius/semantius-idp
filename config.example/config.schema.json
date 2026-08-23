@@ -70,6 +70,11 @@
           "minLength": 1,
           "description": "Postgres connection string. Fallback env: DATABASE_URL."
         },
+        "directUrl": {
+          "description": "Connection string for steps that hold a session advisory lock — startup, migrations, the CLI and the cleanup job. Required when `database.url` points at a transaction-mode connection pooler (Neon's `-pooler` endpoint, PgBouncer), where session locks do not hold. Fallback env: DIRECT_DATABASE_URL.",
+          "type": "string",
+          "minLength": 1
+        },
         "schema": {
           "default": "idp",
           "description": "All IdP tables and the drizzle migrations table live here; nothing is created in `public`.",

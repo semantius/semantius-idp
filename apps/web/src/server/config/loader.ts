@@ -197,6 +197,8 @@ function applyEnvFallbacks(
     root.secret = env.BETTER_AUTH_SECRET
   if (database.url === undefined && env.DATABASE_URL)
     database.url = env.DATABASE_URL
+  if (database.directUrl === undefined && env.DIRECT_DATABASE_URL)
+    database.directUrl = env.DIRECT_DATABASE_URL
   if (database.migrateOnBoot === undefined && env.IDP_MIGRATE_ON_BOOT) {
     database.migrateOnBoot = env.IDP_MIGRATE_ON_BOOT
   }

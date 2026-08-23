@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest"
 
-import { deriveConfig  } from "@/server/config/derive"
-import type {IdpConfig} from "@/server/config/derive";
+import { deriveConfig } from "@/server/config/derive"
+import type { IdpConfig } from "@/server/config/derive"
 import { configFileSchema } from "@/server/config/schema/config-schema"
 import { BUILT_IN_ROLES } from "@/server/config/schema/roles-schema"
 import { createCaptureMailer, createMailer } from "@/server/email/mailer"

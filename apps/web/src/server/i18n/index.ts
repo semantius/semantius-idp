@@ -11,8 +11,8 @@
  *   → `site.defaultLocale`.
  */
 
-import { enUS  } from "./catalog/en-US"
-import type {Catalog} from "./catalog/en-US";
+import { enUS } from "./catalog/en-US"
+import type { Catalog } from "./catalog/en-US"
 
 export type { Catalog } from "./catalog/en-US"
 

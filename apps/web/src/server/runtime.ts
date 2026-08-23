@@ -98,8 +98,8 @@ export async function buildRuntime(): Promise<Runtime> {
 
     // Safe to construct now: the tables the plugins touch on init exist.
     const mailer = createMailer({ config, logger })
-    const auth = createAuth({ config, database, logger, mailer })
     const audit = createAudit(database, logger)
+    const auth = createAuth({ config, database, logger, mailer, audit })
 
     const startup = await runStartup(
       { config, database, locking, auth, logger },

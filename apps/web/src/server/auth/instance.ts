@@ -22,6 +22,7 @@ import type { BetterAuthOptions } from "better-auth"
 
 import type { IdpConfig } from "../config/derive"
 import type { DbHandle } from "../db/client"
+import type { Audit } from "../audit"
 import type { Mailer } from "../email/mailer"
 import type { Logger } from "../logger"
 import { APP_ROUTES, createBasePaths } from "../oidc/base-path"
@@ -45,6 +46,8 @@ export interface AuthDeps {
    * disabled mailer in degraded mode (FR-MAIL-2).
    */
   mailer?: Mailer
+  /** Writes the SEC-6 trail for the approval endpoints. */
+  audit?: Audit
 }
 
 /** Seconds → the `maxAge`/`expiresIn` units Better Auth expects. */
@@ -319,8 +322,9 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
       }),
 
       // DM-1: contributes `audit_log` and `pending_authorization` to the
-      // generated schema.
-      idpPlugin(),
+      // generated schema, plus the approval endpoints Better Auth has no
+      // equivalent for (FR-SIGNUP-2).
+      idpPlugin({ config, audit: deps.audit, mailer: deps.mailer }),
     ],
 
     // FR-SIGNUP-2/3, FR-AUTH-1: the approval gate, the domain restriction and

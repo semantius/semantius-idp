@@ -1,0 +1,211 @@
+import { createFileRoute, Link } from "@tanstack/react-router"
+
+import { Button } from "@workspace/ui/components/button"
+import { Separator } from "@workspace/ui/components/separator"
+
+import { AuthShell } from "@/components/auth/auth-shell"
+import {
+  FormAlert,
+  PasswordField,
+  TextField,
+} from "@/components/auth/form-parts"
+import { messageForErrorCode, messageForNoticeCode } from "@/lib/auth-errors"
+import { getCatalog } from "@/server/i18n"
+import {
+  callAuth,
+  errorCodeFor,
+  readForm,
+  redirectWithCookies,
+  safeReturnTo,
+  withError,
+} from "@/server/http/auth-proxy"
+import { APP_ROUTES } from "@/server/oidc/base-path"
+import { getRuntime } from "@/server/runtime"
+import { buildUiContext  } from "@/server/ui-context"
+import type {UiContext} from "@/server/ui-context";
+
+/**
+ * `/login` — password sign-in plus whichever social providers are configured
+ * (FR-AUTH-1, FR-ACCT-2).
+ *
+ * A plain form posting to this same route, so it works before hydration and
+ * without JavaScript. The POST forwards to Better Auth with the original
+ * headers, so the CSRF origin check applies unchanged (SEC-3), and answers with
+ * a 303 — a refresh cannot re-post a password.
+ *
+ * Failures redirect back with a **code**; the wording comes from the catalog.
+ * Wrong password and unknown address produce the same code (SEC-7).
+ */
+export const Route = createFileRoute("/login")({
+  loader: async ({ location }) => {
+    const runtime = await getRuntime()
+    const search = location.search as Record<string, string | undefined>
+    return {
+      ui: buildUiContext(
+        runtime.config,
+        runtime.config.file.site.defaultLocale
+      ),
+      error: search.error,
+      notice: search.notice,
+      returnTo: safeReturnTo(search.returnTo, ""),
+    }
+  },
+  component: LoginPage,
+  server: {
+    handlers: {
+      POST: async ({ request }) => {
+        const runtime = await getRuntime()
+        const form = await readForm(request)
+        const returnTo = safeReturnTo(form.returnTo, APP_ROUTES.account)
+        const here = `${runtime.config.base.basePath}${APP_ROUTES.login}`
+
+        const result = await callAuth(
+          runtime,
+          "/sign-in/email",
+          { email: form.email ?? "", password: form.password ?? "" },
+          request
+        )
+
+        if (!result.ok) {
+          const code = errorCodeFor(result)
+          // The status gate has its own pages rather than an inline message,
+          // because "wait for approval" and "you are suspended" are states, not
+          // input errors (FR-SIGNUP-2, FR-ADMIN-4).
+          if (code === "pending_approval") {
+            return redirectWithCookies(
+              `${runtime.config.base.basePath}${APP_ROUTES.pendingApproval}`
+            )
+          }
+          if (code === "banned") {
+            return redirectWithCookies(
+              `${runtime.config.base.basePath}${APP_ROUTES.banned}`
+            )
+          }
+          return redirectWithCookies(
+            withError(
+              returnTo
+                ? `${here}?returnTo=${encodeURIComponent(returnTo)}`
+                : here,
+              code
+            )
+          )
+        }
+
+        // FR-AUTH-4: a temporary password is changed before anything else
+        // completes, including an OAuth continuation.
+        const user = result.body.user as
+          | { mustChangePassword?: boolean }
+          | undefined
+        const destination = user?.mustChangePassword
+          ? `${runtime.config.base.basePath}${APP_ROUTES.changePassword}?forced=1&returnTo=${encodeURIComponent(returnTo)}`
+          : `${runtime.config.base.basePath}${returnTo}`
+
+        return redirectWithCookies(destination, result.cookies)
+      },
+    },
+  },
+})
+
+function LoginPage() {
+  const { ui, error, notice, returnTo } = Route.useLoaderData()
+  const t = getCatalog(ui.locale)
+
+  return (
+    <AuthShell ui={ui} title={t.auth.signIn.title}>
+      <FormAlert variant="default">{messageForNoticeCode(notice, t)}</FormAlert>
+      <FormAlert>{messageForErrorCode(error, t)}</FormAlert>
+
+      <form method="post" className="grid gap-4">
+        {returnTo ? (
+          <input type="hidden" name="returnTo" value={returnTo} />
+        ) : null}
+
+        <TextField
+          name="email"
+          type="email"
+          inputMode="email"
+          label={t.common.email}
+          autoComplete="username"
+          autoFocus
+        />
+        <PasswordField
+          name="password"
+          label={t.common.password}
+          autoComplete="current-password"
+          showLabel={t.common.showPassword}
+          hideLabel={t.common.hidePassword}
+        />
+
+        <Button type="submit" className="w-full">
+          {t.auth.signIn.submit}
+        </Button>
+      </form>
+
+      {/* FR-MAIL-2: with no transport there is nothing "forgot password" could do. */}
+      {ui.emailEnabled ? (
+        <p className="mt-4 text-sm">
+          <Link
+            to={APP_ROUTES.forgotPassword}
+            className="text-muted-foreground underline underline-offset-4"
+          >
+            {t.auth.signIn.forgotPassword}
+          </Link>
+        </p>
+      ) : null}
+
+      <SocialButtons
+        ui={ui}
+        label={t.auth.signIn.socialDivider}
+        withProvider={t.auth.signIn.withProvider}
+      />
+
+      {/* FR-SIGNUP-1: with sign-up off the link does not exist, and neither does the page. */}
+      {ui.signUpEnabled ? (
+        <p className="mt-6 text-sm text-muted-foreground">
+          {t.auth.signIn.noAccount}{" "}
+          <Link to={APP_ROUTES.signup} className="underline underline-offset-4">
+            {t.common.signUp}
+          </Link>
+        </p>
+      ) : null}
+    </AuthShell>
+  )
+}
+
+function SocialButtons({
+  ui,
+  label,
+  withProvider,
+}: {
+  ui: UiContext
+  label: string
+  withProvider: (provider: string) => string
+}) {
+  if (ui.socialProviders.length === 0) return null
+
+  return (
+    <>
+      <div className="my-6 flex items-center gap-3">
+        <Separator className="flex-1" />
+        <span className="text-xs text-muted-foreground">{label}</span>
+        <Separator className="flex-1" />
+      </div>
+      <div className="grid gap-2">
+        {ui.socialProviders.map((provider) => (
+          // A GET form rather than a link: the callback URL is fixed by the
+          // server, and the provider id is the only thing the browser chooses.
+          <form
+            key={provider.id}
+            method="post"
+            action={`${ui.basePath}/api/auth/sign-in/social`}
+          >
+            <input type="hidden" name="provider" value={provider.id} />
+            <Button type="submit" variant="outline" className="w-full">
+              {withProvider(provider.label)}
+            </Button>
+          </form>
+        ))}
+      </div>
+    </>
+  )
+}

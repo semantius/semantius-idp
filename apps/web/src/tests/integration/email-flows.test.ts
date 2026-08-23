@@ -2,8 +2,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 
 import { eq } from "drizzle-orm"
 
-import { authRequest, createTestContext  } from "./harness"
-import type {TestContext} from "./harness";
+import { authRequest, createTestContext } from "./harness"
+import type { TestContext } from "./harness"
 
 /**
  * FR-MAIL-1/2 and the verification and reset flows that depend on them

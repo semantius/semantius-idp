@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it } from "vitest"
 
 import { eq } from "drizzle-orm"
 
-import { runStartup, splitRoles } from "@/server/startup"
+import { runStartup } from "@/server/startup"
+import { splitRoles } from "@/server/role-utils"
 import { createAudit } from "@/server/audit"
 import { createLogger } from "@/server/logger"
 import type { LogFields } from "@/server/logger"

@@ -13,18 +13,16 @@
  */
 
 import type { IdpConfig } from "../config/derive"
-import { getCatalog  } from "../i18n"
-import type {Catalog} from "../i18n";
+import { getCatalog } from "../i18n"
+import type { Catalog } from "../i18n"
 import type { Logger } from "../logger"
 import { templates } from "./templates"
 import {
   createCaptureTransport,
   createDisabledTransport,
-  createResendTransport
-  
-  
+  createResendTransport,
 } from "./transport"
-import type {CaptureTransport, EmailTransport} from "./transport";
+import type { CaptureTransport, EmailTransport } from "./transport"
 
 export interface Mailer {
   readonly enabled: boolean

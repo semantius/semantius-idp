@@ -26,6 +26,7 @@ import type { RoleEntry } from "@/server/config/schema/roles-schema"
 import { createDb, quoteIdentifier } from "@/server/db/client"
 import type { DbHandle } from "@/server/db/client"
 import { runMigrations } from "@/server/db/migrate"
+import { createAudit } from "@/server/audit"
 import { createCaptureMailer } from "@/server/email/mailer"
 import { createLogger } from "@/server/logger"
 
@@ -132,7 +133,8 @@ export async function createTestContext(
 
   const logger = createLogger({ level: "error", write: () => {} })
   const mailer = createCaptureMailer(config, logger)
-  const auth = createAuth({ config, database, logger, mailer })
+  const audit = createAudit(database, logger)
+  const auth = createAuth({ config, database, logger, mailer, audit })
 
   // Better Auth starts its plugin `init()` as soon as the instance exists, and
   // the OAuth provider seeds `oauth_resource` there. Awaiting it means the

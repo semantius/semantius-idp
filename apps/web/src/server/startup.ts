@@ -31,6 +31,7 @@ import { withAdvisoryLock } from "./db/advisory-lock"
 import { migrationsAreCurrent, runMigrations } from "./db/migrate"
 import type { Logger } from "./logger"
 import type { Auth } from "./auth/instance"
+import { splitRoles } from "./role-utils"
 
 export interface StartupDeps {
   config: IdpConfig
@@ -226,15 +227,6 @@ async function warnAboutUnknownRoles(deps: StartupDeps): Promise<void> {
       }
     )
   }
-}
-
-/** `user.role` holds several roles comma-separated (FR-ROLE-2). */
-export function splitRoles(value: string | null | undefined): string[] {
-  if (!value) return []
-  return value
-    .split(",")
-    .map((role) => role.trim())
-    .filter((role) => role !== "")
 }
 
 /**

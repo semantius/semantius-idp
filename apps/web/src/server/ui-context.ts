@@ -1,0 +1,120 @@
+/**
+ * The configuration the public pages are allowed to know about.
+ *
+ * Route loaders send this to the browser, so it must contain nothing an
+ * anonymous visitor should not see: no secrets, no client secrets, no
+ * connection strings — only the capability flags that decide which controls
+ * render at all.
+ *
+ * Hiding a control is a real requirement, not cosmetics: with e-mail off,
+ * "forgot password" must not exist (FR-MAIL-2), and with sign-up off, `/signup`
+ * returns 404 and is unlinked (FR-SIGNUP-1).
+ */
+
+import type { IdpConfig } from "./config/derive"
+import { createBasePaths } from "./oidc/base-path"
+
+export interface SocialProviderView {
+  id: string
+  /** Human label for the button, e.g. `Google`. */
+  label: string
+}
+
+export interface UiContext {
+  siteName: string
+  logo?: string
+  theme: "system" | "light" | "dark"
+  supportEmail?: string
+  termsUrl?: string
+  privacyUrl?: string
+  locale: string
+
+  /** Prefix every in-app link with this so a sub-path deployment works (OPS-10). */
+  basePath: string
+
+  /** FR-SIGNUP-1: with sign-up off there is no link and no page. */
+  signUpEnabled: boolean
+  /** FR-SIGNUP-2: shown as a notice on the sign-up form. */
+  requireApproval: boolean
+  /** FR-MAIL-2: gates reset, verification and change-e-mail across the UI. */
+  emailEnabled: boolean
+  /** FR-AUTH-2: whether an unverified account can sign in. */
+  requireEmailVerification: boolean
+  /** FR-2FA-1. */
+  twoFactorEnabled: boolean
+  /** FR-KEY-1. */
+  apiKeysEnabled: boolean
+  /** Minimum password length, shown as an inline policy hint (FR-ACCT-2). */
+  passwordMinLength: number
+  /** FR-SOC-1: only providers that are actually configured render a button. */
+  socialProviders: SocialProviderView[]
+}
+
+/** Provider ids Better Auth ships, with the capitalisation their brand uses. */
+const PROVIDER_LABELS: Record<string, string> = {
+  google: "Google",
+  github: "GitHub",
+  microsoft: "Microsoft",
+  gitlab: "GitLab",
+  apple: "Apple",
+  discord: "Discord",
+  facebook: "Facebook",
+  linkedin: "LinkedIn",
+  spotify: "Spotify",
+  twitch: "Twitch",
+  twitter: "X",
+  dropbox: "Dropbox",
+  kick: "Kick",
+  reddit: "Reddit",
+  roblox: "Roblox",
+  tiktok: "TikTok",
+  vk: "VK",
+  zoom: "Zoom",
+  notion: "Notion",
+  salesforce: "Salesforce",
+  slack: "Slack",
+  linear: "Linear",
+  figma: "Figma",
+  huggingface: "Hugging Face",
+  atlassian: "Atlassian",
+  cognito: "Cognito",
+  paypal: "PayPal",
+  line: "LINE",
+  naver: "Naver",
+  kakao: "Kakao",
+}
+
+function labelFor(providerId: string): string {
+  return (
+    PROVIDER_LABELS[providerId] ??
+    providerId.charAt(0).toUpperCase() + providerId.slice(1)
+  )
+}
+
+export function buildUiContext(config: IdpConfig, locale: string): UiContext {
+  const paths = createBasePaths(config.base)
+  const file = config.file
+
+  return {
+    siteName: file.site.name,
+    logo: file.site.logo,
+    theme: file.site.theme,
+    supportEmail: file.site.supportEmail,
+    termsUrl: file.site.termsUrl,
+    privacyUrl: file.site.privacyUrl,
+    locale,
+    basePath: paths.basePath,
+
+    signUpEnabled: file.signUp.enabled,
+    requireApproval: file.signUp.requireApproval,
+    emailEnabled: config.emailEnabled,
+    requireEmailVerification: config.requireEmailVerification,
+    twoFactorEnabled: file.twoFactor.enabled,
+    apiKeysEnabled: file.apiKeys.enabled,
+    passwordMinLength: file.auth.password.minLength,
+
+    socialProviders: Object.entries(file.social)
+      .filter(([, provider]) => provider.enabled)
+      .map(([id]) => ({ id, label: labelFor(id) })),
+  }
+}

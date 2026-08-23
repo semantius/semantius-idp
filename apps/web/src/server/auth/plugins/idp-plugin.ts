@@ -1,19 +1,34 @@
 /**
- * The IdP's own Better Auth plugin (DM-1, SEC-6, FR-SIGNUP-2, FR-OIDC-9).
+ * The IdP's own Better Auth plugin (DM-1, SEC-6, FR-SIGNUP-2, FR-2FA-2, FR-OIDC-9).
  *
- * It exists mainly so the tables the IdP adds are part of the *generated*
- * schema rather than a hand-written addendum: a Better Auth plugin's `schema`
- * is picked up by `getAuthTables()`, so `audit_log` and `pending_authorization`
- * come out of the same generator as `user` and `session` and are covered by the
- * DM-1 drift gate.
+ * It exists for two reasons.
  *
- * The endpoints it adds are the ones Better Auth has no equivalent for:
- * approving and rejecting a pending sign-up (FR-SIGNUP-2) and resetting another
- * user's second factor (FR-2FA-2). They are added in M5/M10; the schema is
- * needed from M3 so migrations do not have to be rewritten later.
+ * **Schema.** A Better Auth plugin's `schema` is picked up by
+ * `getAuthTables()`, so `audit_log` and `pending_authorization` come out of the
+ * same generator as `user` and `session` and are covered by the DM-1 drift gate
+ * rather than being a hand-written addendum nobody regenerates.
+ *
+ * **Endpoints Better Auth has no equivalent for.** The admin plugin ships ban,
+ * impersonation and CRUD but no approval workflow (V6), so approve and reject
+ * live here — as endpoints rather than page-only logic, because FR-ADMIN-6 says
+ * the admin API is the documented management interface and the UI is one of its
+ * callers.
  */
 
+import {
+  APIError,
+  createAuthEndpoint,
+  createAuthMiddleware,
+  getAuthoritativeSessionFromCtx,
+} from "better-auth/api"
+import { z } from "zod"
+
 import type { BetterAuthPlugin } from "better-auth"
+
+import type { Audit } from "../../audit"
+import type { IdpConfig } from "../../config/derive"
+import type { Mailer } from "../../email/mailer"
+import { splitRoles } from "../../role-utils"
 
 /**
  * Append-only audit trail (SEC-6). No secrets are ever stored: `metadata`
@@ -83,16 +98,169 @@ const pendingAuthorizationSchema = {
 
 export const IDP_PLUGIN_ID = "idp"
 
+export interface IdpPluginOptions {
+  config: IdpConfig
+  /** Absent while the schema is generated, which needs no behaviour. */
+  audit?: Audit
+  mailer?: Mailer
+}
+
+export const IDP_ERROR_CODES = {
+  NOT_AN_ADMIN: "You do not have access to this.",
+  USER_NOT_FOUND: "No such user.",
+  NOT_PENDING: "That account is not waiting for a decision.",
+} as const
+
 /**
- * Contributes the IdP's tables. Endpoints are attached in later milestones;
- * keeping the plugin itself minimal means the generated schema is stable.
+ * Admin gate (FR-ROLE-3).
+ *
+ * Enforced here rather than in each handler so a new endpoint cannot forget it,
+ * and enforced against `admin.adminRoles` from the configuration rather than a
+ * hard-coded name — the catalog decides who is an admin.
  */
-export function idpPlugin(): BetterAuthPlugin {
+function adminOnly(config: IdpConfig) {
+  const adminRoles = new Set(config.adminRoles)
+  return createAuthMiddleware(async (ctx) => {
+    // Authoritative rather than cookie-cached: a role change or a revocation
+    // has to bite immediately on an admin endpoint, which is exactly the case
+    // the ≤ 5 min cookie cache of FR-AUTH-5 would otherwise delay.
+    const session = await getAuthoritativeSessionFromCtx(ctx)
+    if (!session?.user) {
+      throw new APIError("UNAUTHORIZED", {
+        message: IDP_ERROR_CODES.NOT_AN_ADMIN,
+      })
+    }
+    const roles = splitRoles((session.user as { role?: string | null }).role)
+    if (!roles.some((role) => adminRoles.has(role))) {
+      // Same wording an anonymous caller gets: the endpoint's existence is not
+      // a secret, but who holds admin is not confirmed either.
+      throw new APIError("FORBIDDEN", { message: IDP_ERROR_CODES.NOT_AN_ADMIN })
+    }
+    return { session }
+  })
+}
+
+interface UserRow {
+  id: string
+  email: string
+  status?: string | null
+  name?: string | null
+}
+
+/** Contributes the IdP's tables and its approval endpoints. */
+export function idpPlugin(options: IdpPluginOptions): BetterAuthPlugin {
+  const { config, audit, mailer } = options
+  const requireAdmin = adminOnly(config)
+
+  const approveUser = createAuthEndpoint(
+    "/idp/approve-user",
+    {
+      method: "POST",
+      body: z.object({ userId: z.string().min(1) }),
+      requireHeaders: true,
+      use: [requireAdmin],
+    },
+    async (ctx) => {
+      const actor = ctx.context.session.user
+      const user = (await ctx.context.internalAdapter.findUserById(
+        ctx.body.userId
+      )) as UserRow | null
+      if (!user)
+        throw new APIError("NOT_FOUND", {
+          message: IDP_ERROR_CODES.USER_NOT_FOUND,
+        })
+
+      // Idempotent for an already-active user, but a rejected one has to be
+      // approved deliberately rather than by a stale button.
+      if (user.status === "active") return ctx.json({ user })
+
+      const updated = await ctx.context.internalAdapter.updateUser(user.id, {
+        status: "active",
+        approvedAt: new Date(),
+        approvedBy: actor.id,
+      })
+
+      await audit?.record({
+        action: "signup.approved",
+        outcome: "success",
+        actorUserId: actor.id,
+        actorType: "session",
+        target: { type: "user", id: user.id },
+        ipAddress: ctx.request?.headers.get("x-forwarded-for"),
+        userAgent: ctx.request?.headers.get("user-agent"),
+        metadata: { previousStatus: user.status },
+      })
+
+      // FR-SIGNUP-2: the approval e-mail links to /login. It deliberately does
+      // not resume an OAuth flow — the user restarts from the application.
+      await mailer?.send("accountApproved", user.email)
+
+      return ctx.json({ user: updated })
+    }
+  )
+
+  const rejectUser = createAuthEndpoint(
+    "/idp/reject-user",
+    {
+      method: "POST",
+      body: z.object({
+        userId: z.string().min(1),
+        /** Whether to tell them. The rejection e-mail is optional (FR-MAIL-1). */
+        notify: z.boolean().optional(),
+      }),
+      requireHeaders: true,
+      use: [requireAdmin],
+    },
+    async (ctx) => {
+      const actor = ctx.context.session.user
+      const user = (await ctx.context.internalAdapter.findUserById(
+        ctx.body.userId
+      )) as UserRow | null
+      if (!user)
+        throw new APIError("NOT_FOUND", {
+          message: IDP_ERROR_CODES.USER_NOT_FOUND,
+        })
+
+      const updated = await ctx.context.internalAdapter.updateUser(user.id, {
+        status: "rejected",
+        approvedAt: null,
+        approvedBy: actor.id,
+      })
+
+      // FR-SIGNUP-2: the row stays, so the address remains reserved; and any
+      // session they somehow hold goes away now.
+      await ctx.context.internalAdapter.deleteUserSessions(user.id)
+
+      await audit?.record({
+        action: "signup.rejected",
+        outcome: "success",
+        actorUserId: actor.id,
+        actorType: "session",
+        target: { type: "user", id: user.id },
+        ipAddress: ctx.request?.headers.get("x-forwarded-for"),
+        userAgent: ctx.request?.headers.get("user-agent"),
+        metadata: {
+          previousStatus: user.status,
+          notified: ctx.body.notify === true,
+        },
+      })
+
+      if (ctx.body.notify === true)
+        await mailer?.send("accountRejected", user.email)
+
+      return ctx.json({ user: updated })
+    }
+  )
+
   return {
     id: IDP_PLUGIN_ID,
     schema: {
       ...auditLogSchema,
       ...pendingAuthorizationSchema,
+    },
+    endpoints: {
+      approveUser,
+      rejectUser,
     },
   } satisfies BetterAuthPlugin
 }

@@ -1,10 +1,10 @@
 /**
  * Calling Better Auth from a server route that handles an HTML form.
  *
- * The public pages are plain `<form method="post">` — no JavaScript required to
- * sign in. That is a deliberate choice for an identity provider: the login page
- * is the one page that must work when everything else is broken, and FR-ACCT-2
- * asks for no JS flash on first paint.
+ * The public pages are plain `<form method="post">`, so a sign-in is a real
+ * form submission rather than a scripted fetch. Not because scripting-off has
+ * to work — it does not, D31 — but because it keeps the login page correct on
+ * the first paint, which is what FR-ACCT-2's "no JS flash" asks for.
  *
  * So the flow is: browser posts form-encoded fields → this module turns them
  * into the JSON request Better Auth expects, forwards the original headers so

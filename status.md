@@ -68,7 +68,7 @@ the field wrapper, with the two icon states swapped by `peer-checked:`.
 - `aria-label` that changes with state, and a real focus ring — it is a control,
   so it must be reachable and announced
 - ~~still works with JavaScript disabled~~ — **withdrawn by the owner,
-  2026-08-24: the site does not need to work without JavaScript**
+  2026-08-24: the site does not need to work without JavaScript** (D31)
 - `lucide-react` is already a dependency; no new one is needed
 
 **✅ Fixed.** One in-field eye / eye-off control, right-aligned, Tab reaches it
@@ -358,10 +358,10 @@ script that runs both, the integration CI job runs it, and the per-module
 tests to clear them. `src/server/oidc/**` was also under its 85 % branch gate
 and is now covered.
 
-*(One note for later: `packages/ui` carries both `eslint.config.js` and
-`eslint.config.ts`. ESLint resolves `.js` first, so the `.ts` file — which has
-none of the rule overrides — is dead weight that would silently change the
-rule set if the `.js` one ever went away. Left in place, flagged here.)*
+`packages/ui` also carried both `eslint.config.js` and `eslint.config.ts`.
+ESLint resolves `.js` first, so the `.ts` file — which had none of the rule
+overrides — was dead weight that would have silently changed the rule set if
+the `.js` one ever went away. Deleted.
 
 ### R-7 · The advisory-lock timeout never worked
 

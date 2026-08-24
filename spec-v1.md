@@ -84,8 +84,9 @@ Format: each requirement has an id, a normative statement, and acceptance criter
 
 ### 5.1 Authentication — password (FR-AUTH)
 
-**FR-AUTH-1 — Password sign-in.** Users sign in with e-mail + password at `/login`. Passwords: min 12 / max 128 characters, no composition rules; optional breached-password check behind `auth.password.breachCheck` (default false). E-mails are trimmed and lower-cased everywhere (sign-up, sign-in, social, admin).
+**FR-AUTH-1 — Password sign-in.** Users sign in with e-mail + password at `/login`. Passwords: min 12 / max 128 characters, no composition rules; optional breached-password check behind `auth.password.breachCheck` (default false). E-mails are trimmed and lower-cased everywhere (sign-up, sign-in, social, admin). A completed sign-in resolves its destination in this order (D28): a pending OAuth authorization continuation (FR-OIDC-9) · a `returnTo` query parameter that validates as a same-origin relative path (SEC-3, unchanged) · `auth.defaultRedirect` · `/account`. The same resolver governs **password-change completion**, because FR-AUTH-4 interposes `/change-password` before that destination and an absolute `auth.defaultRedirect` cannot round-trip through a `returnTo` parameter that only accepts relative paths — so the forced-change handler re-resolves at the end rather than carrying the value through the query. Sign-up, password reset and verification keep their own endings.
 *AC:* valid credentials create a session; 11-character password rejected at sign-up/change; sign-in failure message is identical for wrong password and unknown e-mail.
+*AC (D28):* with `auth.defaultRedirect` unset, sign-in lands on `/account`; with it set to an absolute URL, both a plain sign-in and a forced password change land there; a `returnTo` of `https://evil.example` is still ignored; a bare hostname is rejected at configuration load.
 
 **FR-AUTH-2 — E-mail verification.** `auth.requireEmailVerification` (default **true**; forced false when e-mail is not configured, FR-MAIL-2) gates **password sign-in only**: unverified password accounts cannot sign in and are offered a resend. Social accounts are never gated by it — their `emailVerified` comes from the provider claim (FR-SOC-4); unverified users carry a badge in the admin UI.
 *AC:* with verification on, a fresh password sign-up cannot sign in before clicking the e-mailed link; the link is single-use and expires (24 h); resend is rate-limited.
@@ -275,6 +276,7 @@ Template inventory (HTML + text, branded from `site.*`, links built from `baseUr
 | `signUp.enabled` | bool | `false` | FR-SIGNUP-1. |
 | `signUp.requireApproval` | bool | `true` | FR-SIGNUP-2. |
 | `signUp.allowedEmailDomains` | string[] | `[]` | FR-SIGNUP-3. |
+| `auth.defaultRedirect` | string | `/account` | Where a completed sign-in lands when nothing more specific applies (FR-AUTH-1, D28). Either a **same-origin relative path** (starts `/`, not `//` or `/\`, no `://`) or an **absolute http(s) URL on any origin** — a bare hostname is rejected. This is operator configuration, not user input, so a cross-origin value is not an open redirect; **SEC-3 is unchanged** and the runtime `returnTo` parameter stays same-origin-relative-only. Set it when the IdP is bundled beside the product it signs users in to. |
 | `auth.requireEmailVerification` | bool | `true` | Forced false when e-mail off; password sign-in only. |
 | `auth.password.minLength/maxLength` | int | `12`/`128` | `auth.password.breachCheck` bool, default false. |
 | `auth.passwordReset.tokenTtlMinutes` | int | `60` | Verification link TTL 24 h. |
@@ -440,6 +442,7 @@ Template inventory (HTML + text, branded from `site.*`, links built from `baseUr
 | D24 | Social profile-sync e-mail collision **blocks the sign-in** (neutral refusal + `social.profile_conflict`), rather than silently skipping the update | FR-SOC-4 |
 | D25 | **No** startup warning for "social enabled while sign-up off"; the "unverified open registration" warning stays | FR-SIGNUP-4 |
 | D27 | **`database.directUrl`** added: every advisory-locked step (startup, migrations, CLI, cleanup) uses it, and it is required whenever `database.url` is a transaction-mode pooler. Forced by spike S4, which showed session locks do not hold through Neon's `-pooler` endpoint while they do through the direct one | CFG-4, OPS-2/5/8, §13 R8 |
+| D28 | **`auth.defaultRedirect`** added (default `/account`): the post-sign-in destination is operator-configurable as a same-origin relative path or an absolute URL on any origin, sitting third in the FR-AUTH-1 precedence behind an OAuth continuation and a validated `returnTo`. Forced by review finding R-3 — the destination was hard-coded to `/account`, which is wrong whenever the IdP is bundled beside its product, and 404s until M7 ships. The resolver also governs password-change completion, since an absolute default cannot survive the `returnTo` round trip FR-AUTH-4 relies on. SEC-3 unchanged | FR-AUTH-1, FR-AUTH-4, CFG-4, SEC-3 |
 | D26 | **No machine-to-machine support in v1**: the `client_credentials` grant, the `service` client type, `clientCredentialsScopes` and `oauth.m2mAccessTokenTtl` are removed; "API keys" = per-user keys (FR-KEY) only | §1.2/1.3, §2, §3, FR-OIDC-1/3/7, CFG-4, CFG-5, SEC-6, TST-4, DOC-3, supersedes D3 |
 
 ### 12.2 Q&A resolutions (owner, 2026-08-23)

@@ -13,7 +13,8 @@ import { cn } from "@workspace/ui/lib/utils"
  * Every input is labelled, carries the right `autocomplete` token so password
  * managers behave, and describes its own hint and error through
  * `aria-describedby`. The password field's visibility toggle is a plain
- * checkbox driven by CSS, so it works before — and without — hydration.
+ * checkbox, so the control is already correct on the first paint, before
+ * hydration. It does not have to survive scripting being off (D31).
  */
 
 export function FieldError({
@@ -100,47 +101,47 @@ export function TextField({
 }
 
 /**
- * A password field with a no-JavaScript visibility toggle (R-1, FR-ACCT-2).
+ * A password field with an in-field visibility toggle (R-1, FR-ACCT-2).
  *
  * The control is the conventional eye / eye-off button sitting inside the
- * field, right-aligned. Underneath it is still a checkbox — visually hidden but
- * focusable — so the toggle works on the first paint, before hydration and
- * with JavaScript off. `autocomplete` matters here: a password manager that
- * cannot tell "current" from "new" will offer the wrong value at the wrong
- * moment.
+ * field, right-aligned. Underneath it is a visually-hidden but focusable
+ * checkbox, so the control is already correct on the first paint and the
+ * label's `for` does the work a click handler would. `autocomplete` matters
+ * here: a password manager that cannot tell "current" from "new" will offer
+ * the wrong value at the wrong moment.
  *
- * How the three CSS hooks divide the work, and why they are not all `peer-*`:
+ * **The toggle is the checkbox's `onChange` flipping the input `type`.** Two
+ * findings are worth keeping, because both contradict what this file used to
+ * assume:
  *
  * - Tailwind v4 compiles `peer-checked:X` to `:where(.peer):checked ~ *`, a
- *   *sibling* combinator. It cannot reach the icons nested inside the label, so
- *   those swap on `group-has-checked:X` → `:where(.group):has(:checked) *`,
- *   which is a descendant selector.
- * - The input's masking uses the same `group-has-checked:` hook rather than
- *   `peer-checked:`, which buys the natural tab order: the checkbox can then
- *   sit *after* the input in the DOM, so Tab goes password field → reveal
- *   control instead of the other way round.
- * - The focus ring is drawn on the label via `peer-focus-visible:`, which does
+ *   *sibling* combinator, so it can reach neither the icons nested inside the
+ *   label nor an input that precedes it. Those use `group-has-checked:X` →
+ *   `:where(.group):has(:checked) *`, a descendant selector. Using it for the
+ *   input's masking too is what lets the checkbox sit *after* the input in the
+ *   DOM, so Tab goes password field → reveal control rather than the reverse.
+ *   The focus ring is drawn on the label via `peer-focus-visible:`, which does
  *   work as a sibling selector — the label directly follows the checkbox.
  *
- * **The CSS-only reveal is not enough on its own, measured 2026-08-24:**
+ * - `-webkit-text-security: none` on `input[type=password]` is parsed and then
+ *   clamped straight back to `disc`, measured 2026-08-24:
  *
- * | engine        | `-webkit-text-security:none` on `input[type=password]` |
- * |---------------|--------------------------------------------------------|
- * | Chromium 151  | parsed, then clamped back to `disc` — no effect         |
- * | WebKit 26.5   | parsed, then clamped back to `disc` — no effect         |
- * | Firefox 153   | honoured                                               |
+ *   | engine       | effect                                          |
+ *   |--------------|-------------------------------------------------|
+ *   | Chromium 151 | none — clamped to `disc`                        |
+ *   | WebKit 26.5  | none — clamped to `disc`                        |
+ *   | Firefox 153  | honoured                                        |
  *
- * (All three honour it on `input[type=text]`, so the property is alive; Blink
- * and WebKit specifically refuse to let a password field be unmasked by style.
- * `:has()` is supported everywhere that matters, so it is not the constraint.)
+ *   All three honour it on `input[type=text]`, so the property is alive and
+ *   Blink and WebKit are specifically refusing to let a password field be
+ *   unmasked by style. The CSS-only reveal this component once claimed
+ *   therefore only ever worked in Firefox. It stays as a one-class fallback
+ *   that covers Firefox before hydration; it is not the mechanism.
  *
- * So the working mechanism is the checkbox's `onChange` flipping the input
- * `type`, and the CSS is what covers Firefox before hydration. Where scripting
- * is off entirely, the `<noscript>` rule below **removes** the control rather
- * than leaving a toggle that renames itself "Hide password" while the password
- * stays masked — a dead control that lies to a screen reader is worse than no
- * control. Firefox-without-scripting loses a reveal it could have had; that is
- * the price of not shipping the lie to Chrome and Safari.
+ * Scripting being off is not a supported case (D31). The `<noscript>` rule
+ * below still withdraws the control, because it costs nothing and stops the
+ * toggle renaming itself "Hide password" over a field that is still masked —
+ * which would lie to a screen reader.
  */
 export function PasswordField({
   name,
@@ -184,7 +185,7 @@ export function PasswordField({
           autoFocus={autoFocus}
           aria-describedby={describedBy}
           aria-invalid={error ? true : undefined}
-          // Room for the control, and the scriptless reveal itself.
+          // Room for the control, plus Firefox's before-hydration fallback.
           className="pr-10 group-has-checked:[-webkit-text-security:none]"
         />
         {/* Rendered as markup only when scripting is off, so it costs nothing
@@ -201,8 +202,8 @@ export function PasswordField({
           type="checkbox"
           className="peer sr-only"
           onChange={(event) => {
-            // The only mechanism Blink and WebKit leave us; also what makes
-            // the control instant on Firefox once hydrated.
+            // The mechanism. Blink and WebKit leave no CSS-only option, and
+            // this is also what makes the control instant on Firefox.
             const field = document.getElementById(name)
             if (field instanceof HTMLInputElement) {
               field.type = event.currentTarget.checked ? "text" : "password"

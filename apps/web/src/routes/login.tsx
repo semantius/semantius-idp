@@ -28,8 +28,11 @@ import type { UiContext } from "@/server/ui-context"
  * `/login` — password sign-in plus whichever social providers are configured
  * (FR-AUTH-1, FR-ACCT-2).
  *
- * A plain form posting to this same route, so it works before hydration and
- * without JavaScript. The POST forwards to Better Auth with the original
+ * A plain form posting to this same route, so the page is usable on the first
+ * paint rather than after a hydration round trip. (Surviving scripting being
+ * off is no longer a requirement — D31 — but the shape is worth keeping: it
+ * is what makes the POST a real form submission.) It forwards to Better Auth
+ * with the original
  * headers, so the CSRF origin check applies unchanged (SEC-3), and answers with
  * a 303 — a refresh cannot re-post a password.
  *

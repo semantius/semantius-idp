@@ -13,11 +13,8 @@ client-bundle gate.
 
 ## Review results
 
-*Empty — nothing outstanding from a review round. The next round's findings go
-here, and are treated as pre-work before any further milestone starts.*
-
-**One thing wants your call**, though it is not a defect: see the Firefox
-trade-off under R-1 below.
+*Empty — nothing outstanding. The next round's findings go here, and are
+treated as pre-work before any further milestone starts.*
 
 ---
 
@@ -27,7 +24,7 @@ The three review findings are fixed. Four more problems surfaced while fixing
 them, all of which were shipping.
 
 **Your three:** R-1 the reveal control · R-2 the schema-generator premise ·
-R-3 the post-login destination.
+R-3 the post-login destination. Nothing outstanding from any of them.
 
 **Found on the way, in the order they appeared:**
 
@@ -70,36 +67,33 @@ the field wrapper, with the two icon states swapped by `peer-checked:`.
 - one toggling control, not two swapped labels
 - `aria-label` that changes with state, and a real focus ring — it is a control,
   so it must be reachable and announced
-- still works with JavaScript disabled
+- ~~still works with JavaScript disabled~~ — **withdrawn by the owner,
+  2026-08-24: the site does not need to work without JavaScript** (D31)
 - `lucide-react` is already a dependency; no new one is needed
 
-**✅ Fixed** — with one criterion I could not meet, and want your call on.
+**✅ Fixed.** One in-field eye / eye-off control, right-aligned, Tab reaches it
+*after* the password field with a visible ring, and the accessible name changes
+with state. Verified in a real browser, not only in a test.
 
-Measured on the three engines while building it (2026-08-24):
+The toggle flips the input `type` from a `change` handler. Two mechanism notes
+worth keeping, because both contradict what the code used to assume:
 
-| engine | `-webkit-text-security:none` on `input[type=password]` |
-|---|---|
-| Chromium 151 | parsed, then clamped back to `disc` — **no effect** |
-| WebKit 26.5 | parsed, then clamped back to `disc` — **no effect** |
-| Firefox 153 | honoured |
+- Tailwind v4 compiles `peer-checked:` to `:where(.peer):checked ~ *`, a
+  **sibling** combinator, so it cannot reach the icons inside the label. Those
+  use `group-has-checked:` (`:where(.group):has(:checked) *`). The same hook
+  masks the input, which is what lets the checkbox sit *after* it in the DOM
+  and gives the natural tab order.
+- `-webkit-text-security: none` on `input[type=password]` is parsed and then
+  **clamped back to `disc`** by Chromium 151 and WebKit 26.5; only Firefox 153
+  honours it. All three honour it on `input[type=text]`, so the two engines are
+  specifically refusing to let a password field be unmasked by style. The
+  scriptless reveal this component always claimed therefore only ever worked in
+  Firefox — moot now, but it is why the CSS path is a fallback and not the
+  mechanism.
 
-All three honour the property on `input[type=text]`, so Blink and WebKit are
-specifically refusing to let a password field be unmasked by style. **The
-scriptless reveal this component has always claimed only ever worked in
-Firefox** — the constraint the original design was built around does not exist
-any more.
-
-So the toggle now flips the input `type` from a `change` handler, and a
-`<noscript>` rule *withdraws* the control when scripting is off rather than
-leaving a toggle that renames itself "Hide password" over a still-masked
-field. A dead control that lies to a screen reader seemed worse than no
-control. **Firefox-without-JavaScript loses a reveal it could have had.** If
-you would rather keep it there for that case and accept it being inert in
-Chrome and Safari, say so and it is a one-line change.
-
-Everything else holds: one in-field eye/eye-off control, right-aligned, Tab
-reaches it *after* the password field with a visible ring, and the accessible
-name changes with state. Verified in a real browser, not only in a test.
+A `<noscript>` rule still withdraws the control when scripting is off. It costs
+nothing and stops the toggle renaming itself "Hide password" over a masked
+field, which would lie to a screen reader. It is no longer load-bearing.
 
 ### R-2 · The custom schema generator rests on a false premise (DM-1)
 
@@ -441,9 +435,9 @@ authorize UX, admin UI, security hardening, Docker/compose/CLI, e2e, and docs.
 Spike S3 (sub-path) is also outstanding, though `base-path.ts` and the config
 already carry it and the e-mail templates are tested under a sub-path issuer.
 
-One deviation worth your call: `drizzle.config.ts` sits in `apps/web/` rather
-than the repo root, because drizzle-kit resolves every path relative to itself
-and both the schema and migrations live there.
+One deviation, already accepted in the plan: `drizzle.config.ts` sits in
+`apps/web/` rather than the repo root, because drizzle-kit resolves every path
+relative to itself and both the schema and the migrations live there.
 
 ---
 
@@ -688,4 +682,4 @@ utility, and the full TST-5 adversarial suite.
 | New config key `database.directUrl` | Forced by the S4 pooler finding; recorded as D27 and amended into CFG-4. |
 | Route loaders read `context.ui`, filled by one `createServerFn` in `beforeLoad` | A Start `loader` is isomorphic, so a top-level `getRuntime` import puts the whole IdP in the browser bundle. See R-4. |
 | Coverage is measured across **both** vitest projects, not `unit` alone | Measuring all of `src/server` against unit tests only is the wrong denominator, and reported ~60 % against its own 70 % gate. See R-6. |
-| The reveal control is withdrawn when scripting is off | Blink and WebKit clamp a password field back to `disc` whatever the style says, so a scriptless toggle would lie. See R-1 — **this is the one wanting your call.** |
+| The reveal control is withdrawn when scripting is off | Blink and WebKit clamp a password field back to `disc` whatever the style says, so a scriptless toggle would lie to a screen reader. Cheap and no longer load-bearing after D30. See R-1. |

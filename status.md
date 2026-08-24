@@ -1,13 +1,14 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-24 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `a89ba87`
-**Plan:** `~/.claude/plans/we-had-c-users-martinamm-claude-plans-ge-buzzing-thimble.md`
-**Spec:** [spec-v1.md](spec-v1.md)
+**As of:** 2026-08-24 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `e030111`
+**Plan:** `~/.claude/plans/finish-idp-v1-s3-m6-m14.md`
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D32**
 
-Working tree clean. **Phase 0 is complete.** Every gate green: lint, typecheck,
-unit (232), integration (301 across both projects), coverage thresholds,
-schema-drift, config-schema staleness, dependency pinning, and the new
-client-bundle gate.
+Working tree clean. **S3, M6, M7 and all of M8 are done.** Every gate green:
+lint, typecheck, unit (329), integration (149 across sixteen files), coverage
+thresholds including the 85 % per-module gates on `server/config`,
+`server/claims` and `server/oidc`, schema-drift, config-schema staleness,
+dependency pinning, and the client-bundle gate (422 KB of a 600 KB ceiling).
 
 ---
 
@@ -15,6 +16,83 @@ client-bundle gate.
 
 *Empty — nothing outstanding. The next round's findings go here, and are
 treated as pre-work before any further milestone starts.*
+
+---
+
+## What this session did, and what it broke open
+
+Four milestones landed in plan order: **S3** (one build, two mount points),
+**M6** (2FA + social enforcement), **M7** (the account area, API keys, the
+freshness gate) and **M8a/b/c** (client reconciliation, tokens and claims, the
+issuer-root protocol surface). Each is described in its own commit message.
+
+**Eleven defects were found by running things rather than reading them**, which
+is the same lesson Phase 0 recorded:
+
+| | |
+|---|---|
+| **S3-1** | Better Auth was unreachable under a sub-path — 1.7.1 appends `basePath` to `baseURL` only when `baseURL` has no path, so the issuer mounted everything at `/idp/*` and nobody could sign in |
+| **S3-2** | Nothing emitted `<link rel="icon">`, so browsers probed `/favicon.ico` at the *origin* root — someone else's application under a sub-path |
+| **M6-1** | The audit trail called a 2FA challenge a completed sign-in |
+| **M6-2** | `?forced=1` was never true: the router parses query values with `JSON.parse`, so the forced-password-change page had been rendering the ordinary screen |
+| **M6-3** | Declaring `validateUserInfo` made Better Auth refuse every user creation without an endpoint context — the bootstrap admin died at start-up |
+| **M6-4** | `syncProfile` mapped to nothing, so the documented default of refreshing a social profile never happened |
+| **M7-1** | An API key kept working after its owner was banned or un-approved |
+| **M7-2** | The freshness gate read the cookie cache, so a twenty-minute-old session could mint an API key |
+| **M7-3** | `/account/security` put 200 KB of Drizzle and the whole schema in the browser bundle |
+| **M8-1** | Every session JWT was born expired — `jwt.expirationTime` took a number as an absolute `exp`, so `GET /api/auth/token` returned tokens that expired in 1970 |
+| **M8-2** | `/.well-known/security.txt` served "Welcome to Bun!", and a GET to `/oauth2/token` served the sign-in page with a 200 |
+
+Two spike conclusions turned out to be wrong and are recorded as decisions:
+
+- **D32** — S1/S5 planned to normalise `aud` in the `jwt.sign` seam. That seam
+  does not exist for a self-hosted key set: the `jwt` plugin refuses to
+  construct with `jwt.sign` unless `jwks.remoteUrl` moves the keys off the
+  deployment. `aud` keeps the implicit userinfo audience the provider appends
+  for `openid`, and FR-OIDC-6 is read as membership rather than string
+  equality — which is how every RFC 7519 §4.1.3 verifier reads it anyway.
+- **R11 was never spiked**, and reading 1.7.1 confirmed the hazard: a rotated
+  key signs immediately, before any verifier has seen it. `rotate-keys.ts`
+  publishes first and signs an hour later.
+
+One thing the provider gets wrong is normalised rather than accepted:
+`/oauth2/revoke` answers 400 for an unknown token where RFC 7009 §2.2 requires
+200, which would let the endpoint be used as an oracle for which tokens exist.
+
+---
+
+## One thing waiting on you: the dev login
+
+**The persistent `idp` schema's bootstrap admin is still stranded**, exactly as
+the plan's P0'.1 describes: someone completed the forced password change from
+VS Code's embedded browser on 2026-08-24 with a value recorded nowhere, and
+`must_change_password` is still true, so the account demands a change that
+needs the password nobody has.
+
+Nothing in this session touched it, and nothing needed to. Every live check ran
+on a **throwaway schema** created from the same `.env` and dropped afterwards
+(`idp_spike_s3`, `idp_live_m6`, `idp_live_m7`, `idp_live_m8a`, `idp_live_m8c`) —
+which is what the standing rule asks for and what the runtime-schema machinery
+(D27/D29) exists to make cheap. Two supporting changes, both in the gitignored
+`config/` folder and therefore uncommitted:
+
+- `config/config.json`'s `database.schema` is now `"${env:IDP_SCHEMA_NAME:-idp}"`,
+  so a throwaway schema is one environment variable away;
+- `config/oauth_clients.json` now exists with two development clients
+  (`dev-web`, `dev-spa`), so the reconcile step has something to do and the M13
+  sample RP has a client to use.
+
+**Two ways to fix the dev login, and the choice is yours:**
+
+1. If you remember the password typed at 09:29 on 2026-08-24, put it in `.env`
+   as `IDP_ADMIN_PASSWORD` with a comment and nothing else changes.
+2. Otherwise `drop schema idp cascade` through `DIRECT_DATABASE_URL` and boot;
+   the startup sequence re-bootstraps from `.env`. It destroys one stranded
+   user, one stale session and three audit rows.
+
+It was left for you because it is irreversible and nothing blocks on it.
+**M12 makes it stop mattering**: `idp create-admin` recovers a stranded admin
+without dropping anything, and M14's README is written around that.
 
 ---
 
@@ -428,16 +506,20 @@ schema identifier in the committed SQL. And **`buildRuntime` had to become
 async**, because the OAuth provider queries `oauth_resource` from its own
 `init()`; on a fresh database the process died before it could migrate.
 
-## Not done (S3, M6–M14)
+## Not done (M9–M14)
 
-Social + 2FA, account self-service + API keys, **OIDC core (M8 — the largest)**,
-authorize UX, admin UI, security hardening, Docker/compose/CLI, e2e, and docs.
-Spike S3 (sub-path) is also outstanding, though `base-path.ts` and the config
-already carry it and the e-mail templates are tested under a sub-path issuer.
+Authorize UX (continuation, consent, end-session UI), the admin surface,
+security hardening, the container and CLI, e2e and docs. Everything before
+them is done.
 
-One deviation, already accepted in the plan: `drizzle.config.ts` sits in
-`apps/web/` rather than the repo root, because drizzle-kit resolves every path
-relative to itself and both the schema and the migrations live there.
+Accepted deviations, unchanged: `drizzle.config.ts` sits in `apps/web/`
+because drizzle-kit resolves paths relative to itself; `test:e2e` stays
+declared-but-inert until M13; `.agents/skills/` is committed tooling.
+
+New since the last update: `src/serve.ts` is the `Bun.serve` wrapper spike S3
+needed — static files out of `dist/client` with the mount path stripped. M12
+extends it with OPS-4 draining, health-check exclusions and the SEC-5 request
+log rather than starting from nothing.
 
 ---
 
@@ -445,34 +527,28 @@ relative to itself and both the schema and the migrations live there.
 
 | | |
 |---|---|
-| `/` → `/login` | ✅ 307 |
-| `/login` | ✅ 200 |
+| `/` | ✅ 307 → `/account` when signed in, `/login` when not |
+| `/login` `/signup` `/two-factor` `/change-password` … | ✅ 200 |
+| `/account` `/account/security` `/account/sessions` `/account/api-keys` `/account/consents` | ✅ 200 |
 | `/healthz` `/readyz` | ✅ 200 |
-| `/api/auth/jwks` | ✅ 200 (real ES256 key) |
-| `/.well-known/openid-configuration` | ❌ 404 — **M8** |
-| `/oauth2/authorize` `/oauth2/token` | ❌ 404 — **M8** |
-| `/account/*` | ❌ 404 — **M7** · ⚠ and it is where sign-in currently sends you, see **R-3** |
+| `/.well-known/openid-configuration` | ✅ 200 — issuer-root URLs, no `/api/auth` anywhere |
+| `/.well-known/oauth-authorization-server` | ✅ 200 |
+| `/.well-known/jwks.json` `/api/auth/jwks` | ✅ 200, byte-identical, ETag + `max-age=300` |
+| `/.well-known/change-password` | ✅ 302 → `/change-password` |
+| `/.well-known/security.txt` | ✅ 200 with a file in the config folder, 404 without |
+| `/robots.txt` | ✅ 200, disallow all |
+| `/oauth2/authorize` `/oauth2/token` `/oauth2/userinfo` `/oauth2/introspect` `/oauth2/revoke` `/oauth2/end-session` | ✅ 200 / 405 by method |
 | `/admin/*` | ❌ 404 — **M10** |
 
-Plus `/signup`, `/forgot-password`, `/reset-password`, `/verify-email`,
-`/pending-approval`, `/banned`, `/change-password`, `/logout` — though `/signup`
-and `/forgot-password` deliberately 404 under the default config, since sign-up
-is off and no Resend key is set.
+**A full authorization-code + PKCE flow works end to end**, verified against a
+live server on a throwaway schema: authorize → code → token (ES256, `kid`,
+`typ: at+jwt`, `iss` byte-equal, user claims, `no-store`) → userinfo. The CORS
+matrix answers four different ways depending on the endpoint and origin.
 
-So: what works end to end today is password sign-in, sign-up with approval,
-verification and reset, the startup sequence and the bootstrap admin.
-
-**The `/account` 404 is now curable by configuration** — set
-`auth.defaultRedirect` and sign-in lands wherever you point it (D28). Verified
-against a live server: temporary password → forced change → the configured
-destination, and the next sign-in goes straight there.
-
-Also new since the last update: the public pages actually **hydrate** (R-4),
-so anything needing JavaScript works rather than silently not; and every
-Better Auth endpoint that matters writes an **audit row** (SEC-6), where before
-only three of twenty-nine actions did.
-**What does not work is OIDC** — no discovery, no authorize, no token endpoint.
-That's M8, the largest remaining milestone, and nothing in it has been started.
+What is still missing from the OIDC surface is *interaction*: the consent
+screen, the pending-authorization continuation and the end-session
+confirmation page are M9. `/oauth2/end-session` forwards today but has no
+confirmation page for the no-hint case.
 
 ---
 
@@ -481,17 +557,17 @@ That's M8, the largest remaining milestone, and nothing in it has been started.
 | # | Milestone | Status |
 |---|---|---|
 | M1.0 | Amend spec for D24–D26 | ✅ done |
-| M0 | Spikes S1, S2, S4, S5 | ✅ done · S3 (sub-path) **outstanding** |
+| M0 | Spikes S1, S2, S3, S4, S5 | ✅ done — S3's verdict is in [docs/spikes/s3-sub-path.md](docs/spikes/s3-sub-path.md) |
 | P0 | Phase 0 — review fixes + M5.5 backfill + CI | ✅ done |
 | M1 | Toolchain baseline | ✅ done |
 | M2 | Configuration system | ✅ done |
 | M3 | DB, Better Auth skeleton, migrations | ✅ done |
 | M4 | Startup, bootstrap admin, audit, e-mail, i18n | ✅ done |
 | M5 | Password auth, sign-up & approval | ✅ done |
-| M6 | Social + 2FA | ⬜ not started |
-| M7 | Account self-service + API keys | ⬜ not started |
-| M8 | **OIDC core** (largest remaining) | ⬜ not started |
-| M9 | Authorize UX: continuation, consent, end-session | ⬜ not started |
+| M6 | Social + 2FA | ✅ done |
+| M7 | Account self-service + API keys | ✅ done |
+| M8 | **OIDC core** | ✅ done — a, b and c |
+| M9 | Authorize UX: continuation, consent, end-session | ⬜ **next** |
 | M10 | Admin UI + API | ⬜ not started |
 | M11 | Security hardening | ⬜ partial — see below |
 | M12 | Container, compose, Caddy, CLI, ops | ⬜ not started |
@@ -506,6 +582,17 @@ troubleshooting — is still to come.
 ---
 
 ## Commits
+
+This session, newest first:
+
+```
+e030111 feat(m8c): the protocol endpoints move to the issuer root
+d46433e feat(m8b): tokens that say the same thing whichever endpoint minted them
+0e09f43 feat(m8a): the client file becomes the database, and the R4 risk dissolves
+c8edfc2 feat(m7): the account area, API keys, and a re-authentication gate
+c759412 feat(m6): the second factor, and social identities that stay in their lane
+6046bf4 feat(s3): one build that serves the host root and /idp
+```
 
 Phase 0, newest first:
 
@@ -582,10 +669,10 @@ Startup warns when the URL looks pooled and `directUrl` is unset.
 
 | Risk | Outcome |
 |---|---|
-| **R1** default audience | Real — no `resource` parameter yields an *opaque* token, not a JWT. Fixed by a `hooks.before` injection; **the pre-authorized `pnpm patch` is not needed**. One wrinkle recorded for M8: with `openid` in scope the provider adds its own userinfo endpoint as a second `aud`, to be normalised in the `jwt.sign` seam. |
+| **R1** default audience | Real — no `resource` parameter yields an *opaque* token, not a JWT. Fixed by a `hooks.before` injection; **the pre-authorized `pnpm patch` is not needed**. The wrinkle it recorded — a second `aud` from the `openid` scope — could *not* be normalised in the `jwt.sign` seam, because that seam requires a remote key set; settled as **D32**. |
 | **R2** per-client resources | Confirmed: `enforcePerClientResources` defaults to `true`. Kept on; reconcile owns the links. |
 | **R4** client-secret hashing | Resolved outright — `storeClientSecret` accepts our own `hash`/`verify` pair, so reconcile and the token endpoint use the same function object. |
-| **R5** session JWT | Better than expected — `jwt.sign` is a full payload seam that *every* signed token routes through, so one claims builder covers all three FR-OIDC-7 paths. |
+| **R5** session JWT | Half right. `definePayload` is the seam for the session JWT and one claims builder does cover all three FR-OIDC-7 paths — but **not** through `jwt.sign`, which the plugin refuses to accept without a remote key set (D32). |
 
 ---
 
@@ -617,7 +704,7 @@ point for the approval gate, domain restriction and status assignment · a
 before-hook normalising e-mail ahead of validation.
 
 **Startup (OPS-2)** — `apps/web/src/server/startup.ts`
-migrate → signing key → reconcile *(M8)* → validate roles → bootstrap admin,
+migrate → signing key → reconcile clients → validate roles → bootstrap admin,
 every mutating step under an advisory lock on the direct connection, failures
 surfacing as one actionable `StartupError`. FR-ADMIN-1's "two boots create
 exactly one admin" holds.
@@ -629,6 +716,19 @@ applies), answer 303, and carry failures as an error **code** — wording comes
 from the catalog, user input never reaches a URL, and wrong-password and
 unknown-address collapse to one code (SEC-7).
 
+**OIDC (FR-OIDC-2..17)** — `apps/web/src/server/oidc/`, `apps/web/src/server/claims/`
+Client reconciliation in one transaction under an advisory lock, with the
+shared `{hash, verify}` pair the token endpoint verifies with (R4) · one claims
+builder for all three token shapes · the R1 default-resource injection · scoped
+token revocation (user / session / client) · the FR-OIDC-13 absolute refresh
+ceiling · the issuer-root protocol proxy with the discovery rewrite, the CORS
+matrix and the RFC 7009 normalisation · publish-then-sign key rotation (R11).
+
+**Account area (FR-ACCT-1, FR-KEY-1)** — `apps/web/src/routes/account/`
+Profile, security (password, e-mail, 2FA enrolment with a server-rendered QR),
+sessions, API keys and connected applications, every sensitive POST behind the
+FR-AUTH-5 freshness gate reading authoritative session state.
+
 **Also in place:** structured logger with SEC-5 redaction · SEC-6 audit trail ·
 Resend and capture transports with all nine templates · typed en-US catalog with
 FR-I18N-1 locale resolution · `/healthz` and `/readyz` · approve/reject
@@ -639,36 +739,38 @@ dependency-pinning, schema-drift and config-schema gates, plus a nightly audit.
 
 ## What is left, in detail
 
-**M6 — Social + 2FA.** The config-driven provider map exists
-(`auth/options/social.ts`), including `given_name`/`family_name` mapping and
-`disableImplicitSignUp`. Still needed: the e-mail-collision refusal at sign-in
-**and** at sync (D24) with the `social.profile_conflict` audit event, the
-two-factor challenge route, and the TST-7 mock OIDC provider fixture.
+**M9 — Authorize UX.** The pending-authorization store over the existing
+`pending_authorization` table, the gate chain (login → status → 2FA → forced
+change → consent → resume), the consent screen, the end-session confirmation
+page and `routes/error.tsx`. `/oauth2/end-session` forwards today; the no-hint
+case needs a page before it can act, because ending a session on an
+unauthenticated GET is a CSRF surface.
 
-**M7 — Account self-service + API keys.** `/account/*` entirely, api-key plugin
-behaviour per `apiKeys.*`, and the 15-minute fresh-session middleware.
+**M10 — Admin UI + API.** `/admin/*` entirely, the invariants module (last
+admin, no self-ban, no self-role-change), impersonation behind
+`admin.allowImpersonation`, and the admin API endpoints FR-ADMIN-6 documents.
 
-**M8 — OIDC core.** Client reconciliation (transactional diff under lock, secret
-re-hash, resource links, audit diff) · the R1 `hooks.before` audience injection ·
-the `jwt.sign` claims-builder seam including the `aud` normalisation above ·
-grants, TTLs, rotation and reuse detection · discovery, JWKS, CORS and the
-`/oauth2/*` + `/.well-known/*` routes at the issuer root. The seams exist:
-`oidc/base-path.ts`, `PROTOCOL_ROUTES`, the resource registry in `derive.ts`,
-and the startup step placeholder.
+**M11 — Security hardening.** Already in place: SEC-1 (every URL from
+`baseUrl`), SEC-3, SEC-5 redaction, SEC-6, SEC-7, SEC-9, SEC-10, and now the
+FR-OIDC-17 CORS matrix. Still to do: the SEC-4 headers/CSP middleware, the
+SEC-5 *request log* (which no milestone has created yet — audit rows still
+carry no request id), the SEC-2 rate-limit rules with `trustProxy` IP
+resolution, `auth.password.breachCheck`, and the TST-5 adversarial suite.
 
-**M9–M14.** Authorize UX and consent · admin UI and API · security hardening ·
-container, compose, Caddy and the operator CLI · e2e, sample RP and a11y · docs
-and release.
+**M12 — Container and ops.** The remaining CLI commands (`config validate`,
+`create-admin`, `rotate-keys`, `cleanup` — `migrate` and `reconcile-clients`
+exist), the cleanup job, SIGTERM draining on top of `src/serve.ts`, the
+Dockerfile, compose, both Caddyfiles and the smoke test.
 
-**Spike S3 — sub-path.** `base-path.ts` and the config model it, and the e-mail
-templates are tested under a sub-path issuer, but Vite's `base` and the router
-`basepath` have not been exercised end to end.
+**M13 — E2E, sample RP, a11y.** Playwright against the built image at both
+mount points, the `openid-client` sample RP, axe. The TST-7 mock OIDC provider
+already exists as `src/tests/fixtures/mock-oidc-provider.ts` and is written as
+a real listener precisely so the containerised run can reuse it.
 
-**M11 partial.** Already in place: SEC-1 (every URL from `baseUrl`), SEC-3
-(`returnTo` validation, forwarded origin checks), SEC-5 (redaction), SEC-6
-(audit), SEC-7 (uniform responses), SEC-9 (pinning gate), SEC-10. Still to do:
-the SEC-4 headers/CSP middleware, the SEC-2 rate-limit rules and `trustProxy` IP
-utility, and the full TST-5 adversarial suite.
+**M14 — Docs and release.** The generated configuration reference, the DOC-1
+README rewrite (including the first-sign-in trap: the forced change *consumes*
+the `.env` password), `docs/neon.md`, `docs/clients.md`,
+`docs/admin-api.md`, the runbooks, and the release gate.
 
 ---
 
@@ -682,4 +784,4 @@ utility, and the full TST-5 adversarial suite.
 | New config key `database.directUrl` | Forced by the S4 pooler finding; recorded as D27 and amended into CFG-4. |
 | Route loaders read `context.ui`, filled by one `createServerFn` in `beforeLoad` | A Start `loader` is isomorphic, so a top-level `getRuntime` import puts the whole IdP in the browser bundle. See R-4. |
 | Coverage is measured across **both** vitest projects, not `unit` alone | Measuring all of `src/server` against unit tests only is the wrong denominator, and reported ~60 % against its own 70 % gate. See R-6. |
-| The reveal control is withdrawn when scripting is off | Blink and WebKit clamp a password field back to `disc` whatever the style says, so a scriptless toggle would lie to a screen reader. Cheap and no longer load-bearing after D30. See R-1. |
+| The reveal control is withdrawn when scripting is off | Blink and WebKit clamp a password field back to `disc` whatever the style says, so a scriptless toggle would lie to a screen reader. Cheap and no longer load-bearing after D31. See R-1. |

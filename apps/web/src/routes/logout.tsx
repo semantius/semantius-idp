@@ -11,7 +11,6 @@ import {
 } from "@/server/http/auth-proxy"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
-import { buildUiContext } from "@/server/ui-context"
 
 /**
  * `/logout` (FR-AUTH-6).
@@ -24,14 +23,10 @@ import { buildUiContext } from "@/server/ui-context"
  * is a different thing entirely and lives at `/oauth2/end-session` (FR-OIDC-11).
  */
 export const Route = createFileRoute("/logout")({
-  loader: async ({ location }) => {
-    const runtime = await getRuntime()
+  loader: ({ context, location }) => {
     const search = location.search as Record<string, string | undefined>
     return {
-      ui: buildUiContext(
-        runtime.config,
-        runtime.config.file.site.defaultLocale
-      ),
+      ui: context.ui,
       returnTo: safeReturnTo(search.returnTo, APP_ROUTES.login),
       done: search.done === "1",
     }

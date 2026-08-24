@@ -15,7 +15,6 @@ import {
 } from "@/server/http/auth-proxy"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
-import { buildUiContext } from "@/server/ui-context"
 
 /**
  * `/reset-password` (FR-AUTH-3).
@@ -29,14 +28,10 @@ import { buildUiContext } from "@/server/ui-context"
  * OAuth tokens too (FR-OIDC-12), so the page says so before the user commits.
  */
 export const Route = createFileRoute("/reset-password")({
-  loader: async ({ location }) => {
-    const runtime = await getRuntime()
+  loader: ({ context, location }) => {
     const search = location.search as Record<string, string | undefined>
     return {
-      ui: buildUiContext(
-        runtime.config,
-        runtime.config.file.site.defaultLocale
-      ),
+      ui: context.ui,
       token: search.token ?? "",
       error: search.error,
     }

@@ -17,7 +17,6 @@ import {
 import { resolveSignInDestination } from "@/server/http/post-login"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
-import { buildUiContext } from "@/server/ui-context"
 
 /**
  * `/change-password` — including the forced variant (FR-AUTH-4).
@@ -31,14 +30,10 @@ import { buildUiContext } from "@/server/ui-context"
  * available would make the flag advisory.
  */
 export const Route = createFileRoute("/change-password")({
-  loader: async ({ location }) => {
-    const runtime = await getRuntime()
+  loader: ({ context, location }) => {
     const search = location.search as Record<string, string | undefined>
     return {
-      ui: buildUiContext(
-        runtime.config,
-        runtime.config.file.site.defaultLocale
-      ),
+      ui: context.ui,
       forced: search.forced === "1",
       // Empty, not `/account`: an absent value has to fall through to
       // `auth.defaultRedirect` when the form is submitted (D28).

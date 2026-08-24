@@ -70,6 +70,54 @@ Everything else holds: one in-field eye/eye-off control, right-aligned, Tab
 reaches it *after* the password field with a visible ring, and the accessible
 name changes with state. Verified in a real browser, not only in a test.
 
+### R-4 · The whole server was being shipped to the browser — found while fixing R-1
+
+**Not a review finding — found by opening the app in a real browser**, which
+R-1 made necessary. The console said:
+
+```
+ReferenceError: Buffer is not defined
+  at ../node_modules/.pnpm/postgres@3.4.9/.../postgres/src/bytes.js:2:13
+```
+
+**The `postgres` driver was in the client bundle, and it killed hydration on
+every page.** The production build shipped 1.06 MB to the browser containing
+Better Auth, Drizzle, the migrator and this, verbatim:
+
+```sql
+select pg_try_advisory_lock($1::int, $2::int) as locked
+```
+
+No secrets leaked — those are runtime values, not compiled in — but the
+server's *code* was, and nothing on any page could hydrate.
+
+**Why it happened.** A TanStack Start route `loader` is isomorphic: it runs on
+the server for the first paint and in the browser on every client-side
+navigation. So a top-level `import { getRuntime }` in a route file pulls the
+entire IdP into the client graph — even though only the loader touches it.
+Every route did exactly that, `__root.tsx` included. A `server.handlers` block
+*is* stripped from the client build, which is why the POST handlers were fine
+and why this looked safe.
+
+**Why nobody noticed.** Every public page is a plain server-rendered form that
+works without JavaScript — deliberately, per FR-ACCT-2. With nothing depending
+on hydration, a completely dead client bundle is invisible. R-1's reveal
+control is the first thing on the site that needs script, and it did not work.
+
+**Fixed.** `server/functions/ui.ts` wraps the one piece of server work the
+shell needs in `createServerFn`, whose body the Start plugin compiles out of
+the client build. `__root.tsx` fetches it in `beforeLoad` and puts it in the
+router context; every child route reads `context.ui`, so it is one RPC per
+navigation rather than one per matched route. Client bundle 1.06 MB → 334 kB,
+and hydration verified working in Chrome.
+
+**Guarded.** New `scripts/check-client-bundle.ts`, wired into CI: it fails if
+any of six server-only strings appears in a client chunk, or if the bundle
+crosses a size ceiling. Each marker is also asserted to be *present* in the
+server build, so a marker that stops matching anything fails loudly instead of
+passing for ever. Verified by reintroducing a single leaking loader — the gate
+catches it.
+
 ### R-2 · The custom schema generator rests on a false premise (DM-1)
 
 **Where:** `apps/web/scripts/generate-auth-schema.ts`, and every place that

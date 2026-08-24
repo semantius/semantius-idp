@@ -2,9 +2,8 @@ import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router"
 
 import appCss from "@workspace/ui/globals.css?url"
 
+import { fetchUiContext } from "@/server/functions/ui"
 import { getCatalog } from "@/server/i18n"
-import { getRuntime } from "@/server/runtime"
-import { buildUiContext } from "@/server/ui-context"
 
 /**
  * The document every page is rendered into.
@@ -18,15 +17,11 @@ import { buildUiContext } from "@/server/ui-context"
  * a sign-in page in search results only helps phishing.
  */
 export const Route = createRootRoute({
-  loader: async () => {
-    const runtime = await getRuntime()
-    return {
-      ui: buildUiContext(
-        runtime.config,
-        runtime.config.file.site.defaultLocale
-      ),
-    }
-  },
+  // `beforeLoad` rather than `loader`, so the value lands in the router
+  // context and every child route reads it from there — one RPC per
+  // navigation, not one per matched route.
+  beforeLoad: async () => ({ ui: await fetchUiContext() }),
+  loader: ({ context }) => ({ ui: context.ui }),
   head: ({ loaderData }) => {
     const ui = loaderData?.ui
     return {

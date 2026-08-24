@@ -12,7 +12,6 @@ import {
 } from "@/server/http/auth-proxy"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
-import { buildUiContext } from "@/server/ui-context"
 
 /**
  * `/verify-email` (FR-AUTH-2, FR-ACCT-2).
@@ -26,14 +25,10 @@ import { buildUiContext } from "@/server/ui-context"
  * the outcome it redirected to.
  */
 export const Route = createFileRoute("/verify-email")({
-  loader: async ({ location }) => {
-    const runtime = await getRuntime()
+  loader: ({ context, location }) => {
     const search = location.search as Record<string, string | undefined>
     return {
-      ui: buildUiContext(
-        runtime.config,
-        runtime.config.file.site.defaultLocale
-      ),
+      ui: context.ui,
       /** Set after sign-up: "we sent you a link". */
       sent: search.sent === "1",
       email: search.email,

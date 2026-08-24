@@ -3,8 +3,6 @@ import { createFileRoute, Link } from "@tanstack/react-router"
 import { AuthShell } from "@/components/auth/auth-shell"
 import { getCatalog } from "@/server/i18n"
 import { APP_ROUTES } from "@/server/oidc/base-path"
-import { getRuntime } from "@/server/runtime"
-import { buildUiContext } from "@/server/ui-context"
 
 /**
  * `/banned` (FR-ADMIN-4).
@@ -17,14 +15,10 @@ import { buildUiContext } from "@/server/ui-context"
  * takes it from the ban record — never from user input.
  */
 export const Route = createFileRoute("/banned")({
-  loader: async ({ location }) => {
-    const runtime = await getRuntime()
+  loader: ({ context, location }) => {
     const search = location.search as Record<string, string | undefined>
     return {
-      ui: buildUiContext(
-        runtime.config,
-        runtime.config.file.site.defaultLocale
-      ),
+      ui: context.ui,
       reason: search.reason,
       expires: search.expires,
     }

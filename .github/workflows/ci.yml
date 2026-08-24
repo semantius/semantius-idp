@@ -64,6 +64,15 @@ jobs:
         # the running code does not expect.
         run: pnpm --filter web run db:generate-schema -- --check
 
+      - name: Build
+        run: pnpm --filter web run build
+
+      - name: The server has not leaked into the browser bundle
+        # A route `loader` runs on the client too, so one careless import puts
+        # Better Auth, Drizzle and the `postgres` driver in the browser — which
+        # is what broke hydration outright until it was caught.
+        run: bun run scripts/check-client-bundle.ts
+
   # ---------------------------------------------------------------------------
   # Nightly dependency audit (SEC-9).
   # ---------------------------------------------------------------------------

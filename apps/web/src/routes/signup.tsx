@@ -19,7 +19,6 @@ import {
 } from "@/server/http/auth-proxy"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
-import { buildUiContext } from "@/server/ui-context"
 
 /**
  * `/signup` — self-registration (FR-SIGNUP-1..5).
@@ -32,17 +31,13 @@ import { buildUiContext } from "@/server/ui-context"
  * before the user commits: approval pending, confirm your address, or straight in.
  */
 export const Route = createFileRoute("/signup")({
-  loader: async ({ location }) => {
-    const runtime = await getRuntime()
+  loader: ({ context, location }) => {
     // FR-SIGNUP-1.
-    if (!runtime.config.file.signUp.enabled) throw notFound()
+    if (!context.ui.signUpEnabled) throw notFound()
 
     const search = location.search as Record<string, string | undefined>
     return {
-      ui: buildUiContext(
-        runtime.config,
-        runtime.config.file.site.defaultLocale
-      ),
+      ui: context.ui,
       error: search.error,
     }
   },

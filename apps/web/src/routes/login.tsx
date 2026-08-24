@@ -22,8 +22,7 @@ import {
 import { resolveSignInDestination } from "@/server/http/post-login"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
-import { buildUiContext  } from "@/server/ui-context"
-import type {UiContext} from "@/server/ui-context";
+import type { UiContext } from "@/server/ui-context"
 
 /**
  * `/login` — password sign-in plus whichever social providers are configured
@@ -38,14 +37,10 @@ import type {UiContext} from "@/server/ui-context";
  * Wrong password and unknown address produce the same code (SEC-7).
  */
 export const Route = createFileRoute("/login")({
-  loader: async ({ location }) => {
-    const runtime = await getRuntime()
+  loader: ({ context, location }) => {
     const search = location.search as Record<string, string | undefined>
     return {
-      ui: buildUiContext(
-        runtime.config,
-        runtime.config.file.site.defaultLocale
-      ),
+      ui: context.ui,
       error: search.error,
       notice: search.notice,
       returnTo: safeReturnTo(search.returnTo, ""),

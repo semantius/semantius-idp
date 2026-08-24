@@ -13,7 +13,6 @@ import {
 } from "@/server/http/auth-proxy"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
-import { buildUiContext } from "@/server/ui-context"
 
 /**
  * `/forgot-password` (FR-AUTH-3, SEC-7).
@@ -26,16 +25,12 @@ import { buildUiContext } from "@/server/ui-context"
  * uniformity is the requirement, so the handler deliberately ignores the result.
  */
 export const Route = createFileRoute("/forgot-password")({
-  loader: async ({ location }) => {
-    const runtime = await getRuntime()
-    if (!runtime.config.emailEnabled) throw notFound()
+  loader: ({ context, location }) => {
+    if (!context.ui.emailEnabled) throw notFound()
 
     const search = location.search as Record<string, string | undefined>
     return {
-      ui: buildUiContext(
-        runtime.config,
-        runtime.config.file.site.defaultLocale
-      ),
+      ui: context.ui,
       notice: search.notice,
     }
   },

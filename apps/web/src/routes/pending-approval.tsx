@@ -3,8 +3,6 @@ import { createFileRoute, Link } from "@tanstack/react-router"
 import { AuthShell } from "@/components/auth/auth-shell"
 import { getCatalog } from "@/server/i18n"
 import { APP_ROUTES } from "@/server/oidc/base-path"
-import { getRuntime } from "@/server/runtime"
-import { buildUiContext } from "@/server/ui-context"
 
 /**
  * `/pending-approval` (FR-SIGNUP-2).
@@ -18,15 +16,7 @@ import { buildUiContext } from "@/server/ui-context"
  * from the application.
  */
 export const Route = createFileRoute("/pending-approval")({
-  loader: async () => {
-    const runtime = await getRuntime()
-    return {
-      ui: buildUiContext(
-        runtime.config,
-        runtime.config.file.site.defaultLocale
-      ),
-    }
-  },
+  loader: ({ context }) => ({ ui: context.ui }),
   component: PendingApprovalPage,
 })
 

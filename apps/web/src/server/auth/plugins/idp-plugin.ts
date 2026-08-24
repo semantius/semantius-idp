@@ -15,12 +15,7 @@
  * callers.
  */
 
-import {
-  APIError,
-  createAuthEndpoint,
-  createAuthMiddleware,
-  getAuthoritativeSessionFromCtx,
-} from "better-auth/api"
+import { APIError, createAuthEndpoint } from "better-auth/api"
 import { z } from "zod"
 
 import type { BetterAuthPlugin } from "better-auth"
@@ -29,7 +24,7 @@ import type { AuthMiddleware } from "better-auth/api"
 import type { Audit } from "../../audit"
 import type { IdpConfig } from "../../config/derive"
 import type { Mailer } from "../../email/mailer"
-import { splitRoles } from "../../role-utils"
+import { NOT_AN_ADMIN, requireAdmin } from "../../admin/gate"
 
 /**
  * Append-only audit trail (SEC-6). No secrets are ever stored: `metadata`
@@ -110,42 +105,27 @@ export interface IdpPluginOptions {
    * bottom of {@link idpPlugin}.
    */
   afterHook?: AuthMiddleware
+  /**
+   * FR-ADMIN-3: the invariants that wrap Better Auth's own admin endpoints.
+   * Registered here rather than in `options.hooks.before` so it sits next to
+   * the endpoints it guards and travels with this plugin.
+   */
+  adminGuard?: AuthMiddleware
+  /** FR-ADMIN-4/FR-OIDC-12: what a completed admin mutation still owes. */
+  adminAfterHook?: AuthMiddleware
+  /**
+   * FR-ADMIN-2/6: the administrative endpoints, built in `admin/endpoints.ts`.
+   * Passed in rather than built here so this file stays about the approval
+   * workflow its coverage gate is written for.
+   */
+  adminEndpoints?: BetterAuthPlugin["endpoints"]
 }
 
 export const IDP_ERROR_CODES = {
-  NOT_AN_ADMIN: "You do not have access to this.",
+  NOT_AN_ADMIN,
   USER_NOT_FOUND: "No such user.",
   NOT_PENDING: "That account is not waiting for a decision.",
 } as const
-
-/**
- * Admin gate (FR-ROLE-3).
- *
- * Enforced here rather than in each handler so a new endpoint cannot forget it,
- * and enforced against `admin.adminRoles` from the configuration rather than a
- * hard-coded name — the catalog decides who is an admin.
- */
-function adminOnly(config: IdpConfig) {
-  const adminRoles = new Set(config.adminRoles)
-  return createAuthMiddleware(async (ctx) => {
-    // Authoritative rather than cookie-cached: a role change or a revocation
-    // has to bite immediately on an admin endpoint, which is exactly the case
-    // the ≤ 5 min cookie cache of FR-AUTH-5 would otherwise delay.
-    const session = await getAuthoritativeSessionFromCtx(ctx)
-    if (!session?.user) {
-      throw new APIError("UNAUTHORIZED", {
-        message: IDP_ERROR_CODES.NOT_AN_ADMIN,
-      })
-    }
-    const roles = splitRoles((session.user as { role?: string | null }).role)
-    if (!roles.some((role) => adminRoles.has(role))) {
-      // Same wording an anonymous caller gets: the endpoint's existence is not
-      // a secret, but who holds admin is not confirmed either.
-      throw new APIError("FORBIDDEN", { message: IDP_ERROR_CODES.NOT_AN_ADMIN })
-    }
-    return { session }
-  })
-}
 
 interface UserRow {
   id: string
@@ -157,7 +137,7 @@ interface UserRow {
 /** Contributes the IdP's tables and its approval endpoints. */
 export function idpPlugin(options: IdpPluginOptions): BetterAuthPlugin {
   const { config, audit, mailer } = options
-  const requireAdmin = adminOnly(config)
+  const adminGate = requireAdmin(config)
 
   const approveUser = createAuthEndpoint(
     "/idp/approve-user",
@@ -165,7 +145,7 @@ export function idpPlugin(options: IdpPluginOptions): BetterAuthPlugin {
       method: "POST",
       body: z.object({ userId: z.string().min(1) }),
       requireHeaders: true,
-      use: [requireAdmin],
+      use: [adminGate],
     },
     async (ctx) => {
       const actor = ctx.context.session.user
@@ -216,7 +196,7 @@ export function idpPlugin(options: IdpPluginOptions): BetterAuthPlugin {
         notify: z.boolean().optional(),
       }),
       requireHeaders: true,
-      use: [requireAdmin],
+      use: [adminGate],
     },
     async (ctx) => {
       const actor = ctx.context.session.user
@@ -268,6 +248,7 @@ export function idpPlugin(options: IdpPluginOptions): BetterAuthPlugin {
     endpoints: {
       approveUser,
       rejectUser,
+      ...(options.adminEndpoints ?? {}),
     },
     // The SEC-6 trail runs **here** rather than as `options.hooks.after`,
     // and the difference is not cosmetic. Better Auth runs the options hook
@@ -276,14 +257,33 @@ export function idpPlugin(options: IdpPluginOptions): BetterAuthPlugin {
     // challenge still looks like a completed sign-in, and the trail said
     // "signed in" for someone who had not been. This plugin is registered
     // last, so it sees what the caller will actually receive.
-    ...(options.afterHook
-      ? {
-          hooks: {
-            after: [{ matcher: () => true, handler: options.afterHook }],
-          },
-        }
-      : {}),
+    ...buildHooks(options),
   } satisfies BetterAuthPlugin
+}
+
+/**
+ * `before` guards first, then the trail.
+ *
+ * Better Auth merges every plugin's hooks into one chain in registration
+ * order, so the only thing this decides is the order *within* this plugin —
+ * and the audit middleware has to be last of all, which is why it is
+ * registered from here at all.
+ */
+function buildHooks(options: IdpPluginOptions) {
+  const before = options.adminGuard
+    ? [{ matcher: () => true, handler: options.adminGuard }]
+    : []
+  const after = [options.adminAfterHook, options.afterHook]
+    .filter((handler): handler is AuthMiddleware => handler !== undefined)
+    .map((handler) => ({ matcher: () => true, handler }))
+
+  if (before.length === 0 && after.length === 0) return {}
+  return {
+    hooks: {
+      ...(before.length ? { before } : {}),
+      ...(after.length ? { after } : {}),
+    },
+  }
 }
 
 export type AuditAction =

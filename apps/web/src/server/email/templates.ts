@@ -278,7 +278,32 @@ export const templates = {
     }
   },
 
-  /** 9 — an API key was created (FR-KEY-1). */
+  /**
+   * 9 — an administrator reset the second factor (FR-2FA-2).
+   *
+   * Sent to the user rather than to the administrator, because the user is the
+   * only person who can tell whether the reset was legitimate — and if it was
+   * not, this message is the first sign that someone talked their way past the
+   * help desk.
+   */
+  twoFactorReset(context: TemplateContext): Built {
+    const { t, config } = context
+    const body = render(context, {
+      heading: t.email.twoFactorReset.heading,
+      paragraphs: [t.email.twoFactorReset.body, t.email.twoFactorReset.warning],
+      action: {
+        label: t.email.twoFactorReset.action,
+        url: link(config, `${APP_ROUTES.account}/security`),
+      },
+    })
+    return {
+      subject: t.email.twoFactorReset.subject(config.file.site.name),
+      template: "two-factor-reset",
+      ...body,
+    }
+  },
+
+  /** 10 — an API key was created (FR-KEY-1). */
   apiKeyCreated(context: TemplateContext, input: { keyName: string }): Built {
     const { t, config } = context
     const body = render(context, {

@@ -15,6 +15,8 @@ import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 
+import { createAdminContext } from "@/server/admin/context"
+import type { AdminContext } from "@/server/admin/context"
 import { createAuth } from "@/server/auth/instance"
 import { deriveConfig } from "@/server/config/derive"
 import type { IdpConfig } from "@/server/config/derive"
@@ -78,6 +80,8 @@ export interface TestContext {
   config: IdpConfig
   database: DbHandle
   auth: ReturnType<typeof createAuth>
+  /** Filled in as the runtime would; `startup` stays unset unless a test sets it. */
+  adminContext: AdminContext
   /** Capture transport: every e-mail the run would have sent (FR-MAIL-1). */
   mailer: ReturnType<typeof createCaptureMailer>
   schemaName: string
@@ -136,7 +140,20 @@ export async function createTestContext(
   const logger = createLogger({ level: "error", write: () => {} })
   const mailer = createCaptureMailer(config, logger)
   const audit = createAudit(database, logger)
-  const auth = createAuth({ config, database, logger, mailer, audit })
+  // The admin context the runtime fills in after start-up. Tests get one too,
+  // because `/idp/system` and `/idp/rotate-keys` answer 503 without it — and a
+  // suite that could not reach them would be a suite that never notices they
+  // stopped working.
+  const adminContext = createAdminContext()
+  const auth = createAuth({
+    config,
+    database,
+    logger,
+    mailer,
+    audit,
+    adminContext,
+  })
+  adminContext.auth = auth
 
   // Better Auth starts its plugin `init()` as soon as the instance exists, and
   // the OAuth provider seeds `oauth_resource` there. Awaiting it means the
@@ -148,6 +165,7 @@ export async function createTestContext(
     config,
     database,
     auth,
+    adminContext,
     mailer,
     schemaName,
     teardown: async () => {
@@ -179,12 +197,24 @@ export function authRequest(
   })
 }
 
-/** Reads the session cookie out of a response so a follow-up request can send it. */
+/**
+ * Reads the session cookie out of a response so a follow-up request can send
+ * it.
+ *
+ * **The last live one**, not the first match. Some responses clear the current
+ * session before setting a new one — impersonation does exactly that — so the
+ * first `session_token` header can be the `Max-Age=0` deletion, and a test
+ * that grabs it sends an empty token and is told it is not signed in. That
+ * cost an hour of looking at the wrong end of `/admin/impersonate-user`.
+ */
 export function sessionCookie(response: Response): string | undefined {
-  const setCookie = response.headers.getSetCookie()
-  for (const cookie of setCookie) {
+  let found: string | undefined
+  for (const cookie of response.headers.getSetCookie()) {
     const [pair] = cookie.split(";")
-    if (pair !== undefined && pair.includes("session_token")) return pair
+    if (pair === undefined || !pair.includes("session_token")) continue
+    // A deletion: `name=` with nothing after it, and `Max-Age=0` to say so.
+    if (/=\s*$/.test(pair)) continue
+    found = pair
   }
-  return undefined
+  return found
 }

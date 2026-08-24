@@ -25,8 +25,10 @@ import { Route as ErrorRouteImport } from './routes/error'
 import { Route as ConsentRouteImport } from './routes/consent'
 import { Route as ChangePasswordRouteImport } from './routes/change-password'
 import { Route as BannedRouteImport } from './routes/banned'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AccountIndexRouteImport } from './routes/account/index'
 import { Route as Oauth2UserinfoRouteImport } from './routes/oauth2/userinfo'
 import { Route as Oauth2TokenRouteImport } from './routes/oauth2/token'
@@ -34,6 +36,10 @@ import { Route as Oauth2RevokeRouteImport } from './routes/oauth2/revoke'
 import { Route as Oauth2IntrospectRouteImport } from './routes/oauth2/introspect'
 import { Route as Oauth2EndSessionRouteImport } from './routes/oauth2/end-session'
 import { Route as Oauth2AuthorizeRouteImport } from './routes/oauth2/authorize'
+import { Route as AdminSystemRouteImport } from './routes/admin/system'
+import { Route as AdminRolesRouteImport } from './routes/admin/roles'
+import { Route as AdminClientsRouteImport } from './routes/admin/clients'
+import { Route as AdminAuditRouteImport } from './routes/admin/audit'
 import { Route as AccountSessionsRouteImport } from './routes/account/sessions'
 import { Route as AccountSecurityRouteImport } from './routes/account/security'
 import { Route as AccountConsentsRouteImport } from './routes/account/consents'
@@ -43,7 +49,10 @@ import { Route as DotwellKnownOpenidConfigurationRouteImport } from './routes/[.
 import { Route as DotwellKnownOauthAuthorizationServerRouteImport } from './routes/[.]well-known.oauth-authorization-server'
 import { Route as DotwellKnownJwksDotjsonRouteImport } from './routes/[.]well-known.jwks[.]json'
 import { Route as DotwellKnownChangePasswordRouteImport } from './routes/[.]well-known.change-password'
+import { Route as AdminUsersIndexRouteImport } from './routes/admin/users/index'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
+import { Route as AdminUsersNewRouteImport } from './routes/admin/users/new'
+import { Route as AdminUsersUserIdRouteImport } from './routes/admin/users/$userId'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
@@ -125,6 +134,11 @@ const BannedRoute = BannedRouteImport.update({
   path: '/banned',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AccountRoute = AccountRouteImport.update({
   id: '/account',
   path: '/account',
@@ -134,6 +148,11 @@ const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AccountIndexRoute = AccountIndexRouteImport.update({
   id: '/',
@@ -169,6 +188,26 @@ const Oauth2AuthorizeRoute = Oauth2AuthorizeRouteImport.update({
   id: '/oauth2/authorize',
   path: '/oauth2/authorize',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AdminSystemRoute = AdminSystemRouteImport.update({
+  id: '/system',
+  path: '/system',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminRolesRoute = AdminRolesRouteImport.update({
+  id: '/roles',
+  path: '/roles',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminClientsRoute = AdminClientsRouteImport.update({
+  id: '/clients',
+  path: '/clients',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminAuditRoute = AdminAuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
+  getParentRoute: () => AdminRoute,
 } as any)
 const AccountSessionsRoute = AccountSessionsRouteImport.update({
   id: '/sessions',
@@ -219,15 +258,31 @@ const DotwellKnownChangePasswordRoute =
     path: '/.well-known/change-password',
     getParentRoute: () => rootRouteImport,
   } as any)
+const AdminUsersIndexRoute = AdminUsersIndexRouteImport.update({
+  id: '/users/',
+  path: '/users/',
+  getParentRoute: () => AdminRoute,
+} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminUsersNewRoute = AdminUsersNewRouteImport.update({
+  id: '/users/new',
+  path: '/users/new',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminUsersUserIdRoute = AdminUsersUserIdRouteImport.update({
+  id: '/users/$userId',
+  path: '/users/$userId',
+  getParentRoute: () => AdminRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/account': typeof AccountRouteWithChildren
+  '/admin': typeof AdminRouteWithChildren
   '/banned': typeof BannedRoute
   '/change-password': typeof ChangePasswordRoute
   '/consent': typeof ConsentRoute
@@ -253,6 +308,10 @@ export interface FileRoutesByFullPath {
   '/account/consents': typeof AccountConsentsRoute
   '/account/security': typeof AccountSecurityRoute
   '/account/sessions': typeof AccountSessionsRoute
+  '/admin/audit': typeof AdminAuditRoute
+  '/admin/clients': typeof AdminClientsRoute
+  '/admin/roles': typeof AdminRolesRoute
+  '/admin/system': typeof AdminSystemRoute
   '/oauth2/authorize': typeof Oauth2AuthorizeRoute
   '/oauth2/end-session': typeof Oauth2EndSessionRoute
   '/oauth2/introspect': typeof Oauth2IntrospectRoute
@@ -260,7 +319,11 @@ export interface FileRoutesByFullPath {
   '/oauth2/token': typeof Oauth2TokenRoute
   '/oauth2/userinfo': typeof Oauth2UserinfoRoute
   '/account/': typeof AccountIndexRoute
+  '/admin/': typeof AdminIndexRoute
+  '/admin/users/$userId': typeof AdminUsersUserIdRoute
+  '/admin/users/new': typeof AdminUsersNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/admin/users/': typeof AdminUsersIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -289,6 +352,10 @@ export interface FileRoutesByTo {
   '/account/consents': typeof AccountConsentsRoute
   '/account/security': typeof AccountSecurityRoute
   '/account/sessions': typeof AccountSessionsRoute
+  '/admin/audit': typeof AdminAuditRoute
+  '/admin/clients': typeof AdminClientsRoute
+  '/admin/roles': typeof AdminRolesRoute
+  '/admin/system': typeof AdminSystemRoute
   '/oauth2/authorize': typeof Oauth2AuthorizeRoute
   '/oauth2/end-session': typeof Oauth2EndSessionRoute
   '/oauth2/introspect': typeof Oauth2IntrospectRoute
@@ -296,12 +363,17 @@ export interface FileRoutesByTo {
   '/oauth2/token': typeof Oauth2TokenRoute
   '/oauth2/userinfo': typeof Oauth2UserinfoRoute
   '/account': typeof AccountIndexRoute
+  '/admin': typeof AdminIndexRoute
+  '/admin/users/$userId': typeof AdminUsersUserIdRoute
+  '/admin/users/new': typeof AdminUsersNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/admin/users': typeof AdminUsersIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/account': typeof AccountRouteWithChildren
+  '/admin': typeof AdminRouteWithChildren
   '/banned': typeof BannedRoute
   '/change-password': typeof ChangePasswordRoute
   '/consent': typeof ConsentRoute
@@ -327,6 +399,10 @@ export interface FileRoutesById {
   '/account/consents': typeof AccountConsentsRoute
   '/account/security': typeof AccountSecurityRoute
   '/account/sessions': typeof AccountSessionsRoute
+  '/admin/audit': typeof AdminAuditRoute
+  '/admin/clients': typeof AdminClientsRoute
+  '/admin/roles': typeof AdminRolesRoute
+  '/admin/system': typeof AdminSystemRoute
   '/oauth2/authorize': typeof Oauth2AuthorizeRoute
   '/oauth2/end-session': typeof Oauth2EndSessionRoute
   '/oauth2/introspect': typeof Oauth2IntrospectRoute
@@ -334,13 +410,18 @@ export interface FileRoutesById {
   '/oauth2/token': typeof Oauth2TokenRoute
   '/oauth2/userinfo': typeof Oauth2UserinfoRoute
   '/account/': typeof AccountIndexRoute
+  '/admin/': typeof AdminIndexRoute
+  '/admin/users/$userId': typeof AdminUsersUserIdRoute
+  '/admin/users/new': typeof AdminUsersNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/admin/users/': typeof AdminUsersIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/account'
+    | '/admin'
     | '/banned'
     | '/change-password'
     | '/consent'
@@ -366,6 +447,10 @@ export interface FileRouteTypes {
     | '/account/consents'
     | '/account/security'
     | '/account/sessions'
+    | '/admin/audit'
+    | '/admin/clients'
+    | '/admin/roles'
+    | '/admin/system'
     | '/oauth2/authorize'
     | '/oauth2/end-session'
     | '/oauth2/introspect'
@@ -373,7 +458,11 @@ export interface FileRouteTypes {
     | '/oauth2/token'
     | '/oauth2/userinfo'
     | '/account/'
+    | '/admin/'
+    | '/admin/users/$userId'
+    | '/admin/users/new'
     | '/api/auth/$'
+    | '/admin/users/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -402,6 +491,10 @@ export interface FileRouteTypes {
     | '/account/consents'
     | '/account/security'
     | '/account/sessions'
+    | '/admin/audit'
+    | '/admin/clients'
+    | '/admin/roles'
+    | '/admin/system'
     | '/oauth2/authorize'
     | '/oauth2/end-session'
     | '/oauth2/introspect'
@@ -409,11 +502,16 @@ export interface FileRouteTypes {
     | '/oauth2/token'
     | '/oauth2/userinfo'
     | '/account'
+    | '/admin'
+    | '/admin/users/$userId'
+    | '/admin/users/new'
     | '/api/auth/$'
+    | '/admin/users'
   id:
     | '__root__'
     | '/'
     | '/account'
+    | '/admin'
     | '/banned'
     | '/change-password'
     | '/consent'
@@ -439,6 +537,10 @@ export interface FileRouteTypes {
     | '/account/consents'
     | '/account/security'
     | '/account/sessions'
+    | '/admin/audit'
+    | '/admin/clients'
+    | '/admin/roles'
+    | '/admin/system'
     | '/oauth2/authorize'
     | '/oauth2/end-session'
     | '/oauth2/introspect'
@@ -446,12 +548,17 @@ export interface FileRouteTypes {
     | '/oauth2/token'
     | '/oauth2/userinfo'
     | '/account/'
+    | '/admin/'
+    | '/admin/users/$userId'
+    | '/admin/users/new'
     | '/api/auth/$'
+    | '/admin/users/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AccountRoute: typeof AccountRouteWithChildren
+  AdminRoute: typeof AdminRouteWithChildren
   BannedRoute: typeof BannedRoute
   ChangePasswordRoute: typeof ChangePasswordRoute
   ConsentRoute: typeof ConsentRoute
@@ -596,6 +703,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BannedRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/account': {
       id: '/account'
       path: '/account'
@@ -609,6 +723,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/account/': {
       id: '/account/'
@@ -658,6 +779,34 @@ declare module '@tanstack/react-router' {
       fullPath: '/oauth2/authorize'
       preLoaderRoute: typeof Oauth2AuthorizeRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/admin/system': {
+      id: '/admin/system'
+      path: '/system'
+      fullPath: '/admin/system'
+      preLoaderRoute: typeof AdminSystemRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/roles': {
+      id: '/admin/roles'
+      path: '/roles'
+      fullPath: '/admin/roles'
+      preLoaderRoute: typeof AdminRolesRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/clients': {
+      id: '/admin/clients'
+      path: '/clients'
+      fullPath: '/admin/clients'
+      preLoaderRoute: typeof AdminClientsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/audit': {
+      id: '/admin/audit'
+      path: '/audit'
+      fullPath: '/admin/audit'
+      preLoaderRoute: typeof AdminAuditRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/account/sessions': {
       id: '/account/sessions'
@@ -722,12 +871,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DotwellKnownChangePasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/users/': {
+      id: '/admin/users/'
+      path: '/users'
+      fullPath: '/admin/users/'
+      preLoaderRoute: typeof AdminUsersIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
       fullPath: '/api/auth/$'
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/admin/users/new': {
+      id: '/admin/users/new'
+      path: '/users/new'
+      fullPath: '/admin/users/new'
+      preLoaderRoute: typeof AdminUsersNewRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/users/$userId': {
+      id: '/admin/users/$userId'
+      path: '/users/$userId'
+      fullPath: '/admin/users/$userId'
+      preLoaderRoute: typeof AdminUsersUserIdRouteImport
+      parentRoute: typeof AdminRoute
     }
   }
 }
@@ -751,9 +921,34 @@ const AccountRouteChildren: AccountRouteChildren = {
 const AccountRouteWithChildren =
   AccountRoute._addFileChildren(AccountRouteChildren)
 
+interface AdminRouteChildren {
+  AdminAuditRoute: typeof AdminAuditRoute
+  AdminClientsRoute: typeof AdminClientsRoute
+  AdminRolesRoute: typeof AdminRolesRoute
+  AdminSystemRoute: typeof AdminSystemRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+  AdminUsersUserIdRoute: typeof AdminUsersUserIdRoute
+  AdminUsersNewRoute: typeof AdminUsersNewRoute
+  AdminUsersIndexRoute: typeof AdminUsersIndexRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminAuditRoute: AdminAuditRoute,
+  AdminClientsRoute: AdminClientsRoute,
+  AdminRolesRoute: AdminRolesRoute,
+  AdminSystemRoute: AdminSystemRoute,
+  AdminIndexRoute: AdminIndexRoute,
+  AdminUsersUserIdRoute: AdminUsersUserIdRoute,
+  AdminUsersNewRoute: AdminUsersNewRoute,
+  AdminUsersIndexRoute: AdminUsersIndexRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AccountRoute: AccountRouteWithChildren,
+  AdminRoute: AdminRouteWithChildren,
   BannedRoute: BannedRoute,
   ChangePasswordRoute: ChangePasswordRoute,
   ConsentRoute: ConsentRoute,

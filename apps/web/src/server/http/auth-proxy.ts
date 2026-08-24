@@ -102,6 +102,17 @@ export function errorCodeFor(result: AuthCallResult): string {
     case "PASSWORD_TOO_SHORT":
     case "PASSWORD_TOO_LONG":
       return "password_length"
+    // The admin invariants (`admin/guard.ts`) answer with their own codes.
+    // They are echoed through rather than collapsed into "server error",
+    // because each one names a different thing the administrator can do next.
+    case "ADMIN_CANNOT_CHANGE_OWN_ROLES":
+    case "ADMIN_CANNOT_BAN_SELF":
+    case "ADMIN_CANNOT_DELETE_SELF":
+    case "ADMIN_CANNOT_IMPERSONATE_SELF":
+    case "LAST_ADMIN_PROTECTED":
+    case "ONLY_ADMINS_GRANT_ADMIN_ROLES":
+    case "IMPERSONATION_DISABLED":
+      return code.toLowerCase()
     case "USER_ALREADY_EXISTS":
       // SEC-7: sign-up must not confirm that an address is taken.
       return "signup_failed"

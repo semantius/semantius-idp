@@ -307,6 +307,232 @@ export const enUS = {
     },
   },
 
+  /**
+   * The admin area (FR-ADMIN-2..6).
+   *
+   * Written for someone who has to explain what they did afterwards: every
+   * destructive action names its consequence rather than its mechanism, and
+   * the refusals say what to do instead ("give another account an admin role
+   * first") rather than only what went wrong.
+   */
+  admin: {
+    title: "Administration",
+    forbidden: {
+      title: "You do not have access to this",
+      description:
+        "This area is for administrators. If you think that is a mistake, ask whoever set this server up.",
+      back: "Back to your account",
+    },
+    nav: {
+      dashboard: "Overview",
+      users: "Users",
+      clients: "Applications",
+      roles: "Roles",
+      audit: "Audit",
+      system: "System",
+    },
+    dashboard: {
+      title: "Overview",
+      users: "Users",
+      pending: "Waiting for approval",
+      active: "Active",
+      banned: "Suspended",
+      admins: "Administrators",
+      sessions: "Live sessions",
+      clients: "Applications",
+      signIns: "Sign-ins (24 h)",
+      failures: "Failed sign-ins (24 h)",
+      warningsTitle: "Configuration warnings",
+      pendingCta: (count: number) =>
+        count === 1
+          ? "1 account is waiting for a decision."
+          : `${count} accounts are waiting for a decision.`,
+      review: "Review them",
+    },
+    users: {
+      title: "Users",
+      search: "Search by name or e-mail",
+      searchAction: "Search",
+      filterStatus: "Status",
+      filterRole: "Role",
+      any: "Any",
+      create: "Create a user",
+      empty: "No users match that.",
+      columns: {
+        user: "User",
+        status: "Status",
+        roles: "Roles",
+        created: "Created",
+      },
+      showing: (from: number, to: number, total: number) =>
+        `${from}–${to} of ${total}`,
+      previous: "Previous",
+      next: "Next",
+      pageSize: "Per page",
+    },
+    status: {
+      pending: "Pending",
+      active: "Active",
+      rejected: "Rejected",
+      banned: "Suspended",
+      unverified: "E-mail not confirmed",
+      mustChangePassword: "Must change password",
+      twoFactor: "Two-factor on",
+    },
+    detail: {
+      identities: "Sign-in methods",
+      noIdentities: "Password only.",
+      sessions: "Sessions",
+      noSessions: "Not signed in anywhere.",
+      apiKeys: "API keys",
+      noApiKeys: "No API keys.",
+      events: "Recent activity",
+      started: "Started",
+      ip: "IP address",
+      device: "Device",
+      keyCreated: "Created",
+      notifyRejection: "Send them an e-mail about it",
+      noEvents: "Nothing recorded yet.",
+      unknownRoles: (roles: string) =>
+        `Holds roles that are not in the catalog and are dropped from claims: ${roles}. Add them to roles.json, or change them here.`,
+      profileConflict:
+        "A social sign-in was refused because this address already belongs to this account. Link the provider from the account page instead.",
+      impersonatedSession: "Impersonated",
+    },
+    actions: {
+      title: "Actions",
+      approve: "Approve",
+      reject: "Reject",
+      ban: "Suspend",
+      banReason: "Reason (recorded, not shown to the user)",
+      banDuration: "For how long",
+      banForever: "Until an administrator lifts it",
+      unban: "Lift the suspension",
+      delete: "Delete this account",
+      deleteConfirm:
+        "Deleting removes the account and everything attached to it. This cannot be undone.",
+      revokeSessions: "Sign out everywhere",
+      resetTwoFactor: "Reset two-factor authentication",
+      sendReset: "Send a password-reset e-mail",
+      temporaryPassword: "Set a temporary password",
+      temporaryPasswordHelp:
+        "They will have to choose a new one the next time they sign in.",
+      setRoles: "Roles",
+      setRolesHelp: "Comma-separated, from the catalog.",
+      save: "Save",
+      impersonate: "Sign in as this user",
+      impersonateHelp:
+        "Everything you do will be recorded against your own account.",
+      impersonateDisabled: "Impersonation is turned off on this server.",
+      revokeKey: "Revoke",
+      createKey: "Create an API key for this user",
+      keyName: "Key name",
+    },
+    create: {
+      title: "Create a user",
+      description:
+        "The account is created approved and confirmed — it is you doing the vouching.",
+      email: "E-mail address",
+      name: "Name",
+      roles: "Roles",
+      submit: "Create",
+      passwordSent: "A link to choose a password has been e-mailed to them.",
+      linkTitle: "Give them this link",
+      linkHelp:
+        "E-mail is turned off, so this is the only copy. It works once and expires.",
+    },
+    clients: {
+      title: "Applications",
+      description:
+        "Registered OAuth clients. File-configured ones are managed in oauth_clients.json and reconciled at start-up (FR-OIDC-2).",
+      empty: "No applications are registered.",
+      managedFile: "From the file",
+      managedDatabase: "Registered dynamically",
+      public: "Public",
+      confidential: "Confidential",
+      disabled: "Disabled",
+      redirectUris: "Redirect URIs",
+      scopes: "Scopes",
+      audience: "Audience",
+      skipConsent: "Consent skipped",
+      lastReconcile: "Last reconciled at start-up",
+    },
+    roles: {
+      title: "Roles",
+      description:
+        "The catalog from roles.json. Roles are assigned per user; the catalog itself is edited in the file.",
+      name: "Role",
+      users: "Users",
+      isDefault: "Given at sign-up",
+      isAdmin: "Administrator",
+    },
+    audit: {
+      title: "Audit",
+      description: "Every security-relevant event, newest first.",
+      filterAction: "Event",
+      filterOutcome: "Outcome",
+      apply: "Filter",
+      empty: "Nothing matches that.",
+      more: "Older events",
+      columns: {
+        when: "When",
+        action: "Event",
+        outcome: "Outcome",
+        actor: "Who",
+        target: "What",
+        details: "Details",
+      },
+    },
+    system: {
+      title: "System",
+      version: "Version",
+      revision: "Build",
+      issuer: "Issuer",
+      email: "E-mail",
+      emailOn: (transport: string) => `On, via ${transport}`,
+      emailOff: "Off — the server runs in degraded mode (FR-MAIL-2)",
+      keys: "Signing keys",
+      algorithm: "Algorithm",
+      activeKey: "Signing key",
+      publishedKeys: "Published",
+      rotate: "Rotate the signing key now",
+      rotateHelp:
+        "The new key is published first and starts signing an hour later, so tokens already issued keep verifying (FR-OIDC-16).",
+      rotated: (keyId: string) => `A successor key was created: ${keyId}.`,
+      startup: "Start-up",
+      reconcile: "Client reconciliation",
+      config: "Effective configuration",
+      configHelp: "Secrets are masked.",
+      warnings: "Warnings",
+    },
+    refusals: {
+      ownRoles: "You cannot change your own roles. Ask another administrator.",
+      selfBan: "You cannot suspend your own account.",
+      selfDelete: "You cannot delete your own account here.",
+      selfImpersonate: "You are already signed in as yourself.",
+      lastAdmin:
+        "This is the only administrator left. Give another account an admin role first.",
+      notAnAdmin: "Only an administrator can grant an admin role.",
+      emailDisabled:
+        "E-mail is turned off on this server, so nothing can be sent. Set a temporary password instead.",
+    },
+    notices: {
+      approved: "Approved.",
+      rejected: "Rejected.",
+      banned: "Suspended.",
+      unbanned: "The suspension has been lifted.",
+      deleted: "The account has been deleted.",
+      rolesSaved: "Roles updated.",
+      sessionsRevoked: "Signed out everywhere.",
+      twoFactorReset: "Two-factor authentication has been reset.",
+      resetSent: "A password-reset e-mail has been sent.",
+      temporaryPasswordSet:
+        "A temporary password is set. They must change it at the next sign-in.",
+      keyRevoked: "The API key has been revoked.",
+      created: "The account has been created.",
+    },
+  },
+
   email: {
     // Subject + body for each of the nine templates (FR-MAIL-1). Every link is
     // built from `server.baseUrl` only (SEC-1).
@@ -375,6 +601,15 @@ export const enUS = {
       headingDisabled: "Two-factor authentication is off",
       body: "If you did this, there is nothing to do.",
       warning: "If you did not, contact your administrator immediately.",
+    },
+    twoFactorReset: {
+      subject: (siteName: string) =>
+        `Two-factor authentication was reset on your ${siteName} account`,
+      heading: "An administrator reset your second factor",
+      body: "Two-factor authentication is off, and you have been signed out everywhere. Sign in with your password and set it up again.",
+      warning:
+        "If you did not ask for this, contact your administrator immediately.",
+      action: "Set up two-factor authentication",
     },
     apiKeyCreated: {
       subject: (siteName: string) =>

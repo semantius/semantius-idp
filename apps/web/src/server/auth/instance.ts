@@ -34,6 +34,9 @@ import {
   assertUserMaySignIn,
   buildDatabaseHooks,
 } from "./options/database-hooks"
+import type { AdminContext } from "../admin/context"
+import { buildAdminEndpoints } from "../admin/endpoints"
+import { buildAdminAfterHook, buildAdminGuard } from "../admin/guard"
 import { buildEmailCallbacks } from "./options/email-callbacks"
 import { gateApiKeyPlugin } from "./options/api-key-gate"
 import { buildAfterHook, buildBeforeHook } from "./options/hooks"
@@ -48,6 +51,12 @@ export interface AuthDeps {
    * handle carries the tables already bound to `database.schema`.
    */
   database?: DbHandle
+  /**
+   * Filled in by `runtime.ts` after this instance exists — the system page and
+   * the rotate button need the instance and the startup result, neither of
+   * which is available while the instance is being built.
+   */
+  adminContext?: AdminContext
   logger?: Logger
   /**
    * Sends the FR-MAIL-1 templates. Omitted during schema generation, and a
@@ -454,6 +463,29 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
         config,
         audit: deps.audit,
         mailer: deps.mailer,
+        // FR-ADMIN-3: the last-admin and self-action rules, in front of Better
+        // Auth's own admin endpoints — so the admin API and the admin UI are
+        // refused the same things (FR-ADMIN-6).
+        adminGuard: buildAdminGuard({
+          config,
+          database: deps.database,
+          audit: deps.audit,
+          logger: deps.logger,
+        }),
+        adminEndpoints: buildAdminEndpoints({
+          config,
+          database: deps.database,
+          audit: deps.audit,
+          logger: deps.logger,
+          mailer: deps.mailer,
+          context: deps.adminContext,
+        }),
+        adminAfterHook: buildAdminAfterHook({
+          config,
+          database: deps.database,
+          audit: deps.audit,
+          logger: deps.logger,
+        }),
         // Registered last on purpose: the SEC-6 trail has to see the response
         // the caller gets, after every other plugin has had its say.
         afterHook: buildAfterHook({ config, audit: deps.audit }),

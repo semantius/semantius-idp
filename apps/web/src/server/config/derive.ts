@@ -65,6 +65,8 @@ export interface IdpConfig {
   readonly defaultRole: string
   /** Roles that unlock `/admin/*` and the admin API. */
   readonly adminRoles: readonly string[]
+  /** FR-ADMIN-5: impersonation is off unless the operator turns it on. */
+  readonly allowImpersonation: boolean
   /** True when the deployment is treated as production (https issuer) — drives the CFG-5 literal-secret rule. */
   readonly isProduction: boolean
 }
@@ -179,6 +181,7 @@ export function deriveConfig(
       : [],
     defaultRole,
     adminRoles: file.admin.adminRoles,
+    allowImpersonation: file.admin.allowImpersonation,
     isProduction: base.secure,
   }
 }

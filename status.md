@@ -1,21 +1,22 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-24 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `e030111`
+**As of:** 2026-08-24 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `c0d8d8e`
 **Plan:** `~/.claude/plans/finish-idp-v1-s3-m6-m14.md`
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D32**
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D35**
 
-Working tree clean. **S3, M6, M7 and all of M8 are done.** Every gate green:
-lint, typecheck, unit (329), integration (149 across sixteen files), coverage
-thresholds including the 85 % per-module gates on `server/config`,
-`server/claims` and `server/oidc`, schema-drift, config-schema staleness,
-dependency pinning, and the client-bundle gate (422 KB of a 600 KB ceiling).
+**S3, M6, M7, M8 and M9 are done and committed; M10 is done and awaiting its
+commit.** Every gate green: lint, typecheck, unit (362), integration (173
+across eighteen files), coverage thresholds including the 85 % per-module
+gates, schema-drift, config-schema staleness, dependency pinning, and the
+client-bundle gate — the admin area is route-split, so the largest new chunk
+is the 18 KB user-detail page rather than anything on the sign-in path.
 
 ---
 
 ## Review results
 
-*Empty — nothing outstanding. The next round's findings go here, and are
-treated as pre-work before any further milestone starts.*
+_Empty — nothing outstanding. The next round's findings go here, and are
+treated as pre-work before any further milestone starts._
 
 ---
 
@@ -29,19 +30,19 @@ issuer-root protocol surface). Each is described in its own commit message.
 **Eleven defects were found by running things rather than reading them**, which
 is the same lesson Phase 0 recorded:
 
-| | |
-|---|---|
+|          |                                                                                                                                                                                             |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **S3-1** | Better Auth was unreachable under a sub-path — 1.7.1 appends `basePath` to `baseURL` only when `baseURL` has no path, so the issuer mounted everything at `/idp/*` and nobody could sign in |
-| **S3-2** | Nothing emitted `<link rel="icon">`, so browsers probed `/favicon.ico` at the *origin* root — someone else's application under a sub-path |
-| **M6-1** | The audit trail called a 2FA challenge a completed sign-in |
-| **M6-2** | `?forced=1` was never true: the router parses query values with `JSON.parse`, so the forced-password-change page had been rendering the ordinary screen |
-| **M6-3** | Declaring `validateUserInfo` made Better Auth refuse every user creation without an endpoint context — the bootstrap admin died at start-up |
-| **M6-4** | `syncProfile` mapped to nothing, so the documented default of refreshing a social profile never happened |
-| **M7-1** | An API key kept working after its owner was banned or un-approved |
-| **M7-2** | The freshness gate read the cookie cache, so a twenty-minute-old session could mint an API key |
-| **M7-3** | `/account/security` put 200 KB of Drizzle and the whole schema in the browser bundle |
-| **M8-1** | Every session JWT was born expired — `jwt.expirationTime` took a number as an absolute `exp`, so `GET /api/auth/token` returned tokens that expired in 1970 |
-| **M8-2** | `/.well-known/security.txt` served "Welcome to Bun!", and a GET to `/oauth2/token` served the sign-in page with a 200 |
+| **S3-2** | Nothing emitted `<link rel="icon">`, so browsers probed `/favicon.ico` at the _origin_ root — someone else's application under a sub-path                                                   |
+| **M6-1** | The audit trail called a 2FA challenge a completed sign-in                                                                                                                                  |
+| **M6-2** | `?forced=1` was never true: the router parses query values with `JSON.parse`, so the forced-password-change page had been rendering the ordinary screen                                     |
+| **M6-3** | Declaring `validateUserInfo` made Better Auth refuse every user creation without an endpoint context — the bootstrap admin died at start-up                                                 |
+| **M6-4** | `syncProfile` mapped to nothing, so the documented default of refreshing a social profile never happened                                                                                    |
+| **M7-1** | An API key kept working after its owner was banned or un-approved                                                                                                                           |
+| **M7-2** | The freshness gate read the cookie cache, so a twenty-minute-old session could mint an API key                                                                                              |
+| **M7-3** | `/account/security` put 200 KB of Drizzle and the whole schema in the browser bundle                                                                                                        |
+| **M8-1** | Every session JWT was born expired — `jwt.expirationTime` took a number as an absolute `exp`, so `GET /api/auth/token` returned tokens that expired in 1970                                 |
+| **M8-2** | `/.well-known/security.txt` served "Welcome to Bun!", and a GET to `/oauth2/token` served the sign-in page with a 200                                                                       |
 
 Two spike conclusions turned out to be wrong and are recorded as decisions:
 
@@ -58,6 +59,85 @@ Two spike conclusions turned out to be wrong and are recorded as decisions:
 One thing the provider gets wrong is normalised rather than accepted:
 `/oauth2/revoke` answers 400 for an unknown token where RFC 7009 §2.2 requires
 200, which would let the endpoint be used as an oracle for which tokens exist.
+
+---
+
+## M9 and M10, and the seven defects they turned up
+
+**M9 — the interrupted authorization.** `/oauth2/authorize` now runs a gate
+chain before it forwards: sign in, approval, suspension, forced password
+change, in that order, each returning to the authorization it interrupted.
+
+The design changed once it met the library. The plan assumed a
+`pending_authorization` table keyed to a cookie; 1.7.1 already carries the whole
+request in the interstitial page's query string, signed with the server secret
+and stamped with an expiry, and takes it back at `/oauth2/continue`. So there
+is no store, no handle and nothing to sweep — and `pending_authorization` stays
+in the schema, unused. Removing it would be a migration for no gain; M12's
+cleanup job purges it either way. **That is a deviation from the plan, recorded
+rather than hidden.**
+
+What _is_ ours is driving the resume. The provider also resumes automatically
+whenever a request carrying the signed query sets a session cookie — one gate
+too few, because a user with a temporary password gets a session on sign-in and
+would receive an authorization code before the forced change. Verified live.
+
+**M10 — the admin surface.** Better Auth's admin plugin does the writes; what
+this milestone adds is the deployment's own rules in front of them
+(`server/admin/invariants.ts`, enforced by a `before` hook so the admin API and
+the admin UI are refused the same things), the five endpoints the plugin has no
+equivalent for, and eleven pages. Every button posts to its own route, through
+Better Auth, so nothing bypasses the guard or the audit trail.
+
+The whole surface was walked in a browser against a throwaway schema
+(`idp_live_m10`, dropped afterwards; the ephemeral bootstrap password never
+touched the persistent `idp` schema).
+
+### The defects, all found by running things
+
+1. **`base: "./"` and every knob it broke** — recorded in the S3 note.
+2. **The admin API refused API keys (FR-ADMIN-6).**
+   `getAuthoritativeSessionFromCtx` re-reads the session past the cookie cache
+   by setting `context.session = null` and reading the cookie again. An API-key
+   caller has no cookie: the api-key plugin built their session in a `before`
+   hook, and the authoritative read threw it away. Every admin endpoint
+   answered 401 to exactly the callers FR-ADMIN-6 exists for. The gate now
+   falls back to what the hooks resolved — and puts it back, or every later
+   hook sees an anonymous request.
+3. **The last-admin refusal gave advice nobody could follow.** The self rules
+   were checked first, so the only administrator on a deployment who tried to
+   demote themselves was told to "ask another administrator". With two
+   administrators the last-admin rule does not apply at all, so that message
+   was _only ever_ shown to the one person for whom it was wrong. The
+   last-admin rule now goes first.
+4. **`/idp/admin-stats` answered 500 to everyone.** A bare column beside
+   `count()` with no `group by`; Postgres refuses it. Nothing said so until the
+   endpoint was actually called.
+5. **The whole dashboard answered 500.** A raw ``sql`${col} >= ${date}` ``
+   template binds the `Date` with no type for the driver, and Postgres will not
+   compare it with a `timestamp`. Drizzle's `gte` does it correctly — and was
+   already used, correctly, three files away.
+6. **`sessionCookie()` in the test harness took the first match.** Impersonation
+   clears the current session before setting the new one, so the first
+   `session_token` header is the `Max-Age=0` deletion. The test sent an empty
+   token and was told it was not signed in — an hour spent at the wrong end of
+   `/admin/impersonate-user`. It now takes the last live one.
+7. **An administrative create ignores the `status` it is given.** Not a defect —
+   `database-hooks.ts` forces admin-created users active on purpose
+   (FR-SIGNUP-2) — but it means a test cannot manufacture a pending user, and
+   the approval test now registers one through `/sign-up/email` like a person.
+
+### One thing noticed and deliberately not changed
+
+`buildSessionClaims` decides "did this come from an API key?" with
+`typeof session.session.token !== "string"`. In 1.7.1 the api-key plugin sets
+`token` to the key **string**, so that test is always false: `azp` is always
+`idp` and `apiKeys.tokenClientId` is dead configuration. `tokens.test.ts`
+asserts `azp === "idp"` for a key exchange with a comment endorsing it, so the
+_behaviour_ is the one that was chosen — but the discriminator and the config
+option both claim otherwise. **Left for M11**, where the token surface is
+already being revisited; changing token claims mid-M10 would be re-opening a
+decision another block made and tested.
 
 ---
 
@@ -106,14 +186,14 @@ R-3 the post-login destination. Nothing outstanding from any of them.
 
 **Found on the way, in the order they appeared:**
 
-| | |
-|---|---|
-| **R-4** | The whole server was in the browser bundle, and hydration was dead on every page |
+|         |                                                                                   |
+| ------- | --------------------------------------------------------------------------------- |
+| **R-4** | The whole server was in the browser bundle, and hydration was dead on every page  |
 | **R-5** | The forced password change never ended — the bootstrap admin was trapped for ever |
-| **R-6** | Two gates that were green only because nobody ran them |
-| **R-7** | The advisory-lock timeout never worked; a blocked start would hang, not fail |
+| **R-6** | Two gates that were green only because nobody ran them                            |
+| **R-7** | The advisory-lock timeout never worked; a blocked start would hang, not fail      |
 
-Every one was found by *running* something rather than reading it: opening the
+Every one was found by _running_ something rather than reading it: opening the
 app in a real browser, signing in end to end against a live server, running the
 CLI, running the coverage command. None would have been caught by another pass
 over the code.
@@ -124,7 +204,7 @@ over the code.
 Affects `/login`, `/signup`, `/reset-password`, `/change-password`.
 
 **What is wrong:** the reveal is a full-width underlined text link reading
-"Show password" / "Hide password" sitting *below* the input — three of them
+"Show password" / "Hide password" sitting _below_ the input — three of them
 stacked on the change-password form. It reads as unstyled scaffolding, not a
 product.
 
@@ -141,6 +221,7 @@ checkbox can style a `<label>` containing an SVG, positioned absolutely inside
 the field wrapper, with the two icon states swapped by `peer-checked:`.
 
 **Acceptance:**
+
 - icon button inside the input, not a link below it
 - one toggling control, not two swapped labels
 - `aria-label` that changes with state, and a real focus ring — it is a control,
@@ -150,7 +231,7 @@ the field wrapper, with the two icon states swapped by `peer-checked:`.
 - `lucide-react` is already a dependency; no new one is needed
 
 **✅ Fixed.** One in-field eye / eye-off control, right-aligned, Tab reaches it
-*after* the password field with a visible ring, and the accessible name changes
+_after_ the password field with a visible ring, and the accessible name changes
 with state. Verified in a real browser, not only in a test.
 
 The toggle flips the input `type` from a `change` handler. Two mechanism notes
@@ -159,7 +240,7 @@ worth keeping, because both contradict what the code used to assume:
 - Tailwind v4 compiles `peer-checked:` to `:where(.peer):checked ~ *`, a
   **sibling** combinator, so it cannot reach the icons inside the label. Those
   use `group-has-checked:` (`:where(.group):has(:checked) *`). The same hook
-  masks the input, which is what lets the checkbox sit *after* it in the DOM
+  masks the input, which is what lets the checkbox sit _after_ it in the DOM
   and gives the natural tab order.
 - `-webkit-text-security: none` on `input[type=password]` is parsed and then
   **clamped back to `disc`** by Chromium 151 and WebKit 26.5; only Firefox 153
@@ -183,10 +264,10 @@ written yet.
 **What is wrong:** the generator exists because I concluded the Better Auth CLI
 was version-stranded. It is not. The CLI was **renamed**:
 
-| | |
-|---|---|
-| `@better-auth/cli` | **deprecated** — *"Package no longer supported"*, last at 1.4.21 |
-| **`auth`** | the current CLI, **1.7.1**, bins `auth` and `better-auth`, depending on `better-auth@1.7.1` and `@better-auth/core@1.7.1` |
+|                    |                                                                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| `@better-auth/cli` | **deprecated** — _"Package no longer supported"_, last at 1.4.21                                                          |
+| **`auth`**         | the current CLI, **1.7.1**, bins `auth` and `better-auth`, depending on `better-auth@1.7.1` and `@better-auth/core@1.7.1` |
 
 Those are exactly our pinned versions, so the version-skew argument — the whole
 stated reason for not using DM-1's specified tool — does not hold.
@@ -202,10 +283,10 @@ package, and I read it as an abandoned one.
 1. Does `npx auth generate` produce a Drizzle schema equivalent to the committed
    one? Diff it against `auth-schema.ts` before deciding anything.
 2. **The open question that may still justify a custom generator:**
-   `database.schema` is a *runtime* value (CFG-4, D27), so the schema module has
+   `database.schema` is a _runtime_ value (CFG-4, D27), so the schema module has
    to be a `createAuthSchema(schemaName)` **factory**. The CLI emits constants
    with the name baked in. If it cannot be made to emit a factory, the custom
-   generator survives — but for *that* reason, stated honestly, not the version
+   generator survives — but for _that_ reason, stated honestly, not the version
    one.
 3. If the CLI can serve, delete the generator, switch `db:generate-schema` to
    it, and keep the `--check` drift gate pointed at whatever produces the file.
@@ -219,7 +300,7 @@ produced.
 
 I ran the CLI rather than reasoning about it. `auth@1.7.1` installs, runs, and
 against a shim of our own option set emits the same **seventeen** tables.
-Compared as Drizzle *table objects* — `getTableConfig()` over every column,
+Compared as Drizzle _table objects_ — `getTableConfig()` over every column,
 index and foreign key, not a text diff — the two are now **identical across all
 17 tables**.
 
@@ -243,10 +324,10 @@ note, spec §4 + DM-1, and the deviations table below.
 **Running it found two real bugs in ours** — "identical" is only true after
 fixing them, and this is the part worth your attention:
 
-| | ours (before) | `auth generate` |
-|---|---|---|
-| `required` | `if (field.required)` | `attr.required !== false` |
-| date defaults | `.toString().includes("new Date()")` | the same test |
+|               | ours (before)                        | `auth generate`           |
+| ------------- | ------------------------------------ | ------------------------- |
+| `required`    | `if (field.required)`                | `attr.required !== false` |
+| date defaults | `.toString().includes("new Date()")` | the same test             |
 
 Better Auth documents `required?: boolean` as **`@default true`**. Reading it as
 truthy made every field that declares nothing **nullable** — including
@@ -275,14 +356,14 @@ in FR-AUTH-1; needs a decision number (**D28**).
 
 **Two problems, one fix.**
 
-*It is broken now.* Sign-in redirects to
+_It is broken now._ Sign-in redirects to
 `safeReturnTo(form.returnTo, APP_ROUTES.account)` — and `/account` does not
 exist until M7. **A successful sign-in today lands on a 404.** Only the
 bootstrap admin escapes it, because `mustChangePassword` diverts to
 `/change-password`, which is why this was not caught: the one account used to
 test the flow is the one account that never reaches the default.
 
-*It is unconfigurable.* `/account` is the wrong destination whenever the IdP is
+_It is unconfigurable._ `/account` is the wrong destination whenever the IdP is
 bundled beside the product — at `https://apps.example.com/idp` with the app on
 `/`, or with the app on a different host entirely. After signing in, users
 should land in the product, not on their profile page.
@@ -313,6 +394,7 @@ forced-change handler has to re-resolve the destination at the end rather than
 round-trip it through a parameter.
 
 **Acceptance:**
+
 - key validates as a relative path or an absolute URL; a bare hostname is rejected
 - sign-in honours the precedence above, and an OAuth continuation still wins
 - `returnTo` from the query is still refused unless same-origin relative — the
@@ -321,7 +403,7 @@ round-trip it through a parameter.
 - `config.example` documents it, and the README says to set it when the IdP is
   bundled
 
-**Note on ordering:** this is worth doing *before* M7. It removes the 404 by
+**Note on ordering:** this is worth doing _before_ M7. It removes the 404 by
 configuration rather than making everyone wait for `/account` to exist.
 
 **✅ Fixed.** Recorded as **D28** in the spec (CFG-4 row, FR-AUTH-1 precedence
@@ -355,14 +437,14 @@ select pg_try_advisory_lock($1::int, $2::int) as locked
 ```
 
 No secrets leaked — those are runtime values, not compiled in — but the
-server's *code* was, and nothing on any page could hydrate.
+server's _code_ was, and nothing on any page could hydrate.
 
 **Why it happened.** A TanStack Start route `loader` is isomorphic: it runs on
 the server for the first paint and in the browser on every client-side
 navigation. So a top-level `import { getRuntime }` in a route file pulls the
 entire IdP into the client graph — even though only the loader touches it.
 Every route did exactly that, `__root.tsx` included. A `server.handlers` block
-*is* stripped from the client build, which is why the POST handlers were fine
+_is_ stripped from the client build, which is why the POST handlers were fine
 and why this looked safe.
 
 **Why nobody noticed.** Every public page is a plain server-rendered form that
@@ -379,7 +461,7 @@ and hydration verified working in Chrome.
 
 **Guarded.** New `scripts/check-client-bundle.ts`, wired into CI: it fails if
 any of six server-only strings appears in a client chunk, or if the bundle
-crosses a size ceiling. Each marker is also asserted to be *present* in the
+crosses a size ceiling. Each marker is also asserted to be _present_ in the
 server build, so a marker that stops matching anything fails loudly instead of
 passing for ever. Verified by reintroducing a single leaking loader — the gate
 catches it.
@@ -401,7 +483,7 @@ theoretical rather than seen: the one account available to test with never got
 past the interposition to hit it.
 
 **Fixed** in `auth/options/database-hooks.ts` via `account.update.after` — the
-only seam that fires after the write succeeds *and* carries both `providerId`
+only seam that fires after the write succeeds _and_ carries both `providerId`
 and `userId` (the matching `before` hook receives just `{ password }`, with no
 user to act on). Gated on an explicit endpoint list rather than "any credential
 password write", because M10's admin temporary-password flow writes a password
@@ -482,7 +564,7 @@ CFG-4/5, SEC-6, TST-4, DOC-3, §12, §15 ticked).
   so three packages have to move in lockstep on every upgrade. Reading their
   real type surface is also what froze the FR-OIDC-3 mapping (R9) and settled
   R4, R5 and R10.
-  ⚠ The *second half* of this finding — that the CLI was unusable — **was
+  ⚠ The _second half_ of this finding — that the CLI was unusable — **was
   wrong**; settled as **D29**, see **R-2** under Review results. The CLI runs
   fine at 1.7.1; the generator survives because the CLI cannot emit a
   schema-name factory, and running it found two real bugs in ours.
@@ -506,15 +588,18 @@ schema identifier in the committed SQL. And **`buildRuntime` had to become
 async**, because the OAuth provider queries `oauth_resource` from its own
 `init()`; on a fresh database the process died before it could migrate.
 
-## Not done (M9–M14)
+## Not done (M11–M14)
 
-Authorize UX (continuation, consent, end-session UI), the admin surface,
-security hardening, the container and CLI, e2e and docs. Everything before
-them is done.
+Security hardening, the container and CLI, e2e and docs. Everything before them
+is done.
 
 Accepted deviations, unchanged: `drizzle.config.ts` sits in `apps/web/`
 because drizzle-kit resolves paths relative to itself; `test:e2e` stays
 declared-but-inert until M13; `.agents/skills/` is committed tooling.
+
+New deviation, recorded as **D33**: `pending_authorization` is generated into
+the schema and never written to — 1.7.1's signed continuation makes the store
+unnecessary. See the M9 section above.
 
 New since the last update: `src/serve.ts` is the `Bun.serve` wrapper spike S3
 needed — static files out of `dist/client` with the mount path stripped. M12
@@ -525,27 +610,27 @@ log rather than starting from nothing.
 
 ## What responds today
 
-| | |
-|---|---|
-| `/` | ✅ 307 → `/account` when signed in, `/login` when not |
-| `/login` `/signup` `/two-factor` `/change-password` … | ✅ 200 |
-| `/account` `/account/security` `/account/sessions` `/account/api-keys` `/account/consents` | ✅ 200 |
-| `/healthz` `/readyz` | ✅ 200 |
-| `/.well-known/openid-configuration` | ✅ 200 — issuer-root URLs, no `/api/auth` anywhere |
-| `/.well-known/oauth-authorization-server` | ✅ 200 |
-| `/.well-known/jwks.json` `/api/auth/jwks` | ✅ 200, byte-identical, ETag + `max-age=300` |
-| `/.well-known/change-password` | ✅ 302 → `/change-password` |
-| `/.well-known/security.txt` | ✅ 200 with a file in the config folder, 404 without |
-| `/robots.txt` | ✅ 200, disallow all |
-| `/oauth2/authorize` `/oauth2/token` `/oauth2/userinfo` `/oauth2/introspect` `/oauth2/revoke` `/oauth2/end-session` | ✅ 200 / 405 by method |
-| `/admin/*` | ❌ 404 — **M10** |
+|                                                                                                                    |                                                       |
+| ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------- |
+| `/`                                                                                                                | ✅ 307 → `/account` when signed in, `/login` when not |
+| `/login` `/signup` `/two-factor` `/change-password` …                                                              | ✅ 200                                                |
+| `/account` `/account/security` `/account/sessions` `/account/api-keys` `/account/consents`                         | ✅ 200                                                |
+| `/healthz` `/readyz`                                                                                               | ✅ 200                                                |
+| `/.well-known/openid-configuration`                                                                                | ✅ 200 — issuer-root URLs, no `/api/auth` anywhere    |
+| `/.well-known/oauth-authorization-server`                                                                          | ✅ 200                                                |
+| `/.well-known/jwks.json` `/api/auth/jwks`                                                                          | ✅ 200, byte-identical, ETag + `max-age=300`          |
+| `/.well-known/change-password`                                                                                     | ✅ 302 → `/change-password`                           |
+| `/.well-known/security.txt`                                                                                        | ✅ 200 with a file in the config folder, 404 without  |
+| `/robots.txt`                                                                                                      | ✅ 200, disallow all                                  |
+| `/oauth2/authorize` `/oauth2/token` `/oauth2/userinfo` `/oauth2/introspect` `/oauth2/revoke` `/oauth2/end-session` | ✅ 200 / 405 by method                                |
+| `/admin/*`                                                                                                         | ❌ 404 — **M10**                                      |
 
 **A full authorization-code + PKCE flow works end to end**, verified against a
 live server on a throwaway schema: authorize → code → token (ES256, `kid`,
 `typ: at+jwt`, `iss` byte-equal, user claims, `no-store`) → userinfo. The CORS
 matrix answers four different ways depending on the endpoint and origin.
 
-What is still missing from the OIDC surface is *interaction*: the consent
+What is still missing from the OIDC surface is _interaction_: the consent
 screen, the pending-authorization continuation and the end-session
 confirmation page are M9. `/oauth2/end-session` forwards today but has no
 confirmation page for the no-hint case.
@@ -554,25 +639,25 @@ confirmation page for the no-hint case.
 
 ## Milestone table
 
-| # | Milestone | Status |
-|---|---|---|
-| M1.0 | Amend spec for D24–D26 | ✅ done |
-| M0 | Spikes S1, S2, S3, S4, S5 | ✅ done — S3's verdict is in [docs/spikes/s3-sub-path.md](docs/spikes/s3-sub-path.md) |
-| P0 | Phase 0 — review fixes + M5.5 backfill + CI | ✅ done |
-| M1 | Toolchain baseline | ✅ done |
-| M2 | Configuration system | ✅ done |
-| M3 | DB, Better Auth skeleton, migrations | ✅ done |
-| M4 | Startup, bootstrap admin, audit, e-mail, i18n | ✅ done |
-| M5 | Password auth, sign-up & approval | ✅ done |
-| M6 | Social + 2FA | ✅ done |
-| M7 | Account self-service + API keys | ✅ done |
-| M8 | **OIDC core** | ✅ done — a, b and c |
-| M9 | Authorize UX: continuation, consent, end-session | ⬜ **next** |
-| M10 | Admin UI + API | ⬜ not started |
-| M11 | Security hardening | ⬜ partial — see below |
-| M12 | Container, compose, Caddy, CLI, ops | ⬜ not started |
-| M13 | E2E, sample RP, a11y | ⬜ not started |
-| M14 | Docs & release — **including the README (DOC-1)** | ⬜ not started |
+| #    | Milestone                                         | Status                                                                                |
+| ---- | ------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| M1.0 | Amend spec for D24–D26                            | ✅ done                                                                               |
+| M0   | Spikes S1, S2, S3, S4, S5                         | ✅ done — S3's verdict is in [docs/spikes/s3-sub-path.md](docs/spikes/s3-sub-path.md) |
+| P0   | Phase 0 — review fixes + M5.5 backfill + CI       | ✅ done                                                                               |
+| M1   | Toolchain baseline                                | ✅ done                                                                               |
+| M2   | Configuration system                              | ✅ done                                                                               |
+| M3   | DB, Better Auth skeleton, migrations              | ✅ done                                                                               |
+| M4   | Startup, bootstrap admin, audit, e-mail, i18n     | ✅ done                                                                               |
+| M5   | Password auth, sign-up & approval                 | ✅ done                                                                               |
+| M6   | Social + 2FA                                      | ✅ done                                                                               |
+| M7   | Account self-service + API keys                   | ✅ done                                                                               |
+| M8   | **OIDC core**                                     | ✅ done — a, b and c                                                                  |
+| M9   | Authorize UX: continuation, consent, end-session  | ✅ done                                                                               |
+| M10  | Admin UI + API                                    | ✅ done                                                                               |
+| M11  | Security hardening                                | ⬜ **next** — partial, see below                                                      |
+| M12  | Container, compose, Caddy, CLI, ops               | ⬜ not started                                                                        |
+| M13  | E2E, sample RP, a11y                              | ⬜ not started                                                                        |
+| M14  | Docs & release — **including the README (DOC-1)** | ⬜ not started                                                                        |
 
 `README.md` is **DOC-1, in M14**. It currently carries a minimal
 getting-started and first-sign-in section; the full DOC-1 README — features,
@@ -586,6 +671,7 @@ troubleshooting — is still to come.
 This session, newest first:
 
 ```
+c0d8d8e feat(oidc): interstitials that resume the authorization (M9)
 e030111 feat(m8c): the protocol endpoints move to the issuer root
 d46433e feat(m8b): tokens that say the same thing whichever endpoint minted them
 0e09f43 feat(m8a): the client file becomes the database, and the R4 risk dissolves
@@ -655,7 +741,7 @@ R10.
 ### Session advisory locks do not hold through a pooler (S4 → **decision D27**)
 
 With the lock held on one reserved connection, `pg_try_advisory_lock` on a
-second connection through the **pooled** endpoint *succeeds*. Through the
+second connection through the **pooled** endpoint _succeeds_. Through the
 **direct** endpoint it behaves correctly. Every mutating startup step depends on
 this — migrations, first-boot key generation, reconciliation, bootstrap admin,
 cleanup.
@@ -667,12 +753,12 @@ Startup warns when the URL looks pooled and `directUrl` is unset.
 
 ### Risks that resolved better than expected
 
-| Risk | Outcome |
-|---|---|
-| **R1** default audience | Real — no `resource` parameter yields an *opaque* token, not a JWT. Fixed by a `hooks.before` injection; **the pre-authorized `pnpm patch` is not needed**. The wrinkle it recorded — a second `aud` from the `openid` scope — could *not* be normalised in the `jwt.sign` seam, because that seam requires a remote key set; settled as **D32**. |
-| **R2** per-client resources | Confirmed: `enforcePerClientResources` defaults to `true`. Kept on; reconcile owns the links. |
-| **R4** client-secret hashing | Resolved outright — `storeClientSecret` accepts our own `hash`/`verify` pair, so reconcile and the token endpoint use the same function object. |
-| **R5** session JWT | Half right. `definePayload` is the seam for the session JWT and one claims builder does cover all three FR-OIDC-7 paths — but **not** through `jwt.sign`, which the plugin refuses to accept without a remote key set (D32). |
+| Risk                         | Outcome                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **R1** default audience      | Real — no `resource` parameter yields an _opaque_ token, not a JWT. Fixed by a `hooks.before` injection; **the pre-authorized `pnpm patch` is not needed**. The wrinkle it recorded — a second `aud` from the `openid` scope — could _not_ be normalised in the `jwt.sign` seam, because that seam requires a remote key set; settled as **D32**. |
+| **R2** per-client resources  | Confirmed: `enforcePerClientResources` defaults to `true`. Kept on; reconcile owns the links.                                                                                                                                                                                                                                                     |
+| **R4** client-secret hashing | Resolved outright — `storeClientSecret` accepts our own `hash`/`verify` pair, so reconcile and the token endpoint use the same function object.                                                                                                                                                                                                   |
+| **R5** session JWT           | Half right. `definePayload` is the seam for the session JWT and one claims builder does cover all three FR-OIDC-7 paths — but **not** through `jwt.sign`, which the plugin refuses to accept without a remote key set (D32).                                                                                                                      |
 
 ---
 
@@ -753,7 +839,7 @@ admin, no self-ban, no self-role-change), impersonation behind
 **M11 — Security hardening.** Already in place: SEC-1 (every URL from
 `baseUrl`), SEC-3, SEC-5 redaction, SEC-6, SEC-7, SEC-9, SEC-10, and now the
 FR-OIDC-17 CORS matrix. Still to do: the SEC-4 headers/CSP middleware, the
-SEC-5 *request log* (which no milestone has created yet — audit rows still
+SEC-5 _request log_ (which no milestone has created yet — audit rows still
 carry no request id), the SEC-2 rate-limit rules with `trustProxy` IP
 resolution, `auth.password.breachCheck`, and the TST-5 adversarial suite.
 
@@ -768,7 +854,7 @@ already exists as `src/tests/fixtures/mock-oidc-provider.ts` and is written as
 a real listener precisely so the containerised run can reuse it.
 
 **M14 — Docs and release.** The generated configuration reference, the DOC-1
-README rewrite (including the first-sign-in trap: the forced change *consumes*
+README rewrite (including the first-sign-in trap: the forced change _consumes_
 the `.env` password), `docs/neon.md`, `docs/clients.md`,
 `docs/admin-api.md`, the runbooks, and the release gate.
 
@@ -776,12 +862,12 @@ the `.env` password), `docs/neon.md`, `docs/clients.md`,
 
 ## Deviations from the plan
 
-| Deviation | Why |
-|---|---|
-| Schema generated by `scripts/generate-auth-schema.ts`, not the Better Auth CLI | **Verified, D29.** The old "version-stranded CLI" reason was false — the CLI was renamed to `auth` and tracks 1.7.1. The real reason: the CLI emits module-level constants with the schema name baked in as a string literal, and a runtime `database.schema` (D27) needs a `createAuthSchema(schemaName)` factory it has no code path to produce. Both now emit field-identical output across all 17 tables. |
-| Own migrator instead of `drizzle-orm`'s | Drizzle's applies the file verbatim and cannot retarget `database.schema`, which is a runtime setting. |
-| `drizzle.config.ts` in `apps/web/`, not the repo root | drizzle-kit resolves every path relative to the config file, and both the schema and the migrations live there. |
-| New config key `database.directUrl` | Forced by the S4 pooler finding; recorded as D27 and amended into CFG-4. |
-| Route loaders read `context.ui`, filled by one `createServerFn` in `beforeLoad` | A Start `loader` is isomorphic, so a top-level `getRuntime` import puts the whole IdP in the browser bundle. See R-4. |
-| Coverage is measured across **both** vitest projects, not `unit` alone | Measuring all of `src/server` against unit tests only is the wrong denominator, and reported ~60 % against its own 70 % gate. See R-6. |
-| The reveal control is withdrawn when scripting is off | Blink and WebKit clamp a password field back to `disc` whatever the style says, so a scriptless toggle would lie to a screen reader. Cheap and no longer load-bearing after D31. See R-1. |
+| Deviation                                                                       | Why                                                                                                                                                                                                                                                                                                                                                                                                           |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Schema generated by `scripts/generate-auth-schema.ts`, not the Better Auth CLI  | **Verified, D29.** The old "version-stranded CLI" reason was false — the CLI was renamed to `auth` and tracks 1.7.1. The real reason: the CLI emits module-level constants with the schema name baked in as a string literal, and a runtime `database.schema` (D27) needs a `createAuthSchema(schemaName)` factory it has no code path to produce. Both now emit field-identical output across all 17 tables. |
+| Own migrator instead of `drizzle-orm`'s                                         | Drizzle's applies the file verbatim and cannot retarget `database.schema`, which is a runtime setting.                                                                                                                                                                                                                                                                                                        |
+| `drizzle.config.ts` in `apps/web/`, not the repo root                           | drizzle-kit resolves every path relative to the config file, and both the schema and the migrations live there.                                                                                                                                                                                                                                                                                               |
+| New config key `database.directUrl`                                             | Forced by the S4 pooler finding; recorded as D27 and amended into CFG-4.                                                                                                                                                                                                                                                                                                                                      |
+| Route loaders read `context.ui`, filled by one `createServerFn` in `beforeLoad` | A Start `loader` is isomorphic, so a top-level `getRuntime` import puts the whole IdP in the browser bundle. See R-4.                                                                                                                                                                                                                                                                                         |
+| Coverage is measured across **both** vitest projects, not `unit` alone          | Measuring all of `src/server` against unit tests only is the wrong denominator, and reported ~60 % against its own 70 % gate. See R-6.                                                                                                                                                                                                                                                                        |
+| The reveal control is withdrawn when scripting is off                           | Blink and WebKit clamp a password field back to `disc` whatever the style says, so a scriptless toggle would lie to a screen reader. Cheap and no longer load-bearing after D31. See R-1.                                                                                                                                                                                                                     |

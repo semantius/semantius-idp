@@ -51,6 +51,22 @@ export function messageForErrorCode(
     case "signup_failed":
       // SEC-7: never confirms whether the address was already taken.
       return t.auth.signUp.done
+    case "admin_cannot_change_own_roles":
+      return t.admin.refusals.ownRoles
+    case "admin_cannot_ban_self":
+      return t.admin.refusals.selfBan
+    case "admin_cannot_delete_self":
+      return t.admin.refusals.selfDelete
+    case "admin_cannot_impersonate_self":
+      return t.admin.refusals.selfImpersonate
+    case "last_admin_protected":
+      return t.admin.refusals.lastAdmin
+    case "only_admins_grant_admin_roles":
+      return t.admin.refusals.notAnAdmin
+    case "impersonation_disabled":
+      return t.admin.actions.impersonateDisabled
+    case "email_disabled":
+      return t.admin.refusals.emailDisabled
     case "rate_limited":
       return t.errors.rateLimited.description
     case "server_error":
@@ -123,6 +139,9 @@ export function messageForNoticeCode(
     case "twofactor_off":
       return t.account.twoFactor.turnedOff
     default:
-      return undefined
+      // The admin pages name their notices after the catalog key directly:
+      // there are a dozen of them, they are all one-line confirmations, and a
+      // second switch listing each one would say nothing the key does not.
+      return (t.admin.notices as Record<string, string | undefined>)[code ?? ""]
   }
 }

@@ -62,6 +62,12 @@ export interface UiContext {
   apiKeyMaxExpiresInDays: number
   /** Minimum password length, shown as an inline policy hint (FR-ACCT-2). */
   passwordMinLength: number
+  /**
+   * FR-ADMIN-5: with impersonation off the admin page still shows the control,
+   * disabled and explained — a button that vanishes reads as a missing feature,
+   * and the operator who turned it off is not usually the one clicking.
+   */
+  allowImpersonation: boolean
   /** FR-SOC-1: only providers that are actually configured render a button. */
   socialProviders: SocialProviderView[]
 }
@@ -130,7 +136,8 @@ export function buildUiContext(config: IdpConfig, locale: string): UiContext {
   return {
     siteName: file.site.name,
     logo: brandingUrl(paths, file.site.logo),
-    favicon: brandingUrl(paths, file.site.favicon) ?? paths.path("/favicon.ico"),
+    favicon:
+      brandingUrl(paths, file.site.favicon) ?? paths.path("/favicon.ico"),
     theme: file.site.theme,
     supportEmail: file.site.supportEmail,
     termsUrl: file.site.termsUrl,
@@ -145,6 +152,7 @@ export function buildUiContext(config: IdpConfig, locale: string): UiContext {
     twoFactorEnabled: file.twoFactor.enabled,
     twoFactorTrustDeviceDays: file.twoFactor.trustDeviceDays,
     apiKeysEnabled: file.apiKeys.enabled,
+    allowImpersonation: file.admin.allowImpersonation,
     apiKeyMaxExpiresInDays: Math.max(
       1,
       Math.floor(file.apiKeys.maxExpiresIn / 86_400)

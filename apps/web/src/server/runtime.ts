@@ -27,6 +27,7 @@ import type { Audit } from "./audit"
 import { loadConfig } from "./config/loader"
 import type { LoadedConfig } from "./config/loader"
 import type { IdpConfig } from "./config/derive"
+import { createAdminContext } from "./admin/context"
 import { createDb } from "./db/client"
 import type { DbHandle } from "./db/client"
 import { loadDevEnv } from "./dev-env"
@@ -99,12 +100,24 @@ export async function buildRuntime(): Promise<Runtime> {
     // Safe to construct now: the tables the plugins touch on init exist.
     const mailer = createMailer({ config, logger })
     const audit = createAudit(database, logger)
-    const auth = createAuth({ config, database, logger, mailer, audit })
+    // Handed to the instance empty and filled in as each piece appears; see
+    // `admin/context.ts` for why this is not a module-level singleton.
+    const adminContext = createAdminContext()
+    const auth = createAuth({
+      config,
+      database,
+      logger,
+      mailer,
+      audit,
+      adminContext,
+    })
+    adminContext.auth = auth
 
     const startup = await runStartup(
       { config, database, locking, auth, logger },
       [migrateStep]
     )
+    adminContext.startup = startup
 
     return {
       config,

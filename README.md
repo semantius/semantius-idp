@@ -52,9 +52,13 @@ DIRECT_DATABASE_URL=postgres://…     # required only if DATABASE_URL is pooled
 IDP_SECRET=…                         # required, ≥ 32 random bytes
 IDP_CONFIG_DIR=./config
 
-IDP_ADMIN_EMAIL=you@example.com      # the first administrator
-IDP_ADMIN_PASSWORD=…                 # temporary; you change it at first sign-in
+IDP_ADMIN_EMAIL=you@example.com      # ← this is your login
+IDP_ADMIN_PASSWORD=…                 # ← and this; you change it at first sign-in
 ```
+
+**These two are the only way in.** There is no default account and no built-in
+password — whatever you put here is what you sign in with. See
+[Signing in for the first time](#signing-in-for-the-first-time).
 
 Generate the secret with:
 
@@ -88,9 +92,55 @@ curl localhost:3000/readyz
 
 ## Signing in for the first time
 
-The **bootstrap administrator** is created from `admin.bootstrap` in
-`config.json`, whose values come from `IDP_ADMIN_EMAIL` and
-`IDP_ADMIN_PASSWORD`:
+**There is no built-in account and no default password.** The first
+administrator is whatever you put in these two variables before the first boot:
+
+```bash
+IDP_ADMIN_EMAIL=you@example.com
+IDP_ADMIN_PASSWORD=whatever-you-choose-here
+```
+
+Those *are* your login. Open **`http://localhost:3000/`** — it redirects to
+`/login` — and sign in with exactly those two values.
+
+> **Already have a `.env` and don't know what is in it?**
+> ```bash
+> grep IDP_ADMIN .env
+> ```
+> Whatever it prints is the login. If the values are empty, no administrator was
+> created and nobody can sign in — see "if you get locked out" below.
+
+Then:
+
+1. Sign in with `IDP_ADMIN_EMAIL` / `IDP_ADMIN_PASSWORD`.
+2. You land on **`/change-password`** and cannot skip it: the bootstrap account
+   is created with `mustChangePassword` set. Choose your real password here.
+   **From this point the `.env` password no longer works.**
+3. **Unset both variables.** They are only read when the database holds no
+   administrator, so keeping them achieves nothing and leaves a password lying
+   about in your environment.
+
+### If you get locked out
+
+The bootstrap step runs **only when no user holds an admin role**. So:
+
+- Changing `IDP_ADMIN_PASSWORD` after an administrator already exists does
+  **nothing** — the step is skipped, and the log says
+  `bootstrap admin skipped: an admin already exists`.
+- To start over in development, drop the schema and let the next boot rebuild
+  it:
+  ```bash
+  psql "$DIRECT_DATABASE_URL" -c 'drop schema idp cascade'
+  ```
+  Everything is in that one schema, so this destroys users, sessions, tokens and
+  signing keys and nothing else.
+- In production, `idp create-admin` is the supported route. It arrives with the
+  operator CLI in M12.
+
+### How it is wired
+
+`admin.bootstrap` in `config.json` reads the two variables through placeholders,
+which is why the config file itself contains no password:
 
 ```jsonc
 "admin": {
@@ -101,17 +151,6 @@ The **bootstrap administrator** is created from `admin.bootstrap` in
   }
 }
 ```
-
-Then:
-
-1. Open **`http://localhost:3000/`** — it redirects to `/login`.
-2. Sign in with `IDP_ADMIN_EMAIL` and `IDP_ADMIN_PASSWORD`.
-3. You are sent straight to **`/change-password`**, which you cannot skip: the
-   bootstrap account is created with `mustChangePassword` set. Choose your own
-   password.
-4. **Unset `IDP_ADMIN_EMAIL` and `IDP_ADMIN_PASSWORD`.** They are only read when
-   the database holds no administrator, so leaving them set achieves nothing and
-   keeps a password in your environment.
 
 Things worth knowing about that account:
 

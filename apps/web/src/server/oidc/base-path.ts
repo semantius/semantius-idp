@@ -96,6 +96,8 @@ export const APP_ROUTES = {
   changePassword: "/change-password",
   logout: "/logout",
   endSession: "/oauth2/end-session",
+  /** The confirmation page for a logout with no `id_token_hint` (FR-OIDC-11). */
+  endSessionConfirm: "/sign-out",
   account: "/account",
   admin: "/admin",
   error: "/error",

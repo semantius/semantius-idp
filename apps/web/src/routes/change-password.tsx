@@ -16,6 +16,11 @@ import {
   withError,
 } from "@/server/http/auth-proxy"
 import { resolveSignInDestination } from "@/server/http/post-login"
+import { readOauthQuery } from "@/lib/oauth-query"
+import {
+  OAUTH_QUERY_FIELD,
+  resumeAuthorization,
+} from "@/server/oidc/continuation"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
 
@@ -39,6 +44,7 @@ export const Route = createFileRoute("/change-password")({
       // Empty, not `/account`: an absent value has to fall through to
       // `auth.defaultRedirect` when the form is submitted (D28).
       returnTo: safeReturnTo(searchString(search.returnTo), ""),
+      oauthQuery: readOauthQuery({ search, searchStr: location.searchStr }),
       error: searchString(search.error),
     }
   },
@@ -51,11 +57,13 @@ export const Route = createFileRoute("/change-password")({
         const form = await readForm(request)
         const forced = form.forced === "1"
         const returnTo = safeReturnTo(form.returnTo, "")
+        const oauthQuery = form[OAUTH_QUERY_FIELD]
 
         // Built from parts because `returnTo` is now optional — an absent one
         // must not leave a stray `?&` behind (D28).
         const params = new URLSearchParams()
         if (returnTo) params.set("returnTo", returnTo)
+        if (oauthQuery) params.set(OAUTH_QUERY_FIELD, oauthQuery)
         if (forced) params.set("forced", "1")
         const query = params.toString()
         const here =
@@ -88,9 +96,21 @@ export const Route = createFileRoute("/change-password")({
 
         // Re-resolved rather than round-tripped: this is the far end of the
         // FR-AUTH-4 interposition, and an absolute `auth.defaultRedirect`
-        // never travelled through the query to get here (D28).
+        // never travelled through the query to get here (D28). The forced
+        // change is also the last gate before an authorization may proceed,
+        // so this is where a waiting request resumes (FR-OIDC-9).
+        const resumed = await resumeAuthorization(
+          runtime,
+          request,
+          oauthQuery,
+          result.cookies
+        )
         return redirectWithCookies(
-          resolveSignInDestination({ config: runtime.config, returnTo }),
+          resolveSignInDestination({
+            config: runtime.config,
+            returnTo,
+            pendingContinuation: resumed.destination,
+          }),
           result.cookies
         )
       },
@@ -99,7 +119,7 @@ export const Route = createFileRoute("/change-password")({
 })
 
 function ChangePasswordPage() {
-  const { ui, forced, returnTo, error } = Route.useLoaderData()
+  const { ui, forced, returnTo, oauthQuery, error } = Route.useLoaderData()
   const t = getCatalog(ui.locale)
 
   return (
@@ -117,6 +137,9 @@ function ChangePasswordPage() {
           <input type="hidden" name="returnTo" value={returnTo} />
         ) : null}
         {forced ? <input type="hidden" name="forced" value="1" /> : null}
+        {oauthQuery ? (
+          <input type="hidden" name={OAUTH_QUERY_FIELD} value={oauthQuery} />
+        ) : null}
 
         <PasswordField
           name="currentPassword"

@@ -31,10 +31,12 @@ export interface SignInDestinationInput {
   /** The raw `returnTo` from the form or query. Validated here, not by the caller. */
   returnTo?: string | null
   /**
-   * Path to resume a pending `/oauth2/authorize` (FR-OIDC-9).
+   * Where to resume a pending `/oauth2/authorize` (FR-OIDC-9).
    *
-   * Always `undefined` until M9 fills the seam. The parameter exists now so
-   * that M9 changes this module and nothing else.
+   * Either the client's own redirect URI carrying an authorization code, or
+   * the consent page — both decided by the provider, never by the browser, so
+   * unlike `returnTo` this is not user input and an absolute URL here is not
+   * an open redirect.
    */
   pendingContinuation?: string | null
 }
@@ -50,7 +52,13 @@ export function resolveSignInDestination({
 }: SignInDestinationInput): string {
   const basePath = config.base.basePath
 
-  if (pendingContinuation) return withBasePath(basePath, pendingContinuation)
+  if (pendingContinuation) {
+    // Absolute when the provider resolved the request to a client's redirect
+    // URI; relative when it resolved to a page of ours.
+    return pendingContinuation.startsWith("/")
+      ? withBasePath(basePath, pendingContinuation)
+      : pendingContinuation
+  }
 
   const validated = safeReturnTo(returnTo, "")
   if (validated !== "") return withBasePath(basePath, validated)

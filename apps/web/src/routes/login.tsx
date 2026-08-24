@@ -21,6 +21,11 @@ import {
   withError,
 } from "@/server/http/auth-proxy"
 import { resolveSignInDestination } from "@/server/http/post-login"
+import { readOauthQuery } from "@/lib/oauth-query"
+import {
+  OAUTH_QUERY_FIELD,
+  resumeAuthorization,
+} from "@/server/oidc/continuation"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
 import type { UiContext } from "@/server/ui-context"
@@ -48,6 +53,10 @@ export const Route = createFileRoute("/login")({
       error: searchString(search.error),
       notice: searchString(search.notice),
       returnTo: safeReturnTo(searchString(search.returnTo), ""),
+      // The provider puts the whole signed authorization request in the query
+      // when it sends someone here to sign in (FR-OIDC-9). Carried through
+      // the form unread: only the provider can verify it.
+      oauthQuery: readOauthQuery({ search, searchStr: location.searchStr }),
     }
   },
   component: LoginPage,
@@ -59,6 +68,10 @@ export const Route = createFileRoute("/login")({
         // Empty rather than `/account`: an absent `returnTo` must fall through
         // to `auth.defaultRedirect`, not pre-empt it (D28).
         const returnTo = safeReturnTo(form.returnTo, "")
+        // The signed authorization request, when the provider sent the user
+        // here from `/oauth2/authorize` (FR-OIDC-9). Opaque to this handler:
+        // it is verified by the provider, not by us.
+        const oauthQuery = form[OAUTH_QUERY_FIELD]
         const here = `${runtime.config.base.basePath}${APP_ROUTES.login}`
 
         const result = await callAuth(
@@ -99,10 +112,12 @@ export const Route = createFileRoute("/login")({
         // authorises `/two-factor` — so the cookies have to be replayed.
         if (result.body.twoFactorRedirect === true) {
           const challenge = `${runtime.config.base.basePath}${APP_ROUTES.twoFactor}`
+          const params = new URLSearchParams()
+          if (returnTo) params.set("returnTo", returnTo)
+          if (oauthQuery) params.set(OAUTH_QUERY_FIELD, oauthQuery)
+          const query = params.toString()
           return redirectWithCookies(
-            returnTo
-              ? `${challenge}?returnTo=${encodeURIComponent(returnTo)}`
-              : challenge,
+            query ? `${challenge}?${query}` : challenge,
             result.cookies
           )
         }
@@ -114,21 +129,37 @@ export const Route = createFileRoute("/login")({
           | undefined
 
         if (user?.mustChangePassword) {
+          // FR-AUTH-4 ahead of FR-OIDC-9: the authorization is carried to the
+          // change-password page rather than resumed here, so a temporary
+          // password can never buy an authorization code.
+          //
           // Only a *relative* returnTo round-trips through the query — an
           // absolute `auth.defaultRedirect` would not survive `safeReturnTo`
           // at the other end, so the change-password handler re-resolves it
           // there instead (D28).
-          const forced = `${runtime.config.base.basePath}${APP_ROUTES.changePassword}?forced=1`
+          const params = new URLSearchParams({ forced: "1" })
+          if (returnTo) params.set("returnTo", returnTo)
+          if (oauthQuery) params.set(OAUTH_QUERY_FIELD, oauthQuery)
           return redirectWithCookies(
-            returnTo
-              ? `${forced}&returnTo=${encodeURIComponent(returnTo)}`
-              : forced,
+            `${runtime.config.base.basePath}${APP_ROUTES.changePassword}?${params.toString()}`,
             result.cookies
           )
         }
 
+        // Every gate is satisfied, so the authorization may proceed.
+        const resumed = await resumeAuthorization(
+          runtime,
+          request,
+          oauthQuery,
+          result.cookies
+        )
+
         return redirectWithCookies(
-          resolveSignInDestination({ config: runtime.config, returnTo }),
+          resolveSignInDestination({
+            config: runtime.config,
+            returnTo,
+            pendingContinuation: resumed.destination,
+          }),
           result.cookies
         )
       },
@@ -137,7 +168,7 @@ export const Route = createFileRoute("/login")({
 })
 
 function LoginPage() {
-  const { ui, error, notice, returnTo } = Route.useLoaderData()
+  const { ui, error, notice, returnTo, oauthQuery } = Route.useLoaderData()
   const t = getCatalog(ui.locale)
 
   return (
@@ -148,6 +179,9 @@ function LoginPage() {
       <form method="post" className="grid gap-4">
         {returnTo ? (
           <input type="hidden" name="returnTo" value={returnTo} />
+        ) : null}
+        {oauthQuery ? (
+          <input type="hidden" name={OAUTH_QUERY_FIELD} value={oauthQuery} />
         ) : null}
 
         <TextField

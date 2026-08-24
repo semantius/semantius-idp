@@ -149,6 +149,7 @@ export const enUS = {
     description: "Review what it is asking for before you continue.",
     allow: "Allow",
     deny: "Deny",
+    denied: "You did not allow that application.",
     scopes: {
       openid: "Confirm who you are",
       profile: "See your name and profile details",

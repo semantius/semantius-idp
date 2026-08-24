@@ -100,6 +100,15 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
     // SEC-8: no third-party origins at runtime.
     telemetry: { enabled: false },
 
+    // FR-OIDC-9: an authorization that cannot be redirected back to the
+    // client — unknown client, unregistered redirect URI — lands on this
+    // app's own error page rather than Better Auth's built-in one under
+    // `/api/auth/error`, which is unbranded, untranslated and advertises the
+    // auth mount that the rest of M8c works to keep out of sight.
+    onAPIError: {
+      errorURL: `${paths.basePath}${APP_ROUTES.error}`,
+    },
+
     database: deps.database
       ? drizzleAdapter(deps.database.db, {
           provider: "pg",

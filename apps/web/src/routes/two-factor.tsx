@@ -15,6 +15,11 @@ import {
   withError,
 } from "@/server/http/auth-proxy"
 import { resolveSignInDestination } from "@/server/http/post-login"
+import { readOauthQuery } from "@/lib/oauth-query"
+import {
+  OAUTH_QUERY_FIELD,
+  resumeAuthorization,
+} from "@/server/oidc/continuation"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
 
@@ -47,6 +52,7 @@ export const Route = createFileRoute("/two-factor")({
       ui: context.ui,
       backup: searchFlag(search.backup),
       returnTo: safeReturnTo(searchString(search.returnTo), ""),
+      oauthQuery: readOauthQuery({ search, searchStr: location.searchStr }),
       error: searchString(search.error),
     }
   },
@@ -62,10 +68,12 @@ export const Route = createFileRoute("/two-factor")({
         const base = runtime.config.base.basePath
         const form = await readForm(request)
         const returnTo = safeReturnTo(form.returnTo, "")
+        const oauthQuery = form[OAUTH_QUERY_FIELD]
         const backup = form.backupCode !== undefined
 
         const params = new URLSearchParams()
         if (returnTo) params.set("returnTo", returnTo)
+        if (oauthQuery) params.set(OAUTH_QUERY_FIELD, oauthQuery)
         if (backup) params.set("backup", "1")
         const query = params.toString()
         const here =
@@ -109,9 +117,20 @@ export const Route = createFileRoute("/two-factor")({
 
         // The sign-in settles here, so this is where the destination is
         // resolved — same rules as `/login`, including an absolute
-        // `auth.defaultRedirect` that could not travel through `returnTo`.
+        // `auth.defaultRedirect` that could not travel through `returnTo`,
+        // and any authorization request that was waiting on the challenge.
+        const resumed = await resumeAuthorization(
+          runtime,
+          request,
+          oauthQuery,
+          result.cookies
+        )
         return redirectWithCookies(
-          resolveSignInDestination({ config: runtime.config, returnTo }),
+          resolveSignInDestination({
+            config: runtime.config,
+            returnTo,
+            pendingContinuation: resumed.destination,
+          }),
           result.cookies
         )
       },
@@ -120,12 +139,13 @@ export const Route = createFileRoute("/two-factor")({
 })
 
 function TwoFactorPage() {
-  const { ui, backup, returnTo, error } = Route.useLoaderData()
+  const { ui, backup, returnTo, oauthQuery, error } = Route.useLoaderData()
   const t = getCatalog(ui.locale)
   const trustDays = ui.twoFactorTrustDeviceDays
 
   const otherModeQuery = new URLSearchParams()
   if (returnTo) otherModeQuery.set("returnTo", returnTo)
+  if (oauthQuery) otherModeQuery.set(OAUTH_QUERY_FIELD, oauthQuery)
   if (!backup) otherModeQuery.set("backup", "1")
   const otherModeHref =
     `${ui.basePath}${APP_ROUTES.twoFactor}` +
@@ -146,6 +166,9 @@ function TwoFactorPage() {
       <form method="post" className="grid gap-4">
         {returnTo ? (
           <input type="hidden" name="returnTo" value={returnTo} />
+        ) : null}
+        {oauthQuery ? (
+          <input type="hidden" name={OAUTH_QUERY_FIELD} value={oauthQuery} />
         ) : null}
 
         {backup ? (

@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as TwoFactorRouteImport } from './routes/two-factor'
 import { Route as SignupRouteImport } from './routes/signup'
+import { Route as SignOutRouteImport } from './routes/sign-out'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ReadyzRouteImport } from './routes/readyz'
@@ -20,6 +21,8 @@ import { Route as LogoutRouteImport } from './routes/logout'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as HealthzRouteImport } from './routes/healthz'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as ErrorRouteImport } from './routes/error'
+import { Route as ConsentRouteImport } from './routes/consent'
 import { Route as ChangePasswordRouteImport } from './routes/change-password'
 import { Route as BannedRouteImport } from './routes/banned'
 import { Route as AccountRouteImport } from './routes/account'
@@ -55,6 +58,11 @@ const TwoFactorRoute = TwoFactorRouteImport.update({
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
   path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignOutRoute = SignOutRouteImport.update({
+  id: '/sign-out',
+  path: '/sign-out',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
@@ -95,6 +103,16 @@ const HealthzRoute = HealthzRouteImport.update({
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
   id: '/forgot-password',
   path: '/forgot-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ErrorRoute = ErrorRouteImport.update({
+  id: '/error',
+  path: '/error',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ConsentRoute = ConsentRouteImport.update({
+  id: '/consent',
+  path: '/consent',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ChangePasswordRoute = ChangePasswordRouteImport.update({
@@ -212,6 +230,8 @@ export interface FileRoutesByFullPath {
   '/account': typeof AccountRouteWithChildren
   '/banned': typeof BannedRoute
   '/change-password': typeof ChangePasswordRoute
+  '/consent': typeof ConsentRoute
+  '/error': typeof ErrorRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/healthz': typeof HealthzRoute
   '/login': typeof LoginRoute
@@ -220,6 +240,7 @@ export interface FileRoutesByFullPath {
   '/readyz': typeof ReadyzRoute
   '/reset-password': typeof ResetPasswordRoute
   '/robots.txt': typeof RobotsDottxtRoute
+  '/sign-out': typeof SignOutRoute
   '/signup': typeof SignupRoute
   '/two-factor': typeof TwoFactorRoute
   '/verify-email': typeof VerifyEmailRoute
@@ -245,6 +266,8 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/banned': typeof BannedRoute
   '/change-password': typeof ChangePasswordRoute
+  '/consent': typeof ConsentRoute
+  '/error': typeof ErrorRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/healthz': typeof HealthzRoute
   '/login': typeof LoginRoute
@@ -253,6 +276,7 @@ export interface FileRoutesByTo {
   '/readyz': typeof ReadyzRoute
   '/reset-password': typeof ResetPasswordRoute
   '/robots.txt': typeof RobotsDottxtRoute
+  '/sign-out': typeof SignOutRoute
   '/signup': typeof SignupRoute
   '/two-factor': typeof TwoFactorRoute
   '/verify-email': typeof VerifyEmailRoute
@@ -280,6 +304,8 @@ export interface FileRoutesById {
   '/account': typeof AccountRouteWithChildren
   '/banned': typeof BannedRoute
   '/change-password': typeof ChangePasswordRoute
+  '/consent': typeof ConsentRoute
+  '/error': typeof ErrorRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/healthz': typeof HealthzRoute
   '/login': typeof LoginRoute
@@ -288,6 +314,7 @@ export interface FileRoutesById {
   '/readyz': typeof ReadyzRoute
   '/reset-password': typeof ResetPasswordRoute
   '/robots.txt': typeof RobotsDottxtRoute
+  '/sign-out': typeof SignOutRoute
   '/signup': typeof SignupRoute
   '/two-factor': typeof TwoFactorRoute
   '/verify-email': typeof VerifyEmailRoute
@@ -316,6 +343,8 @@ export interface FileRouteTypes {
     | '/account'
     | '/banned'
     | '/change-password'
+    | '/consent'
+    | '/error'
     | '/forgot-password'
     | '/healthz'
     | '/login'
@@ -324,6 +353,7 @@ export interface FileRouteTypes {
     | '/readyz'
     | '/reset-password'
     | '/robots.txt'
+    | '/sign-out'
     | '/signup'
     | '/two-factor'
     | '/verify-email'
@@ -349,6 +379,8 @@ export interface FileRouteTypes {
     | '/'
     | '/banned'
     | '/change-password'
+    | '/consent'
+    | '/error'
     | '/forgot-password'
     | '/healthz'
     | '/login'
@@ -357,6 +389,7 @@ export interface FileRouteTypes {
     | '/readyz'
     | '/reset-password'
     | '/robots.txt'
+    | '/sign-out'
     | '/signup'
     | '/two-factor'
     | '/verify-email'
@@ -383,6 +416,8 @@ export interface FileRouteTypes {
     | '/account'
     | '/banned'
     | '/change-password'
+    | '/consent'
+    | '/error'
     | '/forgot-password'
     | '/healthz'
     | '/login'
@@ -391,6 +426,7 @@ export interface FileRouteTypes {
     | '/readyz'
     | '/reset-password'
     | '/robots.txt'
+    | '/sign-out'
     | '/signup'
     | '/two-factor'
     | '/verify-email'
@@ -418,6 +454,8 @@ export interface RootRouteChildren {
   AccountRoute: typeof AccountRouteWithChildren
   BannedRoute: typeof BannedRoute
   ChangePasswordRoute: typeof ChangePasswordRoute
+  ConsentRoute: typeof ConsentRoute
+  ErrorRoute: typeof ErrorRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   HealthzRoute: typeof HealthzRoute
   LoginRoute: typeof LoginRoute
@@ -426,6 +464,7 @@ export interface RootRouteChildren {
   ReadyzRoute: typeof ReadyzRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
+  SignOutRoute: typeof SignOutRoute
   SignupRoute: typeof SignupRoute
   TwoFactorRoute: typeof TwoFactorRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
@@ -464,6 +503,13 @@ declare module '@tanstack/react-router' {
       path: '/signup'
       fullPath: '/signup'
       preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-out': {
+      id: '/sign-out'
+      path: '/sign-out'
+      fullPath: '/sign-out'
+      preLoaderRoute: typeof SignOutRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/robots.txt': {
@@ -520,6 +566,20 @@ declare module '@tanstack/react-router' {
       path: '/forgot-password'
       fullPath: '/forgot-password'
       preLoaderRoute: typeof ForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/error': {
+      id: '/error'
+      path: '/error'
+      fullPath: '/error'
+      preLoaderRoute: typeof ErrorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/consent': {
+      id: '/consent'
+      path: '/consent'
+      fullPath: '/consent'
+      preLoaderRoute: typeof ConsentRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/change-password': {
@@ -696,6 +756,8 @@ const rootRouteChildren: RootRouteChildren = {
   AccountRoute: AccountRouteWithChildren,
   BannedRoute: BannedRoute,
   ChangePasswordRoute: ChangePasswordRoute,
+  ConsentRoute: ConsentRoute,
+  ErrorRoute: ErrorRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   HealthzRoute: HealthzRoute,
   LoginRoute: LoginRoute,
@@ -704,6 +766,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReadyzRoute: ReadyzRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,
+  SignOutRoute: SignOutRoute,
   SignupRoute: SignupRoute,
   TwoFactorRoute: TwoFactorRoute,
   VerifyEmailRoute: VerifyEmailRoute,

@@ -1,25 +1,41 @@
 import { createFileRoute } from "@tanstack/react-router"
 
+import { redirectWithCookies } from "@/server/http/auth-proxy"
+import { APP_ROUTES } from "@/server/oidc/base-path"
 import { forwardToAuth } from "@/server/oidc/protocol-proxy"
 import { getRuntime } from "@/server/runtime"
 
 /**
  * `{issuer}/oauth2/end-session` — RP-initiated logout (FR-OIDC-11).
  *
- * Discovery advertises this endpoint, so it has to exist at the issuer root
- * from the moment discovery does; without it a client that read the document
- * would get a 404 at the one moment it is trying to sign a user out.
- *
  * The provider validates `id_token_hint`, exact-matches
  * `post_logout_redirect_uri` against the client's registered list and echoes
- * `state`. **M9 adds the confirmation page** for the case where no valid hint
- * is supplied — ending a session on an unauthenticated GET is a CSRF surface,
- * so that path has to ask before it acts.
+ * `state`.
+ *
+ * **Without a valid `id_token_hint` this asks first.** A GET that ends a
+ * session is a CSRF surface: any page could sign a user out with an `<img>`
+ * tag, and "sign out" is a denial-of-service against them, not a favour. With
+ * a hint, the request is proof that a client the user was actually signed in
+ * to is asking, so it proceeds; without one, the browser goes to the
+ * confirmation page, which asks and then POSTs.
  */
-const handle = async ({ request }: { request: Request }) =>
-  forwardToAuth(await getRuntime(), request, {
+const handle = async ({ request }: { request: Request }) => {
+  const runtime = await getRuntime()
+  const url = new URL(request.url)
+
+  if (request.method === "GET" && !url.searchParams.get("id_token_hint")) {
+    const query = new URLSearchParams(url.search)
+    return redirectWithCookies(
+      `${runtime.config.base.basePath}${APP_ROUTES.endSessionConfirm}${
+        query.size ? `?${query.toString()}` : ""
+      }`
+    )
+  }
+
+  return forwardToAuth(runtime, request, {
     providerPath: "/oauth2/end-session",
   })
+}
 
 export const Route = createFileRoute("/oauth2/end-session")({
   server: { handlers: { GET: handle, POST: handle } },

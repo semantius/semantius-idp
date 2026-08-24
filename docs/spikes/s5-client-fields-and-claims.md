@@ -16,17 +16,38 @@ and friends under `better-auth/plugins/*`; `oauthProvider` and `apiKey` come
 from the separate, version-locked packages `@better-auth/oauth-provider@1.7.1`
 and `@better-auth/api-key@1.7.1`.
 
-Consequence for DM-1: `@better-auth/cli` is at **1.4.21** on `latest` (with
-`1.5.0-beta.*` on `beta`) and depends on `better-auth@1.4.21` as a *hard
-dependency*, so `@better-auth/cli generate` would derive the core tables from a
-1.4 core while our plugins are 1.7. That is exactly the drift DM-1's CI gate is
-meant to prevent, so the CLI is not usable here.
+> ## ⚠ Correction (2026-08-24) — this section's conclusion was wrong
+>
+> This spike concluded that the Better Auth CLI was version-stranded and
+> therefore unusable. **It is not.** The CLI was *renamed*:
+>
+> - `@better-auth/cli` is **deprecated** — npm reports *"Package no longer
+>   supported"* — and its `latest` is frozen at 1.4.21.
+> - The current CLI is the **`auth`** package, at **1.7.1**, exposing the bins
+>   `auth` and `better-auth`, and depending on `better-auth@1.7.1` and
+>   `@better-auth/core@1.7.1` — exactly our pinned versions.
+>
+> The error was reading a stale `latest` as abandonment without checking for a
+> rename, and without running `npm view @better-auth/cli deprecated`, which says
+> so plainly.
+>
+> The custom generator described below still produces the committed schema, and
+> that schema is validated against a real database and by the drift gate — but
+> the *reason* given for it does not hold. Whether it should be replaced by
+> `npx auth generate` is tracked as **R-2** in `status.md`; the open question
+> there is whether the CLI can emit the `createAuthSchema(schemaName)` factory
+> that a runtime-configurable `database.schema` (CFG-4, D27) requires.
 
-**Decision:** generate the Drizzle schema from the *installed* Better Auth using
-its own exported `getSchema()` (`better-auth/db`), driven by our real auth
-instance. See `docs/spikes/s4-schema-placement.md`. The DM-1 intent — one
-authoritative schema derived from the enabled plugins, with a CI drift gate — is
-preserved; only the tool changes.
+Consequence for DM-1 *(as originally reasoned — see the correction above)*:
+`@better-auth/cli` is at **1.4.21** on `latest` and depends on
+`better-auth@1.4.21` as a *hard dependency*, so `@better-auth/cli generate`
+would derive the core tables from a 1.4 core while our plugins are 1.7.
+
+**Decision taken at the time:** generate the Drizzle schema from the *installed*
+Better Auth using its own exported `getSchema()` (`better-auth/db`), driven by
+our real auth instance. The DM-1 intent — one authoritative schema derived from
+the enabled plugins, with a CI drift gate — is preserved either way; only the
+tool differs.
 
 ## 1. R9 — client fields (freezes the FR-OIDC-3 mapping)
 

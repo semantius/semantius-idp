@@ -42,6 +42,48 @@ the field wrapper, with the two icon states swapped by `peer-checked:`.
 - still works with JavaScript disabled
 - `lucide-react` is already a dependency; no new one is needed
 
+### R-2 · The custom schema generator rests on a false premise (DM-1)
+
+**Where:** `apps/web/scripts/generate-auth-schema.ts`, and every place that
+repeats its justification — the deviations table below, the S5 spike note, the
+file's own header comment, and the M14 CONTRIBUTING text that has not been
+written yet.
+
+**What is wrong:** the generator exists because I concluded the Better Auth CLI
+was version-stranded. It is not. The CLI was **renamed**:
+
+| | |
+|---|---|
+| `@better-auth/cli` | **deprecated** — *"Package no longer supported"*, last at 1.4.21 |
+| **`auth`** | the current CLI, **1.7.1**, bins `auth` and `better-auth`, depending on `better-auth@1.7.1` and `@better-auth/core@1.7.1` |
+
+Those are exactly our pinned versions, so the version-skew argument — the whole
+stated reason for not using DM-1's specified tool — does not hold.
+
+**How it was missed:** I read `@better-auth/cli`'s dist-tags, saw `latest:
+1.4.21` against `better-auth@1.7.1`, and stopped. I never checked whether the
+package had been renamed, and never ran `npm view @better-auth/cli deprecated`,
+which says so outright. A stale `latest` is exactly the shape of a renamed
+package, and I read it as an abandoned one.
+
+**What must be re-evaluated — not assumed:**
+
+1. Does `npx auth generate` produce a Drizzle schema equivalent to the committed
+   one? Diff it against `auth-schema.ts` before deciding anything.
+2. **The open question that may still justify a custom generator:**
+   `database.schema` is a *runtime* value (CFG-4, D27), so the schema module has
+   to be a `createAuthSchema(schemaName)` **factory**. The CLI emits constants
+   with the name baked in. If it cannot be made to emit a factory, the custom
+   generator survives — but for *that* reason, stated honestly, not the version
+   one.
+3. If the CLI can serve, delete the generator, switch `db:generate-schema` to
+   it, and keep the `--check` drift gate pointed at whatever produces the file.
+
+**Until this is settled, treat the deviations table's "version-stranded" row as
+known-false.** The generated schema itself is not in doubt — it is validated
+against a real database and by the drift gate — only the reasoning for how it is
+produced.
+
 ---
 
 ## Done (M0 spikes, M1–M5)
@@ -50,20 +92,15 @@ the field wrapper, with the two icon states swapped by `peer-checked:`.
 sign-in, no social/sign-up warning, and M2M removed throughout (FR-OIDC-1/3/7,
 CFG-4/5, SEC-6, TST-4, DOC-3, §12, §15 ticked).
 
-**M0 spikes** — three findings changed the design, all recorded in
-[docs/spikes/](docs/spikes/):
+**M0 spikes** — findings recorded in [docs/spikes/](docs/spikes/):
 
 - **The 1.7.x plugins moved.** `oauth-provider` and `api-key` are now separate
-  packages, and `@better-auth/cli` is stuck at 1.4.21 bundling its *own*
-  better-auth. Using it would have generated core tables from the wrong version
-  — exactly the drift DM-1's gate exists to catch. The schema is generated from
-  the installed `getAuthTables()` instead.
-- **`search_path` is not a usable mechanism** — Neon's pooler silently drops it.
-  Schema placement relies on qualified table names instead, which work
-  regardless of pooling. **This does not mean the schema name is fixed:**
-  `database.schema` is still a runtime setting, the qualification is built from
-  it, and the migrator retargets the committed SQL to match. Only the *technique*
-  for putting tables in the right schema changed.
+  packages (`@better-auth/oauth-provider@1.7.1`, `@better-auth/api-key@1.7.1`),
+  so three packages have to move in lockstep on every upgrade. Reading their
+  real type surface is also what froze the FR-OIDC-3 mapping (R9) and settled
+  R4, R5 and R10.
+  ⚠ The *second half* of this finding — that the CLI was unusable — **was
+  wrong**; see **R-2** under Review results.
 - **Session advisory locks do not hold through the pooler** but do through the
   direct endpoint. This forced a new config key, `database.directUrl` (recorded
   as D27), used by every locked step. Without it two containers starting
@@ -170,29 +207,20 @@ d90ddb3 feat(m3): database layer, Better Auth instance, migrations, approval gat
 Notes are in [docs/spikes/](docs/spikes/); S4 is re-runnable with
 `pnpm --filter web exec bun run scripts/spike-s4-schema-placement.ts`.
 
-### The 1.7.x plugins moved, and the CLI is stranded (S5)
+### The 1.7.x plugins moved (S5)
 
 `oauth-provider` and `api-key` are **separate packages** in 1.7.x
-(`@better-auth/oauth-provider@1.7.1`, `@better-auth/api-key@1.7.1`), and
-`@better-auth/cli` is stuck at **1.4.21** with `better-auth@1.4.21` as a *hard*
-dependency. Running `@better-auth/cli generate` would derive the core tables
-from 1.4 while our plugins are 1.7.
+(`@better-auth/oauth-provider@1.7.1`, `@better-auth/api-key@1.7.1`). Three
+packages now have to move in lockstep on every upgrade. Reading their real type
+surface is what froze the FR-OIDC-3 client mapping (R9) and settled R4, R5 and
+R10.
 
-**Resolution:** the Drizzle schema is generated from the *installed*
-`getAuthTables()` by `apps/web/scripts/generate-auth-schema.ts`, which owns its
-own formatting so the CI drift gate can compare byte-for-byte. DM-1's intent —
-one authoritative schema derived from the enabled plugins, CI fails on drift —
-is preserved; only the tool changed.
-
-### `search_path` is not a usable mechanism (S4, risk R8)
-
-The original R8 plan was "postgres driver `search_path` + drizzle-kit
-`migrations.schema`". Against Neon's pooled endpoint the startup parameter is
-**silently dropped** — nothing warns, the connection just comes up with the
-default path. Anything relying on it would have quietly written to `public`.
-
-**Resolution:** every table Drizzle emits is schema-qualified, so placement does
-not depend on connection state. R8's post-processing fallback is not needed.
+> ⚠ **This spike also concluded the CLI was unusable. That was wrong** — the CLI
+> was renamed from `@better-auth/cli` (now deprecated) to **`auth`**, which
+> tracks 1.7.1. See **R-2** under Review results. The Drizzle schema is
+> currently generated by `apps/web/scripts/generate-auth-schema.ts` from the
+> installed `getAuthTables()`; whether that should remain is R-2's open
+> question.
 
 ### Session advisory locks do not hold through a pooler (S4 → **decision D27**)
 
@@ -305,7 +333,7 @@ utility, and the full TST-5 adversarial suite.
 
 | Deviation | Why |
 |---|---|
-| Schema generated by `scripts/generate-auth-schema.ts`, not `@better-auth/cli generate` | The CLI is version-stranded at 1.4.21 (S5). DM-1's intent is preserved. |
+| Schema generated by `scripts/generate-auth-schema.ts`, not the Better Auth CLI | ⚠ **Justification known-false — see R-2.** The stated reason (version-stranded CLI) does not hold: the CLI was renamed to `auth` and tracks 1.7.1. A real reason may survive (the runtime-configurable `database.schema` needs a factory, which the CLI does not emit), but that has not been verified. |
 | Own migrator instead of `drizzle-orm`'s | Drizzle's applies the file verbatim and cannot retarget `database.schema`, which is a runtime setting. |
 | `drizzle.config.ts` in `apps/web/`, not the repo root | drizzle-kit resolves every path relative to the config file, and both the schema and the migrations live there. |
 | New config key `database.directUrl` | Forced by the S4 pooler finding; recorded as D27 and amended into CFG-4. |

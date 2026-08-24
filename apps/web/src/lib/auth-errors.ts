@@ -48,11 +48,21 @@ export function messageForErrorCode(
   }
 }
 
-/** Codes that are good news rather than failures, shown in a neutral alert. */
+/**
+ * Codes that are good news rather than failures, shown in a neutral alert.
+ *
+ * Kept in step with the switch below by a unit test, because the two used to
+ * disagree: `/signup` and `/logout` both redirect carrying a notice, and
+ * neither code was handled — so completing a sign-up or signing out landed on
+ * `/login` with a query parameter and a blank page where the confirmation
+ * should have been.
+ */
 export const NOTICE_CODES = new Set([
   "reset_sent",
   "verification_sent",
   "password_changed",
+  "account_created",
+  "signed_out",
 ])
 
 export function messageForNoticeCode(
@@ -66,6 +76,12 @@ export function messageForNoticeCode(
       return t.auth.verifyEmail.resent
     case "password_changed":
       return t.auth.changePassword.success
+    case "account_created":
+      // Only reachable with approval *and* verification off; both gates have
+      // a page of their own, and this is the path where neither applies.
+      return t.auth.signUp.done
+    case "signed_out":
+      return t.auth.signOut.description
     default:
       return undefined
   }

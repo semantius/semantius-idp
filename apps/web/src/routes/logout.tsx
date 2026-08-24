@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router"
+import { createFileRoute } from "@tanstack/react-router"
 
 import { Button } from "@workspace/ui/components/button"
 
@@ -28,7 +28,6 @@ export const Route = createFileRoute("/logout")({
     return {
       ui: context.ui,
       returnTo: safeReturnTo(search.returnTo, APP_ROUTES.login),
-      done: search.done === "1",
     }
   },
   component: LogoutPage,
@@ -57,25 +56,13 @@ export const Route = createFileRoute("/logout")({
 })
 
 function LogoutPage() {
-  const { ui, returnTo, done } = Route.useLoaderData()
+  const { ui, returnTo } = Route.useLoaderData()
   const t = getCatalog(ui.locale)
 
-  if (done) {
-    return (
-      <AuthShell
-        ui={ui}
-        title={t.auth.signOut.title}
-        description={t.auth.signOut.description}
-      >
-        <p className="text-sm">
-          <Link to={APP_ROUTES.login} className="underline underline-offset-4">
-            {t.auth.signOut.signInAgain}
-          </Link>
-        </p>
-      </AuthShell>
-    )
-  }
-
+  // There is no `?done=1` variant: the POST redirects to
+  // `/login?notice=signed_out`, so the confirmation lives on the page the user
+  // actually lands on. A branch here for a parameter nothing emits was one
+  // more thing that had to be kept working for no reader.
   return (
     <AuthShell ui={ui} title={t.common.signOut}>
       <form method="post" className="grid gap-4">

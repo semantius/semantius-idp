@@ -51,6 +51,10 @@ export const enUS = {
       // SEC-7: one message for wrong password and unknown address alike.
       failed: "That e-mail address and password combination is not correct.",
       unavailable: "This account is not available.",
+      // FR-AUTH-5: not a failure — the session is valid but too old for what
+      // was being attempted.
+      reauth: "Sign in again to continue. It has been a while.",
+      required: "Sign in to continue.",
     },
     signUp: {
       title: "Create your account",
@@ -201,6 +205,9 @@ export const enUS = {
 
   account: {
     title: "Your account",
+    // FR-ADMIN-5: an impersonated session must be obvious on every page.
+    impersonationBanner:
+      "An administrator is signed in as you. Everything you do here is recorded.",
     nav: {
       profile: "Profile",
       security: "Security",
@@ -208,9 +215,27 @@ export const enUS = {
       apiKeys: "API keys",
       consents: "Connected applications",
     },
-    profile: { title: "Profile", saved: "Profile updated." },
+    profile: {
+      title: "Profile",
+      saved: "Profile updated.",
+      description: "Your name as it appears to applications you sign in to.",
+      submit: "Save",
+      roles: "Roles",
+      noRoles: "No roles.",
+      emailVerified: "Confirmed",
+      emailUnverified: "Not confirmed",
+    },
+    security: {
+      title: "Security",
+      changePassword: {
+        title: "Password",
+        description: "Change the password you sign in with.",
+        submit: "Change password",
+      },
+    },
     changeEmail: {
       title: "Change e-mail address",
+      newEmail: "New e-mail address",
       description:
         "We will send a confirmation link to the new address before switching.",
       submit: "Send confirmation",
@@ -218,6 +243,12 @@ export const enUS = {
     },
     sessions: {
       title: "Where you are signed in",
+      description:
+        "Every browser and device with a live session. Signing one out takes effect immediately.",
+      signedIn: "Signed in",
+      expires: "Expires",
+      unknownDevice: "Unknown device",
+      revoked: "That session has been signed out.",
       current: "This device",
       revoke: "Sign out",
       revokeAll: "Sign out everywhere else",
@@ -233,6 +264,15 @@ export const enUS = {
       neverShownAgain: "Copy this key now — it will not be shown again.",
       revoke: "Revoke",
       empty: "No API keys yet.",
+      created: "Created",
+      never: "Never",
+      lastUsed: "Last used",
+      neverUsed: "Never used",
+      revoked: "That key has been revoked.",
+      expiresIn: "Expires in",
+      expiryHint: (days: number) => `Up to ${days} days.`,
+      outOfRange: "Choose an expiry within the allowed range.",
+      days: "days",
     },
     twoFactor: {
       title: "Two-factor authentication",
@@ -244,12 +284,25 @@ export const enUS = {
       backupCodesNotice: "Save these somewhere safe. Each one works once.",
       enabled: "Two-factor authentication is on.",
       disabled: "Two-factor authentication is off.",
+      description:
+        "Ask for a code from your authenticator app as well as your password.",
+      confirm: "Enter the code to finish",
+      confirmSubmit: "Confirm",
+      passwordToDisable: "Enter your password to turn it off",
+      manualEntry: "Or enter this key by hand:",
+      turnedOn: "Two-factor authentication is now on.",
+      turnedOff: "Two-factor authentication is now off.",
     },
     consents: {
       title: "Connected applications",
       revoke: "Disconnect",
       empty: "No applications are connected.",
       revokeNotice: "Disconnecting also signs the application out.",
+      description:
+        "Applications you have allowed to sign you in and see parts of your account.",
+      scopes: "Allowed",
+      connectedOn: "Connected",
+      revoked: "That application has been disconnected.",
     },
   },
 

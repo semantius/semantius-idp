@@ -21,7 +21,13 @@ import { Route as HealthzRouteImport } from './routes/healthz'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as ChangePasswordRouteImport } from './routes/change-password'
 import { Route as BannedRouteImport } from './routes/banned'
+import { Route as AccountRouteImport } from './routes/account'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AccountIndexRouteImport } from './routes/account/index'
+import { Route as AccountSessionsRouteImport } from './routes/account/sessions'
+import { Route as AccountSecurityRouteImport } from './routes/account/security'
+import { Route as AccountConsentsRouteImport } from './routes/account/consents'
+import { Route as AccountApiKeysRouteImport } from './routes/account/api-keys'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
@@ -84,10 +90,40 @@ const BannedRoute = BannedRouteImport.update({
   path: '/banned',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AccountRoute = AccountRouteImport.update({
+  id: '/account',
+  path: '/account',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AccountIndexRoute = AccountIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AccountRoute,
+} as any)
+const AccountSessionsRoute = AccountSessionsRouteImport.update({
+  id: '/sessions',
+  path: '/sessions',
+  getParentRoute: () => AccountRoute,
+} as any)
+const AccountSecurityRoute = AccountSecurityRouteImport.update({
+  id: '/security',
+  path: '/security',
+  getParentRoute: () => AccountRoute,
+} as any)
+const AccountConsentsRoute = AccountConsentsRouteImport.update({
+  id: '/consents',
+  path: '/consents',
+  getParentRoute: () => AccountRoute,
+} as any)
+const AccountApiKeysRoute = AccountApiKeysRouteImport.update({
+  id: '/api-keys',
+  path: '/api-keys',
+  getParentRoute: () => AccountRoute,
 } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
@@ -97,6 +133,7 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/account': typeof AccountRouteWithChildren
   '/banned': typeof BannedRoute
   '/change-password': typeof ChangePasswordRoute
   '/forgot-password': typeof ForgotPasswordRoute
@@ -109,6 +146,11 @@ export interface FileRoutesByFullPath {
   '/signup': typeof SignupRoute
   '/two-factor': typeof TwoFactorRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/account/api-keys': typeof AccountApiKeysRoute
+  '/account/consents': typeof AccountConsentsRoute
+  '/account/security': typeof AccountSecurityRoute
+  '/account/sessions': typeof AccountSessionsRoute
+  '/account/': typeof AccountIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesByTo {
@@ -125,11 +167,17 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/two-factor': typeof TwoFactorRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/account/api-keys': typeof AccountApiKeysRoute
+  '/account/consents': typeof AccountConsentsRoute
+  '/account/security': typeof AccountSecurityRoute
+  '/account/sessions': typeof AccountSessionsRoute
+  '/account': typeof AccountIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/account': typeof AccountRouteWithChildren
   '/banned': typeof BannedRoute
   '/change-password': typeof ChangePasswordRoute
   '/forgot-password': typeof ForgotPasswordRoute
@@ -142,12 +190,18 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/two-factor': typeof TwoFactorRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/account/api-keys': typeof AccountApiKeysRoute
+  '/account/consents': typeof AccountConsentsRoute
+  '/account/security': typeof AccountSecurityRoute
+  '/account/sessions': typeof AccountSessionsRoute
+  '/account/': typeof AccountIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/account'
     | '/banned'
     | '/change-password'
     | '/forgot-password'
@@ -160,6 +214,11 @@ export interface FileRouteTypes {
     | '/signup'
     | '/two-factor'
     | '/verify-email'
+    | '/account/api-keys'
+    | '/account/consents'
+    | '/account/security'
+    | '/account/sessions'
+    | '/account/'
     | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -176,10 +235,16 @@ export interface FileRouteTypes {
     | '/signup'
     | '/two-factor'
     | '/verify-email'
+    | '/account/api-keys'
+    | '/account/consents'
+    | '/account/security'
+    | '/account/sessions'
+    | '/account'
     | '/api/auth/$'
   id:
     | '__root__'
     | '/'
+    | '/account'
     | '/banned'
     | '/change-password'
     | '/forgot-password'
@@ -192,11 +257,17 @@ export interface FileRouteTypes {
     | '/signup'
     | '/two-factor'
     | '/verify-email'
+    | '/account/api-keys'
+    | '/account/consents'
+    | '/account/security'
+    | '/account/sessions'
+    | '/account/'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AccountRoute: typeof AccountRouteWithChildren
   BannedRoute: typeof BannedRoute
   ChangePasswordRoute: typeof ChangePasswordRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
@@ -298,12 +369,54 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof BannedRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/account': {
+      id: '/account'
+      path: '/account'
+      fullPath: '/account'
+      preLoaderRoute: typeof AccountRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/account/': {
+      id: '/account/'
+      path: '/'
+      fullPath: '/account/'
+      preLoaderRoute: typeof AccountIndexRouteImport
+      parentRoute: typeof AccountRoute
+    }
+    '/account/sessions': {
+      id: '/account/sessions'
+      path: '/sessions'
+      fullPath: '/account/sessions'
+      preLoaderRoute: typeof AccountSessionsRouteImport
+      parentRoute: typeof AccountRoute
+    }
+    '/account/security': {
+      id: '/account/security'
+      path: '/security'
+      fullPath: '/account/security'
+      preLoaderRoute: typeof AccountSecurityRouteImport
+      parentRoute: typeof AccountRoute
+    }
+    '/account/consents': {
+      id: '/account/consents'
+      path: '/consents'
+      fullPath: '/account/consents'
+      preLoaderRoute: typeof AccountConsentsRouteImport
+      parentRoute: typeof AccountRoute
+    }
+    '/account/api-keys': {
+      id: '/account/api-keys'
+      path: '/api-keys'
+      fullPath: '/account/api-keys'
+      preLoaderRoute: typeof AccountApiKeysRouteImport
+      parentRoute: typeof AccountRoute
     }
     '/api/auth/$': {
       id: '/api/auth/$'
@@ -315,8 +428,28 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AccountRouteChildren {
+  AccountApiKeysRoute: typeof AccountApiKeysRoute
+  AccountConsentsRoute: typeof AccountConsentsRoute
+  AccountSecurityRoute: typeof AccountSecurityRoute
+  AccountSessionsRoute: typeof AccountSessionsRoute
+  AccountIndexRoute: typeof AccountIndexRoute
+}
+
+const AccountRouteChildren: AccountRouteChildren = {
+  AccountApiKeysRoute: AccountApiKeysRoute,
+  AccountConsentsRoute: AccountConsentsRoute,
+  AccountSecurityRoute: AccountSecurityRoute,
+  AccountSessionsRoute: AccountSessionsRoute,
+  AccountIndexRoute: AccountIndexRoute,
+}
+
+const AccountRouteWithChildren =
+  AccountRoute._addFileChildren(AccountRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AccountRoute: AccountRouteWithChildren,
   BannedRoute: BannedRoute,
   ChangePasswordRoute: ChangePasswordRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,

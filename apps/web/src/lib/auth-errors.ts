@@ -36,6 +36,12 @@ export function messageForErrorCode(
       return t.auth.twoFactor.lockedOut
     case "two_factor_expired":
       return t.auth.twoFactor.expired
+    case "not_found":
+      // The thing being acted on is not there, or is not yours. SEC-7: the
+      // two cases must not be distinguishable.
+      return t.errors.notFound.description
+    case "expiry_out_of_range":
+      return t.account.apiKeys.outOfRange
     case "token_expired":
       return t.auth.resetPassword.expired
     case "token_used":
@@ -69,6 +75,15 @@ export const NOTICE_CODES = new Set([
   "password_changed",
   "account_created",
   "signed_out",
+  "reauth",
+  "signin_required",
+  "profile_saved",
+  "email_change_sent",
+  "session_revoked",
+  "apikey_revoked",
+  "consent_revoked",
+  "twofactor_on",
+  "twofactor_off",
 ])
 
 export function messageForNoticeCode(
@@ -88,6 +103,25 @@ export function messageForNoticeCode(
       return t.auth.signUp.done
     case "signed_out":
       return t.auth.signOut.description
+    case "reauth":
+      // FR-AUTH-5: the session was real, only too old for what was asked.
+      return t.auth.signIn.reauth
+    case "signin_required":
+      return t.auth.signIn.required
+    case "profile_saved":
+      return t.account.profile.saved
+    case "email_change_sent":
+      return t.account.changeEmail.sent
+    case "session_revoked":
+      return t.account.sessions.revoked
+    case "apikey_revoked":
+      return t.account.apiKeys.revoked
+    case "consent_revoked":
+      return t.account.consents.revoked
+    case "twofactor_on":
+      return t.account.twoFactor.turnedOn
+    case "twofactor_off":
+      return t.account.twoFactor.turnedOff
     default:
       return undefined
   }

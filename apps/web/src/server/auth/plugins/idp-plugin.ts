@@ -277,7 +277,11 @@ export function idpPlugin(options: IdpPluginOptions): BetterAuthPlugin {
     // "signed in" for someone who had not been. This plugin is registered
     // last, so it sees what the caller will actually receive.
     ...(options.afterHook
-      ? { hooks: { after: [{ matcher: () => true, handler: options.afterHook }] } }
+      ? {
+          hooks: {
+            after: [{ matcher: () => true, handler: options.afterHook }],
+          },
+        }
       : {}),
   } satisfies BetterAuthPlugin
 }

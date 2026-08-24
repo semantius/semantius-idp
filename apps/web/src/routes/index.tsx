@@ -1,5 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router"
 
+import { fetchProfile } from "@/server/functions/account"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 
 /**
@@ -10,15 +11,12 @@ import { APP_ROUTES } from "@/server/oidc/base-path"
  * in. Both live elsewhere, so this redirects rather than rendering a page that
  * would only ever be a menu of two links.
  *
- * It redirects to `/login` unconditionally for now. Once `/account` exists
- * (M7) this should send a signed-in visitor there instead; `/login` is already
- * the right answer for the anonymous case, which is the one that matters.
- *
  * `beforeLoad` makes it a real server-side redirect rather than a flash of one
  * page before another.
  */
 export const Route = createFileRoute("/")({
-  beforeLoad: () => {
-    throw redirect({ to: APP_ROUTES.login })
+  beforeLoad: async () => {
+    const profile = await fetchProfile()
+    throw redirect({ to: profile ? APP_ROUTES.account : APP_ROUTES.login })
   },
 })

@@ -277,7 +277,7 @@ export function buildDatabaseHooks(
   }
 }
 
-interface GateUser {
+export interface GateUser {
   status?: string | null
   banned?: boolean | null
   banExpires?: Date | string | null

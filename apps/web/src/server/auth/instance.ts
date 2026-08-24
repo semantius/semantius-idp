@@ -29,6 +29,7 @@ import { APP_ROUTES, createBasePaths } from "../oidc/base-path"
 import { idpPlugin } from "./plugins/idp-plugin"
 import { buildDatabaseHooks } from "./options/database-hooks"
 import { buildEmailCallbacks } from "./options/email-callbacks"
+import { gateApiKeyPlugin } from "./options/api-key-gate"
 import { buildAfterHook, buildBeforeHook } from "./options/hooks"
 import { buildSocialProviders } from "./options/social"
 import { buildValidateUserInfo } from "./options/social-sync"
@@ -279,32 +280,37 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
           ]
         : []),
 
+      // FR-KEY-2: wrapped so the owner's ban/approval state is re-checked on
+      // every use of a key, which the plugin itself never does.
       ...(file.apiKeys.enabled || deps.forSchema
         ? [
-            apiKey({
-              // FR-KEY-1: hashed at rest, prefixed for recognisability.
-              defaultPrefix: "idp_",
-              disableKeyHashing: false,
-              requireName: true,
-              keyExpiration: {
-                // Better Auth quirk: `defaultExpiresIn` is in seconds while
-                // `min`/`maxExpiresIn` are in days. Converted here so the
-                // config file can express both as durations.
-                defaultExpiresIn: file.apiKeys.defaultExpiresIn,
-                minExpiresIn: 1,
-                maxExpiresIn: Math.ceil(file.apiKeys.maxExpiresIn / 86_400),
-                disableCustomExpiresTime: false,
-              },
-              // FR-KEY-1: per-key rate limiting.
-              rateLimit: {
-                enabled: true,
-                timeWindow: 60_000,
-                maxRequests: 120,
-              },
-              // FR-KEY-2: a key authenticates *as the owning user*, same roles.
-              enableSessionForAPIKeys: true,
-              storage: "database",
-            }),
+            gateApiKeyPlugin(
+              apiKey({
+                // FR-KEY-1: hashed at rest, prefixed for recognisability.
+                defaultPrefix: "idp_",
+                disableKeyHashing: false,
+                requireName: true,
+                keyExpiration: {
+                  // Better Auth quirk: `defaultExpiresIn` is in seconds while
+                  // `min`/`maxExpiresIn` are in days. Converted here so the
+                  // config file can express both as durations.
+                  defaultExpiresIn: file.apiKeys.defaultExpiresIn,
+                  minExpiresIn: 1,
+                  maxExpiresIn: Math.ceil(file.apiKeys.maxExpiresIn / 86_400),
+                  disableCustomExpiresTime: false,
+                },
+                // FR-KEY-1: per-key rate limiting.
+                rateLimit: {
+                  enabled: true,
+                  timeWindow: 60_000,
+                  maxRequests: 120,
+                },
+                // FR-KEY-2: a key authenticates *as the owning user*, same roles.
+                enableSessionForAPIKeys: true,
+                storage: "database",
+              }),
+              { audit: deps.audit }
+            ),
           ]
         : []),
 

@@ -1,0 +1,145 @@
+import type { ReactNode } from "react"
+
+import { Link } from "@tanstack/react-router"
+
+import { cn } from "@workspace/ui/lib/utils"
+
+import type { Catalog } from "@/server/i18n"
+import type { UiContext } from "@/server/ui-context"
+
+/**
+ * The frame the signed-in pages share (FR-ACCT-1, FR-ACCT-2).
+ *
+ * A different shape from `AuthShell`: those pages are a single centred card
+ * for someone who is not signed in yet, these are a section of an application
+ * for someone who is. The navigation is a real `<nav>` with `aria-current` on
+ * the active entry, and it is rendered on the server like everything else, so
+ * the page is complete before hydration.
+ *
+ * Which entries exist follows the capability flags — with e-mail off there is
+ * nothing to change an address to, and with API keys off the page 404s, so a
+ * link to it would be a link to a dead end (FR-MAIL-2, FR-KEY-1).
+ */
+
+export interface AccountNavItem {
+  to: string
+  label: string
+}
+
+export function accountNavItems(ui: UiContext, t: Catalog): AccountNavItem[] {
+  return [
+    { to: "/account", label: t.account.nav.profile },
+    { to: "/account/security", label: t.account.nav.security },
+    { to: "/account/sessions", label: t.account.nav.sessions },
+    ...(ui.apiKeysEnabled
+      ? [{ to: "/account/api-keys", label: t.account.nav.apiKeys }]
+      : []),
+    { to: "/account/consents", label: t.account.nav.consents },
+  ]
+}
+
+export function AccountShell({
+  ui,
+  t,
+  title,
+  description,
+  impersonated,
+  children,
+}: {
+  ui: UiContext
+  t: Catalog
+  title: string
+  description?: ReactNode
+  /** FR-ADMIN-5: an impersonated session says so on every page it renders. */
+  impersonated?: boolean
+  children: ReactNode
+}) {
+  const items = accountNavItems(ui, t)
+
+  return (
+    <div className="min-h-svh bg-muted/30">
+      {impersonated ? (
+        <p
+          role="status"
+          className="text-destructive-foreground bg-destructive px-4 py-2 text-center text-sm font-medium"
+        >
+          {t.account.impersonationBanner}
+        </p>
+      ) : null}
+
+      <div className="mx-auto w-full max-w-4xl px-4 py-10">
+        <header className="mb-8 flex flex-wrap items-baseline justify-between gap-3">
+          <div>
+            <p className="text-sm text-muted-foreground">{ui.siteName}</p>
+            <h1 className="text-2xl font-semibold tracking-tight">
+              {t.account.title}
+            </h1>
+          </div>
+          <form method="post" action={`${ui.basePath}/logout`}>
+            <button
+              type="submit"
+              className="text-sm text-muted-foreground underline underline-offset-4"
+            >
+              {t.common.signOut}
+            </button>
+          </form>
+        </header>
+
+        <div className="grid gap-8 md:grid-cols-[12rem_1fr]">
+          <nav aria-label={t.account.title}>
+            <ul className="flex flex-wrap gap-1 md:flex-col">
+              {items.map((item) => (
+                <li key={item.to}>
+                  <Link
+                    to={item.to}
+                    activeOptions={{ exact: item.to === "/account" }}
+                    className={cn(
+                      "block rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
+                    )}
+                    activeProps={{
+                      className: "bg-muted font-medium text-foreground",
+                      "aria-current": "page",
+                    }}
+                  >
+                    {item.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+
+          <main>
+            <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+            {description ? (
+              <p className="mt-1 text-sm text-muted-foreground">
+                {description}
+              </p>
+            ) : null}
+            <div className="mt-6 grid gap-6">{children}</div>
+          </main>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** One bordered block per action, so a page of four forms still reads as four. */
+export function AccountSection({
+  title,
+  description,
+  children,
+}: {
+  title: string
+  description?: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <section className="rounded-xl border bg-card p-6 shadow-sm">
+      <h3 className="font-medium">{title}</h3>
+      {description ? (
+        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+      ) : null}
+      <div className="mt-4">{children}</div>
+    </section>
+  )
+}

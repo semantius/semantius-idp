@@ -58,6 +58,8 @@ export interface UiContext {
   twoFactorTrustDeviceDays: number
   /** FR-KEY-1. */
   apiKeysEnabled: boolean
+  /** `apiKeys.maxExpiresIn` in whole days, which is how the form asks for it. */
+  apiKeyMaxExpiresInDays: number
   /** Minimum password length, shown as an inline policy hint (FR-ACCT-2). */
   passwordMinLength: number
   /** FR-SOC-1: only providers that are actually configured render a button. */
@@ -143,6 +145,10 @@ export function buildUiContext(config: IdpConfig, locale: string): UiContext {
     twoFactorEnabled: file.twoFactor.enabled,
     twoFactorTrustDeviceDays: file.twoFactor.trustDeviceDays,
     apiKeysEnabled: file.apiKeys.enabled,
+    apiKeyMaxExpiresInDays: Math.max(
+      1,
+      Math.floor(file.apiKeys.maxExpiresIn / 86_400)
+    ),
     passwordMinLength: file.auth.password.minLength,
 
     socialProviders: Object.entries(file.social)

@@ -17,6 +17,7 @@
 import type { DbHandle } from "./db/client"
 import type { AuditAction } from "./auth/plugins/idp-plugin"
 import { anonymizeIp, redactFields } from "./logger"
+import { currentRequest, currentRequestId } from "./http/request-log"
 import type { LogFields, Logger } from "./logger"
 
 export type AuditOutcome = "success" | "failure" | "denied"
@@ -56,7 +57,11 @@ export function createAudit(database: DbHandle, logger: Logger): Audit {
       actorType: event.actorType,
       targetType: event.target?.type,
       targetId: event.target?.id,
-      requestId: event.requestId,
+      // SEC-6: falls back to the id the edge minted for this request, so the
+      // trail and the request log can be read side by side. `undefined`
+      // outside a request — start-up, the CLI, a background job — and that is
+      // an ordinary answer rather than a missing one.
+      requestId: event.requestId ?? currentRequestId(),
       metadata,
     })
 
@@ -69,9 +74,14 @@ export function createAudit(database: DbHandle, logger: Logger): Audit {
         actorType: event.actorType ?? null,
         targetType: event.target?.type ?? null,
         targetId: event.target?.id ?? null,
-        ipAddress: anonymizeIp(event.ipAddress) ?? null,
+        // The edge already resolved and anonymised the caller's address using
+        // `server.trustProxy`. Falling back to it means a call site that reads
+        // a raw `X-Forwarded-For` — which anyone can prepend to — cannot write
+        // a spoofed address into the trail just by passing one.
+        ipAddress:
+          anonymizeIp(event.ipAddress) ?? currentRequest()?.ipAddress ?? null,
         userAgent: event.userAgent ?? null,
-        requestId: event.requestId ?? null,
+        requestId: event.requestId ?? currentRequestId() ?? null,
         metadata: metadata ?? null,
         createdAt: new Date(),
       })

@@ -37,6 +37,7 @@ import {
 import type { AdminContext } from "../admin/context"
 import { buildAdminEndpoints } from "../admin/endpoints"
 import { buildAdminAfterHook, buildAdminGuard } from "../admin/guard"
+import { SOCKET_ADDRESS_HEADER } from "../http/client-ip"
 import { buildEmailCallbacks } from "./options/email-callbacks"
 import { gateApiKeyPlugin } from "./options/api-key-gate"
 import { buildAfterHook, buildBeforeHook } from "./options/hooks"
@@ -57,6 +58,11 @@ export interface AuthDeps {
    * which is available while the instance is being built.
    */
   adminContext?: AdminContext
+  /**
+   * Injected by tests so the FR-AUTH-1 breach check never leaves the process.
+   * Production leaves it unset and the module uses the global `fetch`.
+   */
+  breachFetch?: (input: string, init?: RequestInit) => Promise<Response>
   logger?: Logger
   /**
    * Sends the FR-MAIL-1 templates. Omitted during schema generation, and a
@@ -242,7 +248,16 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
         // SEC-2: only honour forwarded headers when a proxy is trusted.
         disableIpTracking: false,
         ...(file.server.trustProxy === false
-          ? { ipAddressHeaders: [] }
+          ? {
+              // Not the empty list. With no header to read, Better Auth cannot
+              // resolve an address at all and every caller shares **one**
+              // rate-limit bucket — which is either so wide it limits nothing
+              // or so narrow it locks the whole deployment out at once. The
+              // edge stamps the real socket address into this private header
+              // and overwrites whatever a client sent, so reading it here is
+              // reading the socket, not the caller.
+              ipAddressHeaders: [SOCKET_ADDRESS_HEADER],
+            }
           : {
               ipAddressHeaders: ["x-forwarded-for"],
               ...(Array.isArray(file.server.trustProxy)
@@ -257,6 +272,12 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
       enabled: file.rateLimit.enabled,
       // SEC-2: database storage survives restarts and is replica-safe.
       storage: file.rateLimit.storage,
+      // SEC-2's named endpoints. Better Auth keys every bucket as `ip:path`
+      // and `customRules` can only change the window and the maximum, never
+      // the key — so the *per-client-id* half of the `/oauth2/token` rule
+      // cannot live here. It lives in `routes/oauth2/token.ts` instead, over
+      // the same `rate_limit` table. See `server/http/rate-limit.ts`.
+      customRules: SEC2_RULES,
     },
 
     // ------------------------------------------------------------- plugins ---
@@ -501,6 +522,7 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
         config,
         database: deps.database,
         logger: deps.logger,
+        breachFetch: deps.breachFetch,
       }),
     },
 
@@ -558,6 +580,40 @@ function sessionTokenPayload(
     // authorization request, so there is no scope to have agreed on.
     scope: "openid profile email",
   }
+}
+
+/**
+ * The stricter buckets SEC-2 names, in seconds and attempts.
+ *
+ * The numbers are chosen to be invisible to a person and expensive to a
+ * script. Ten sign-in attempts a minute is more than anyone types and far less
+ * than a password list needs; three password-reset requests in five minutes is
+ * a user pressing the button again, not an inbox being flooded.
+ *
+ * A wildcard entry matches by path, so `/callback/*` covers every social
+ * provider without naming them.
+ */
+const SEC2_RULES: Record<string, { window: number; max: number }> = {
+  // Credential guessing.
+  "/sign-in/email": { window: 60, max: 10 },
+  "/sign-up/email": { window: 300, max: 5 },
+  // Mail amplification: each of these sends a message to an address the
+  // caller chose.
+  "/request-password-reset": { window: 300, max: 3 },
+  "/forget-password": { window: 300, max: 3 },
+  "/send-verification-email": { window: 300, max: 3 },
+  // FR-2FA-1: the second factor is six digits, so the attempt limit *is* the
+  // security of it.
+  "/two-factor/verify-totp": { window: 300, max: 10 },
+  "/two-factor/verify-backup-code": { window: 300, max: 10 },
+  "/two-factor/verify-otp": { window: 300, max: 10 },
+  // A key is a bearer credential; verification is a guessing oracle.
+  "/api-key/verify": { window: 60, max: 30 },
+  // The authorization endpoint is a redirect factory, and each hit costs a
+  // session read.
+  "/oauth2/authorize": { window: 60, max: 60 },
+  // Per IP. The per-client-id half is in the route handler.
+  "/oauth2/token": { window: 60, max: 120 },
 }
 
 export type Auth = ReturnType<typeof betterAuth<BetterAuthOptions>>

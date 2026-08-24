@@ -82,7 +82,36 @@ const REDACTED_KEYS = [
 const REDACTION = "[redacted]"
 
 /** Paths whose query string is stripped before a URL is logged (SEC-5). */
-const SENSITIVE_PATH_PREFIXES = ["/oauth2/", "/api/auth/"]
+/**
+ * Paths whose query string is dropped wholesale (SEC-5).
+ *
+ * Matched **anywhere in the path**, not only at the start, because under a
+ * sub-path deployment the protocol endpoints are at `/idp/oauth2/...` — and a
+ * prefix check would have quietly logged every authorization code the moment
+ * the mount path was set (OPS-10).
+ *
+ * The list covers more than SEC-5 names literally, and each addition is a
+ * parameter that is a credential in its own right:
+ *
+ *  - `/reset-password` and `/verify-email` carry single-use tokens;
+ *  - `/change-password`, `/login`, `/two-factor` and `/consent` carry the
+ *    signed `oauth_query` continuation, which is a bearer of the whole
+ *    authorization request (FR-OIDC-9).
+ *
+ * Dropping the whole query rather than naming sensitive parameters is
+ * deliberate: the set of parameters grows with every plugin, and a redaction
+ * list that has to be maintained is one that will be out of date.
+ */
+const SENSITIVE_PATH_SEGMENTS = [
+  "/oauth2/",
+  "/api/auth/",
+  "/reset-password",
+  "/verify-email",
+  "/change-password",
+  "/two-factor",
+  "/consent",
+  "/login",
+]
 
 export function createLogger(options: CreateLoggerOptions = {}): Logger {
   const level = options.level ?? "info"
@@ -175,7 +204,7 @@ export function safeUrlForLog(url: string): string {
     const parsed = new URL(url, "http://placeholder.invalid")
     const path = parsed.pathname
     if (
-      SENSITIVE_PATH_PREFIXES.some((prefix) => path.startsWith(prefix)) &&
+      SENSITIVE_PATH_SEGMENTS.some((segment) => path.includes(segment)) &&
       parsed.search !== ""
     ) {
       return `${path}?[redacted]`

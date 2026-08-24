@@ -118,6 +118,33 @@ describe("safeUrlForLog (SEC-5)", () => {
   it("keeps a protocol path with no query as-is", () => {
     expect(safeUrlForLog("/oauth2/token")).toBe("/oauth2/token")
   })
+
+  it("still redacts under a sub-path mount (OPS-10)", () => {
+    // A prefix check passed at the host root and silently logged every
+    // authorization code the moment `server.baseUrl` grew a path.
+    expect(safeUrlForLog("/idp/oauth2/authorize?client_id=a&code=b")).toBe(
+      "/idp/oauth2/authorize?[redacted]"
+    )
+    expect(safeUrlForLog("/idp/api/auth/callback/google?code=secret")).toBe(
+      "/idp/api/auth/callback/google?[redacted]"
+    )
+  })
+
+  it("redacts our own pages that carry a credential in the query", () => {
+    // Each of these is a bearer of something: a single-use token, or the
+    // signed authorization request of FR-OIDC-9.
+    for (const path of [
+      "/reset-password?token=abc",
+      "/verify-email?token=abc",
+      "/change-password?forced=1&oauth_query=sig%3Dx",
+      "/two-factor?oauth_query=sig%3Dx",
+      "/consent?sig=x&client_id=y",
+      "/login?oauth_query=sig%3Dx",
+      "/idp/reset-password?token=abc",
+    ]) {
+      expect(safeUrlForLog(path), path).toMatch(/\?\[redacted\]$/)
+    }
+  })
 })
 
 describe("anonymizeIp (SEC-5)", () => {

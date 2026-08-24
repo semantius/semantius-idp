@@ -21,6 +21,13 @@
  * Static assets are served by whatever fronts this handler (`scripts/
  * spike-s3-proxy.ts` today, the container's entrypoint from M12); that layer
  * strips the mount path before looking in `dist/client`.
+ *
+ * **It is also the edge** (M11). Every request that reaches the application
+ * passes through here exactly once, which makes it the only honest place to
+ * mint the request id, resolve the client address and stamp the SEC-4 headers.
+ * Doing it in `src/serve.ts` instead would leave `vite dev` without any of it,
+ * so a developer would be looking at a different application from the one that
+ * ships.
  */
 
 import {
@@ -31,12 +38,28 @@ import type { Register } from "@tanstack/react-router"
 import type { RequestHandler } from "@tanstack/react-start/server"
 
 import { setRuntimeBasePath } from "./lib/base-path"
+import type { IdpConfig } from "./server/config/derive"
 import { loadConfig } from "./server/config/loader"
 import { loadDevEnv } from "./server/dev-env"
+import { SOCKET_ADDRESS_HEADER, clientIpFrom } from "./server/http/client-ip"
+import {
+  buildLogEntry,
+  isQuietPath,
+  logRequest,
+  requestIdFrom,
+  withRequestContext,
+} from "./server/http/request-log"
+import {
+  withSecurityHeaders,
+  withStandardRetryAfter,
+} from "./server/http/security-headers"
+import { anonymizeIp, createLogger } from "./server/logger"
+import type { Logger } from "./server/logger"
 
 const SERVER_FN_SEGMENT = "/_serverFn/"
 
 let mountPath: string | undefined
+let edge: { config: IdpConfig; logger: Logger } | undefined
 
 /**
  * The mount path, read straight from the config folder.
@@ -60,6 +83,33 @@ function resolveMountPath(): string {
   }
   setRuntimeBasePath(mountPath)
   return mountPath
+}
+
+/**
+ * Configuration and a logger for the edge, resolved once.
+ *
+ * Same reasoning as `resolveMountPath`: this runs before the first request is
+ * routed, and `getRuntime()` is the whole OPS-2 start-up sequence. A broken
+ * configuration yields `undefined`, and the edge then does the minimum — an id
+ * and the headers — rather than refusing to serve the page that would explain
+ * the breakage.
+ */
+function resolveEdge(): { config: IdpConfig; logger: Logger } | undefined {
+  if (edge !== undefined) return edge
+  try {
+    loadDevEnv()
+    const { config } = loadConfig()
+    edge = {
+      config,
+      logger: createLogger({
+        level: config.file.logging.level,
+        format: config.file.logging.format,
+      }),
+    }
+  } catch {
+    return undefined
+  }
+  return edge
 }
 
 const handler = createStartHandler({
@@ -93,9 +143,48 @@ function unmountServerFnRequest(request: Request): Request {
 export type ServerEntry = { fetch: RequestHandler<Register> }
 
 const entry: ServerEntry = {
-  fetch: (request, ...rest) => {
-    resolveMountPath()
-    return handler(unmountServerFnRequest(request), ...rest)
+  fetch: async (request, ...rest) => {
+    const base = resolveMountPath()
+    const context = resolveEdge()
+    const trustProxy = context?.config.file.server.trustProxy ?? false
+
+    const requestId = requestIdFrom(request, trustProxy)
+    const ipAddress = clientIpFrom(request, trustProxy, {
+      socketAddress: request.headers.get(SOCKET_ADDRESS_HEADER),
+    })
+    const startedAt = Date.now()
+
+    const response = await withRequestContext(
+      { requestId, ipAddress: anonymizeIp(ipAddress) },
+      () => handler(unmountServerFnRequest(request), ...rest)
+    )
+
+    const { pathname } = new URL(request.url)
+    if (context && !isQuietPath(pathname, base)) {
+      logRequest(
+        context.logger,
+        buildLogEntry({
+          request,
+          status: response.status,
+          startedAt,
+          requestId,
+          ipAddress,
+        })
+      )
+    }
+
+    const withHeaders = withSecurityHeaders(
+      withStandardRetryAfter(response),
+      request,
+      {
+        https: context?.config.base.secure ?? false,
+        basePath: base,
+      }
+    )
+    // Echoed so an operator reading a 500 in a browser can quote the id that
+    // is on the log line and the audit row.
+    withHeaders.headers.set("X-Request-Id", requestId)
+    return withHeaders
   },
 }
 

@@ -173,7 +173,10 @@ export function idpPlugin(options: IdpPluginOptions): BetterAuthPlugin {
         actorUserId: actor.id,
         actorType: "session",
         target: { type: "user", id: user.id },
-        ipAddress: ctx.request?.headers.get("x-forwarded-for"),
+        // Deliberately not read from a header here: `X-Forwarded-For` is
+        // attacker-controlled at the left, and the audit writer already has
+        // the address the edge resolved under `server.trustProxy`.
+        ipAddress: undefined,
         userAgent: ctx.request?.headers.get("user-agent"),
         metadata: { previousStatus: user.status },
       })
@@ -224,7 +227,10 @@ export function idpPlugin(options: IdpPluginOptions): BetterAuthPlugin {
         actorUserId: actor.id,
         actorType: "session",
         target: { type: "user", id: user.id },
-        ipAddress: ctx.request?.headers.get("x-forwarded-for"),
+        // Deliberately not read from a header here: `X-Forwarded-For` is
+        // attacker-controlled at the left, and the audit writer already has
+        // the address the edge resolved under `server.trustProxy`.
+        ipAddress: undefined,
         userAgent: ctx.request?.headers.get("user-agent"),
         metadata: {
           previousStatus: user.status,

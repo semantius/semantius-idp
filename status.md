@@ -2,7 +2,7 @@
 
 **As of:** 2026-08-24 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `c0d8d8e`
 **Plan:** `~/.claude/plans/finish-idp-v1-s3-m6-m14.md`
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D35**
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D38**
 
 **S3, M6, M7, M8 and M9 are done and committed; M10 is done and awaiting its
 commit.** Every gate green: lint, typecheck, unit (362), integration (173
@@ -138,6 +138,67 @@ _behaviour_ is the one that was chosen — but the discriminator and the config
 option both claim otherwise. **Left for M11**, where the token surface is
 already being revisited; changing token claims mid-M10 would be re-opening a
 decision another block made and tested.
+
+---
+
+## M11 — security hardening, and the four things it found
+
+**Headers and the request log.** `server/http/security-headers.ts` puts the
+SEC-4 set on every response and `no-store` on the four endpoints that must
+never be cached. The CSP concedes `script-src 'unsafe-inline'` because Start
+streams framework scripts with no seam for a nonce — recorded as **D36**, with
+the rest of the policy written so that concession is contained.
+
+`server/http/request-log.ts` is the SEC-5 line that no milestone had yet
+created. It mints a request id at the edge, keeps it in an `AsyncLocalStorage`
+for the length of the request, and prints it — so **`audit_log.request_id`,
+which has been a column since M4 and empty ever since, is now filled in**. An
+event in the trail and a line in the log can finally be put side by side.
+
+Both live in `src/server-entry.ts` rather than `src/serve.ts`, so `vite dev`
+gets them too and a developer is not looking at a different application from
+the one that ships.
+
+**Rate limits and the client address.** `server/http/client-ip.ts` implements
+rightmost-untrusted-hop over `server.trustProxy`, v4 and v6, with 20 unit tests
+written from the attacker's side. SEC-2's named endpoints get stricter buckets
+through Better Auth's `customRules`; the per-client-id half of the
+`/oauth2/token` rule could not be expressed there and is implemented over the
+same table instead (**D37**).
+
+**`auth.password.breachCheck` now does something.** Schema'd since M2, wired
+now: k-anonymity against Have I Been Pwned, five hex characters on the wire,
+padding requested, three-second timeout, and a failure never blocks a password.
+Off by default, and DOC-4 has to say that enabling it adds one egress origin.
+
+### What running it turned up
+
+1. **`safeUrlForLog` only redacted at the host root.** It matched
+   `/oauth2/` and `/api/auth/` as _prefixes_, so the moment `server.baseUrl`
+   grew a path every authorization code would have gone into the log
+   (OPS-10). Now matched anywhere in the path — and widened to cover
+   `/reset-password`, `/verify-email` and the pages that carry the signed
+   `oauth_query`, each of which is a bearer credential in a query string.
+2. **The audit trail recorded a spoofable address.** Two call sites read
+   `X-Forwarded-For` straight off the request, which is the attacker-controlled
+   end of the list. They now pass nothing and the audit writer falls back to
+   the address the edge resolved under `server.trustProxy`.
+3. **Every caller shared one rate-limit bucket in standalone mode.** With
+   `trustProxy: false` the previous code set `ipAddressHeaders: []`, leaving
+   Better Auth unable to resolve any address at all — it said so in a warning
+   at every boot and nothing had picked it up. Fixed by **D38**.
+4. **429s carried a header nothing honours.** Better Auth answers with
+   `X-Retry-After`; no browser and no HTTP client does anything with it. The
+   edge now copies it onto `Retry-After`.
+
+`security.test.ts` is the TST-5 suite: 22 cases, all written as attacks —
+forged `Host`, mass assignment, unregistered redirect URI, PKCE downgrade,
+wrong and missing secrets, code replay, uniform answers, cookie attributes, the
+approval gate, and a spoofed `X-Forwarded-For` that must not escape the limiter.
+
+Headers verified live on `/login` and `/consent`, the log line and its
+redaction verified live, and the request id verified reaching real audit rows —
+all against `idp_live_m11`, dropped afterwards.
 
 ---
 
@@ -588,10 +649,9 @@ schema identifier in the committed SQL. And **`buildRuntime` had to become
 async**, because the OAuth provider queries `oauth_resource` from its own
 `init()`; on a fresh database the process died before it could migrate.
 
-## Not done (M11–M14)
+## Not done (M12–M14)
 
-Security hardening, the container and CLI, e2e and docs. Everything before them
-is done.
+The container and CLI, e2e and docs. Everything before them is done.
 
 Accepted deviations, unchanged: `drizzle.config.ts` sits in `apps/web/`
 because drizzle-kit resolves paths relative to itself; `test:e2e` stays

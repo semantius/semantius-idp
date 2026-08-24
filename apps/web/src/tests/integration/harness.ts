@@ -74,6 +74,14 @@ export interface TestContextOptions {
   config?: Record<string, unknown>
   clients?: Record<string, unknown>[]
   roles?: RoleEntry[]
+  /**
+   * Stands in for the Have I Been Pwned range API (FR-AUTH-1).
+   *
+   * Supplied so the suite never reaches the internet: a test that depends on a
+   * third party is a test that fails on a train. Without it the check fails
+   * open, which is the documented production behaviour.
+   */
+  breachFetch?: (input: string, init?: RequestInit) => Promise<Response>
 }
 
 export interface TestContext {
@@ -152,6 +160,7 @@ export async function createTestContext(
     mailer,
     audit,
     adminContext,
+    ...(options.breachFetch ? { breachFetch: options.breachFetch } : {}),
   })
   adminContext.auth = auth
 

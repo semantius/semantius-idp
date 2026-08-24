@@ -27,7 +27,7 @@
  * A new route cannot forget to audit, and the mapping is one table to read.
  */
 
-import { createAuthMiddleware } from "better-auth/api"
+import { APIError, createAuthMiddleware } from "better-auth/api"
 
 import type { BetterAuthOptions } from "better-auth"
 
@@ -37,6 +37,8 @@ import type { DbHandle } from "../../db/client"
 import type { Logger } from "../../logger"
 import { revokeExpiredRefreshFamilies } from "../../oidc/refresh-lifetime"
 import type { AuditAction } from "../plugins/idp-plugin"
+import { checkPasswordBreach } from "../password-breach"
+import type { BreachCheckDeps } from "../password-breach"
 import { normalizeEmail } from "./social"
 
 /**
@@ -63,6 +65,23 @@ export interface BeforeHookDeps {
   /** Absent during schema generation. */
   database?: DbHandle
   logger?: Logger
+  /** Injected by tests so the breach check never leaves the process. */
+  breachFetch?: BreachCheckDeps["fetchImpl"]
+}
+
+/**
+ * Endpoints where the caller is *choosing* a password (FR-AUTH-1).
+ *
+ * Sign-in is deliberately absent: refusing an existing password at sign-in
+ * would lock a user out of their own account over a corpus they cannot do
+ * anything about from a login form. The check belongs where a new value is
+ * being set, which is also the only place the user can act on the answer.
+ */
+const PASSWORD_CHOICE_PATHS: Record<string, string> = {
+  "/sign-up/email": "password",
+  "/reset-password": "newPassword",
+  "/change-password": "newPassword",
+  "/admin/set-user-password": "newPassword",
 }
 
 export function buildBeforeHook(
@@ -81,9 +100,47 @@ export function buildBeforeHook(
     // token is already dead when the provider looks at it, so an over-age
     // family gets the ordinary `invalid_grant` instead of a special case.
     const body = ctx.body as Record<string, unknown> | undefined
+
+    await assertPasswordNotBreached(ctx.path, body, deps)
+
     if (ctx.path === "/oauth2/token" && body?.grant_type === "refresh_token") {
       await revokeExpiredRefreshFamilies(deps)
     }
+  })
+}
+
+/**
+ * FR-AUTH-1: refuses a password that is already in a breach corpus.
+ *
+ * Only when `auth.password.breachCheck` is on, and only where a password is
+ * being *chosen*. A service failure allows the password — see
+ * `password-breach.ts` for why — so this can only ever add a refusal, never
+ * take a working sign-up away because a third party is down.
+ */
+async function assertPasswordNotBreached(
+  path: string,
+  body: Record<string, unknown> | undefined,
+  deps: BeforeHookDeps
+): Promise<void> {
+  if (!deps.config.file.auth.password.breachCheck) return
+  const field = PASSWORD_CHOICE_PATHS[path]
+  if (!field) return
+  const password = body?.[field]
+  if (typeof password !== "string" || password === "") return
+
+  const result = await checkPasswordBreach(password, {
+    logger: deps.logger,
+    fetchImpl: deps.breachFetch,
+  })
+  if (!result.breached) return
+
+  // The count is never shown. "Seen 3,730,471 times" tells the user nothing
+  // they can act on and tells anyone watching the response exactly which
+  // password was tried.
+  throw new APIError("BAD_REQUEST", {
+    code: "PASSWORD_BREACHED",
+    message:
+      "That password has appeared in a public data breach. Choose a different one.",
   })
 }
 

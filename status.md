@@ -1,16 +1,47 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-24 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `0268b73`
-**Plan:** `~/.claude/plans/generate-a-plan-to-lovely-teacup.md` · **Spec:** [spec-v1.md](spec-v1.md)
+**As of:** 2026-08-24 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `a89ba87`
+**Plan:** `~/.claude/plans/we-had-c-users-martinamm-claude-plans-ge-buzzing-thimble.md`
+**Spec:** [spec-v1.md](spec-v1.md)
 
-Working tree clean. Every gate green: lint, typecheck, unit, integration,
-schema-drift, config-schema staleness, dependency pinning.
+Working tree clean. **Phase 0 is complete.** Every gate green: lint, typecheck,
+unit (232), integration (301 across both projects), coverage thresholds,
+schema-drift, config-schema staleness, dependency pinning, and the new
+client-bundle gate.
 
 ---
 
-## Review results — to fix before continuing
+## Review results
 
-Findings from owner review. **These are fixed before further milestones start.**
+*Empty — nothing outstanding from a review round. The next round's findings go
+here, and are treated as pre-work before any further milestone starts.*
+
+**One thing wants your call**, though it is not a defect: see the Firefox
+trade-off under R-1 below.
+
+---
+
+## Phase 0 — done, and what it turned up
+
+The three review findings are fixed. Four more problems surfaced while fixing
+them, all of which were shipping.
+
+**Your three:** R-1 the reveal control · R-2 the schema-generator premise ·
+R-3 the post-login destination.
+
+**Found on the way, in the order they appeared:**
+
+| | |
+|---|---|
+| **R-4** | The whole server was in the browser bundle, and hydration was dead on every page |
+| **R-5** | The forced password change never ended — the bootstrap admin was trapped for ever |
+| **R-6** | Two gates that were green only because nobody ran them |
+| **R-7** | The advisory-lock timeout never worked; a blocked start would hang, not fail |
+
+Every one was found by *running* something rather than reading it: opening the
+app in a real browser, signing in end to end against a live server, running the
+CLI, running the coverage command. None would have been caught by another pass
+over the code.
 
 ### R-1 · Password reveal control looks unfinished (FR-ACCT-2, WCAG 2.1 AA)
 
@@ -69,139 +100,6 @@ Chrome and Safari, say so and it is a one-line change.
 Everything else holds: one in-field eye/eye-off control, right-aligned, Tab
 reaches it *after* the password field with a visible ring, and the accessible
 name changes with state. Verified in a real browser, not only in a test.
-
-### R-4 · The whole server was being shipped to the browser — found while fixing R-1
-
-**Not a review finding — found by opening the app in a real browser**, which
-R-1 made necessary. The console said:
-
-```
-ReferenceError: Buffer is not defined
-  at ../node_modules/.pnpm/postgres@3.4.9/.../postgres/src/bytes.js:2:13
-```
-
-**The `postgres` driver was in the client bundle, and it killed hydration on
-every page.** The production build shipped 1.06 MB to the browser containing
-Better Auth, Drizzle, the migrator and this, verbatim:
-
-```sql
-select pg_try_advisory_lock($1::int, $2::int) as locked
-```
-
-No secrets leaked — those are runtime values, not compiled in — but the
-server's *code* was, and nothing on any page could hydrate.
-
-**Why it happened.** A TanStack Start route `loader` is isomorphic: it runs on
-the server for the first paint and in the browser on every client-side
-navigation. So a top-level `import { getRuntime }` in a route file pulls the
-entire IdP into the client graph — even though only the loader touches it.
-Every route did exactly that, `__root.tsx` included. A `server.handlers` block
-*is* stripped from the client build, which is why the POST handlers were fine
-and why this looked safe.
-
-**Why nobody noticed.** Every public page is a plain server-rendered form that
-works without JavaScript — deliberately, per FR-ACCT-2. With nothing depending
-on hydration, a completely dead client bundle is invisible. R-1's reveal
-control is the first thing on the site that needs script, and it did not work.
-
-**Fixed.** `server/functions/ui.ts` wraps the one piece of server work the
-shell needs in `createServerFn`, whose body the Start plugin compiles out of
-the client build. `__root.tsx` fetches it in `beforeLoad` and puts it in the
-router context; every child route reads `context.ui`, so it is one RPC per
-navigation rather than one per matched route. Client bundle 1.06 MB → 334 kB,
-and hydration verified working in Chrome.
-
-**Guarded.** New `scripts/check-client-bundle.ts`, wired into CI: it fails if
-any of six server-only strings appears in a client chunk, or if the bundle
-crosses a size ceiling. Each marker is also asserted to be *present* in the
-server build, so a marker that stops matching anything fails loudly instead of
-passing for ever. Verified by reintroducing a single leaking loader — the gate
-catches it.
-
-### R-5 · The forced password change never ended
-
-**Also not a review finding** — found while proving R-3 end to end against a
-live server. `mustChangePassword` was **set** by the bootstrap step and
-**cleared nowhere in the codebase**. So:
-
-1. sign in with the temporary password → `/change-password?forced=1`
-2. change the password → succeeds, session kept
-3. sign in again → `/change-password?forced=1`, for ever
-
-FR-AUTH-4 says the flag interposes a change "before anything else completes".
-It did. It just never stopped. **The bootstrap admin could not reach any
-destination at all** — which is also why R-3's `/account` 404 was reported as
-theoretical rather than seen: the one account available to test with never got
-past the interposition to hit it.
-
-**Fixed** in `auth/options/database-hooks.ts` via `account.update.after` — the
-only seam that fires after the write succeeds *and* carries both `providerId`
-and `userId` (the matching `before` hook receives just `{ password }`, with no
-user to act on). Gated on an explicit endpoint list rather than "any credential
-password write", because M10's admin temporary-password flow writes a password
-**and** raises this same flag; clearing on every write would race it and hand
-the user an unforced sign-in. The decision is an exported pure predicate so
-that list is asserted without a database.
-
-Verified against a live server: temporary password → forced change → the
-configured destination → and the next sign-in goes straight there.
-
-### R-6 · Two more gates that were green only because nobody ran them
-
-Both found while doing the work above, both now real.
-
-**`pnpm lint` was failing at HEAD.** Three shadcn-copied files in
-`packages/ui` used inline `type` specifiers, which the TanStack config
-rejects. status.md said every gate was green. Fixed in the first commit of
-this session.
-
-**The coverage thresholds were decorative — and failing.** TST-1's numbers were
-in `vitest.config.ts` but **no CI job ever ran `--coverage`**, so nobody saw
-that a run reported ~60 % lines against a 70 % gate. The cause was the
-denominator: coverage was measured over the whole of `src/server` from the
-**unit** project alone, while the database layer, the auth instance and the
-hooks are exercised by the integration project by design.
-
-Measured across both projects the real numbers are 82.9 % lines / 79.4 %
-branches, comfortably over TST-1's 70 %. So there is now a `test:coverage`
-script that runs both, the integration CI job runs it, and the per-module
-85 % gates are extended to the approval modules the plan asked for —
-`auth/options/database-hooks.ts` and `auth/plugins/idp-plugin.ts` — with the
-tests to clear them. `src/server/oidc/**` was also under its 85 % branch gate
-and is now covered.
-
-*(One note for later: `packages/ui` carries both `eslint.config.js` and
-`eslint.config.ts`. ESLint resolves `.js` first, so the `.ts` file — which has
-none of the rule overrides — is dead weight that would silently change the
-rule set if the `.js` one ever went away. Left in place, flagged here.)*
-
-### R-7 · The advisory-lock timeout never worked
-
-Found by running `pnpm --filter web run db:migrate` — the script this session
-was fixing anyway — while a killed process still held the lock. It waited ten
-minutes without the `AdvisoryLockTimeout` the code carefully wrote.
-
-`withAdvisoryLock` did:
-
-```sql
-SET LOCAL lock_timeout = '60000ms'
-```
-
-**`SET LOCAL` outside an explicit transaction block is discarded by Postgres**
-with a warning, and every statement there runs in autocommit. So the timeout
-stayed at 0 and the wait was unbounded. Every advisory-locked step inherits
-this: migrate, first-boot key generation, reconcile, bootstrap admin, cleanup.
-Two containers restarting together is the ordinary case (OPS-2), and the
-second one would hang silently rather than fail with the actionable message
-that was already written for exactly this situation.
-
-Now a session-scoped `SET`, with `RESET lock_timeout` before the connection
-goes back to the pool so the next borrower does not inherit it. New
-`tests/integration/advisory-lock.test.ts` holds the lock on one connection and
-asserts the second gives up, names the lock in the error, honours
-`skipIfLocked`, releases on both success and throw, and leaves no
-`lock_timeout` behind. **Verified by putting the bug back**: the timeout test
-hangs until killed, and passes in seven seconds with the fix.
 
 ### R-2 · The custom schema generator rests on a false premise (DM-1)
 
@@ -366,6 +264,139 @@ server-side and never needs to reach the browser.
 
 ---
 
+### R-4 · The whole server was being shipped to the browser — found while fixing R-1
+
+**Not a review finding — found by opening the app in a real browser**, which
+R-1 made necessary. The console said:
+
+```
+ReferenceError: Buffer is not defined
+  at ../node_modules/.pnpm/postgres@3.4.9/.../postgres/src/bytes.js:2:13
+```
+
+**The `postgres` driver was in the client bundle, and it killed hydration on
+every page.** The production build shipped 1.06 MB to the browser containing
+Better Auth, Drizzle, the migrator and this, verbatim:
+
+```sql
+select pg_try_advisory_lock($1::int, $2::int) as locked
+```
+
+No secrets leaked — those are runtime values, not compiled in — but the
+server's *code* was, and nothing on any page could hydrate.
+
+**Why it happened.** A TanStack Start route `loader` is isomorphic: it runs on
+the server for the first paint and in the browser on every client-side
+navigation. So a top-level `import { getRuntime }` in a route file pulls the
+entire IdP into the client graph — even though only the loader touches it.
+Every route did exactly that, `__root.tsx` included. A `server.handlers` block
+*is* stripped from the client build, which is why the POST handlers were fine
+and why this looked safe.
+
+**Why nobody noticed.** Every public page is a plain server-rendered form that
+works without JavaScript — deliberately, per FR-ACCT-2. With nothing depending
+on hydration, a completely dead client bundle is invisible. R-1's reveal
+control is the first thing on the site that needs script, and it did not work.
+
+**Fixed.** `server/functions/ui.ts` wraps the one piece of server work the
+shell needs in `createServerFn`, whose body the Start plugin compiles out of
+the client build. `__root.tsx` fetches it in `beforeLoad` and puts it in the
+router context; every child route reads `context.ui`, so it is one RPC per
+navigation rather than one per matched route. Client bundle 1.06 MB → 334 kB,
+and hydration verified working in Chrome.
+
+**Guarded.** New `scripts/check-client-bundle.ts`, wired into CI: it fails if
+any of six server-only strings appears in a client chunk, or if the bundle
+crosses a size ceiling. Each marker is also asserted to be *present* in the
+server build, so a marker that stops matching anything fails loudly instead of
+passing for ever. Verified by reintroducing a single leaking loader — the gate
+catches it.
+
+### R-5 · The forced password change never ended
+
+**Also not a review finding** — found while proving R-3 end to end against a
+live server. `mustChangePassword` was **set** by the bootstrap step and
+**cleared nowhere in the codebase**. So:
+
+1. sign in with the temporary password → `/change-password?forced=1`
+2. change the password → succeeds, session kept
+3. sign in again → `/change-password?forced=1`, for ever
+
+FR-AUTH-4 says the flag interposes a change "before anything else completes".
+It did. It just never stopped. **The bootstrap admin could not reach any
+destination at all** — which is also why R-3's `/account` 404 was reported as
+theoretical rather than seen: the one account available to test with never got
+past the interposition to hit it.
+
+**Fixed** in `auth/options/database-hooks.ts` via `account.update.after` — the
+only seam that fires after the write succeeds *and* carries both `providerId`
+and `userId` (the matching `before` hook receives just `{ password }`, with no
+user to act on). Gated on an explicit endpoint list rather than "any credential
+password write", because M10's admin temporary-password flow writes a password
+**and** raises this same flag; clearing on every write would race it and hand
+the user an unforced sign-in. The decision is an exported pure predicate so
+that list is asserted without a database.
+
+Verified against a live server: temporary password → forced change → the
+configured destination → and the next sign-in goes straight there.
+
+### R-6 · Two more gates that were green only because nobody ran them
+
+Both found while doing the work above, both now real.
+
+**`pnpm lint` was failing at HEAD.** Three shadcn-copied files in
+`packages/ui` used inline `type` specifiers, which the TanStack config
+rejects. status.md said every gate was green. Fixed in the first commit of
+this session.
+
+**The coverage thresholds were decorative — and failing.** TST-1's numbers were
+in `vitest.config.ts` but **no CI job ever ran `--coverage`**, so nobody saw
+that a run reported ~60 % lines against a 70 % gate. The cause was the
+denominator: coverage was measured over the whole of `src/server` from the
+**unit** project alone, while the database layer, the auth instance and the
+hooks are exercised by the integration project by design.
+
+Measured across both projects the real numbers are 82.9 % lines / 79.4 %
+branches, comfortably over TST-1's 70 %. So there is now a `test:coverage`
+script that runs both, the integration CI job runs it, and the per-module
+85 % gates are extended to the approval modules the plan asked for —
+`auth/options/database-hooks.ts` and `auth/plugins/idp-plugin.ts` — with the
+tests to clear them. `src/server/oidc/**` was also under its 85 % branch gate
+and is now covered.
+
+*(One note for later: `packages/ui` carries both `eslint.config.js` and
+`eslint.config.ts`. ESLint resolves `.js` first, so the `.ts` file — which has
+none of the rule overrides — is dead weight that would silently change the
+rule set if the `.js` one ever went away. Left in place, flagged here.)*
+
+### R-7 · The advisory-lock timeout never worked
+
+Found by running `pnpm --filter web run db:migrate` — the script this session
+was fixing anyway — while a killed process still held the lock. It waited ten
+minutes without the `AdvisoryLockTimeout` the code carefully wrote.
+
+`withAdvisoryLock` did:
+
+```sql
+SET LOCAL lock_timeout = '60000ms'
+```
+
+**`SET LOCAL` outside an explicit transaction block is discarded by Postgres**
+with a warning, and every statement there runs in autocommit. So the timeout
+stayed at 0 and the wait was unbounded. Every advisory-locked step inherits
+this: migrate, first-boot key generation, reconcile, bootstrap admin, cleanup.
+Two containers restarting together is the ordinary case (OPS-2), and the
+second one would hang silently rather than fail with the actionable message
+that was already written for exactly this situation.
+
+Now a session-scoped `SET`, with `RESET lock_timeout` before the connection
+goes back to the pool so the next borrower does not inherit it. New
+`tests/integration/advisory-lock.test.ts` holds the lock on one connection and
+asserts the second gives up, names the lock in the error, honours
+`skipIfLocked`, releases on both success and throw, and leaves no
+`lock_timeout` behind. **Verified by putting the bug back**: the timeout test
+hangs until killed, and passes in seven seconds with the fix.
+
 ## Done (M0 spikes, M1–M5)
 
 **M1.0 — spec amended** for D24–D26: social profile-sync collision now blocks
@@ -403,7 +434,7 @@ schema identifier in the committed SQL. And **`buildRuntime` had to become
 async**, because the OAuth provider queries `oauth_resource` from its own
 `init()`; on a fresh database the process died before it could migrate.
 
-## Not done (M6–M14)
+## Not done (S3, M6–M14)
 
 Social + 2FA, account self-service + API keys, **OIDC core (M8 — the largest)**,
 authorize UX, admin UI, security hardening, Docker/compose/CLI, e2e, and docs.
@@ -435,9 +466,17 @@ and `/forgot-password` deliberately 404 under the default config, since sign-up
 is off and no Resend key is set.
 
 So: what works end to end today is password sign-in, sign-up with approval,
-verification and reset, the startup sequence and the bootstrap admin — with the
-caveat in **R-3** that a successful sign-in currently redirects to `/account`,
-which does not exist yet.
+verification and reset, the startup sequence and the bootstrap admin.
+
+**The `/account` 404 is now curable by configuration** — set
+`auth.defaultRedirect` and sign-in lands wherever you point it (D28). Verified
+against a live server: temporary password → forced change → the configured
+destination, and the next sign-in goes straight there.
+
+Also new since the last update: the public pages actually **hydrate** (R-4),
+so anything needing JavaScript works rather than silently not; and every
+Better Auth endpoint that matters writes an **audit row** (SEC-6), where before
+only three of twenty-nine actions did.
 **What does not work is OIDC** — no discovery, no authorize, no token endpoint.
 That's M8, the largest remaining milestone, and nothing in it has been started.
 
@@ -449,6 +488,7 @@ That's M8, the largest remaining milestone, and nothing in it has been started.
 |---|---|---|
 | M1.0 | Amend spec for D24–D26 | ✅ done |
 | M0 | Spikes S1, S2, S4, S5 | ✅ done · S3 (sub-path) **outstanding** |
+| P0 | Phase 0 — review fixes + M5.5 backfill + CI | ✅ done |
 | M1 | Toolchain baseline | ✅ done |
 | M2 | Configuration system | ✅ done |
 | M3 | DB, Better Auth skeleton, migrations | ✅ done |
@@ -473,7 +513,32 @@ troubleshooting — is still to come.
 
 ## Commits
 
+Phase 0, newest first:
+
 ```
+a89ba87 feat(cli): make `db:migrate` real, and fix the lock timeout it exposed
+b3fbabf fix(ui): translate the two notice codes nothing handled, drop a dead branch
+8c4923b feat(audit): SEC-6 â€” record what Better Auth does, and make the coverage gate real
+612dcbc feat(signup): FR-SIGNUP-2 â€” actually notify the administrators
+9256dc7 ci: run the integration suite against a real Postgres
+9a1804c fix(db): R-2/D29 â€” settle the generator question, and fix what asking it found
+365064b fix(auth): FR-AUTH-4 â€” let the user out of the forced password change
+ac85464 fix(build): keep the server out of the browser bundle
+6d975ad feat(auth): R-3/D28 â€” auth.defaultRedirect, resolved in one place
+fb989fe docs(spec): D28 â€” auth.defaultRedirect, the post-sign-in destination
+2f9865c chore(skills): install the agent-browser skill
+fbee5ba fix(ui): R-1 â€” password reveal as an in-field icon control
+31e08c6 fix(ui): restore the lint gate â€” top-level type-only imports
+```
+
+Everything before this session:
+
+```
+520d786 docs(status): record R-3 - post-login destination unconfigurable and 404s today
+8f35357 docs: correct the CLI finding - the Better Auth CLI was renamed, not abandoned
+b319c98 docs(status): add review-results section; clarify the search_path finding
+896cab1 docs: say plainly that there is no default login, and what to type instead
+099f47b docs: rewrite status.md around the Done/Not-done summary, add README getting started
 0268b73 fix: replace the starter page at / with a redirect to /login
 17de4f9 docs: add status.md with where the plan stands
 ae7851a feat(m5): public auth UI and the approval endpoints
@@ -621,3 +686,6 @@ utility, and the full TST-5 adversarial suite.
 | Own migrator instead of `drizzle-orm`'s | Drizzle's applies the file verbatim and cannot retarget `database.schema`, which is a runtime setting. |
 | `drizzle.config.ts` in `apps/web/`, not the repo root | drizzle-kit resolves every path relative to the config file, and both the schema and the migrations live there. |
 | New config key `database.directUrl` | Forced by the S4 pooler finding; recorded as D27 and amended into CFG-4. |
+| Route loaders read `context.ui`, filled by one `createServerFn` in `beforeLoad` | A Start `loader` is isomorphic, so a top-level `getRuntime` import puts the whole IdP in the browser bundle. See R-4. |
+| Coverage is measured across **both** vitest projects, not `unit` alone | Measuring all of `src/server` against unit tests only is the wrong denominator, and reported ~60 % against its own 70 % gate. See R-6. |
+| The reveal control is withdrawn when scripting is off | Blink and WebKit clamp a password field back to `disc` whatever the style says, so a scriptless toggle would lie. See R-1 — **this is the one wanting your call.** |

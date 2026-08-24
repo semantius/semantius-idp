@@ -47,8 +47,14 @@ export interface ResendTransportOptions {
   from: string
   replyTo?: string
   logger: Logger
-  /** Injected by tests. Defaults to the global `fetch`. */
-  fetchImpl?: typeof fetch
+  /**
+   * Injected by tests. Defaults to the global `fetch`.
+   *
+   * Typed as the call signature rather than `typeof fetch` so a stub only has
+   * to be callable — the runtime's `fetch` carries extra members (Bun adds
+   * `preconnect`) that no caller here uses.
+   */
+  fetchImpl?: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
 }
 
 const RESEND_ENDPOINT = "https://api.resend.com/emails"

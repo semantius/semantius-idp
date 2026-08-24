@@ -8,6 +8,23 @@
  * one place is what stops the sub-path deployment from being a permanent source
  * of "works at the root, 404s behind Caddy" bugs.
  *
+ * Two of those knobs are not read from here, because they belong to bundles
+ * this module cannot reach (spike S3, `docs/spikes/s3-sub-path.md`):
+ *
+ *  - **Vite's `base`** is `"./"`, fixed at build time. It makes the client
+ *    bundle relocatable; the two URLs it cannot fix — the SSR asset manifest
+ *    and `?url` imports — are pinned to the mount path at runtime, in
+ *    `src/server-entry.ts` and `src/lib/base-path.ts`.
+ *  - **The router's `basepath`** is a runtime value that reaches the browser
+ *    on `<html data-base-path>` and is re-applied on every `router.update`
+ *    (`src/router.tsx`), because Start pushes its build-time value in there.
+ *
+ * {@link BasePaths.authBasePath} is what Better Auth is configured with, and
+ * {@link BasePaths.authBaseUrl} is where its endpoints answer. They are not
+ * interchangeable: 1.7.1 appends `basePath` to `baseURL` only when `baseURL`
+ * has no path of its own, so the issuer must **not** be passed as `baseURL` —
+ * see the comment on `createAuthOptions`.
+ *
  * Nothing here ever reads `Host` or `X-Forwarded-Host` (SEC-1).
  */
 

@@ -2,6 +2,7 @@ import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router"
 
 import appCss from "@workspace/ui/globals.css?url"
 
+import { BASE_PATH_ATTRIBUTE, assetUrl } from "@/lib/base-path"
 import { fetchUiContext } from "@/server/functions/ui"
 import { getCatalog } from "@/server/i18n"
 
@@ -37,8 +38,8 @@ export const Route = createRootRoute({
         { title: ui?.siteName ?? "Identity provider" },
       ],
       links: [
-        { rel: "stylesheet", href: appCss },
-        ...(ui?.logo ? [{ rel: "icon", href: ui.logo }] : []),
+        { rel: "stylesheet", href: assetUrl(appCss) },
+        ...(ui?.favicon ? [{ rel: "icon", href: ui.favicon }] : []),
       ],
     }
   },
@@ -50,7 +51,13 @@ export const Route = createRootRoute({
 function RootDocument({ children }: { children: React.ReactNode }) {
   const { ui } = Route.useLoaderData()
   return (
-    <html lang={ui.locale} className={ui.theme === "dark" ? "dark" : undefined}>
+    <html
+      lang={ui.locale}
+      className={ui.theme === "dark" ? "dark" : undefined}
+      // How the mount path reaches the browser bundle (OPS-10, spike S3):
+      // already parsed by the time the client entry builds its router.
+      {...{ [BASE_PATH_ATTRIBUTE]: ui.basePath }}
+    >
       <head>
         <HeadContent />
       </head>

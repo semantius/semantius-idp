@@ -13,6 +13,7 @@
 
 import type { IdpConfig } from "./config/derive"
 import { createBasePaths } from "./oidc/base-path"
+import type { BasePaths } from "./oidc/base-path"
 
 export interface SocialProviderView {
   id: string
@@ -23,6 +24,13 @@ export interface SocialProviderView {
 export interface UiContext {
   siteName: string
   logo?: string
+  /**
+   * `<link rel="icon">`. Always set, and always mount-path-absolute: without
+   * it a browser falls back to probing `/favicon.ico` at the *origin* root,
+   * which under a sub-path deployment is somebody else's application (spike
+   * S3 caught the 404).
+   */
+  favicon: string
   theme: "system" | "light" | "dark"
   supportEmail?: string
   termsUrl?: string
@@ -91,13 +99,30 @@ function labelFor(providerId: string): string {
   )
 }
 
+/**
+ * Turns a `site.logo` / `site.favicon` setting into a URL the browser can use.
+ *
+ * The setting names a file inside the config folder (`branding/logo.svg`,
+ * CFG-1), which is served from `/branding`. Prefixing it with the mount path
+ * is not cosmetic: a bare `branding/logo.svg` resolves against whatever page
+ * is showing, and `/favicon.ico` resolves against the *origin* root — which
+ * under a sub-path deployment belongs to a different application (spike S3
+ * caught the 404). An absolute URL is left alone.
+ */
+function brandingUrl(paths: BasePaths, value?: string): string | undefined {
+  if (!value) return undefined
+  if (/^https?:\/\//i.test(value)) return value
+  return paths.path(`/branding/${value.replace(/^\/+/, "")}`)
+}
+
 export function buildUiContext(config: IdpConfig, locale: string): UiContext {
   const paths = createBasePaths(config.base)
   const file = config.file
 
   return {
     siteName: file.site.name,
-    logo: file.site.logo,
+    logo: brandingUrl(paths, file.site.logo),
+    favicon: brandingUrl(paths, file.site.favicon) ?? paths.path("/favicon.ico"),
     theme: file.site.theme,
     supportEmail: file.site.supportEmail,
     termsUrl: file.site.termsUrl,

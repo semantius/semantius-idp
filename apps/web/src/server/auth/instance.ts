@@ -69,9 +69,17 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
     appName: file.site.name,
 
     // SEC-1: every absolute URL derives from `server.baseUrl`, never from a
-    // request header. `baseURL` carries the sub-path; `basePath` is appended.
-    baseURL: paths.issuer,
-    basePath: "/api/auth",
+    // request header.
+    //
+    // The split matters. Better Auth 1.7.1's `withPath` appends `basePath`
+    // **only when `baseURL` has no path of its own** — give it the issuer
+    // `https://host/idp` and it mounts every endpoint at `/idp/*` and ignores
+    // `basePath` entirely, so `/idp/api/auth/sign-in/email` 404s and a
+    // sub-path deployment cannot sign anyone in (found by spike S3). Passing
+    // the origin and carrying the mount path in `basePath` makes the sub-path
+    // case resolve to exactly what the host root resolves to.
+    baseURL: paths.origin,
+    basePath: paths.authBasePath,
     secret: file.secret,
     trustedOrigins: [...config.trustedOrigins],
 

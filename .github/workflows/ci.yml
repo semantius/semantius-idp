@@ -74,6 +74,58 @@ jobs:
         run: bun run scripts/check-client-bundle.ts
 
   # ---------------------------------------------------------------------------
+  # Integration tests against a real Postgres (TST-1).
+  #
+  # A service container is a *direct* connection, never a transaction pooler,
+  # so the session advisory locks these tests assert actually hold (S4, D27).
+  # `localhost` also means the config's SSL default resolves to `disable`, so
+  # no certificate wrangling is needed.
+  # ---------------------------------------------------------------------------
+  integration:
+    if: github.event_name != 'schedule'
+    name: integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:17.11-alpine
+        env:
+          POSTGRES_USER: idp
+          POSTGRES_PASSWORD: idp
+          POSTGRES_DB: idp
+        ports:
+          - 5432:5432
+        # Without this the first test can connect before Postgres is ready and
+        # fail for a reason that has nothing to do with the code.
+        options: >-
+          --health-cmd "pg_isready -U idp -d idp"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgres://idp:idp@localhost:5432/idp
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Integration tests
+        run: pnpm --filter web run test:integration
+
+  # ---------------------------------------------------------------------------
   # Nightly dependency audit (SEC-9).
   # ---------------------------------------------------------------------------
   audit:

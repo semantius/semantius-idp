@@ -8,6 +8,42 @@ schema-drift, config-schema staleness, dependency pinning.
 
 ---
 
+## Review results — to fix before continuing
+
+Findings from owner review. **These are fixed before further milestones start.**
+
+### R-1 · Password reveal control looks unfinished (FR-ACCT-2, WCAG 2.1 AA)
+
+**Where:** `apps/web/src/components/auth/form-parts.tsx` → `PasswordField`.
+Affects `/login`, `/signup`, `/reset-password`, `/change-password`.
+
+**What is wrong:** the reveal is a full-width underlined text link reading
+"Show password" / "Hide password" sitting *below* the input — three of them
+stacked on the change-password form. It reads as unstyled scaffolding, not a
+product.
+
+**What it should be:** an **icon button inside the field**, right-aligned,
+vertically centred — the conventional eye / eye-off affordance. One control that
+toggles, not two links that swap. A leading field icon (envelope, padlock) is
+the reference the owner gave; the reveal control is the part that matters.
+
+**Why it ended up like this:** the toggle is a hidden checkbox driving the input
+through a CSS sibling selector, so it works before hydration and without
+JavaScript — which was a deliberate choice for the login page. That constraint
+is worth keeping, but it does **not** require an ugly control: the same
+checkbox can style a `<label>` containing an SVG, positioned absolutely inside
+the field wrapper, with the two icon states swapped by `peer-checked:`.
+
+**Acceptance:**
+- icon button inside the input, not a link below it
+- one toggling control, not two swapped labels
+- `aria-label` that changes with state, and a real focus ring — it is a control,
+  so it must be reachable and announced
+- still works with JavaScript disabled
+- `lucide-react` is already a dependency; no new one is needed
+
+---
+
 ## Done (M0 spikes, M1–M5)
 
 **M1.0 — spec amended** for D24–D26: social profile-sync collision now blocks
@@ -23,8 +59,11 @@ CFG-4/5, SEC-6, TST-4, DOC-3, §12, §15 ticked).
   — exactly the drift DM-1's gate exists to catch. The schema is generated from
   the installed `getAuthTables()` instead.
 - **`search_path` is not a usable mechanism** — Neon's pooler silently drops it.
-  Schema placement relies on qualified table names, which work regardless of
-  pooling.
+  Schema placement relies on qualified table names instead, which work
+  regardless of pooling. **This does not mean the schema name is fixed:**
+  `database.schema` is still a runtime setting, the qualification is built from
+  it, and the migrator retargets the committed SQL to match. Only the *technique*
+  for putting tables in the right schema changed.
 - **Session advisory locks do not hold through the pooler** but do through the
   direct endpoint. This forced a new config key, `database.directUrl` (recorded
   as D27), used by every locked step. Without it two containers starting

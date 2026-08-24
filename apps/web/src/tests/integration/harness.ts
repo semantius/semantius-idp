@@ -58,8 +58,10 @@ export function testDatabaseUrl(): string {
     env.IDP_TEST_DATABASE_URL ?? env.DIRECT_DATABASE_URL ?? env.DATABASE_URL
   if (!url) {
     throw new Error(
-      "No test database. Set IDP_TEST_DATABASE_URL, or DATABASE_URL in the repo-root .env " +
-        "(docker-compose.dev.yml brings up a local Postgres if you have no hosted one)."
+      "No test database. Set IDP_TEST_DATABASE_URL, or DATABASE_URL in the repo-root .env. " +
+        "Any Postgres will do; prefer a direct (non-pooled) endpoint, because several " +
+        "tests assert session advisory locks and those do not hold through a transaction " +
+        "pooler (S4, D27)."
     )
   }
   return url

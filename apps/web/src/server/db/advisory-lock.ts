@@ -25,7 +25,7 @@ import type postgres from "postgres"
  * Namespace for our lock keys, so an IdP lock can never collide with an
  * application lock in the same database. Arbitrary but fixed: "idp0" as ASCII.
  */
-const LOCK_NAMESPACE = 0x69647030
+export const LOCK_NAMESPACE = 0x69647030
 
 export const LOCK_KEYS = {
   migrate: 1,
@@ -85,9 +85,16 @@ export async function withAdvisoryLock<T>(
       `
       if (!row?.locked) return undefined
     } else {
-      // `lock_timeout` turns an indefinite wait into an actionable error.
+      // `lock_timeout` turns an indefinite wait into an actionable error —
+      // but only if it is actually set. `SET LOCAL` outside an explicit
+      // transaction block is discarded by Postgres with a warning, and every
+      // statement here runs in autocommit, so this used to leave the timeout
+      // at 0 and wait for ever. A container starting while another instance
+      // held the lock hung silently instead of failing with the message
+      // below. Session-scoped `SET`, reset before the connection goes back to
+      // the pool so the next borrower does not inherit it.
       await connection.unsafe(
-        `set local lock_timeout = '${timeoutSeconds * 1000}ms'`
+        `set lock_timeout = '${timeoutSeconds * 1000}ms'`
       )
       try {
         await connection`select pg_advisory_lock(${LOCK_NAMESPACE}::int, ${key}::int)`
@@ -95,6 +102,8 @@ export async function withAdvisoryLock<T>(
         if (isLockTimeout(error))
           throw new AdvisoryLockTimeout(name, timeoutSeconds)
         throw error
+      } finally {
+        await connection.unsafe("reset lock_timeout")
       }
     }
 

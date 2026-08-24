@@ -175,6 +175,34 @@ and is now covered.
 none of the rule overrides — is dead weight that would silently change the
 rule set if the `.js` one ever went away. Left in place, flagged here.)*
 
+### R-7 · The advisory-lock timeout never worked
+
+Found by running `pnpm --filter web run db:migrate` — the script this session
+was fixing anyway — while a killed process still held the lock. It waited ten
+minutes without the `AdvisoryLockTimeout` the code carefully wrote.
+
+`withAdvisoryLock` did:
+
+```sql
+SET LOCAL lock_timeout = '60000ms'
+```
+
+**`SET LOCAL` outside an explicit transaction block is discarded by Postgres**
+with a warning, and every statement there runs in autocommit. So the timeout
+stayed at 0 and the wait was unbounded. Every advisory-locked step inherits
+this: migrate, first-boot key generation, reconcile, bootstrap admin, cleanup.
+Two containers restarting together is the ordinary case (OPS-2), and the
+second one would hang silently rather than fail with the actionable message
+that was already written for exactly this situation.
+
+Now a session-scoped `SET`, with `RESET lock_timeout` before the connection
+goes back to the pool so the next borrower does not inherit it. New
+`tests/integration/advisory-lock.test.ts` holds the lock on one connection and
+asserts the second gives up, names the lock in the error, honours
+`skipIfLocked`, releases on both success and throw, and leaves no
+`lock_timeout` behind. **Verified by putting the bug back**: the timeout test
+hangs until killed, and passes in seven seconds with the fix.
+
 ### R-2 · The custom schema generator rests on a false premise (DM-1)
 
 **Where:** `apps/web/scripts/generate-auth-schema.ts`, and every place that

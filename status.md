@@ -118,6 +118,34 @@ server build, so a marker that stops matching anything fails loudly instead of
 passing for ever. Verified by reintroducing a single leaking loader — the gate
 catches it.
 
+### R-5 · The forced password change never ended
+
+**Also not a review finding** — found while proving R-3 end to end against a
+live server. `mustChangePassword` was **set** by the bootstrap step and
+**cleared nowhere in the codebase**. So:
+
+1. sign in with the temporary password → `/change-password?forced=1`
+2. change the password → succeeds, session kept
+3. sign in again → `/change-password?forced=1`, for ever
+
+FR-AUTH-4 says the flag interposes a change "before anything else completes".
+It did. It just never stopped. **The bootstrap admin could not reach any
+destination at all** — which is also why R-3's `/account` 404 was reported as
+theoretical rather than seen: the one account available to test with never got
+past the interposition to hit it.
+
+**Fixed** in `auth/options/database-hooks.ts` via `account.update.after` — the
+only seam that fires after the write succeeds *and* carries both `providerId`
+and `userId` (the matching `before` hook receives just `{ password }`, with no
+user to act on). Gated on an explicit endpoint list rather than "any credential
+password write", because M10's admin temporary-password flow writes a password
+**and** raises this same flag; clearing on every write would race it and hand
+the user an unforced sign-in. The decision is an exported pure predicate so
+that list is asserted without a database.
+
+Verified against a live server: temporary password → forced change → the
+configured destination → and the next sign-in goes straight there.
+
 ### R-2 · The custom schema generator rests on a false premise (DM-1)
 
 **Where:** `apps/web/scripts/generate-auth-schema.ts`, and every place that

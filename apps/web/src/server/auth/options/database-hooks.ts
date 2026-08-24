@@ -46,6 +46,71 @@ interface HookContext {
   context?: { internalRequest?: boolean }
 }
 
+/**
+ * Endpoints where the **user themselves** sets their password, which is what
+ * ends a forced change (FR-AUTH-4).
+ *
+ * Deliberately a list rather than "any credential password write". An admin
+ * assigning a temporary password (FR-ADMIN-2, M10) writes a password *and*
+ * raises this same flag; clearing on every write would race that and undo it.
+ */
+const SELF_SERVICE_PASSWORD_PATHS = new Set([
+  "/change-password",
+  "/reset-password",
+])
+
+interface PasswordHookContext {
+  path?: string
+  context?: {
+    internalAdapter?: {
+      updateUser: (
+        userId: string,
+        data: Record<string, unknown>
+      ) => Promise<unknown>
+    }
+  }
+}
+
+/**
+ * Lets a user out of the forced password change once they have completed it.
+ *
+ * `account.update.after` is the seam because it fires only after the write
+ * succeeded and carries the whole row — `providerId` and `userId` both. The
+ * matching `before` hook receives only the changed columns (`{ password }`),
+ * with no user to act on, so it cannot do this job.
+ *
+ * Without this the flag was set at bootstrap and cleared nowhere: changing
+ * the password succeeded and the next sign-in interposed the very same page,
+ * for ever. The bootstrap admin could never reach any destination at all.
+ */
+async function clearMustChangePassword(
+  account: { providerId?: string; userId?: string },
+  context: PasswordHookContext | null
+): Promise<void> {
+  if (!endsForcedPasswordChange(account.providerId, context?.path)) return
+  if (!account.userId) return
+
+  const adapter = context?.context?.internalAdapter
+  if (!adapter) return
+  await adapter.updateUser(account.userId, { mustChangePassword: false })
+}
+
+/**
+ * The decision on its own, so the endpoint list is testable without a database.
+ *
+ * `path` is `undefined` whenever there is no request behind the write — the
+ * bootstrap step, the CLI, and Better Auth's own `internalAdapter.updateAccount`
+ * all reach the hook that way. None of them should end a forced change.
+ */
+export function endsForcedPasswordChange(
+  providerId: string | undefined,
+  path: string | undefined
+): boolean {
+  if (providerId !== "credential") return false
+  if (!path) return false
+  return SELF_SERVICE_PASSWORD_PATHS.has(path)
+}
+
 /** Whether this creation is administrative rather than a self-registration. */
 function isAdministrativeCreate(context: HookContext | null): boolean {
   if (!context) return true // no request at all: bootstrap admin or CLI
@@ -57,6 +122,14 @@ export function buildDatabaseHooks(
   config: IdpConfig
 ): BetterAuthOptions["databaseHooks"] {
   return {
+    account: {
+      update: {
+        // FR-AUTH-4's other half: the flag has to come *off* again.
+        after: async (account, context) => {
+          await clearMustChangePassword(account, context as PasswordHookContext)
+        },
+      },
+    },
     user: {
       create: {
         before: async (user, context) => {

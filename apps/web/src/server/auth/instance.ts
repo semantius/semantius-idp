@@ -26,6 +26,7 @@ import type { Audit } from "../audit"
 import type { Mailer } from "../email/mailer"
 import type { Logger } from "../logger"
 import { APP_ROUTES, createBasePaths } from "../oidc/base-path"
+import { clientSecretStorage } from "../oidc/secret-hash"
 import { idpPlugin } from "./plugins/idp-plugin"
 import { buildDatabaseHooks } from "./options/database-hooks"
 import { buildEmailCallbacks } from "./options/email-callbacks"
@@ -357,9 +358,11 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
 
         scopes: file.oauth.scopes,
 
-        // SEC-10: secrets and tokens are hashed at rest. The hash function is
-        // ours so reconciliation can produce byte-identical values (risk R4).
-        storeClientSecret: "hashed",
+        // SEC-10 / risk R4: **the same function object** the reconciler
+        // hashes with, so a secret written by `oauth_clients.json` and a
+        // secret presented at the token endpoint cannot disagree about how
+        // they are compared.
+        storeClientSecret: clientSecretStorage,
         storeTokens: "hashed",
 
         // SEC-2: per-endpoint limits on top of the global ones.

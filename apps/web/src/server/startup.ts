@@ -33,6 +33,8 @@ import type { Logger } from "./logger"
 import type { Auth } from "./auth/instance"
 import { createUserWithoutRequest } from "./auth/provisioning"
 import { splitRoles } from "./role-utils"
+import { reconcileClients } from "./oidc/reconcile"
+import type { ReconcileDiff } from "./oidc/reconcile"
 
 export interface StartupDeps {
   config: IdpConfig
@@ -47,6 +49,8 @@ export interface StartupDeps {
 export interface StartupResult {
   /** Steps that ran, in order, for the log and the admin system page. */
   steps: { name: string; skipped?: string }[]
+  /** What the FR-OIDC-2 sync did, for `/admin/system` (M10). */
+  reconcile?: ReconcileDiff
 }
 
 export type StartupStep = StartupResult["steps"][number]
@@ -103,6 +107,7 @@ export async function runStartup(
   const { config, logger, locking } = deps
   const steps: StartupResult["steps"] = [...earlier]
   const audit = createAudit(deps.database, logger)
+  let lastReconcile: ReconcileDiff | undefined
 
   // -- signing key (FR-OIDC-16, risk R11) ----------------------------------
   await step(steps, "signing key", async () => {
@@ -110,12 +115,22 @@ export async function runStartup(
   })
 
   // -- clients and resources (FR-OIDC-2) -----------------------------------
-  // Reconciliation lands in M8; the step is listed so the sequence and its
-  // locking are in place, and so `/admin/system` can report it.
-  steps.push({
-    name: "reconcile clients",
-    skipped: config.clients.length === 0 ? "no clients configured" : undefined,
-  })
+  // After the auth instance exists, because the OAuth provider seeds
+  // `oauth_resource` in its own `init()` and the per-client links point at
+  // those rows.
+  if (config.clients.length === 0) {
+    steps.push({ name: "reconcile clients", skipped: "no clients configured" })
+  } else {
+    await step(steps, "reconcile clients", async () => {
+      lastReconcile = await reconcileClients({
+        config,
+        database: deps.database,
+        locking,
+        audit,
+        logger,
+      })
+    })
+  }
 
   // -- roles vs. the database (FR-ROLE-2) ----------------------------------
   await step(steps, "validate roles", async () => {
@@ -133,7 +148,7 @@ export async function runStartup(
     ),
     issuer: config.base.origin + config.base.basePath,
   })
-  return { steps }
+  return { steps, ...(lastReconcile ? { reconcile: lastReconcile } : {}) }
 }
 
 async function step(

@@ -15,10 +15,15 @@
  */
 
 import { APIError } from "better-auth/api"
+import { isNotNull } from "drizzle-orm"
 
 import type { BetterAuthOptions } from "better-auth"
 
 import type { IdpConfig } from "../../config/derive"
+import type { DbHandle } from "../../db/client"
+import type { Mailer } from "../../email/mailer"
+import type { Logger } from "../../logger"
+import { isAdmin } from "../../role-utils"
 import { isEmailDomainAllowed, normalizeEmail } from "./social"
 import type { UserStatus } from "./user-fields"
 
@@ -118,9 +123,71 @@ function isAdministrativeCreate(context: HookContext | null): boolean {
   return ADMINISTRATIVE_CREATE_PATHS.has(context.path)
 }
 
-export function buildDatabaseHooks(
+export interface DatabaseHookDeps {
   config: IdpConfig
+  /** Absent during schema generation, which needs no connection. */
+  database?: DbHandle
+  /** Absent in degraded mode (FR-MAIL-2); a disabled one sends nothing. */
+  mailer?: Mailer
+  logger?: Logger
+}
+
+/**
+ * FR-SIGNUP-2: "an administrator is notified" when a self-registration lands
+ * as pending.
+ *
+ * The template has existed since M4 and nothing ever called it, so approval
+ * was a queue nobody was told about. Recipients are every **active** admin —
+ * a pending or rejected admin cannot act on it, and a banned one should not.
+ *
+ * Never allowed to fail the sign-up: the account is already written by the
+ * time this runs, and refusing the registration because an e-mail bounced
+ * would be the wrong trade. Failures are logged and swallowed.
+ */
+async function notifyAdminsOfPendingSignUp(
+  deps: DatabaseHookDeps,
+  applicantEmail: string
+): Promise<void> {
+  const { config, database, mailer, logger } = deps
+  if (!database || !mailer?.enabled) return
+
+  try {
+    const rows = await database.db
+      .select({
+        email: database.schema.user.email,
+        role: database.schema.user.role,
+        status: database.schema.user.status,
+        banned: database.schema.user.banned,
+      })
+      .from(database.schema.user)
+      // Narrows the scan to users who could possibly be admins; the catalog
+      // check itself has to happen in JS, because several roles share one
+      // comma-separated column (FR-ROLE-2).
+      .where(isNotNull(database.schema.user.role))
+
+    const recipients = rows
+      .filter(
+        (row) =>
+          row.status === "active" &&
+          !row.banned &&
+          isAdmin(row.role, config.adminRoles)
+      )
+      .map((row) => row.email)
+
+    for (const recipient of recipients) {
+      await mailer.send("pendingSignUp", recipient, { applicantEmail })
+    }
+  } catch (error) {
+    logger?.error("could not notify admins of a pending sign-up", {
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+export function buildDatabaseHooks(
+  deps: DatabaseHookDeps
 ): BetterAuthOptions["databaseHooks"] {
+  const { config } = deps
   return {
     account: {
       update: {
@@ -181,6 +248,13 @@ export function buildDatabaseHooks(
                 : {}),
             },
           }
+        },
+        after: async (user, context) => {
+          // Only a self-registration that actually landed pending: an
+          // admin-created user is already active and nobody is waiting on it.
+          if (user.status !== "pending") return
+          if (isAdministrativeCreate(context as HookContext | null)) return
+          await notifyAdminsOfPendingSignUp(deps, String(user.email))
         },
       },
     },

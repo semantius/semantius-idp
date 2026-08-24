@@ -192,6 +192,89 @@ describe("e-mail flows", () => {
     })
   })
 
+  describe("the pending-sign-up notification (FR-SIGNUP-2)", () => {
+    let ctx: TestContext
+    const admin = "queue-watcher@example.com"
+    const otherAdmin = "second-watcher@example.com"
+
+    beforeAll(async () => {
+      ctx = await createTestContext("pending-notify", {
+        config: {
+          signUp: { enabled: true, requireApproval: true },
+          email: {
+            resend: { apiKey: "re_test" },
+            from: "IdP <idp@example.com>",
+          },
+          admin: { adminRoles: ["admin"] },
+        },
+      })
+
+      // Two admins who can act on the queue, and three users who cannot:
+      // a plain member, a pending admin, and a banned one.
+      const context = await ctx.auth.$context
+      for (const [email, role, status, banned] of [
+        [admin, "admin", "active", false],
+        [otherAdmin, "admin,user", "active", false],
+        ["member@example.com", "user", "active", false],
+        ["not-yet@example.com", "admin", "pending", false],
+        ["suspended@example.com", "admin", "active", true],
+      ] as const) {
+        await context.internalAdapter.createUser(
+          { email, name: email, emailVerified: true, role, banned },
+          { method: "admin" }
+        )
+        // `user.create.before` forces an administratively-created user to
+        // `active`, so the pending case has to be set afterwards.
+        if (status !== "active") {
+          await ctx.database.db
+            .update(ctx.database.schema.user)
+            .set({ status })
+            .where(eq(ctx.database.schema.user.email, email))
+        }
+      }
+    }, 120_000)
+    afterAll(async () => await ctx.teardown())
+    beforeEach(() => ctx.mailer.captured.clear())
+
+    it("tells every active admin, and nobody else", async () => {
+      const applicant = `applicant-${Date.now()}@example.com`
+      const response = await ctx.auth.handler(
+        authRequest("/sign-up/email", {
+          json: { email: applicant, password, name: "Ada Applicant" },
+        })
+      )
+      expect(response.status).toBe(200)
+
+      const notices = ctx.mailer.captured.messages.filter(
+        (message) => message.template === "pending-signup"
+      )
+      expect(notices.map((message) => message.to).sort()).toEqual(
+        [admin, otherAdmin].sort()
+      )
+      // The address that applied belongs in the body, not the recipient list.
+      expect(notices[0]!.text).toContain(applicant)
+    })
+
+    it("says nothing when an administrator creates the account", async () => {
+      // Already active: there is no queue and nobody is waiting.
+      const context = await ctx.auth.$context
+      await context.internalAdapter.createUser(
+        {
+          email: `made-by-admin-${Date.now()}@example.com`,
+          name: "Made By Admin",
+          emailVerified: true,
+        },
+        { method: "admin" }
+      )
+
+      expect(
+        ctx.mailer.captured.messages.filter(
+          (message) => message.template === "pending-signup"
+        )
+      ).toHaveLength(0)
+    })
+  })
+
   describe("in degraded mode (FR-MAIL-2)", () => {
     let ctx: TestContext
 

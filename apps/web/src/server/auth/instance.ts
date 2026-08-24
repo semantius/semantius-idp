@@ -333,7 +333,12 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
     // FR-AUTH-1: normalise addresses before Better Auth validates them.
     hooks: { before: buildBeforeHook(config) },
 
-    databaseHooks: buildDatabaseHooks(config),
+    databaseHooks: buildDatabaseHooks({
+      config,
+      database: deps.database,
+      mailer: deps.mailer,
+      logger: deps.logger,
+    }),
 
     logger: deps.logger
       ? {

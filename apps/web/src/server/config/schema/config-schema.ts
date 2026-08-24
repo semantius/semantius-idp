@@ -191,7 +191,55 @@ const signUpSchema = z.strictObject({
     .describe("Empty = no restriction. Admin-created users always bypass it."),
 })
 
+/**
+ * `auth.defaultRedirect` (D28) — a same-origin relative path, or an absolute
+ * http(s) URL on any origin.
+ *
+ * Cross-origin is allowed here and nowhere else: this value comes from the
+ * operator's own configuration file, not from a request, so it cannot be an
+ * open redirect. The runtime `returnTo` parameter is a different thing
+ * entirely and stays same-origin-relative-only — see `safeReturnTo` (SEC-3).
+ *
+ * A bare hostname (`example.com`) is the trap this guards: it is neither, and
+ * silently resolving it as a relative path would send everyone to
+ * `/example.com`.
+ */
+function postSignInDestination() {
+  return z.string().superRefine((value, ctx) => {
+    const reject = (message: string) => ctx.addIssue({ code: "custom", message })
+
+    if (value.startsWith("/")) {
+      // The same three shapes `safeReturnTo` refuses: both are read by a
+      // browser as an origin, whatever the leading slash suggests.
+      if (value.startsWith("//") || value.startsWith("/\\")) {
+        reject(`\`${value}\` is protocol-relative, not a path on this origin.`)
+      } else if (value.includes("://")) {
+        reject(`\`${value}\` looks like a URL smuggled into a path.`)
+      }
+      return
+    }
+
+    let url: URL
+    try {
+      url = new URL(value)
+    } catch {
+      reject(
+        `\`${value}\` is neither a path starting with \`/\` nor an absolute http(s) URL.`
+      )
+      return
+    }
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      reject(`\`${value}\` must use http or https.`)
+    }
+  })
+}
+
 const authSchema = z.strictObject({
+  defaultRedirect: postSignInDestination()
+    .default("/account")
+    .describe(
+      "Where a completed sign-in lands when no OAuth continuation and no validated returnTo apply. Relative path, or an absolute URL when the IdP sits beside the product."
+    ),
   requireEmailVerification: flexBoolean()
     .default(true)
     .describe(

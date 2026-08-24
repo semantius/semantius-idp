@@ -14,6 +14,7 @@ import {
   safeReturnTo,
   withError,
 } from "@/server/http/auth-proxy"
+import { resolveSignInDestination } from "@/server/http/post-login"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
 import { buildUiContext } from "@/server/ui-context"
@@ -39,7 +40,9 @@ export const Route = createFileRoute("/change-password")({
         runtime.config.file.site.defaultLocale
       ),
       forced: search.forced === "1",
-      returnTo: safeReturnTo(search.returnTo, APP_ROUTES.account),
+      // Empty, not `/account`: an absent value has to fall through to
+      // `auth.defaultRedirect` when the form is submitted (D28).
+      returnTo: safeReturnTo(search.returnTo, ""),
       error: search.error,
     }
   },
@@ -51,11 +54,16 @@ export const Route = createFileRoute("/change-password")({
         const base = runtime.config.base.basePath
         const form = await readForm(request)
         const forced = form.forced === "1"
-        const returnTo = safeReturnTo(form.returnTo, APP_ROUTES.account)
+        const returnTo = safeReturnTo(form.returnTo, "")
 
+        // Built from parts because `returnTo` is now optional — an absent one
+        // must not leave a stray `?&` behind (D28).
+        const params = new URLSearchParams()
+        if (returnTo) params.set("returnTo", returnTo)
+        if (forced) params.set("forced", "1")
+        const query = params.toString()
         const here =
-          `${base}${APP_ROUTES.changePassword}?returnTo=${encodeURIComponent(returnTo)}` +
-          (forced ? "&forced=1" : "")
+          `${base}${APP_ROUTES.changePassword}` + (query ? `?${query}` : "")
 
         if (form.password !== form.confirmPassword) {
           return redirectWithCookies(withError(here, "password_mismatch"))
@@ -82,7 +90,13 @@ export const Route = createFileRoute("/change-password")({
           return redirectWithCookies(withError(here, mapped))
         }
 
-        return redirectWithCookies(`${base}${returnTo}`, result.cookies)
+        // Re-resolved rather than round-tripped: this is the far end of the
+        // FR-AUTH-4 interposition, and an absolute `auth.defaultRedirect`
+        // never travelled through the query to get here (D28).
+        return redirectWithCookies(
+          resolveSignInDestination({ config: runtime.config, returnTo }),
+          result.cookies
+        )
       },
     },
   },
@@ -103,7 +117,9 @@ function ChangePasswordPage() {
       <FormAlert>{messageForErrorCode(error, t)}</FormAlert>
 
       <form method="post" className="grid gap-4">
-        <input type="hidden" name="returnTo" value={returnTo} />
+        {returnTo ? (
+          <input type="hidden" name="returnTo" value={returnTo} />
+        ) : null}
         {forced ? <input type="hidden" name="forced" value="1" /> : null}
 
         <PasswordField

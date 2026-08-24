@@ -19,6 +19,7 @@ import {
   safeReturnTo,
   withError,
 } from "@/server/http/auth-proxy"
+import { resolveSignInDestination } from "@/server/http/post-login"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
 import { buildUiContext  } from "@/server/ui-context"
@@ -56,7 +57,9 @@ export const Route = createFileRoute("/login")({
       POST: async ({ request }) => {
         const runtime = await getRuntime()
         const form = await readForm(request)
-        const returnTo = safeReturnTo(form.returnTo, APP_ROUTES.account)
+        // Empty rather than `/account`: an absent `returnTo` must fall through
+        // to `auth.defaultRedirect`, not pre-empt it (D28).
+        const returnTo = safeReturnTo(form.returnTo, "")
         const here = `${runtime.config.base.basePath}${APP_ROUTES.login}`
 
         const result = await callAuth(
@@ -96,11 +99,25 @@ export const Route = createFileRoute("/login")({
         const user = result.body.user as
           | { mustChangePassword?: boolean }
           | undefined
-        const destination = user?.mustChangePassword
-          ? `${runtime.config.base.basePath}${APP_ROUTES.changePassword}?forced=1&returnTo=${encodeURIComponent(returnTo)}`
-          : `${runtime.config.base.basePath}${returnTo}`
 
-        return redirectWithCookies(destination, result.cookies)
+        if (user?.mustChangePassword) {
+          // Only a *relative* returnTo round-trips through the query — an
+          // absolute `auth.defaultRedirect` would not survive `safeReturnTo`
+          // at the other end, so the change-password handler re-resolves it
+          // there instead (D28).
+          const forced = `${runtime.config.base.basePath}${APP_ROUTES.changePassword}?forced=1`
+          return redirectWithCookies(
+            returnTo
+              ? `${forced}&returnTo=${encodeURIComponent(returnTo)}`
+              : forced,
+            result.cookies
+          )
+        }
+
+        return redirectWithCookies(
+          resolveSignInDestination({ config: runtime.config, returnTo }),
+          result.cookies
+        )
       },
     },
   },

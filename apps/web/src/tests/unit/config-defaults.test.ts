@@ -39,6 +39,7 @@ describe("CFG-4 defaults", () => {
         allowedEmailDomains: [],
       },
       auth: {
+        defaultRedirect: "/account",
         requireEmailVerification: true,
         password: { minLength: 12, maxLength: 128, breachCheck: false },
         passwordReset: { tokenTtlMinutes: 60 },
@@ -122,5 +123,43 @@ describe("CFG-4 defaults", () => {
         session: { expiresIn: "7 fortnights" },
       }).success
     ).toBe(false)
+  })
+})
+
+describe("auth.defaultRedirect (D28)", () => {
+  const parseRedirect = (defaultRedirect: unknown) =>
+    configFileSchema.safeParse({ ...baseConfig(), auth: { defaultRedirect } })
+
+  it.each([
+    "/account",
+    "/",
+    "/products/dashboard?tab=1",
+    "https://apps.example.com/",
+    "https://apps.example.com/app#section",
+    "http://localhost:5173/",
+  ])("accepts %s", (value) => {
+    expect(parseRedirect(value).success).toBe(true)
+  })
+
+  it.each([
+    // The trap this key exists to catch: neither a path nor a URL, and
+    // resolving it as a path would send everyone to `/example.com`.
+    ["example.com", "bare hostname"],
+    ["//evil.example/", "protocol-relative"],
+    ["/\\evil.example/", "backslash-smuggled"],
+    ["/redirect?to=https://evil.example", "scheme inside a path"],
+    ["javascript:alert(1)", "javascript scheme"],
+    ["data:text/html,<script>", "data scheme"],
+    ["", "empty"],
+    ["account", "relative without a leading slash"],
+  ])("rejects %s (%s)", (value) => {
+    expect(parseRedirect(value).success).toBe(false)
+  })
+
+  it("leaves SEC-3 alone — this is config, `returnTo` is not", () => {
+    // Cross-origin is legitimate *here* because it comes from the operator's
+    // file. The runtime parameter is validated by `safeReturnTo` and is
+    // covered by its own tests.
+    expect(parseRedirect("https://elsewhere.example/app").success).toBe(true)
   })
 })

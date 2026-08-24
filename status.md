@@ -42,6 +42,34 @@ the field wrapper, with the two icon states swapped by `peer-checked:`.
 - still works with JavaScript disabled
 - `lucide-react` is already a dependency; no new one is needed
 
+**✅ Fixed** — with one criterion I could not meet, and want your call on.
+
+Measured on the three engines while building it (2026-08-24):
+
+| engine | `-webkit-text-security:none` on `input[type=password]` |
+|---|---|
+| Chromium 151 | parsed, then clamped back to `disc` — **no effect** |
+| WebKit 26.5 | parsed, then clamped back to `disc` — **no effect** |
+| Firefox 153 | honoured |
+
+All three honour the property on `input[type=text]`, so Blink and WebKit are
+specifically refusing to let a password field be unmasked by style. **The
+scriptless reveal this component has always claimed only ever worked in
+Firefox** — the constraint the original design was built around does not exist
+any more.
+
+So the toggle now flips the input `type` from a `change` handler, and a
+`<noscript>` rule *withdraws* the control when scripting is off rather than
+leaving a toggle that renames itself "Hide password" over a still-masked
+field. A dead control that lies to a screen reader seemed worse than no
+control. **Firefox-without-JavaScript loses a reveal it could have had.** If
+you would rather keep it there for that case and accept it being inert in
+Chrome and Safari, say so and it is a one-line change.
+
+Everything else holds: one in-field eye/eye-off control, right-aligned, Tab
+reaches it *after* the password field with a visible ring, and the accessible
+name changes with state. Verified in a real browser, not only in a test.
+
 ### R-2 · The custom schema generator rests on a false premise (DM-1)
 
 **Where:** `apps/web/scripts/generate-auth-schema.ts`, and every place that
@@ -140,6 +168,16 @@ round-trip it through a parameter.
 
 **Note on ordering:** this is worth doing *before* M7. It removes the 404 by
 configuration rather than making everyone wait for `/account` to exist.
+
+**✅ Fixed.** Recorded as **D28** in the spec (CFG-4 row, FR-AUTH-1 precedence
+sentence, a new AC line, §12.1). The resolver is one exported function,
+`server/http/post-login.ts`, so the three places that decide a destination —
+sign-in, the 2FA challenge in M6, and the far end of a forced password change
+— cannot drift apart. The `pendingContinuation` parameter is already there and
+always `undefined`, so M9 changes that module and nothing else.
+
+`server/ui-context.ts` is deliberately untouched: the destination is resolved
+server-side and never needs to reach the browser.
 
 ---
 

@@ -120,6 +120,23 @@ Then:
    administrator, so keeping them achieves nothing and leaves a password lying
    about in your environment.
 
+### Where sign-in sends people
+
+By default a completed sign-in lands on `/account`, which does not exist until
+M7 — so set `auth.defaultRedirect` in `config/config.json` and it never comes
+up. It takes either a path on this origin or an absolute URL on any origin:
+
+```jsonc
+"auth": { "defaultRedirect": "https://apps.example.com/" }
+```
+
+Set it to the product whenever the IdP is bundled beside one — at
+`https://apps.example.com/idp` with the app on `/`, or on a different host
+entirely — so people land in the product rather than on their profile page. An
+OAuth authorization in progress and a validated `returnTo` both take
+precedence over it, and `returnTo` is still refused unless it is a same-origin
+relative path.
+
 ### If you get locked out
 
 The bootstrap step runs **only when no user holds an admin role**. So:

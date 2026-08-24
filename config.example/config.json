@@ -93,6 +93,11 @@
   },
 
   "auth": {
+    // Where a completed sign-in lands. A relative path stays on this origin;
+    // set an absolute URL when the IdP sits beside the product it signs
+    // people in to, so they land in the product rather than on their profile.
+    // An OAuth continuation and a validated `returnTo` both take precedence.
+    "defaultRedirect": "/account",
     "requireEmailVerification": true,
     "password": { "minLength": 12, "maxLength": 128, "breachCheck": false },
     "passwordReset": { "tokenTtlMinutes": 60 }

@@ -212,6 +212,11 @@
       "default": {},
       "type": "object",
       "properties": {
+        "defaultRedirect": {
+          "default": "/account",
+          "description": "Where a completed sign-in lands when no OAuth continuation and no validated returnTo apply. Relative path, or an absolute URL when the IdP sits beside the product.",
+          "type": "string"
+        },
         "requireEmailVerification": {
           "description": "Gates password sign-in only. Forced false when e-mail is not configured.",
           "type": "boolean"

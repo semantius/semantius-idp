@@ -217,6 +217,7 @@ describe("e-mail flows", () => {
         [otherAdmin, "admin,user", "active", false],
         ["member@example.com", "user", "active", false],
         ["not-yet@example.com", "admin", "pending", false],
+        ["turned-down@example.com", "admin", "rejected", false],
         ["suspended@example.com", "admin", "active", true],
       ] as const) {
         await context.internalAdapter.createUser(

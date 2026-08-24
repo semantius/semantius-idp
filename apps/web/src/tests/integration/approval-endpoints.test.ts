@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 
-import { eq } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 
 import {
   authRequest,
@@ -185,10 +185,9 @@ describe("approval endpoints (FR-SIGNUP-2, FR-ROLE-3)", () => {
       const applicant = await createApplicant()
       await call("/idp/approve-user", { userId: applicant.id }, adminCookie)
 
-      const rows = await ctx.database.db
-        .select()
-        .from(ctx.database.schema.auditLog)
-        .where(eq(ctx.database.schema.auditLog.targetId, applicant.id))
+      // Filtered by action: the applicant also has a `signup.created` row
+      // from registering, now that the SEC-6 after-hook records one.
+      const rows = await auditRows(applicant.id, "signup.approved")
       expect(rows).toHaveLength(1)
       expect(rows[0]).toMatchObject({
         action: "signup.approved",
@@ -211,13 +210,9 @@ describe("approval endpoints (FR-SIGNUP-2, FR-ROLE-3)", () => {
         adminCookie
       )
       expect(again.status).toBe(200)
-      // No second e-mail and no second audit row.
+      // No second e-mail and no second approval row.
       expect(ctx.mailer.captured.messages).toHaveLength(0)
-      const rows = await ctx.database.db
-        .select()
-        .from(ctx.database.schema.auditLog)
-        .where(eq(ctx.database.schema.auditLog.targetId, applicant.id))
-      expect(rows).toHaveLength(1)
+      expect(await auditRows(applicant.id, "signup.approved")).toHaveLength(1)
     })
 
     it("404s for an unknown user", async () => {
@@ -298,10 +293,8 @@ describe("approval endpoints (FR-SIGNUP-2, FR-ROLE-3)", () => {
         adminCookie
       )
 
-      const rows = await ctx.database.db
-        .select()
-        .from(ctx.database.schema.auditLog)
-        .where(eq(ctx.database.schema.auditLog.targetId, applicant.id))
+      const rows = await auditRows(applicant.id, "signup.rejected")
+      expect(rows).toHaveLength(1)
       expect(rows[0]).toMatchObject({
         action: "signup.rejected",
         outcome: "success",
@@ -309,4 +302,17 @@ describe("approval endpoints (FR-SIGNUP-2, FR-ROLE-3)", () => {
       expect(rows[0]!.metadata).toMatchObject({ notified: true })
     })
   })
+
+  /** Audit rows for one user, narrowed to a single action. */
+  async function auditRows(targetId: string, action: string) {
+    return ctx.database.db
+      .select()
+      .from(ctx.database.schema.auditLog)
+      .where(
+        and(
+          eq(ctx.database.schema.auditLog.targetId, targetId),
+          eq(ctx.database.schema.auditLog.action, action)
+        )
+      )
+  }
 })

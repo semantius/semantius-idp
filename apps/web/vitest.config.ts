@@ -12,6 +12,14 @@ import { defineConfig } from "vitest/config"
  *   schema anyway (DM-4), so runs stay isolated even on a shared hosted DB.
  *
  * `test:e2e` is Playwright against the built image and is configured separately.
+ *
+ * **Coverage is measured across both projects** (`pnpm --filter web run
+ * test:coverage`), not over `unit` alone. Measuring the whole of `src/server`
+ * against unit tests only is the wrong denominator: the database layer, the
+ * auth instance and the hooks are exercised by the integration project by
+ * design, so a unit-only run reported ~60 % and failed its own 70 % gate.
+ * Nothing noticed, because no CI job ran coverage at all. The integration job
+ * runs it now, since that is the one with a database.
  */
 export default defineConfig({
   resolve: {
@@ -68,6 +76,20 @@ export default defineConfig({
           statements: 85,
         },
         "src/server/oidc/**/*.ts": {
+          lines: 85,
+          functions: 85,
+          branches: 85,
+          statements: 85,
+        },
+        // TST-1 names "approval" explicitly: the status gate and the
+        // endpoints that move a user through it.
+        "src/server/auth/options/database-hooks.ts": {
+          lines: 85,
+          functions: 85,
+          branches: 85,
+          statements: 85,
+        },
+        "src/server/auth/plugins/idp-plugin.ts": {
           lines: 85,
           functions: 85,
           branches: 85,

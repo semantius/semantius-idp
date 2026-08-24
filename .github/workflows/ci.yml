@@ -122,8 +122,13 @@ jobs:
       - name: Install (frozen lockfile)
         run: pnpm install --frozen-lockfile
 
-      - name: Integration tests
-        run: pnpm --filter web run test:integration
+      - name: Integration tests + coverage thresholds (TST-1)
+        # `test:coverage` runs *both* projects. Measuring `src/server` against
+        # the unit project alone was the wrong denominator — the database
+        # layer and the auth hooks are exercised by integration tests by
+        # design — so the thresholds reported ~60 % and failed their own gate.
+        # Nothing noticed, because no job ran coverage at all.
+        run: pnpm --filter web run test:coverage
 
   # ---------------------------------------------------------------------------
   # Nightly dependency audit (SEC-9).

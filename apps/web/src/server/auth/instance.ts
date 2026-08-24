@@ -29,7 +29,7 @@ import { APP_ROUTES, createBasePaths } from "../oidc/base-path"
 import { idpPlugin } from "./plugins/idp-plugin"
 import { buildDatabaseHooks } from "./options/database-hooks"
 import { buildEmailCallbacks } from "./options/email-callbacks"
-import { buildBeforeHook } from "./options/hooks"
+import { buildAfterHook, buildBeforeHook } from "./options/hooks"
 import { buildSocialProviders } from "./options/social"
 import { userAdditionalFields } from "./options/user-fields"
 
@@ -331,7 +331,10 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
     // e-mail normalisation, enforced beneath every path that creates a user or
     // a session.
     // FR-AUTH-1: normalise addresses before Better Auth validates them.
-    hooks: { before: buildBeforeHook(config) },
+    hooks: {
+      before: buildBeforeHook(config),
+      after: buildAfterHook({ config, audit: deps.audit }),
+    },
 
     databaseHooks: buildDatabaseHooks({
       config,

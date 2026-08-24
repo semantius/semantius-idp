@@ -146,6 +146,35 @@ that list is asserted without a database.
 Verified against a live server: temporary password → forced change → the
 configured destination → and the next sign-in goes straight there.
 
+### R-6 · Two more gates that were green only because nobody ran them
+
+Both found while doing the work above, both now real.
+
+**`pnpm lint` was failing at HEAD.** Three shadcn-copied files in
+`packages/ui` used inline `type` specifiers, which the TanStack config
+rejects. status.md said every gate was green. Fixed in the first commit of
+this session.
+
+**The coverage thresholds were decorative — and failing.** TST-1's numbers were
+in `vitest.config.ts` but **no CI job ever ran `--coverage`**, so nobody saw
+that a run reported ~60 % lines against a 70 % gate. The cause was the
+denominator: coverage was measured over the whole of `src/server` from the
+**unit** project alone, while the database layer, the auth instance and the
+hooks are exercised by the integration project by design.
+
+Measured across both projects the real numbers are 82.9 % lines / 79.4 %
+branches, comfortably over TST-1's 70 %. So there is now a `test:coverage`
+script that runs both, the integration CI job runs it, and the per-module
+85 % gates are extended to the approval modules the plan asked for —
+`auth/options/database-hooks.ts` and `auth/plugins/idp-plugin.ts` — with the
+tests to clear them. `src/server/oidc/**` was also under its 85 % branch gate
+and is now covered.
+
+*(One note for later: `packages/ui` carries both `eslint.config.js` and
+`eslint.config.ts`. ESLint resolves `.js` first, so the `.ts` file — which has
+none of the rule overrides — is dead weight that would silently change the
+rule set if the `.js` one ever went away. Left in place, flagged here.)*
+
 ### R-2 · The custom schema generator rests on a false premise (DM-1)
 
 **Where:** `apps/web/scripts/generate-auth-schema.ts`, and every place that

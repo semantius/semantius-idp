@@ -84,6 +84,63 @@ known-false.** The generated schema itself is not in doubt — it is validated
 against a real database and by the drift gate — only the reasoning for how it is
 produced.
 
+### R-3 · Post-login destination is unconfigurable, and its default 404s today
+
+**Where:** `apps/web/src/routes/login.tsx`, `server/config/schema/config-schema.ts`
+(the `auth` block), `server/ui-context.ts`. Spec: a new CFG-4 key and a sentence
+in FR-AUTH-1; needs a decision number (**D28**).
+
+**Two problems, one fix.**
+
+*It is broken now.* Sign-in redirects to
+`safeReturnTo(form.returnTo, APP_ROUTES.account)` — and `/account` does not
+exist until M7. **A successful sign-in today lands on a 404.** Only the
+bootstrap admin escapes it, because `mustChangePassword` diverts to
+`/change-password`, which is why this was not caught: the one account used to
+test the flow is the one account that never reaches the default.
+
+*It is unconfigurable.* `/account` is the wrong destination whenever the IdP is
+bundled beside the product — at `https://apps.example.com/idp` with the app on
+`/`, or with the app on a different host entirely. After signing in, users
+should land in the product, not on their profile page.
+
+**Design (decided with the owner):**
+
+- New key **`auth.defaultRedirect`**, default `/account`.
+- Accepts a **same-origin relative path or an absolute URL on any origin.** This
+  is operator configuration, not user input, so cross-origin is not an open
+  redirect. **SEC-3 is unchanged:** the runtime `returnTo` query parameter stays
+  same-origin-relative-only, validated by `safeReturnTo` exactly as now.
+- **Governs sign-in only.** Sign-up still ends at `/pending-approval` or
+  verification, password reset still returns to `/login`, verification keeps its
+  own ending. Each flow keeps the ending that makes sense for it.
+
+**Precedence at sign-in, highest first:**
+
+1. a pending OAuth authorization continuation (FR-OIDC-9) — always wins
+2. a validated same-origin relative `returnTo`
+3. `auth.defaultRedirect`
+4. `/account`
+
+**Watch out — the forced-change path.** FR-AUTH-4 interposes
+`/change-password` before the destination and currently carries it through the
+query as `returnTo`, which `safeReturnTo` rejects for absolute URLs. So when
+`auth.defaultRedirect` is absolute it cannot simply be passed through: the
+forced-change handler has to re-resolve the destination at the end rather than
+round-trip it through a parameter.
+
+**Acceptance:**
+- key validates as a relative path or an absolute URL; a bare hostname is rejected
+- sign-in honours the precedence above, and an OAuth continuation still wins
+- `returnTo` from the query is still refused unless same-origin relative — the
+  existing SEC-3 tests must keep passing unchanged
+- forced password change reaches an absolute destination correctly
+- `config.example` documents it, and the README says to set it when the IdP is
+  bundled
+
+**Note on ordering:** this is worth doing *before* M7. It removes the 404 by
+configuration rather than making everyone wait for `/account` to exist.
+
 ---
 
 ## Done (M0 spikes, M1–M5)
@@ -144,7 +201,7 @@ and both the schema and migrations live there.
 | `/api/auth/jwks` | ✅ 200 (real ES256 key) |
 | `/.well-known/openid-configuration` | ❌ 404 — **M8** |
 | `/oauth2/authorize` `/oauth2/token` | ❌ 404 — **M8** |
-| `/account/*` | ❌ 404 — **M7** |
+| `/account/*` | ❌ 404 — **M7** · ⚠ and it is where sign-in currently sends you, see **R-3** |
 | `/admin/*` | ❌ 404 — **M10** |
 
 Plus `/signup`, `/forgot-password`, `/reset-password`, `/verify-email`,
@@ -153,7 +210,9 @@ and `/forgot-password` deliberately 404 under the default config, since sign-up
 is off and no Resend key is set.
 
 So: what works end to end today is password sign-in, sign-up with approval,
-verification and reset, the startup sequence and the bootstrap admin.
+verification and reset, the startup sequence and the bootstrap admin — with the
+caveat in **R-3** that a successful sign-in currently redirects to `/account`,
+which does not exist yet.
 **What does not work is OIDC** — no discovery, no authorize, no token endpoint.
 That's M8, the largest remaining milestone, and nothing in it has been started.
 

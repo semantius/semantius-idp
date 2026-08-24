@@ -63,17 +63,17 @@ describe("PasswordField reveal control", () => {
     expect(html).not.toContain("w-fit")
   })
 
-  it("leaves room for the control and keeps Firefox's CSS fallback", () => {
+  it("leaves room for the control and keeps Firefox's scriptless reveal", () => {
     const html = render()
     expect(html).toContain("pr-10")
     expect(html).toContain("group-has-checked:[-webkit-text-security:none]")
   })
 
   it("withdraws the control when scripting is off, rather than lying", () => {
-    // Scripting-off is not a supported case (D31), but this costs nothing and
     // Blink and WebKit clamp a password field back to `disc` whatever the
-    // style says — so without script the toggle would rename itself "Hide
-    // password" over a still-masked field. Both halves carry the hook.
+    // style says, so without script the toggle could rename itself "Hide
+    // password" over a still-masked field. Both halves of the control carry
+    // the hook the <noscript> rule targets.
     const html = render()
     expect(html).toContain("<noscript>")
     expect(html).toContain("[data-idp-reveal]{display:none}")

@@ -68,7 +68,7 @@ the field wrapper, with the two icon states swapped by `peer-checked:`.
 - `aria-label` that changes with state, and a real focus ring — it is a control,
   so it must be reachable and announced
 - ~~still works with JavaScript disabled~~ — **withdrawn by the owner,
-  2026-08-24: the site does not need to work without JavaScript** (D31)
+  2026-08-24: the site does not need to work without JavaScript**
 - `lucide-react` is already a dependency; no new one is needed
 
 **✅ Fixed.** One in-field eye / eye-off control, right-aligned, Tab reaches it

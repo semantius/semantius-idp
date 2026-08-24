@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest"
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 
 import { desc, eq } from "drizzle-orm"
 
@@ -26,6 +26,14 @@ describe("audit trail (SEC-6)", () => {
     })
   }, 120_000)
   afterAll(async () => await ctx.teardown())
+
+  // Each test counts only the rows it caused. Counting the whole table made
+  // these assertions depend on every earlier test in the file, so one slow
+  // run that retried a case turned three passing tests into three failures
+  // with nothing wrong in the code.
+  beforeEach(async () => {
+    await ctx.database.db.delete(ctx.database.schema.auditLog)
+  })
 
   async function rows(action: string) {
     return ctx.database.db
@@ -101,7 +109,10 @@ describe("audit trail (SEC-6)", () => {
     await ctx.auth.handler(
       authRequest("/change-password", {
         headers: { cookie },
-        json: { currentPassword: password, newPassword: "a different one entirely" },
+        json: {
+          currentPassword: password,
+          newPassword: "a different one entirely",
+        },
       })
     )
     await ctx.auth.handler(

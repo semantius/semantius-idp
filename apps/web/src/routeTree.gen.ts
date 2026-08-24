@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as TwoFactorRouteImport } from './routes/two-factor'
 import { Route as SignupRouteImport } from './routes/signup'
+import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ReadyzRouteImport } from './routes/readyz'
 import { Route as PendingApprovalRouteImport } from './routes/pending-approval'
@@ -24,10 +25,21 @@ import { Route as BannedRouteImport } from './routes/banned'
 import { Route as AccountRouteImport } from './routes/account'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AccountIndexRouteImport } from './routes/account/index'
+import { Route as Oauth2UserinfoRouteImport } from './routes/oauth2/userinfo'
+import { Route as Oauth2TokenRouteImport } from './routes/oauth2/token'
+import { Route as Oauth2RevokeRouteImport } from './routes/oauth2/revoke'
+import { Route as Oauth2IntrospectRouteImport } from './routes/oauth2/introspect'
+import { Route as Oauth2EndSessionRouteImport } from './routes/oauth2/end-session'
+import { Route as Oauth2AuthorizeRouteImport } from './routes/oauth2/authorize'
 import { Route as AccountSessionsRouteImport } from './routes/account/sessions'
 import { Route as AccountSecurityRouteImport } from './routes/account/security'
 import { Route as AccountConsentsRouteImport } from './routes/account/consents'
 import { Route as AccountApiKeysRouteImport } from './routes/account/api-keys'
+import { Route as DotwellKnownSecurityDottxtRouteImport } from './routes/[.]well-known.security[.]txt'
+import { Route as DotwellKnownOpenidConfigurationRouteImport } from './routes/[.]well-known.openid-configuration'
+import { Route as DotwellKnownOauthAuthorizationServerRouteImport } from './routes/[.]well-known.oauth-authorization-server'
+import { Route as DotwellKnownJwksDotjsonRouteImport } from './routes/[.]well-known.jwks[.]json'
+import { Route as DotwellKnownChangePasswordRouteImport } from './routes/[.]well-known.change-password'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
@@ -43,6 +55,11 @@ const TwoFactorRoute = TwoFactorRouteImport.update({
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
   path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
+  id: '/robots.txt',
+  path: '/robots.txt',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
@@ -105,6 +122,36 @@ const AccountIndexRoute = AccountIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AccountRoute,
 } as any)
+const Oauth2UserinfoRoute = Oauth2UserinfoRouteImport.update({
+  id: '/oauth2/userinfo',
+  path: '/oauth2/userinfo',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const Oauth2TokenRoute = Oauth2TokenRouteImport.update({
+  id: '/oauth2/token',
+  path: '/oauth2/token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const Oauth2RevokeRoute = Oauth2RevokeRouteImport.update({
+  id: '/oauth2/revoke',
+  path: '/oauth2/revoke',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const Oauth2IntrospectRoute = Oauth2IntrospectRouteImport.update({
+  id: '/oauth2/introspect',
+  path: '/oauth2/introspect',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const Oauth2EndSessionRoute = Oauth2EndSessionRouteImport.update({
+  id: '/oauth2/end-session',
+  path: '/oauth2/end-session',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const Oauth2AuthorizeRoute = Oauth2AuthorizeRouteImport.update({
+  id: '/oauth2/authorize',
+  path: '/oauth2/authorize',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AccountSessionsRoute = AccountSessionsRouteImport.update({
   id: '/sessions',
   path: '/sessions',
@@ -125,6 +172,35 @@ const AccountApiKeysRoute = AccountApiKeysRouteImport.update({
   path: '/api-keys',
   getParentRoute: () => AccountRoute,
 } as any)
+const DotwellKnownSecurityDottxtRoute =
+  DotwellKnownSecurityDottxtRouteImport.update({
+    id: '/.well-known/security.txt',
+    path: '/.well-known/security.txt',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const DotwellKnownOpenidConfigurationRoute =
+  DotwellKnownOpenidConfigurationRouteImport.update({
+    id: '/.well-known/openid-configuration',
+    path: '/.well-known/openid-configuration',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const DotwellKnownOauthAuthorizationServerRoute =
+  DotwellKnownOauthAuthorizationServerRouteImport.update({
+    id: '/.well-known/oauth-authorization-server',
+    path: '/.well-known/oauth-authorization-server',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const DotwellKnownJwksDotjsonRoute = DotwellKnownJwksDotjsonRouteImport.update({
+  id: '/.well-known/jwks.json',
+  path: '/.well-known/jwks.json',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DotwellKnownChangePasswordRoute =
+  DotwellKnownChangePasswordRouteImport.update({
+    id: '/.well-known/change-password',
+    path: '/.well-known/change-password',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -143,13 +219,25 @@ export interface FileRoutesByFullPath {
   '/pending-approval': typeof PendingApprovalRoute
   '/readyz': typeof ReadyzRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/robots.txt': typeof RobotsDottxtRoute
   '/signup': typeof SignupRoute
   '/two-factor': typeof TwoFactorRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/.well-known/change-password': typeof DotwellKnownChangePasswordRoute
+  '/.well-known/jwks.json': typeof DotwellKnownJwksDotjsonRoute
+  '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
+  '/.well-known/openid-configuration': typeof DotwellKnownOpenidConfigurationRoute
+  '/.well-known/security.txt': typeof DotwellKnownSecurityDottxtRoute
   '/account/api-keys': typeof AccountApiKeysRoute
   '/account/consents': typeof AccountConsentsRoute
   '/account/security': typeof AccountSecurityRoute
   '/account/sessions': typeof AccountSessionsRoute
+  '/oauth2/authorize': typeof Oauth2AuthorizeRoute
+  '/oauth2/end-session': typeof Oauth2EndSessionRoute
+  '/oauth2/introspect': typeof Oauth2IntrospectRoute
+  '/oauth2/revoke': typeof Oauth2RevokeRoute
+  '/oauth2/token': typeof Oauth2TokenRoute
+  '/oauth2/userinfo': typeof Oauth2UserinfoRoute
   '/account/': typeof AccountIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -164,13 +252,25 @@ export interface FileRoutesByTo {
   '/pending-approval': typeof PendingApprovalRoute
   '/readyz': typeof ReadyzRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/robots.txt': typeof RobotsDottxtRoute
   '/signup': typeof SignupRoute
   '/two-factor': typeof TwoFactorRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/.well-known/change-password': typeof DotwellKnownChangePasswordRoute
+  '/.well-known/jwks.json': typeof DotwellKnownJwksDotjsonRoute
+  '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
+  '/.well-known/openid-configuration': typeof DotwellKnownOpenidConfigurationRoute
+  '/.well-known/security.txt': typeof DotwellKnownSecurityDottxtRoute
   '/account/api-keys': typeof AccountApiKeysRoute
   '/account/consents': typeof AccountConsentsRoute
   '/account/security': typeof AccountSecurityRoute
   '/account/sessions': typeof AccountSessionsRoute
+  '/oauth2/authorize': typeof Oauth2AuthorizeRoute
+  '/oauth2/end-session': typeof Oauth2EndSessionRoute
+  '/oauth2/introspect': typeof Oauth2IntrospectRoute
+  '/oauth2/revoke': typeof Oauth2RevokeRoute
+  '/oauth2/token': typeof Oauth2TokenRoute
+  '/oauth2/userinfo': typeof Oauth2UserinfoRoute
   '/account': typeof AccountIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -187,13 +287,25 @@ export interface FileRoutesById {
   '/pending-approval': typeof PendingApprovalRoute
   '/readyz': typeof ReadyzRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/robots.txt': typeof RobotsDottxtRoute
   '/signup': typeof SignupRoute
   '/two-factor': typeof TwoFactorRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/.well-known/change-password': typeof DotwellKnownChangePasswordRoute
+  '/.well-known/jwks.json': typeof DotwellKnownJwksDotjsonRoute
+  '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
+  '/.well-known/openid-configuration': typeof DotwellKnownOpenidConfigurationRoute
+  '/.well-known/security.txt': typeof DotwellKnownSecurityDottxtRoute
   '/account/api-keys': typeof AccountApiKeysRoute
   '/account/consents': typeof AccountConsentsRoute
   '/account/security': typeof AccountSecurityRoute
   '/account/sessions': typeof AccountSessionsRoute
+  '/oauth2/authorize': typeof Oauth2AuthorizeRoute
+  '/oauth2/end-session': typeof Oauth2EndSessionRoute
+  '/oauth2/introspect': typeof Oauth2IntrospectRoute
+  '/oauth2/revoke': typeof Oauth2RevokeRoute
+  '/oauth2/token': typeof Oauth2TokenRoute
+  '/oauth2/userinfo': typeof Oauth2UserinfoRoute
   '/account/': typeof AccountIndexRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -211,13 +323,25 @@ export interface FileRouteTypes {
     | '/pending-approval'
     | '/readyz'
     | '/reset-password'
+    | '/robots.txt'
     | '/signup'
     | '/two-factor'
     | '/verify-email'
+    | '/.well-known/change-password'
+    | '/.well-known/jwks.json'
+    | '/.well-known/oauth-authorization-server'
+    | '/.well-known/openid-configuration'
+    | '/.well-known/security.txt'
     | '/account/api-keys'
     | '/account/consents'
     | '/account/security'
     | '/account/sessions'
+    | '/oauth2/authorize'
+    | '/oauth2/end-session'
+    | '/oauth2/introspect'
+    | '/oauth2/revoke'
+    | '/oauth2/token'
+    | '/oauth2/userinfo'
     | '/account/'
     | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
@@ -232,13 +356,25 @@ export interface FileRouteTypes {
     | '/pending-approval'
     | '/readyz'
     | '/reset-password'
+    | '/robots.txt'
     | '/signup'
     | '/two-factor'
     | '/verify-email'
+    | '/.well-known/change-password'
+    | '/.well-known/jwks.json'
+    | '/.well-known/oauth-authorization-server'
+    | '/.well-known/openid-configuration'
+    | '/.well-known/security.txt'
     | '/account/api-keys'
     | '/account/consents'
     | '/account/security'
     | '/account/sessions'
+    | '/oauth2/authorize'
+    | '/oauth2/end-session'
+    | '/oauth2/introspect'
+    | '/oauth2/revoke'
+    | '/oauth2/token'
+    | '/oauth2/userinfo'
     | '/account'
     | '/api/auth/$'
   id:
@@ -254,13 +390,25 @@ export interface FileRouteTypes {
     | '/pending-approval'
     | '/readyz'
     | '/reset-password'
+    | '/robots.txt'
     | '/signup'
     | '/two-factor'
     | '/verify-email'
+    | '/.well-known/change-password'
+    | '/.well-known/jwks.json'
+    | '/.well-known/oauth-authorization-server'
+    | '/.well-known/openid-configuration'
+    | '/.well-known/security.txt'
     | '/account/api-keys'
     | '/account/consents'
     | '/account/security'
     | '/account/sessions'
+    | '/oauth2/authorize'
+    | '/oauth2/end-session'
+    | '/oauth2/introspect'
+    | '/oauth2/revoke'
+    | '/oauth2/token'
+    | '/oauth2/userinfo'
     | '/account/'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
@@ -277,9 +425,21 @@ export interface RootRouteChildren {
   PendingApprovalRoute: typeof PendingApprovalRoute
   ReadyzRoute: typeof ReadyzRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  RobotsDottxtRoute: typeof RobotsDottxtRoute
   SignupRoute: typeof SignupRoute
   TwoFactorRoute: typeof TwoFactorRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
+  DotwellKnownChangePasswordRoute: typeof DotwellKnownChangePasswordRoute
+  DotwellKnownJwksDotjsonRoute: typeof DotwellKnownJwksDotjsonRoute
+  DotwellKnownOauthAuthorizationServerRoute: typeof DotwellKnownOauthAuthorizationServerRoute
+  DotwellKnownOpenidConfigurationRoute: typeof DotwellKnownOpenidConfigurationRoute
+  DotwellKnownSecurityDottxtRoute: typeof DotwellKnownSecurityDottxtRoute
+  Oauth2AuthorizeRoute: typeof Oauth2AuthorizeRoute
+  Oauth2EndSessionRoute: typeof Oauth2EndSessionRoute
+  Oauth2IntrospectRoute: typeof Oauth2IntrospectRoute
+  Oauth2RevokeRoute: typeof Oauth2RevokeRoute
+  Oauth2TokenRoute: typeof Oauth2TokenRoute
+  Oauth2UserinfoRoute: typeof Oauth2UserinfoRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
 
@@ -304,6 +464,13 @@ declare module '@tanstack/react-router' {
       path: '/signup'
       fullPath: '/signup'
       preLoaderRoute: typeof SignupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/robots.txt': {
+      id: '/robots.txt'
+      path: '/robots.txt'
+      fullPath: '/robots.txt'
+      preLoaderRoute: typeof RobotsDottxtRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reset-password': {
@@ -390,6 +557,48 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AccountIndexRouteImport
       parentRoute: typeof AccountRoute
     }
+    '/oauth2/userinfo': {
+      id: '/oauth2/userinfo'
+      path: '/oauth2/userinfo'
+      fullPath: '/oauth2/userinfo'
+      preLoaderRoute: typeof Oauth2UserinfoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/oauth2/token': {
+      id: '/oauth2/token'
+      path: '/oauth2/token'
+      fullPath: '/oauth2/token'
+      preLoaderRoute: typeof Oauth2TokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/oauth2/revoke': {
+      id: '/oauth2/revoke'
+      path: '/oauth2/revoke'
+      fullPath: '/oauth2/revoke'
+      preLoaderRoute: typeof Oauth2RevokeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/oauth2/introspect': {
+      id: '/oauth2/introspect'
+      path: '/oauth2/introspect'
+      fullPath: '/oauth2/introspect'
+      preLoaderRoute: typeof Oauth2IntrospectRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/oauth2/end-session': {
+      id: '/oauth2/end-session'
+      path: '/oauth2/end-session'
+      fullPath: '/oauth2/end-session'
+      preLoaderRoute: typeof Oauth2EndSessionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/oauth2/authorize': {
+      id: '/oauth2/authorize'
+      path: '/oauth2/authorize'
+      fullPath: '/oauth2/authorize'
+      preLoaderRoute: typeof Oauth2AuthorizeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/account/sessions': {
       id: '/account/sessions'
       path: '/sessions'
@@ -417,6 +626,41 @@ declare module '@tanstack/react-router' {
       fullPath: '/account/api-keys'
       preLoaderRoute: typeof AccountApiKeysRouteImport
       parentRoute: typeof AccountRoute
+    }
+    '/.well-known/security.txt': {
+      id: '/.well-known/security.txt'
+      path: '/.well-known/security.txt'
+      fullPath: '/.well-known/security.txt'
+      preLoaderRoute: typeof DotwellKnownSecurityDottxtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.well-known/openid-configuration': {
+      id: '/.well-known/openid-configuration'
+      path: '/.well-known/openid-configuration'
+      fullPath: '/.well-known/openid-configuration'
+      preLoaderRoute: typeof DotwellKnownOpenidConfigurationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.well-known/oauth-authorization-server': {
+      id: '/.well-known/oauth-authorization-server'
+      path: '/.well-known/oauth-authorization-server'
+      fullPath: '/.well-known/oauth-authorization-server'
+      preLoaderRoute: typeof DotwellKnownOauthAuthorizationServerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.well-known/jwks.json': {
+      id: '/.well-known/jwks.json'
+      path: '/.well-known/jwks.json'
+      fullPath: '/.well-known/jwks.json'
+      preLoaderRoute: typeof DotwellKnownJwksDotjsonRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.well-known/change-password': {
+      id: '/.well-known/change-password'
+      path: '/.well-known/change-password'
+      fullPath: '/.well-known/change-password'
+      preLoaderRoute: typeof DotwellKnownChangePasswordRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/auth/$': {
       id: '/api/auth/$'
@@ -459,9 +703,22 @@ const rootRouteChildren: RootRouteChildren = {
   PendingApprovalRoute: PendingApprovalRoute,
   ReadyzRoute: ReadyzRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  RobotsDottxtRoute: RobotsDottxtRoute,
   SignupRoute: SignupRoute,
   TwoFactorRoute: TwoFactorRoute,
   VerifyEmailRoute: VerifyEmailRoute,
+  DotwellKnownChangePasswordRoute: DotwellKnownChangePasswordRoute,
+  DotwellKnownJwksDotjsonRoute: DotwellKnownJwksDotjsonRoute,
+  DotwellKnownOauthAuthorizationServerRoute:
+    DotwellKnownOauthAuthorizationServerRoute,
+  DotwellKnownOpenidConfigurationRoute: DotwellKnownOpenidConfigurationRoute,
+  DotwellKnownSecurityDottxtRoute: DotwellKnownSecurityDottxtRoute,
+  Oauth2AuthorizeRoute: Oauth2AuthorizeRoute,
+  Oauth2EndSessionRoute: Oauth2EndSessionRoute,
+  Oauth2IntrospectRoute: Oauth2IntrospectRoute,
+  Oauth2RevokeRoute: Oauth2RevokeRoute,
+  Oauth2TokenRoute: Oauth2TokenRoute,
+  Oauth2UserinfoRoute: Oauth2UserinfoRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }
 export const routeTree = rootRouteImport

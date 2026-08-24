@@ -401,6 +401,25 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
 
         scopes: file.oauth.scopes,
 
+        // FR-OIDC-15: discovery describes *this* deployment. The scope list
+        // is the configured one, and the claim list is what the builder can
+        // actually emit — advertising a claim no token carries sends a
+        // resource server looking for something that will never be there.
+        advertisedMetadata: {
+          scopes_supported: file.oauth.scopes,
+          claims_supported: [
+            "sub",
+            "iss",
+            "aud",
+            "exp",
+            "iat",
+            "sid",
+            "scope",
+            "azp",
+            ...config.userClaims,
+          ],
+        },
+
         // SEC-10 / risk R4: **the same function object** the reconciler
         // hashes with, so a secret written by `oauth_clients.json` and a
         // secret presented at the token endpoint cannot disagree about how

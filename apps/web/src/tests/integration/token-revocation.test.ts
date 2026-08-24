@@ -1,0 +1,200 @@
+/**
+ * Which tokens a sign-out takes with it (FR-AUTH-6, FR-OIDC-12).
+ *
+ * `session.revokeOAuthTokensOnLogout` is off by default, and the scope when it
+ * is on is the part worth testing: signing out on a laptop must not log the
+ * phone out of every connected application, so the revocation is bounded by
+ * the *session*, not the user.
+ */
+
+import { describe, expect, it } from "vitest"
+
+import { createHash, randomBytes } from "node:crypto"
+
+import { and, eq, isNull } from "drizzle-orm"
+
+import { reconcileClients } from "@/server/oidc/reconcile"
+import type { TestContext } from "./harness"
+import { authRequest, createTestContext, sessionCookie } from "./harness"
+
+const ISSUER = "http://localhost:3000"
+const SECRET = "logout-client-secret-of-at-least-32-chars"
+const PASSWORD = "correct-horse-battery-staple"
+const REDIRECT = "https://app.example.com/callback"
+const EMAIL = "logout-user@example.com"
+
+const CLIENT = {
+  clientId: "logout-app",
+  type: "web",
+  clientSecret: SECRET,
+  redirectUris: [REDIRECT],
+  scopes: ["openid", "profile", "email", "offline_access"],
+  enableEndSession: false,
+}
+
+async function contextWith(
+  label: string,
+  session: Record<string, unknown> = {}
+): Promise<TestContext> {
+  const context = await createTestContext(label, {
+    clients: [CLIENT],
+    config: {
+      signUp: { enabled: true, requireApproval: false },
+      auth: { requireEmailVerification: false },
+      session,
+      oauth: { scopes: ["openid", "profile", "email", "offline_access"] },
+    },
+  })
+  await reconcileClients({
+    config: context.config,
+    database: context.database,
+    locking: context.database,
+  })
+  return context
+}
+
+/** Registers, signs in twice, and returns both session cookies. */
+async function twoSessions(context: TestContext): Promise<[string, string]> {
+  await context.auth.handler(
+    authRequest("/sign-up/email", {
+      json: { email: EMAIL, password: PASSWORD, name: "Logout User" },
+    })
+  )
+  const cookies: string[] = []
+  for (let i = 0; i < 2; i++) {
+    const response = await context.auth.handler(
+      authRequest("/sign-in/email", {
+        json: { email: EMAIL, password: PASSWORD },
+      })
+    )
+    const cookie = sessionCookie(response)
+    expect(cookie).toBeTruthy()
+    cookies.push(cookie!)
+  }
+  return [cookies[0]!, cookies[1]!]
+}
+
+/** One authorization-code exchange on the given session. */
+async function grant(context: TestContext, cookie: string): Promise<void> {
+  const verifier = randomBytes(32).toString("base64url")
+  const challenge = createHash("sha256").update(verifier).digest("base64url")
+  const query = new URLSearchParams({
+    response_type: "code",
+    client_id: CLIENT.clientId,
+    redirect_uri: REDIRECT,
+    scope: "openid offline_access",
+    state: "state",
+    code_challenge: challenge,
+    code_challenge_method: "S256",
+  })
+  const authorized = await context.auth.handler(
+    new Request(`${ISSUER}/api/auth/oauth2/authorize?${query.toString()}`, {
+      headers: { cookie },
+      redirect: "manual",
+    })
+  )
+  const code = new URL(
+    authorized.headers.get("location") ?? ""
+  ).searchParams.get("code")
+  expect(code, "the flow must produce a code").toBeTruthy()
+
+  const exchanged = await context.auth.handler(
+    new Request(`${ISSUER}/api/auth/oauth2/token`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        origin: ISSUER,
+        authorization: `Basic ${Buffer.from(`${CLIENT.clientId}:${SECRET}`).toString("base64")}`,
+      },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code: code!,
+        redirect_uri: REDIRECT,
+        code_verifier: verifier,
+      }).toString(),
+    })
+  )
+  expect(exchanged.status).toBe(200)
+}
+
+async function liveRefreshTokens(context: TestContext): Promise<number> {
+  const { oauthRefreshToken } = context.database.schema
+  const rows = await context.database.db
+    .select({ id: oauthRefreshToken.id })
+    .from(oauthRefreshToken)
+    .where(
+      and(
+        eq(oauthRefreshToken.clientId, CLIENT.clientId),
+        isNull(oauthRefreshToken.revoked)
+      )
+    )
+  return rows.length
+}
+
+describe("revokeOAuthTokensOnLogout (FR-AUTH-6)", () => {
+  it("revokes only the tokens the session obtained", async () => {
+    const context = await contextWith("logout_revoke_on", {
+      revokeOAuthTokensOnLogout: true,
+    })
+    try {
+      const [laptop, phone] = await twoSessions(context)
+      await grant(context, laptop)
+      await grant(context, phone)
+      expect(await liveRefreshTokens(context)).toBe(2)
+
+      const signedOut = await context.auth.handler(
+        authRequest("/sign-out", { headers: { cookie: laptop }, json: {} })
+      )
+      expect(signedOut.status).toBe(200)
+
+      // The phone keeps its grant. Revoking the user's whole footprint here
+      // would be a different, much blunter, requirement.
+      expect(await liveRefreshTokens(context)).toBe(1)
+    } finally {
+      await context.teardown()
+    }
+  })
+
+  it("leaves them alone when the option is off, which is the default", async () => {
+    const context = await contextWith("logout_revoke_off")
+    try {
+      const [laptop] = await twoSessions(context)
+      await grant(context, laptop)
+      expect(await liveRefreshTokens(context)).toBe(1)
+
+      await context.auth.handler(
+        authRequest("/sign-out", { headers: { cookie: laptop }, json: {} })
+      )
+      // A connected application keeps working after the browser session ends;
+      // that is what "offline access" means.
+      expect(await liveRefreshTokens(context)).toBe(1)
+    } finally {
+      await context.teardown()
+    }
+  })
+
+  it("records what it revoked (SEC-6)", async () => {
+    const context = await contextWith("logout_revoke_audit", {
+      revokeOAuthTokensOnLogout: true,
+    })
+    try {
+      const [laptop] = await twoSessions(context)
+      await grant(context, laptop)
+      await context.auth.handler(
+        authRequest("/sign-out", { headers: { cookie: laptop }, json: {} })
+      )
+
+      const rows = await context.database.db
+        .select()
+        .from(context.database.schema.auditLog)
+        .where(eq(context.database.schema.auditLog.action, "token.revoked"))
+      expect(rows.length).toBeGreaterThan(0)
+      expect(rows[0]?.metadata).toMatchObject({
+        scope: "session",
+        reason: "logout",
+      })
+    } finally {
+      await context.teardown()
+    }
+  })
+})

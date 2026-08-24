@@ -26,9 +26,14 @@ import type { Audit } from "../audit"
 import type { Mailer } from "../email/mailer"
 import type { Logger } from "../logger"
 import { APP_ROUTES, createBasePaths } from "../oidc/base-path"
+import { buildUserClaims } from "../claims/build-claims"
+import type { ClaimsUser } from "../claims/build-claims"
 import { clientSecretStorage } from "../oidc/secret-hash"
-import { idpPlugin } from "./plugins/idp-plugin"
-import { buildDatabaseHooks } from "./options/database-hooks"
+import { IDP_PLUGIN_ID, idpPlugin } from "./plugins/idp-plugin"
+import {
+  assertUserMaySignIn,
+  buildDatabaseHooks,
+} from "./options/database-hooks"
 import { buildEmailCallbacks } from "./options/email-callbacks"
 import { gateApiKeyPlugin } from "./options/api-key-gate"
 import { buildAfterHook, buildBeforeHook } from "./options/hooks"
@@ -143,8 +148,10 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
       resetPasswordTokenExpiresIn: minutes(
         file.auth.passwordReset.tokenTtlMinutes
       ),
-      // FR-AUTH-3: a completed reset revokes every other session. OAuth token
-      // revocation is layered on in M8 through `onPasswordReset`.
+      // FR-AUTH-3: a completed reset revokes every other session. The OAuth
+      // tokens it also has to revoke are handled by the `account.update.after`
+      // database hook, which covers `/change-password` as well and does not
+      // depend on an e-mail transport being configured (FR-OIDC-12).
       revokeSessionsOnPasswordReset: true,
       ...(email
         ? {
@@ -260,7 +267,23 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
             config.defaultAudience.length === 1
               ? config.defaultAudience[0]
               : [...config.defaultAudience],
-          expirationTime: file.jwt.sessionToken.ttl,
+          // A *string* time span, not the number of seconds. Better Auth
+          // passes this straight to `toExpJWT`, where "if a number is passed
+          // it is used as the claim directly" — so `3600` meant an `exp` of
+          // 1970-01-01T01:00:00Z and every session JWT was born expired.
+          // Nothing noticed because nothing verified one until now.
+          expirationTime: `${file.jwt.sessionToken.ttl} seconds`,
+
+          // FR-OIDC-7 / FR-KEY-3: the third token shape. `GET {baseUrl}
+          // /api/auth/token` mints a JWT from a session — or from an API key,
+          // since the api-key plugin turns one into a session — and it has to
+          // carry the same user claims as an access token, or a resource
+          // server would have to special-case where a token came from.
+          //
+          // The protocol claims differ on purpose, and only in the ways
+          // FR-OIDC-7's acceptance criterion allows: `sub`, `sid`, `azp` and
+          // `scope`.
+          definePayload: (session) => sessionTokenPayload(session, config),
         },
       }),
 
@@ -330,6 +353,26 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
         idTokenExpiresIn: file.oauth.idTokenTtl,
         codeExpiresIn: file.oauth.codeTtl,
         refreshTokenExpiresIn: file.oauth.refreshTokenTtl,
+        // FR-OIDC-13's reuse detection: zero seconds of tolerance, so any
+        // second use of a rotated refresh token is replay and revokes the
+        // family. It is 1.7.1's default; stating it makes the requirement
+        // visible where the other lifetimes are, rather than depending on a
+        // default that could change.
+        refreshTokenReuseInterval: 0,
+
+        // FR-OIDC-7: the one claims builder, for the access token and — when
+        // the deployment asks for it — the ID token. The provider spreads
+        // these *first* and then writes `sub`, `aud`, `client_id`, `azp`,
+        // `scope`, `sid`, `iss`, `iat`, `exp` and `jti` over the top, so
+        // nothing here can shadow a protocol claim (S5 §2).
+        customAccessTokenClaims: (info) =>
+          buildUserClaims(info.user as ClaimsUser | null | undefined, config),
+        ...(file.jwt.claimsInIdToken
+          ? {
+              customIdTokenClaims: (info) =>
+                buildUserClaims(info.user as ClaimsUser, config),
+            }
+          : {}),
 
         // FR-OIDC-2: no dynamic registration, and client CRUD is denied for
         // every caller — the file is the source of truth.
@@ -394,7 +437,11 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
     // a session.
     // FR-AUTH-1: normalise addresses before Better Auth validates them.
     hooks: {
-      before: buildBeforeHook(config),
+      before: buildBeforeHook({
+        config,
+        database: deps.database,
+        logger: deps.logger,
+      }),
     },
 
     databaseHooks: buildDatabaseHooks({
@@ -402,6 +449,7 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
       database: deps.database,
       mailer: deps.mailer,
       logger: deps.logger,
+      audit: deps.audit,
     }),
 
     logger: deps.logger
@@ -416,6 +464,39 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
           },
         }
       : undefined,
+  }
+}
+
+/**
+ * The payload of a session JWT (FR-OIDC-7, FR-KEY-3).
+ *
+ * `azp` is the honest answer to "who is presenting this": an API-key exchange
+ * is not the browser session it borrows, so it says so —
+ * `apiKeys.tokenClientId` rather than the IdP itself. The api-key plugin
+ * synthesises a session whose `id` is the *key's* id, which is what makes the
+ * two distinguishable at all.
+ *
+ * A non-active user gets nothing, whatever the session says:
+ * `assertUserMaySignIn` runs on every mint, because a session or a key can
+ * outlive the ban that should have ended it (FR-SIGNUP-2, FR-KEY-2).
+ */
+function sessionTokenPayload(
+  session: { user: Record<string, unknown>; session: Record<string, unknown> },
+  config: IdpConfig
+): Record<string, unknown> {
+  assertUserMaySignIn(session.user)
+
+  // The api-key plugin builds a session object by hand, with the key's id as
+  // the session id and the key itself as the token; a real session row is the
+  // only one whose token is a session token.
+  const fromApiKey = typeof session.session.token !== "string"
+  return {
+    ...buildUserClaims(session.user, config),
+    azp: fromApiKey ? config.file.apiKeys.tokenClientId : IDP_PLUGIN_ID,
+    sid: String(session.session.id ?? ""),
+    // Fixed rather than negotiated: a session token is not the product of an
+    // authorization request, so there is no scope to have agreed on.
+    scope: "openid profile email",
   }
 }
 

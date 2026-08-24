@@ -19,6 +19,7 @@ import {
 import { readSession } from "@/server/http/session"
 import { fetchConsents } from "@/server/functions/account"
 import { APP_ROUTES } from "@/server/oidc/base-path"
+import { revokeForClient } from "@/server/oidc/revoke-user-tokens"
 import { getRuntime } from "@/server/runtime"
 
 const HERE = "/account/consents"
@@ -28,13 +29,11 @@ const HERE = "/account/consents"
  *
  * Withdrawing consent deletes the grant, so the next authorization asks again.
  *
- * **The other half is M8b's.** FR-OIDC-10 also revokes *that client's* access
- * and refresh tokens, and the revoker (`server/oidc/revoke-user-tokens.ts`,
- * `revokeForClient({ userId, clientId })`) does not exist yet. The seam is the
- * marked line in the handler below: M9 wires the call there and nothing else
- * on this page changes. Until then a withdrawn consent stops new grants but
- * leaves an already-issued access token alive until it expires — which is why
- * the notice says what it says rather than promising more.
+ * Withdrawing also revokes that client's access and refresh tokens
+ * (FR-OIDC-10). A JWT access token already issued still verifies against the
+ * JWKS until it expires — that is inherent to stateless verification, and is
+ * why `oauth.accessTokenTtl` defaults to fifteen minutes — but no new one can
+ * be obtained, and the refresh token is dead immediately.
  */
 export const Route = createFileRoute("/account/consents")({
   loader: async ({ context, location }) => {
@@ -83,8 +82,13 @@ export const Route = createFileRoute("/account/consents")({
           return redirectWithCookies(withError(here, "not_found"))
         }
 
-        // M8b/M9 seam: `revokeForClient({ userId, clientId })` goes here, so
-        // withdrawing consent also kills that client's live tokens.
+        // FR-OIDC-10's other half: the grant is gone, and so is what it
+        // bought. Scoped to this client — the other applications the user has
+        // connected are not part of this decision.
+        await revokeForClient(
+          { database: runtime.database, audit: runtime.audit },
+          { userId: session.user.id, clientId, reason: "consent_revoked" }
+        )
 
         await runtime.audit.record({
           action: "consent.revoked",

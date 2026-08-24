@@ -10,9 +10,12 @@
  *   user who copied their address with a trailing space gets an unhelpful
  *   error instead of being signed in.
  *
- * - **Default audience injection (FR-OIDC-6, risk R1)** — added in M8. The
- *   OAuth provider only issues a JWT access token when a `resource` resolves,
- *   so a client that sends none must have `jwt.audience` supplied for it.
+ * - **Default audience injection (FR-OIDC-6, risk R1).** The OAuth provider
+ *   only issues a JWT access token when a `resource` resolves — no `resource`
+ *   means no `aud`, which means an *opaque* token, which is precisely the
+ *   failure FR-OIDC-5/6 exists to prevent. So a request that names none has
+ *   one supplied: the client's own `audience` if it declares one, otherwise
+ *   `jwt.audience`.
  *
  * The **after** hook is the SEC-6 trail for everything Better Auth owns. Three
  * of the twenty-nine audit actions were being written before this: the two the
@@ -30,6 +33,9 @@ import type { BetterAuthOptions } from "better-auth"
 
 import type { Audit, AuditOutcome } from "../../audit"
 import type { IdpConfig } from "../../config/derive"
+import type { DbHandle } from "../../db/client"
+import type { Logger } from "../../logger"
+import { revokeExpiredRefreshFamilies } from "../../oidc/refresh-lifetime"
 import type { AuditAction } from "../plugins/idp-plugin"
 import { normalizeEmail } from "./social"
 
@@ -52,15 +58,107 @@ const EMAIL_BODY_PATHS = new Set([
 /** Body keys that hold an address on those endpoints. */
 const EMAIL_BODY_KEYS = ["email", "newEmail"] as const
 
+export interface BeforeHookDeps {
+  config: IdpConfig
+  /** Absent during schema generation. */
+  database?: DbHandle
+  logger?: Logger
+}
+
 export function buildBeforeHook(
-  _config: IdpConfig
+  deps: BeforeHookDeps
 ): NonNullable<BetterAuthOptions["hooks"]>["before"] {
+  const { config } = deps
   return createAuthMiddleware(async (ctx) => {
     normalizeEmailFields(
       ctx.path,
       ctx.body as Record<string, unknown> | undefined
     )
+    injectDefaultResource(ctx, config)
+
+    // FR-OIDC-13's absolute ceiling, enforced immediately before the grant
+    // that would otherwise extend it. Revoking first means the presented
+    // token is already dead when the provider looks at it, so an over-age
+    // family gets the ordinary `invalid_grant` instead of a special case.
+    const body = ctx.body as Record<string, unknown> | undefined
+    if (ctx.path === "/oauth2/token" && body?.grant_type === "refresh_token") {
+      await revokeExpiredRefreshFamilies(deps)
+    }
   })
+}
+
+/**
+ * The two entry points a `resource` can arrive through, and why both matter
+ * (S1):
+ *
+ * - **authorize** — the value is stored in the authorization-code record and
+ *   travels to the code grant, and from there into the refresh token's
+ *   `resources`, so every later refresh inherits it;
+ * - **token** — covers a refresh token minted before this hook existed, and a
+ *   client that posts to the token endpoint without ever having been through
+ *   `/oauth2/authorize`.
+ */
+const RESOURCE_QUERY_PATHS = new Set(["/oauth2/authorize"])
+const RESOURCE_BODY_PATHS = new Set(["/oauth2/token"])
+
+interface ResourceContext {
+  path: string
+  query?: Record<string, unknown> | undefined
+  body?: Record<string, unknown> | undefined
+}
+
+/** Mutates in place, which is what the middleware needs. Exported for tests. */
+export function injectDefaultResource(
+  ctx: ResourceContext,
+  config: IdpConfig
+): void {
+  const target = RESOURCE_QUERY_PATHS.has(ctx.path)
+    ? ctx.query
+    : RESOURCE_BODY_PATHS.has(ctx.path)
+      ? ctx.body
+      : undefined
+  if (!target) return
+
+  // A client that named its own resources is not second-guessed: FR-OIDC-6
+  // is about supplying a default, not about overriding a choice.
+  if (hasResource(target.resource)) return
+
+  const resource = defaultResourceFor(
+    typeof target.client_id === "string" ? target.client_id : undefined,
+    config
+  )
+  if (resource.length === 0) return
+
+  target.resource = resource.length === 1 ? resource[0] : resource
+}
+
+function hasResource(value: unknown): boolean {
+  if (typeof value === "string") return value !== ""
+  if (Array.isArray(value)) return value.length > 0
+  return false
+}
+
+/**
+ * The client's own `audience` when it declares one, else `jwt.audience`.
+ *
+ * A per-client audience is what makes "this app's tokens are for that API"
+ * expressible without every client having to send `resource` itself
+ * (FR-OIDC-6).
+ */
+export function defaultResourceFor(
+  clientId: string | undefined,
+  config: IdpConfig
+): string[] {
+  const client = clientId
+    ? config.clients.find((entry) => entry.clientId === clientId)
+    : undefined
+
+  if (client?.audience) {
+    return Array.isArray(client.audience)
+      ? [...client.audience]
+      : [client.audience]
+  }
+  return [...config.defaultAudience]
 }
 
 /** Exported for the unit test; mutates in place, which is what the middleware needs. */
@@ -74,7 +172,6 @@ export function normalizeEmailFields(
     if (typeof value === "string") body[key] = normalizeEmail(value)
   }
 }
-
 
 /** What the response told us that the path alone cannot. */
 export interface AuditHints {
@@ -137,6 +234,10 @@ export function auditEventFor(
       return { action: "password.reset_completed", outcome }
     case "/change-password":
       return { action: "password.changed", outcome }
+    case "/oauth2/token":
+      // Only on success: a refused grant issued nothing, and the failure is
+      // already carried by the protocol error the client receives.
+      return ok ? { action: "token.issued", outcome } : undefined
     case "/two-factor/enable":
       // Only on success — a refused enrolment changed nothing (FR-2FA-1).
       return ok ? { action: "twofactor.enabled", outcome } : undefined

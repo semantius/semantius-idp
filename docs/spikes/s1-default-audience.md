@@ -61,7 +61,33 @@ membership), but it contradicts FR-OIDC-6's acceptance criterion "token without
 `resource` → `aud = jwt.audience`" read literally, and it hands every resource
 server a second audience value it never asked about.
 
-### Decision — normalise `aud` in the `jwt.sign` seam
+### Decision — superseded 2026-08-24 by **D32**
+
+> ## ⚠ Correction — the `jwt.sign` seam does not exist for a self-hosted JWKS
+>
+> This section's plan cannot be carried out on 1.7.1. The `jwt` plugin refuses
+> to construct at all when `jwt.sign` is set without `jwks.remoteUrl`:
+>
+> ```js
+> // better-auth/dist/plugins/jwt/index.mjs:24
+> if (options?.jwt?.sign && !options.jwks?.remoteUrl)
+>   throw new BetterAuthError("options.jwks.remoteUrl must be set when using options.jwt.sign")
+> ```
+>
+> `remoteUrl` moves the key set off this deployment, which is the opposite of
+> what OPS-12 and FR-OIDC-16 describe. S5 §4's reading — that `sign` is a free
+> post-processing hook — was taken from `signJWT()` without checking the
+> plugin's constructor.
+>
+> **What ships instead (D32):** `aud` stays the two-element array the provider
+> builds, containing `jwt.audience` and the implicit userinfo identifier. Every
+> RFC 7519 §4.1.3 verifier checks `aud` by membership, so Neon, PostgREST and
+> `jose` are unaffected; the M8b test asserts membership and a successful
+> `jwtVerify({ audience: jwt.audience })` rather than string equality. The
+> injection half of R1 — no `resource` means an *opaque* token — is unaffected
+> and is what the hook below actually fixes.
+
+### The original plan — normalise `aud` in the `jwt.sign` seam
 
 S5 established that `JwtOptions.jwt.sign` receives the complete payload for every
 signed token. The claims builder therefore:

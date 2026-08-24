@@ -119,6 +119,14 @@ describe("auditEventFor", () => {
     expect(auditEventFor("/two-factor/disable", false)).toBeUndefined()
   })
 
+  it("records a token that was actually issued (FR-OIDC-5)", () => {
+    expect(auditEventFor("/oauth2/token", true)?.action).toBe("token.issued")
+    // A refused grant issued nothing, and the client already has the
+    // protocol error; a `token.issued` row with outcome "failure" would read
+    // as a token that exists.
+    expect(auditEventFor("/oauth2/token", false)).toBeUndefined()
+  })
+
   it("says nothing about endpoints that are not events", () => {
     // This runs on every request, so the unmatched case is the hot path.
     for (const path of [
@@ -126,7 +134,6 @@ describe("auditEventFor", () => {
       "/ok",
       "/jwks",
       "/list-sessions",
-      "/oauth2/token",
       "",
       "/callback",
       "/two-factor/get-totp-uri",

@@ -19,11 +19,16 @@ import { isNotNull } from "drizzle-orm"
 
 import type { BetterAuthOptions } from "better-auth"
 
+import type { Audit } from "../../audit"
 import type { IdpConfig } from "../../config/derive"
 import type { DbHandle } from "../../db/client"
 import type { Mailer } from "../../email/mailer"
 import type { Logger } from "../../logger"
 import { isAdmin } from "../../role-utils"
+import {
+  revokeAllForUser,
+  revokeForSession,
+} from "../../oidc/revoke-user-tokens"
 import { isEmailDomainAllowed, normalizeEmail } from "./social"
 import type { UserStatus } from "./user-fields"
 
@@ -62,6 +67,27 @@ interface HookContext {
 const SELF_SERVICE_PASSWORD_PATHS = new Set([
   "/change-password",
   "/reset-password",
+])
+
+/**
+ * Every endpoint that writes a credential password (FR-AUTH-3, FR-OIDC-12).
+ *
+ * A new password means the old one is no longer sufficient to reach the
+ * account — so neither should anything minted with it be. Better Auth revokes
+ * *sessions* itself (`revokeSessionsOnPasswordReset`, and
+ * `revokeOtherSessions` on change), but OAuth access and refresh tokens
+ * survive both, and a refresh token outliving a password reset is the whole
+ * reason FR-OIDC-12 exists.
+ *
+ * This is the seam rather than `emailAndPassword.onPasswordReset` because that
+ * callback fires for `/reset-password` only — and, in this codebase, only when
+ * an e-mail transport is configured, so a degraded deployment would have
+ * silently skipped revocation.
+ */
+const PASSWORD_WRITE_PATHS = new Set([
+  "/change-password",
+  "/reset-password",
+  "/admin/set-user-password",
 ])
 
 interface PasswordHookContext {
@@ -116,6 +142,24 @@ export function endsForcedPasswordChange(
   return SELF_SERVICE_PASSWORD_PATHS.has(path)
 }
 
+/**
+ * Whether this account write set a password (FR-AUTH-3, FR-OIDC-12).
+ *
+ * Pure and exported for the same reason as {@link endsForcedPasswordChange}:
+ * `account.update.after` also fires when Better Auth refreshes a social
+ * provider's stored tokens, and the `after` hook receives the whole row rather
+ * than the changed columns — so the endpoint is the only thing that can tell
+ * a password write from any other account update.
+ */
+export function writesPassword(
+  providerId: string | undefined,
+  path: string | undefined
+): boolean {
+  if (providerId !== "credential") return false
+  if (!path) return false
+  return PASSWORD_WRITE_PATHS.has(path)
+}
+
 /** Whether this creation is administrative rather than a self-registration. */
 function isAdministrativeCreate(context: HookContext | null): boolean {
   if (!context) return true // no request at all: bootstrap admin or CLI
@@ -130,6 +174,41 @@ export interface DatabaseHookDeps {
   /** Absent in degraded mode (FR-MAIL-2); a disabled one sends nothing. */
   mailer?: Mailer
   logger?: Logger
+  /** Writes the FR-OIDC-12 `token.revoked` trail. */
+  audit?: Audit
+}
+
+/**
+ * Kills the OAuth tokens a password used to back (FR-AUTH-3, FR-OIDC-12).
+ *
+ * Never allowed to fail the password change: the new password is already
+ * written by the time this runs, and refusing the change because a revocation
+ * query failed would leave the user unable to sign in with either password.
+ * A failure is logged loudly instead, because it means live tokens outlived a
+ * credential change.
+ */
+async function revokeTokensAfterPasswordWrite(
+  deps: DatabaseHookDeps,
+  account: { providerId?: string; userId?: string },
+  path: string | undefined
+): Promise<void> {
+  if (!writesPassword(account.providerId, path)) return
+  if (!account.userId || !deps.database) return
+
+  try {
+    await revokeAllForUser(
+      { database: deps.database, audit: deps.audit },
+      { userId: account.userId, reason: `password_write:${path}` }
+    )
+  } catch (error) {
+    deps.logger?.error(
+      "could not revoke OAuth tokens after a password change",
+      {
+        error: error instanceof Error ? error.message : String(error),
+        userId: account.userId,
+      }
+    )
+  }
 }
 
 /**
@@ -193,7 +272,13 @@ export function buildDatabaseHooks(
       update: {
         // FR-AUTH-4's other half: the flag has to come *off* again.
         after: async (account, context) => {
-          await clearMustChangePassword(account, context as PasswordHookContext)
+          // `context` really is null when there is no request behind the
+          // write — the bootstrap step and the CLI both reach this hook that
+          // way — so the cast has to say so, or the optional chain below
+          // looks unnecessary to the linter and gets removed.
+          const hook = context as PasswordHookContext | null
+          await clearMustChangePassword(account, hook)
+          await revokeTokensAfterPasswordWrite(deps, account, hook?.path)
         },
       },
     },
@@ -260,6 +345,35 @@ export function buildDatabaseHooks(
     },
 
     session: {
+      delete: {
+        /**
+         * FR-AUTH-6: `session.revokeOAuthTokensOnLogout`.
+         *
+         * Scoped to the session, not the user — signing out on a laptop must
+         * not log the phone out of every connected application. It has to run
+         * *before* the row goes: both token tables reference `session_id` with
+         * `on delete set null`, so after the delete there is nothing left to
+         * scope on.
+         */
+        before: async (session) => {
+          if (!config.file.session.revokeOAuthTokensOnLogout) return
+          if (!deps.database) return
+          try {
+            await revokeForSession(
+              { database: deps.database, audit: deps.audit },
+              {
+                sessionId: String(session.id),
+                userId: String(session.userId),
+                reason: "logout",
+              }
+            )
+          } catch (error) {
+            deps.logger?.error("could not revoke OAuth tokens on logout", {
+              error: error instanceof Error ? error.message : String(error),
+            })
+          }
+        },
+      },
       create: {
         before: async (session, context) => {
           // The gate: no session for anyone who is not `active` or is banned.

@@ -3,12 +3,32 @@
  * Auth (DM-1, DM-4, risk R8).
  *
  * DM-1 asks for the schema to be generated from the enabled plugins rather than
- * hand-written, with CI failing on drift. The obvious tool — `@better-auth/cli
- * generate` — cannot be used: its `latest` is 1.4.21 and it depends on
- * `better-auth@1.4.21` as a hard dependency, so it would derive the core tables
- * from a different major-minor than the 1.7.1 our plugins come from. That is
- * exactly the drift the gate exists to catch, so the generator lives here
- * instead and reads `getAuthTables()` from the version we actually run.
+ * hand-written, with CI failing on drift, and names `@better-auth/cli generate`
+ * as the tool. **That justification used to be recorded here as "the CLI is
+ * version-stranded at 1.4.21". It was wrong** — `@better-auth/cli` is
+ * deprecated and the CLI was renamed to `auth`, which publishes 1.7.1 and
+ * depends on `better-auth@1.7.1` and `@better-auth/core@1.7.1`: exactly our
+ * pins. Recorded as **D29**; see `docs/spikes/s5-client-fields-and-claims.md`.
+ *
+ * The real reason this file survives is narrower and structural. Run against a
+ * shim exporting our own option set, `auth generate` produces the same
+ * seventeen tables with the same fields — but as **module-level constants**.
+ * Where a Postgres schema is configured it emits, from its own source:
+ *
+ *     code += `
+export const ${schemaVarName} = pgSchema(${JSON.stringify(schemaName)});
+
+`
+ *
+ * — the schema name baked in as a string literal at generate time. D27 and
+ * DM-4 make `database.schema` a **runtime** value, so the module has to be a
+ * `createAuthSchema(schemaName)` factory plus `CANONICAL_SCHEMA_NAME` for the
+ * migrator to retarget. The CLI has no code path that emits a function, so it
+ * cannot produce the shape the runtime needs. Hence: same source of truth
+ * (`getAuthTables()`), different emitter.
+ *
+ * Running the CLI was worth it regardless — diffing its output against ours
+ * found two real defects in this file, both fixed below and both marked.
  *
  * Every table is emitted inside `pgSchema(database.schema)` (default `idp`), so
  * nothing lands in `public` and drizzle-kit qualifies its DDL — no
@@ -44,6 +64,13 @@ const OUT_PATH = join(
   "schema",
   "auth-schema.ts"
 )
+
+/**
+ * The schema name the committed file and the committed migrations are written
+ * against. `database.schema` retargets both at runtime (D27, DM-4), so this is
+ * a canonical value in the artefacts, never a deployment decision.
+ */
+const CANONICAL_SCHEMA_NAME = "idp"
 
 const HEADER = `/**
  * GENERATED FILE — do not edit.
@@ -116,15 +143,45 @@ function defaultClause(field: DBFieldAttribute): string {
   const value = field.defaultValue
   if (value === undefined || value === null) return ""
   if (typeof value === "function") {
-    // The only function default Better Auth uses is `() => new Date()`.
-    return field.type === "date" && value.toString().includes("new Date()")
-      ? ".defaultNow()"
-      : ""
+    // Call it rather than match its source. The previous test looked for the
+    // literal `new Date()` and Better Auth 1.7.1 writes `() => new Date` —
+    // no parentheses — so every `.defaultNow()` was being dropped on the
+    // floor. These defaults are Better Auth's own thunks and have no side
+    // effects; anything we cannot evaluate is something we cannot express as
+    // DDL either.
+    try {
+      const produced = (value as () => unknown)()
+      if (produced instanceof Date) return ".defaultNow()"
+    } catch {
+      /* not expressible */
+    }
+    return ""
   }
   if (Array.isArray(value))
     return `.default([${value.map((item) => JSON.stringify(item)).join(", ")}])`
   if (typeof value === "object") return `.default(${JSON.stringify(value)})`
   return `.default(${JSON.stringify(value)})`
+}
+
+/**
+ * `.$onUpdate(...)` for a field the plugin declares as touch-on-write.
+ *
+ * Drizzle applies this in JavaScript on its own `.update()`, so it changes no
+ * DDL and no migration — but leaving it out meant a row updated through
+ * Drizzle kept a stale `updated_at`, which is not what the plugin declared.
+ * `session.updatedAt` and `account.updatedAt` are the two that carry it.
+ */
+function onUpdateClause(field: DBFieldAttribute): string {
+  const onUpdate = (field as { onUpdate?: unknown }).onUpdate
+  if (typeof onUpdate !== "function" || field.type !== "date") return ""
+  try {
+    if ((onUpdate as () => unknown)() instanceof Date) {
+      return ".$onUpdate(() => new Date())"
+    }
+  } catch {
+    /* not expressible */
+  }
+  return ""
 }
 
 function generate(schemaName: string): string {
@@ -169,7 +226,14 @@ function generate(schemaName: string): string {
       usedColumnTypes.add(definition.slice(0, definition.indexOf("(")))
 
       definition += defaultClause(field)
-      if (field.required) definition += ".notNull()"
+      // `DBFieldAttribute.required` is documented `@default true`, so only an
+      // explicit `false` makes a column nullable. Reading it as truthy instead
+      // silently made every field that declares nothing nullable — including
+      // `oauth_access_token.token`, which is also `unique`, and Postgres lets
+      // any number of rows share a NULL under a unique index. Caught by
+      // diffing against `auth generate`, which has always had this right.
+      definition += onUpdateClause(field)
+      if (field.required !== false) definition += ".notNull()"
       if (field.unique) definition += ".unique()"
       if (field.references) {
         const target = tables[field.references.model]
@@ -258,7 +322,9 @@ export type AuthSchema = ReturnType<typeof createAuthSchema>
  * exported tables to diff against, and \`db:generate\` runs with the canonical
  * name so the committed SQL is canonical too.
  */
-const canonicalSchema = createAuthSchema(process.env.IDP_DB_SCHEMA ?? CANONICAL_SCHEMA_NAME)
+const canonicalSchema = createAuthSchema(
+  process.env.IDP_SCHEMA_NAME ?? CANONICAL_SCHEMA_NAME
+)
 
 export const { idpSchema, ${tableNames.join(", ")} } = canonicalSchema
 `
@@ -284,7 +350,11 @@ function dedupeIndexes(indexes: TableIndex[]): TableIndex[] {
 
 async function main(): Promise<void> {
   const check = process.argv.includes("--check")
-  const schemaName = "idp"
+  // The committed file is always canonical; `database.schema` retargets it at
+  // runtime. `IDP_SCHEMA_NAME` is the one name for this — `drizzle.config.ts`
+  // reads the same variable, where it used to be `IDP_DB_SCHEMA` here and the
+  // two could disagree.
+  const schemaName = CANONICAL_SCHEMA_NAME
   // The generator owns the formatting: `--check` compares byte-for-byte, so the
   // committed file and a fresh run have to agree even after someone runs
   // prettier over the tree.

@@ -49,8 +49,11 @@ export function createAuthSchema(schemaName: string) {
       email: text("email").notNull().unique(),
       emailVerified: boolean("email_verified").default(false).notNull(),
       image: text("image"),
-      createdAt: timestamp("created_at").notNull(),
-      updatedAt: timestamp("updated_at").notNull(),
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+      updatedAt: timestamp("updated_at")
+        .defaultNow()
+        .$onUpdate(() => new Date())
+        .notNull(),
       role: text("role"),
       banned: boolean("banned").default(false),
       banReason: text("ban_reason"),
@@ -74,8 +77,10 @@ export function createAuthSchema(schemaName: string) {
       id: text("id").primaryKey(),
       expiresAt: timestamp("expires_at").notNull(),
       token: text("token").notNull().unique(),
-      createdAt: timestamp("created_at").notNull(),
-      updatedAt: timestamp("updated_at").notNull(),
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+      updatedAt: timestamp("updated_at")
+        .$onUpdate(() => new Date())
+        .notNull(),
       ipAddress: text("ip_address"),
       userAgent: text("user_agent"),
       userId: text("user_id")
@@ -103,8 +108,10 @@ export function createAuthSchema(schemaName: string) {
       refreshTokenExpiresAt: timestamp("refresh_token_expires_at"),
       scope: text("scope"),
       password: text("password"),
-      createdAt: timestamp("created_at").notNull(),
-      updatedAt: timestamp("updated_at").notNull(),
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+      updatedAt: timestamp("updated_at")
+        .$onUpdate(() => new Date())
+        .notNull(),
     },
     (table) => [
       uniqueIndex("account_issuer_accountId_uidx").on(
@@ -122,8 +129,11 @@ export function createAuthSchema(schemaName: string) {
       identifier: text("identifier").notNull(),
       value: text("value").notNull(),
       expiresAt: timestamp("expires_at").notNull(),
-      createdAt: timestamp("created_at").notNull(),
-      updatedAt: timestamp("updated_at").notNull(),
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+      updatedAt: timestamp("updated_at")
+        .defaultNow()
+        .$onUpdate(() => new Date())
+        .notNull(),
     },
     (table) => [index("verification_identifier_idx").on(table.identifier)]
   )
@@ -300,8 +310,8 @@ export function createAuthSchema(schemaName: string) {
       authorizationCodeId: text("authorization_code_id"),
       resources: text("resources").array(),
       requestedUserInfoClaims: text("requested_user_info_claims").array(),
-      expiresAt: timestamp("expires_at"),
-      createdAt: timestamp("created_at"),
+      expiresAt: timestamp("expires_at").notNull(),
+      createdAt: timestamp("created_at").notNull(),
       revoked: timestamp("revoked"),
       rotatedAt: timestamp("rotated_at"),
       rotationReplayResponse: text("rotation_replay_response"),
@@ -324,7 +334,7 @@ export function createAuthSchema(schemaName: string) {
     "oauth_access_token",
     {
       id: text("id").primaryKey(),
-      token: text("token").unique(),
+      token: text("token").notNull().unique(),
       clientId: text("client_id")
         .notNull()
         .references(() => oauthClient.clientId, { onDelete: "cascade" }),
@@ -341,8 +351,8 @@ export function createAuthSchema(schemaName: string) {
       refreshId: text("refresh_id").references(() => oauthRefreshToken.id, {
         onDelete: "cascade",
       }),
-      expiresAt: timestamp("expires_at"),
-      createdAt: timestamp("created_at"),
+      expiresAt: timestamp("expires_at").notNull(),
+      createdAt: timestamp("created_at").notNull(),
       revoked: timestamp("revoked"),
       confirmation: jsonb("confirmation"),
       scopes: text("scopes").array().notNull(),
@@ -372,8 +382,8 @@ export function createAuthSchema(schemaName: string) {
       resources: text("resources").array(),
       requestedUserInfoClaims: text("requested_user_info_claims").array(),
       scopes: text("scopes").array().notNull(),
-      createdAt: timestamp("created_at"),
-      updatedAt: timestamp("updated_at"),
+      createdAt: timestamp("created_at").notNull(),
+      updatedAt: timestamp("updated_at").notNull(),
     },
     (table) => [
       index("oauthConsent_clientId_idx").on(table.clientId),
@@ -400,7 +410,7 @@ export function createAuthSchema(schemaName: string) {
       userAgent: text("user_agent"),
       requestId: text("request_id"),
       metadata: jsonb("metadata"),
-      createdAt: timestamp("created_at").notNull(),
+      createdAt: timestamp("created_at").defaultNow().notNull(),
     },
     (table) => [
       index("auditLog_action_idx").on(table.action),
@@ -419,7 +429,7 @@ export function createAuthSchema(schemaName: string) {
       query: jsonb("query").notNull(),
       sessionId: text("session_id"),
       stage: text("stage").notNull(),
-      createdAt: timestamp("created_at").notNull(),
+      createdAt: timestamp("created_at").defaultNow().notNull(),
       expiresAt: timestamp("expires_at").notNull(),
     },
     (table) => [index("pendingAuthorization_expiresAt_idx").on(table.expiresAt)]
@@ -462,7 +472,7 @@ export type AuthSchema = ReturnType<typeof createAuthSchema>
  * name so the committed SQL is canonical too.
  */
 const canonicalSchema = createAuthSchema(
-  process.env.IDP_DB_SCHEMA ?? CANONICAL_SCHEMA_NAME
+  process.env.IDP_SCHEMA_NAME ?? CANONICAL_SCHEMA_NAME
 )
 
 export const {

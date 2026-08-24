@@ -49,6 +49,52 @@ our real auth instance. The DM-1 intent — one authoritative schema derived fro
 the enabled plugins, with a CI drift gate — is preserved either way; only the
 tool differs.
 
+### Resolved 2026-08-24 — R-2 settled, recorded as D29
+
+The reasoning above is void. The CLI was **renamed**, not stranded:
+`@better-auth/cli` is deprecated at 1.4.21, and `auth@1.7.1` (bins `auth` and
+`better-auth`) depends on `better-auth@1.7.1` and `@better-auth/core@1.7.1` —
+our exact pins. It was run, not assumed.
+
+**What the diff showed.** Against a shim exporting our own option set, `auth
+generate` emits the same **seventeen** tables. Comparing the two as *Drizzle
+table objects* rather than as text — `getTableConfig()` on every column,
+index and foreign key — the outputs are now **identical across all 17 tables**.
+
+**The generator survives for a structural reason, and only that one.** Where a
+Postgres schema is configured the CLI emits, from its own source:
+
+```js
+code += `
+export const ${schemaVarName} = pgSchema(${JSON.stringify(schemaName)});
+
+`
+```
+
+— a module-level `const` with the schema name baked in as a string literal at
+generate time. `database.schema` is a **runtime** value (CFG-4, D27, DM-4), so
+the module must be a `createAuthSchema(schemaName)` factory plus
+`CANONICAL_SCHEMA_NAME` for the migrator to retarget. The CLI has no code path
+that emits a function.
+
+**Running it was worth doing anyway — it found two real defects in ours,** and
+"identical across 17 tables" is true only *after* fixing them:
+
+| | ours (before) | `auth generate` | who was right |
+|---|---|---|---|
+| `required` | `if (field.required)` | `attr.required !== false ? ".notNull()" : ""` | the CLI — Better Auth documents `required?: boolean` as `@default true` |
+| date defaults | `.toString().includes("new Date()")` | same test | neither: 1.7.1's thunk stringifies as `() => new Date`, **no parentheses**, so both drop the default. Ours now *evaluates* the thunk instead |
+
+The first was the serious one. Every field declaring no `required` became
+nullable — including `oauth_access_token.token`, which is also `unique`, and
+Postgres permits any number of rows sharing a NULL under a unique index. Also
+`expires_at` on both token tables: a token with no expiry was representable.
+Fixed in migration `0001_cheerful_korg.sql`, before M8 ever wrote a row.
+
+A third, smaller gap closed at the same time: `field.onUpdate` was ignored
+entirely, so `session.updated_at` and `account.updated_at` were not touched on
+a Drizzle-side update. No DDL consequence; it is a JavaScript-side hook.
+
 ## 1. R9 — client fields (freezes the FR-OIDC-3 mapping)
 
 The database row shape is `SchemaClient`; the RFC 7591 metadata shape is

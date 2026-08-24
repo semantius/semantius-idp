@@ -24,6 +24,7 @@ import {
 import { z } from "zod"
 
 import type { BetterAuthPlugin } from "better-auth"
+import type { AuthMiddleware } from "better-auth/api"
 
 import type { Audit } from "../../audit"
 import type { IdpConfig } from "../../config/derive"
@@ -103,6 +104,12 @@ export interface IdpPluginOptions {
   /** Absent while the schema is generated, which needs no behaviour. */
   audit?: Audit
   mailer?: Mailer
+  /**
+   * The SEC-6 audit middleware. Registered through this plugin so it runs
+   * *after* every other plugin's `after` hook — see the comment at the
+   * bottom of {@link idpPlugin}.
+   */
+  afterHook?: AuthMiddleware
 }
 
 export const IDP_ERROR_CODES = {
@@ -262,6 +269,16 @@ export function idpPlugin(options: IdpPluginOptions): BetterAuthPlugin {
       approveUser,
       rejectUser,
     },
+    // The SEC-6 trail runs **here** rather than as `options.hooks.after`,
+    // and the difference is not cosmetic. Better Auth runs the options hook
+    // first and every plugin hook after it, replacing `context.returned` as
+    // it goes — so from the options slot a sign-in that ended in a 2FA
+    // challenge still looks like a completed sign-in, and the trail said
+    // "signed in" for someone who had not been. This plugin is registered
+    // last, so it sees what the caller will actually receive.
+    ...(options.afterHook
+      ? { hooks: { after: [{ matcher: () => true, handler: options.afterHook }] } }
+      : {}),
   } satisfies BetterAuthPlugin
 }
 

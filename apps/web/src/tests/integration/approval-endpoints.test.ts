@@ -2,12 +2,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 
 import { and, eq } from "drizzle-orm"
 
-import {
-  authRequest,
-  createTestContext,
-  sessionCookie
-  
-} from "./harness"
+import { createUserWithoutRequest } from "@/server/auth/provisioning"
+import { authRequest, createTestContext, sessionCookie } from "./harness"
 import type {TestContext} from "./harness";
 
 /**
@@ -40,7 +36,8 @@ describe("approval endpoints (FR-SIGNUP-2, FR-ROLE-3)", () => {
       ["admin@example.com", "admin"],
       ["member@example.com", "user"],
     ] as const) {
-      const user = await context.internalAdapter.createUser(
+      const user = await createUserWithoutRequest(
+      context,
         { email, name: role, emailVerified: true, role, status: "active" },
         { method: "admin" }
       )

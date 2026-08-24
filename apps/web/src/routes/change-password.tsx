@@ -5,6 +5,7 @@ import { Button } from "@workspace/ui/components/button"
 import { AuthShell } from "@/components/auth/auth-shell"
 import { FormAlert, PasswordField } from "@/components/auth/form-parts"
 import { messageForErrorCode } from "@/lib/auth-errors"
+import { searchFlag, searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
 import {
   callAuth,
@@ -31,14 +32,14 @@ import { getRuntime } from "@/server/runtime"
  */
 export const Route = createFileRoute("/change-password")({
   loader: ({ context, location }) => {
-    const search = location.search as Record<string, string | undefined>
+    const search = location.search as Record<string, unknown>
     return {
       ui: context.ui,
-      forced: search.forced === "1",
+      forced: searchFlag(search.forced),
       // Empty, not `/account`: an absent value has to fall through to
       // `auth.defaultRedirect` when the form is submitted (D28).
-      returnTo: safeReturnTo(search.returnTo, ""),
-      error: search.error,
+      returnTo: safeReturnTo(searchString(search.returnTo), ""),
+      error: searchString(search.error),
     }
   },
   component: ChangePasswordPage,

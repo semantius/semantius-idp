@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 
 import { eq } from "drizzle-orm"
 
+import { createUserWithoutRequest } from "@/server/auth/provisioning"
 import { authRequest, createTestContext } from "./harness"
 import type { TestContext } from "./harness"
 
@@ -220,7 +221,8 @@ describe("e-mail flows", () => {
         ["turned-down@example.com", "admin", "rejected", false],
         ["suspended@example.com", "admin", "active", true],
       ] as const) {
-        await context.internalAdapter.createUser(
+        await createUserWithoutRequest(
+      context,
           { email, name: email, emailVerified: true, role, banned },
           { method: "admin" }
         )
@@ -259,7 +261,8 @@ describe("e-mail flows", () => {
     it("says nothing when an administrator creates the account", async () => {
       // Already active: there is no queue and nobody is waiting.
       const context = await ctx.auth.$context
-      await context.internalAdapter.createUser(
+      await createUserWithoutRequest(
+      context,
         {
           email: `made-by-admin-${Date.now()}@example.com`,
           name: "Made By Admin",

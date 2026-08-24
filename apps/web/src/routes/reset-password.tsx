@@ -5,6 +5,7 @@ import { Button } from "@workspace/ui/components/button"
 import { AuthShell } from "@/components/auth/auth-shell"
 import { FormAlert, PasswordField } from "@/components/auth/form-parts"
 import { messageForErrorCode } from "@/lib/auth-errors"
+import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
 import {
   callAuth,
@@ -29,11 +30,11 @@ import { getRuntime } from "@/server/runtime"
  */
 export const Route = createFileRoute("/reset-password")({
   loader: ({ context, location }) => {
-    const search = location.search as Record<string, string | undefined>
+    const search = location.search as Record<string, unknown>
     return {
       ui: context.ui,
-      token: search.token ?? "",
-      error: search.error,
+      token: searchString(search.token) ?? "",
+      error: searchString(search.error),
     }
   },
   component: ResetPasswordPage,

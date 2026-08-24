@@ -30,6 +30,12 @@ export function messageForErrorCode(
       return t.auth.resetPassword.mismatch
     case "wrong_current_password":
       return t.auth.changePassword.wrongCurrent
+    case "two_factor_invalid":
+      return t.auth.twoFactor.invalid
+    case "two_factor_locked":
+      return t.auth.twoFactor.lockedOut
+    case "two_factor_expired":
+      return t.auth.twoFactor.expired
     case "token_expired":
       return t.auth.resetPassword.expired
     case "token_used":

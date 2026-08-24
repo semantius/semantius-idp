@@ -5,6 +5,7 @@ import { Button } from "@workspace/ui/components/button"
 import { AuthShell } from "@/components/auth/auth-shell"
 import { FormAlert, TextField } from "@/components/auth/form-parts"
 import { messageForNoticeCode } from "@/lib/auth-errors"
+import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
 import {
   callAuth,
@@ -28,10 +29,10 @@ export const Route = createFileRoute("/forgot-password")({
   loader: ({ context, location }) => {
     if (!context.ui.emailEnabled) throw notFound()
 
-    const search = location.search as Record<string, string | undefined>
+    const search = location.search as Record<string, unknown>
     return {
       ui: context.ui,
-      notice: search.notice,
+      notice: searchString(search.notice),
     }
   },
   component: ForgotPasswordPage,

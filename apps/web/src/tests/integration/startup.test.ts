@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm"
 import { runStartup } from "@/server/startup"
 import { splitRoles } from "@/server/role-utils"
 import { createAudit } from "@/server/audit"
+import { createUserWithoutRequest } from "@/server/auth/provisioning"
 import { createLogger } from "@/server/logger"
 import type { LogFields } from "@/server/logger"
 import { createTestContext } from "./harness"
@@ -166,7 +167,8 @@ describe("startup sequence (OPS-2)", () => {
       contexts.push(ctx)
 
       const context = await ctx.auth.$context
-      await context.internalAdapter.createUser(
+      await createUserWithoutRequest(
+      context,
         {
           email: "someone.else@example.com",
           name: "Existing Admin",
@@ -192,7 +194,8 @@ describe("startup sequence (OPS-2)", () => {
       contexts.push(ctx)
 
       const context = await ctx.auth.$context
-      await context.internalAdapter.createUser(
+      await createUserWithoutRequest(
+      context,
         {
           email: "bootstrap.admin@example.com",
           name: "Ordinary User",
@@ -223,7 +226,8 @@ describe("startup sequence (OPS-2)", () => {
       contexts.push(ctx)
 
       const context = await ctx.auth.$context
-      await context.internalAdapter.createUser(
+      await createUserWithoutRequest(
+      context,
         {
           email: "legacy@example.com",
           name: "Legacy",
@@ -247,7 +251,8 @@ describe("startup sequence (OPS-2)", () => {
       contexts.push(ctx)
 
       const context = await ctx.auth.$context
-      await context.internalAdapter.createUser(
+      await createUserWithoutRequest(
+      context,
         {
           email: "regular@example.com",
           name: "Regular",

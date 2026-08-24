@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
 
 import { AuthShell } from "@/components/auth/auth-shell"
+import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 
@@ -16,11 +17,11 @@ import { APP_ROUTES } from "@/server/oidc/base-path"
  */
 export const Route = createFileRoute("/banned")({
   loader: ({ context, location }) => {
-    const search = location.search as Record<string, string | undefined>
+    const search = location.search as Record<string, unknown>
     return {
       ui: context.ui,
-      reason: search.reason,
-      expires: search.expires,
+      reason: searchString(search.reason),
+      expires: searchString(search.expires),
     }
   },
   component: BannedPage,

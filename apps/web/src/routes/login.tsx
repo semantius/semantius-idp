@@ -10,6 +10,7 @@ import {
   TextField,
 } from "@/components/auth/form-parts"
 import { messageForErrorCode, messageForNoticeCode } from "@/lib/auth-errors"
+import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
 import {
   callAuth,
@@ -41,12 +42,12 @@ import type { UiContext } from "@/server/ui-context"
  */
 export const Route = createFileRoute("/login")({
   loader: ({ context, location }) => {
-    const search = location.search as Record<string, string | undefined>
+    const search = location.search as Record<string, unknown>
     return {
       ui: context.ui,
-      error: search.error,
-      notice: search.notice,
-      returnTo: safeReturnTo(search.returnTo, ""),
+      error: searchString(search.error),
+      notice: searchString(search.notice),
+      returnTo: safeReturnTo(searchString(search.returnTo), ""),
     }
   },
   component: LoginPage,
@@ -89,6 +90,20 @@ export const Route = createFileRoute("/login")({
                 : here,
               code
             )
+          )
+        }
+
+        // FR-2FA-1: a correct password with 2FA on is not a session yet.
+        // Better Auth answers 200 with `twoFactorRedirect` and sets the
+        // short-lived challenge cookie, which is the only thing that
+        // authorises `/two-factor` — so the cookies have to be replayed.
+        if (result.body.twoFactorRedirect === true) {
+          const challenge = `${runtime.config.base.basePath}${APP_ROUTES.twoFactor}`
+          return redirectWithCookies(
+            returnTo
+              ? `${challenge}?returnTo=${encodeURIComponent(returnTo)}`
+              : challenge,
+            result.cookies
           )
         }
 

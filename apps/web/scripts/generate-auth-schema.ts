@@ -185,7 +185,14 @@ function onUpdateClause(field: DBFieldAttribute): string {
 }
 
 function generate(schemaName: string): string {
-  const options = createAuthOptions({ config: schemaGenerationConfig() })
+  // `forSchema` keeps the config-gated plugins (2FA, API keys) registered
+  // whatever a config file says: the generated schema must depend on the
+  // plugin list alone, or two deployments would need different migrations
+  // and this gate would mean nothing.
+  const options = createAuthOptions({
+    config: schemaGenerationConfig(),
+    forSchema: true,
+  })
   const tables = getAuthTables(options)
 
   const migratable = Object.entries(tables).filter(

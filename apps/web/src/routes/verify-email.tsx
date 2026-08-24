@@ -4,6 +4,7 @@ import { Button } from "@workspace/ui/components/button"
 
 import { AuthShell } from "@/components/auth/auth-shell"
 import { FormAlert, TextField } from "@/components/auth/form-parts"
+import { searchFlag, searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
 import {
   callAuth,
@@ -26,15 +27,15 @@ import { getRuntime } from "@/server/runtime"
  */
 export const Route = createFileRoute("/verify-email")({
   loader: ({ context, location }) => {
-    const search = location.search as Record<string, string | undefined>
+    const search = location.search as Record<string, unknown>
     return {
       ui: context.ui,
       /** Set after sign-up: "we sent you a link". */
-      sent: search.sent === "1",
-      email: search.email,
+      sent: searchFlag(search.sent),
+      email: searchString(search.email),
       /** Set by the verification endpoint's redirect. */
-      status: search.status,
-      notice: search.notice,
+      status: searchString(search.status),
+      notice: searchString(search.notice),
     }
   },
   component: VerifyEmailPage,

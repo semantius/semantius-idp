@@ -76,6 +76,12 @@ export function buildSocialProviders(
       // than silently registered.
       ...(config.file.signUp.enabled ? {} : { disableImplicitSignUp: true }),
 
+      // FR-SOC-4: `syncProfile` is what Better Auth calls
+      // `overrideUserInfoOnSignIn` — with it off the provider's profile is
+      // read once at registration and never again. Nothing used to set it,
+      // so the documented default of `true` silently did nothing.
+      overrideUserInfoOnSignIn: provider.syncProfile,
+
       // FR-SIGNUP-5 / FR-SOC-4: name mapping, applied on create and on sync.
       mapProfileToUser: (profile: Record<string, unknown>) =>
         mapProfileNames(profile),

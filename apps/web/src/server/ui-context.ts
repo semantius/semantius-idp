@@ -50,6 +50,12 @@ export interface UiContext {
   requireEmailVerification: boolean
   /** FR-2FA-1. */
   twoFactorEnabled: boolean
+  /**
+   * `twoFactor.trustDeviceDays`. Zero means "always ask", and the challenge
+   * page then offers no trust-this-device checkbox at all rather than one
+   * that would do nothing.
+   */
+  twoFactorTrustDeviceDays: number
   /** FR-KEY-1. */
   apiKeysEnabled: boolean
   /** Minimum password length, shown as an inline policy hint (FR-ACCT-2). */
@@ -135,6 +141,7 @@ export function buildUiContext(config: IdpConfig, locale: string): UiContext {
     emailEnabled: config.emailEnabled,
     requireEmailVerification: config.requireEmailVerification,
     twoFactorEnabled: file.twoFactor.enabled,
+    twoFactorTrustDeviceDays: file.twoFactor.trustDeviceDays,
     apiKeysEnabled: file.apiKeys.enabled,
     passwordMinLength: file.auth.password.minLength,
 

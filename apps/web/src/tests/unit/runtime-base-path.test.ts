@@ -80,9 +80,7 @@ describe("assetUrl", () => {
 
   it("rewrites to a root-absolute path at the host root", () => {
     setRuntimeBasePath("")
-    expect(assetUrl("./assets/globals-abc.css")).toBe(
-      "/assets/globals-abc.css"
-    )
+    expect(assetUrl("./assets/globals-abc.css")).toBe("/assets/globals-abc.css")
   })
 
   it("leaves the browser's already-absolute value alone", () => {

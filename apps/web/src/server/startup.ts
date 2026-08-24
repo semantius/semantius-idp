@@ -31,6 +31,7 @@ import { withAdvisoryLock } from "./db/advisory-lock"
 import { migrationsAreCurrent, runMigrations } from "./db/migrate"
 import type { Logger } from "./logger"
 import type { Auth } from "./auth/instance"
+import { createUserWithoutRequest } from "./auth/provisioning"
 import { splitRoles } from "./role-utils"
 
 export interface StartupDeps {
@@ -270,7 +271,8 @@ async function bootstrapAdmin(
     }
 
     const adminRole = deps.config.adminRoles[0] ?? "admin"
-    const created = await context.internalAdapter.createUser(
+    const created = await createUserWithoutRequest(
+      context,
       {
         email,
         name: bootstrap?.name ?? "Administrator",

@@ -105,14 +105,18 @@ export const enUS = {
     twoFactor: {
       title: "Two-factor authentication",
       description: "Enter the six-digit code from your authenticator app.",
+      backupDescription:
+        "Enter one of the backup codes you saved when you turned on two-factor authentication. Each code works once.",
       code: "Authentication code",
       submit: "Verify",
       trustDevice: (days: number) =>
         `Do not ask again on this device for ${days} days`,
       useBackupCode: "Use a backup code instead",
+      useAuthenticator: "Use your authenticator app instead",
       backupCode: "Backup code",
       invalid: "That code is not correct.",
       lockedOut: "Too many attempts. Wait a few minutes and try again.",
+      expired: "That took too long. Sign in again to get a new code prompt.",
     },
     pendingApproval: {
       title: "Waiting for approval",

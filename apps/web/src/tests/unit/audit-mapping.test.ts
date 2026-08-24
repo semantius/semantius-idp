@@ -79,6 +79,46 @@ describe("auditEventFor", () => {
     }
   })
 
+  it("does not call a 2FA challenge a sign-in (FR-2FA-1)", () => {
+    // The password was right, but Better Auth answered with a challenge and
+    // no session. Recording success here would put "signed in" in the trail
+    // for someone who may still fail the second factor.
+    expect(
+      auditEventFor("/sign-in/email", true, { twoFactorPending: true })
+    ).toBeUndefined()
+    expect(
+      auditEventFor("/callback/google", true, { twoFactorPending: true })
+    ).toBeUndefined()
+
+    // A *failed* sign-in is still a failed sign-in, challenge or not.
+    expect(
+      auditEventFor("/sign-in/email", false, { twoFactorPending: true })?.action
+    ).toBe("signin.failure")
+  })
+
+  it("records the sign-in at the far end of the challenge", () => {
+    for (const path of [
+      "/two-factor/verify-totp",
+      "/two-factor/verify-backup-code",
+      "/two-factor/verify-otp",
+    ]) {
+      expect(auditEventFor(path, true)?.action).toBe("signin.success")
+      expect(auditEventFor(path, false)?.action).toBe("signin.failure")
+    }
+  })
+
+  it("records enrolment only when it succeeded (FR-2FA-1)", () => {
+    expect(auditEventFor("/two-factor/enable", true)?.action).toBe(
+      "twofactor.enabled"
+    )
+    expect(auditEventFor("/two-factor/disable", true)?.action).toBe(
+      "twofactor.disabled"
+    )
+    // A refused enrolment changed nothing; there is no honest action for it.
+    expect(auditEventFor("/two-factor/enable", false)).toBeUndefined()
+    expect(auditEventFor("/two-factor/disable", false)).toBeUndefined()
+  })
+
   it("says nothing about endpoints that are not events", () => {
     // This runs on every request, so the unmatched case is the hot path.
     for (const path of [
@@ -89,6 +129,8 @@ describe("auditEventFor", () => {
       "/oauth2/token",
       "",
       "/callback",
+      "/two-factor/get-totp-uri",
+      "/two-factor/generate-backup-codes",
     ]) {
       expect(auditEventFor(path, true)).toBeUndefined()
       expect(auditEventFor(path, false)).toBeUndefined()

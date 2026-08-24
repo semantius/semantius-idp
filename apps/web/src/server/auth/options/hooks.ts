@@ -76,6 +76,15 @@ export function normalizeEmailFields(
 }
 
 
+/** What the response told us that the path alone cannot. */
+export interface AuditHints {
+  /**
+   * The endpoint answered with `twoFactorRedirect` — a challenge, not a
+   * session (FR-2FA-1).
+   */
+  twoFactorPending?: boolean
+}
+
 /**
  * Which SEC-6 event an endpoint produces, if any.
  *
@@ -85,13 +94,28 @@ export function normalizeEmailFields(
  */
 export function auditEventFor(
   path: string,
-  ok: boolean
+  ok: boolean,
+  hints: AuditHints = {}
 ): { action: AuditAction; outcome: AuditOutcome } | undefined {
   const outcome: AuditOutcome = ok ? "success" : "failure"
 
   // Social sign-in arrives as `/callback/:providerId` on the way back, and as
   // `/sign-in/social` on the way out; only the callback settles anything.
   if (path === "/sign-in/email" || path.startsWith("/callback/")) {
+    // A 2FA challenge is not a sign-in yet (FR-2FA-1). The endpoint answered
+    // 200 with `twoFactorRedirect`, no session exists, and the user may still
+    // fail the second factor — recording success here would put "signed in"
+    // in the trail for someone who never was.
+    if (ok && hints.twoFactorPending) return undefined
+    return { action: ok ? "signin.success" : "signin.failure", outcome }
+  }
+
+  // The other end of that challenge: this is where the sign-in settles.
+  if (
+    path === "/two-factor/verify-totp" ||
+    path === "/two-factor/verify-backup-code" ||
+    path === "/two-factor/verify-otp"
+  ) {
     return { action: ok ? "signin.success" : "signin.failure", outcome }
   }
 
@@ -113,6 +137,11 @@ export function auditEventFor(
       return { action: "password.reset_completed", outcome }
     case "/change-password":
       return { action: "password.changed", outcome }
+    case "/two-factor/enable":
+      // Only on success — a refused enrolment changed nothing (FR-2FA-1).
+      return ok ? { action: "twofactor.enabled", outcome } : undefined
+    case "/two-factor/disable":
+      return ok ? { action: "twofactor.disabled", outcome } : undefined
     case "/sign-out":
     case "/revoke-session":
     case "/revoke-sessions":
@@ -127,6 +156,19 @@ export interface AfterHookDeps {
   config: IdpConfig
   /** Absent during schema generation and before the database is up. */
   audit?: Audit
+}
+
+/**
+ * Whether the endpoint answered with a 2FA challenge rather than a session.
+ *
+ * Better Auth returns `{ twoFactorRedirect: true }` from `/sign-in/*` with a
+ * 200, so the status code cannot tell the two apart.
+ */
+function isTwoFactorChallenge(returned: unknown): boolean {
+  return (
+    (returned as { twoFactorRedirect?: unknown } | undefined)
+      ?.twoFactorRedirect === true
+  )
 }
 
 /** The user this request settled on, when the endpoint returned one. */
@@ -156,7 +198,9 @@ export function buildAfterHook(
     const returned = context.returned
     const ok = !(returned instanceof Error)
 
-    const event = auditEventFor(ctx.path, ok)
+    const event = auditEventFor(ctx.path, ok, {
+      twoFactorPending: isTwoFactorChallenge(returned),
+    })
     if (!event) return
 
     const userId = subjectOf(returned, context.session)

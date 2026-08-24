@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 import { createLocalAccountIssuer } from "@better-auth/core/db"
 import { eq } from "drizzle-orm"
 
+import { createUserWithoutRequest } from "@/server/auth/provisioning"
 import { authRequest, createTestContext, sessionCookie } from "./harness"
 import type { TestContext } from "./harness"
 
@@ -50,7 +51,8 @@ describe("forced password change (FR-AUTH-4)", () => {
     // Created exactly the way the bootstrap step does it (startup.ts): a
     // temporary password, the flag raised, and no request behind any of it.
     const context = await ctx.auth.$context
-    const created = await context.internalAdapter.createUser(
+    const created = await createUserWithoutRequest(
+      context,
       {
         email,
         name: "Frankie Forced",

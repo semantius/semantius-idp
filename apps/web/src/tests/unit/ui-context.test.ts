@@ -13,10 +13,17 @@ import { buildUiContext } from "@/server/ui-context"
 import { baseConfig, makeConfigFolder } from "../fixtures/config-files"
 
 function contextFor(site: Record<string, unknown>, baseUrl?: string) {
-  const config = { ...baseConfig(), site: { name: "Test IdP", ...site } }
+  const config: Record<string, unknown> = {
+    ...baseConfig(),
+    site: { name: "Test IdP", ...site },
+  }
   if (baseUrl) config.server = { baseUrl }
   const folder = makeConfigFolder({ config })
-  const loaded = loadConfig({ dir: "/config", readFile: folder.readFile, env: {} })
+  const loaded = loadConfig({
+    dir: "/config",
+    readFile: folder.readFile,
+    env: {},
+  })
   return buildUiContext(loaded.config, "en-US")
 }
 

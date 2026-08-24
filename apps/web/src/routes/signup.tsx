@@ -9,6 +9,7 @@ import {
   TextField,
 } from "@/components/auth/form-parts"
 import { messageForErrorCode } from "@/lib/auth-errors"
+import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
 import {
   callAuth,
@@ -35,10 +36,10 @@ export const Route = createFileRoute("/signup")({
     // FR-SIGNUP-1.
     if (!context.ui.signUpEnabled) throw notFound()
 
-    const search = location.search as Record<string, string | undefined>
+    const search = location.search as Record<string, unknown>
     return {
       ui: context.ui,
-      error: search.error,
+      error: searchString(search.error),
     }
   },
   component: SignUpPage,

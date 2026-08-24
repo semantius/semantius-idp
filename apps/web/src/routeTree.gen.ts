@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
+import { Route as TwoFactorRouteImport } from './routes/two-factor'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ReadyzRouteImport } from './routes/readyz'
@@ -26,6 +27,11 @@ import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
   path: '/verify-email',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TwoFactorRoute = TwoFactorRouteImport.update({
+  id: '/two-factor',
+  path: '/two-factor',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignupRoute = SignupRouteImport.update({
@@ -101,6 +107,7 @@ export interface FileRoutesByFullPath {
   '/readyz': typeof ReadyzRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/two-factor': typeof TwoFactorRoute
   '/verify-email': typeof VerifyEmailRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -116,6 +123,7 @@ export interface FileRoutesByTo {
   '/readyz': typeof ReadyzRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/two-factor': typeof TwoFactorRoute
   '/verify-email': typeof VerifyEmailRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -132,6 +140,7 @@ export interface FileRoutesById {
   '/readyz': typeof ReadyzRoute
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
+  '/two-factor': typeof TwoFactorRoute
   '/verify-email': typeof VerifyEmailRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
 }
@@ -149,6 +158,7 @@ export interface FileRouteTypes {
     | '/readyz'
     | '/reset-password'
     | '/signup'
+    | '/two-factor'
     | '/verify-email'
     | '/api/auth/$'
   fileRoutesByTo: FileRoutesByTo
@@ -164,6 +174,7 @@ export interface FileRouteTypes {
     | '/readyz'
     | '/reset-password'
     | '/signup'
+    | '/two-factor'
     | '/verify-email'
     | '/api/auth/$'
   id:
@@ -179,6 +190,7 @@ export interface FileRouteTypes {
     | '/readyz'
     | '/reset-password'
     | '/signup'
+    | '/two-factor'
     | '/verify-email'
     | '/api/auth/$'
   fileRoutesById: FileRoutesById
@@ -195,6 +207,7 @@ export interface RootRouteChildren {
   ReadyzRoute: typeof ReadyzRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SignupRoute: typeof SignupRoute
+  TwoFactorRoute: typeof TwoFactorRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
 }
@@ -206,6 +219,13 @@ declare module '@tanstack/react-router' {
       path: '/verify-email'
       fullPath: '/verify-email'
       preLoaderRoute: typeof VerifyEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/two-factor': {
+      id: '/two-factor'
+      path: '/two-factor'
+      fullPath: '/two-factor'
+      preLoaderRoute: typeof TwoFactorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/signup': {
@@ -307,6 +327,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReadyzRoute: ReadyzRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SignupRoute: SignupRoute,
+  TwoFactorRoute: TwoFactorRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
 }

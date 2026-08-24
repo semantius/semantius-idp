@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import { Button } from "@workspace/ui/components/button"
 
 import { AuthShell } from "@/components/auth/auth-shell"
+import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
 import {
   callAuth,
@@ -24,10 +25,10 @@ import { getRuntime } from "@/server/runtime"
  */
 export const Route = createFileRoute("/logout")({
   loader: ({ context, location }) => {
-    const search = location.search as Record<string, string | undefined>
+    const search = location.search as Record<string, unknown>
     return {
       ui: context.ui,
-      returnTo: safeReturnTo(search.returnTo, APP_ROUTES.login),
+      returnTo: safeReturnTo(searchString(search.returnTo), APP_ROUTES.login),
     }
   },
   component: LogoutPage,

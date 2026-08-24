@@ -31,6 +31,7 @@ import { buildDatabaseHooks } from "./options/database-hooks"
 import { buildEmailCallbacks } from "./options/email-callbacks"
 import { buildAfterHook, buildBeforeHook } from "./options/hooks"
 import { buildSocialProviders } from "./options/social"
+import { buildValidateUserInfo } from "./options/social-sync"
 import { userAdditionalFields } from "./options/user-fields"
 
 export interface AuthDeps {
@@ -48,6 +49,12 @@ export interface AuthDeps {
   mailer?: Mailer
   /** Writes the SEC-6 trail for the approval endpoints. */
   audit?: Audit
+  /**
+   * Schema generation (DM-1), which needs every table a deployment could ever
+   * have — so the config-gated plugins stay registered regardless of what the
+   * config file says. Never set for a running instance.
+   */
+  forSchema?: boolean
 }
 
 /** Seconds → the `maxAge`/`expiresIn` units Better Auth expects. */
@@ -97,6 +104,17 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
     // ---------------------------------------------------------------- user --
     user: {
       additionalFields: userAdditionalFields,
+
+      // FR-SOC-2/3 + D24: what a provider identity is allowed to do to a
+      // local account. The only hook that sees the fresh provider profile on
+      // every arrival — registration, link and returning sign-in.
+      validateUserInfo: buildValidateUserInfo({
+        config,
+        database: deps.database,
+        audit: deps.audit,
+        logger: deps.logger,
+      }),
+
       changeEmail: {
         // FR-ACCT-1: changing an address always verifies the new one. With no
         // transport the whole feature is hidden, so this never runs.
@@ -244,31 +262,51 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
         },
       }),
 
-      twoFactor({
-        // FR-2FA-1: the TOTP issuer label shown in the authenticator app.
-        issuer: config.twoFactorIssuer,
-      }),
+      // FR-2FA-1 / FR-KEY-1: a capability that is switched off has no
+      // endpoints at all, not merely a hidden button. `deps.forSchema` keeps
+      // both plugins on for schema generation, because the tables they own
+      // must exist in every deployment or the DM-1 drift gate would flip with
+      // an operator's config file.
+      ...(file.twoFactor.enabled || deps.forSchema
+        ? [
+            twoFactor({
+              // FR-2FA-1: the TOTP issuer label shown in the authenticator app.
+              issuer: config.twoFactorIssuer,
+              // Config says days; 1.7.1 wants seconds. 0 disables the
+              // trust-this-device option rather than trusting for ever.
+              trustDeviceMaxAge: days(file.twoFactor.trustDeviceDays),
+            }),
+          ]
+        : []),
 
-      apiKey({
-        // FR-KEY-1: hashed at rest, prefixed for recognisability.
-        defaultPrefix: "idp_",
-        disableKeyHashing: false,
-        requireName: true,
-        keyExpiration: {
-          // Better Auth quirk: `defaultExpiresIn` is in seconds while
-          // `min`/`maxExpiresIn` are in days. Converted here so the config file
-          // can express both as durations.
-          defaultExpiresIn: file.apiKeys.defaultExpiresIn,
-          minExpiresIn: 1,
-          maxExpiresIn: Math.ceil(file.apiKeys.maxExpiresIn / 86_400),
-          disableCustomExpiresTime: false,
-        },
-        // FR-KEY-1: per-key rate limiting.
-        rateLimit: { enabled: true, timeWindow: 60_000, maxRequests: 120 },
-        // FR-KEY-2: a key authenticates *as the owning user*, same roles.
-        enableSessionForAPIKeys: true,
-        storage: "database",
-      }),
+      ...(file.apiKeys.enabled || deps.forSchema
+        ? [
+            apiKey({
+              // FR-KEY-1: hashed at rest, prefixed for recognisability.
+              defaultPrefix: "idp_",
+              disableKeyHashing: false,
+              requireName: true,
+              keyExpiration: {
+                // Better Auth quirk: `defaultExpiresIn` is in seconds while
+                // `min`/`maxExpiresIn` are in days. Converted here so the
+                // config file can express both as durations.
+                defaultExpiresIn: file.apiKeys.defaultExpiresIn,
+                minExpiresIn: 1,
+                maxExpiresIn: Math.ceil(file.apiKeys.maxExpiresIn / 86_400),
+                disableCustomExpiresTime: false,
+              },
+              // FR-KEY-1: per-key rate limiting.
+              rateLimit: {
+                enabled: true,
+                timeWindow: 60_000,
+                maxRequests: 120,
+              },
+              // FR-KEY-2: a key authenticates *as the owning user*, same roles.
+              enableSessionForAPIKeys: true,
+              storage: "database",
+            }),
+          ]
+        : []),
 
       oauthProvider({
         // FR-OIDC-9: the gate chain starts at these two pages.
@@ -332,7 +370,14 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
       // DM-1: contributes `audit_log` and `pending_authorization` to the
       // generated schema, plus the approval endpoints Better Auth has no
       // equivalent for (FR-SIGNUP-2).
-      idpPlugin({ config, audit: deps.audit, mailer: deps.mailer }),
+      idpPlugin({
+        config,
+        audit: deps.audit,
+        mailer: deps.mailer,
+        // Registered last on purpose: the SEC-6 trail has to see the response
+        // the caller gets, after every other plugin has had its say.
+        afterHook: buildAfterHook({ config, audit: deps.audit }),
+      }),
     ],
 
     // FR-SIGNUP-2/3, FR-AUTH-1: the approval gate, the domain restriction and
@@ -341,7 +386,6 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
     // FR-AUTH-1: normalise addresses before Better Auth validates them.
     hooks: {
       before: buildBeforeHook(config),
-      after: buildAfterHook({ config, audit: deps.audit }),
     },
 
     databaseHooks: buildDatabaseHooks({

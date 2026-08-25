@@ -1,6 +1,6 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-25 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `fb0e5a1`
+**As of:** 2026-08-25 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `004ac26`
 **Plan:** `~/.claude/plans/finish-idp-v1-s3-m6-m14.md`
 **Spec:** [spec-v1.md](spec-v1.md) — amended through **D38**
 
@@ -1027,6 +1027,8 @@ troubleshooting — is still to come.
 This session, newest first:
 
 ```
+004ac26 feat(m13): the browser gate, and the sub-path deployment nobody had driven
+b0c9641 docs(ops): make the resolved SSL mode visible, and stop naming a command that never existed
 fb0e5a1 feat(m12): the image, and seven things that only running it could find
 94a0ae7 docs(status): point the handoff at the commit it describes
 22db5a3 fix(dev): the sign-in page had no CSS, and no gate could see it (+ M12 lifecycle)

@@ -39,11 +39,43 @@ export interface CorsDecision {
 }
 
 /**
+ * Origins contributed by **enabled database clients** (D50).
+ *
+ * Registered through `/admin/clients`, so they are not in the configuration
+ * file this module can see. Kept in the process rather than queried per
+ * request: `clientOrigins` is called on every protocol request *and* on every
+ * response, to build the CSP `form-action` list (D46), and a database round
+ * trip in that path would be a query per asset.
+ *
+ * Refreshed at start-up and by every client mutation — see
+ * `server/oidc/client-origins.ts`. OPS-11's single-instance topology is what
+ * makes a process-local cache correct; a second replica would see its own
+ * clients and not the other's until the next restart, which is the same
+ * limitation every other cached decision in this codebase has.
+ */
+let databaseOrigins: ReadonlySet<string> = new Set()
+
+/** Replaces the cached set. The only writer is `client-origins.ts`. */
+export function setDatabaseClientOrigins(origins: Iterable<string>): void {
+  databaseOrigins = new Set(origins)
+}
+
+/** For tests, and for a stack that wants to prove the cache starts empty. */
+export function clearDatabaseClientOrigins(): void {
+  databaseOrigins = new Set()
+}
+
+/**
  * Every origin that appears in a registered redirect or post-logout URI.
  *
  * Origins, not URIs: a browser sends `Origin: https://app.example.com` for a
  * page at any path, so matching on the full redirect URI would never allow
  * anything.
+ *
+ * File clients ∪ enabled database clients. Leaving the second half out is what
+ * would make an admin-registered client's sign-in fail in Chrome and nowhere
+ * else: the authorization completes and the browser refuses the `form-action`
+ * redirect back to it.
  */
 export function clientOrigins(config: IdpConfig): Set<string> {
   const origins = new Set<string>()
@@ -56,7 +88,21 @@ export function clientOrigins(config: IdpConfig): Set<string> {
       if (origin) origins.add(origin)
     }
   }
+  for (const origin of databaseOrigins) origins.add(origin)
   return origins
+}
+
+/**
+ * The browser origins among a set of redirect URIs.
+ *
+ * Exported so the refresher can map database rows the same way this module
+ * maps configured ones — a native client's `com.example.app:/cb` has no origin
+ * and must not become one.
+ */
+export function browserOriginsOf(uris: readonly string[]): string[] {
+  return uris
+    .map((uri) => originOf(uri))
+    .filter((origin): origin is string => origin !== undefined)
 }
 
 function originOf(uri: string): string | undefined {

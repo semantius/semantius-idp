@@ -1,16 +1,21 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-25 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `8d4937b`
-**Plan:** `~/.claude/plans/finish-idp-v1-s3-m6-m14.md`
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D47**
+**As of:** 2026-08-25 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `58ee65b`
+**Plan:** `~/.claude/plans/review-the-current-implementation-splendid-dragon.md`
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D52**
 
-**S3 and M6–M14 are done, up to the release gate.** Every gate green: lint,
-typecheck, unit (478), integration (210 across twenty-three files), coverage
-thresholds including the 85 % per-module gates, schema-drift, config-schema
-staleness, the **new** configuration-reference and example-config gates,
-dependency pinning, the client-bundle gate, the TST-8 container smoke test, and
-the TST-6 end-to-end suite — 68 tests in a real browser against the built
+**S3, M6–M14 and owner review round 1 are done, up to the release gate.** Every
+gate green: lint, typecheck, unit (483), integration (223 across twenty-four
+files), coverage thresholds including the 85 % per-module gates, schema-drift,
+config-schema staleness, the configuration-reference and example-config gates,
+dependency pinning, the client-bundle gate, the TST-8 container smoke test —
+run against the moved `docker/` layout and now completing the first-run wizard
+— and the TST-6 end-to-end suite: 74 tests in a real browser against the built
 image, in both deployment shapes.
+
+The `docker/idp-*` lifecycle scripts were exercised end to end as well —
+create → status → cli → stop → start → logs → destroy — against a throwaway
+`idp_scripts_check` schema that was dropped afterwards (P0'.2).
 
 **What is left needs the owner.** Tagging `v1.0.0` and publishing the image are
 the mandatory sign-off gate, and the two checks that cannot be automated are
@@ -50,16 +55,163 @@ Everything buildable is built. What remains cannot be done from here:
 
 ### 2. Open, non-blocking
 
-- The dev login on the persistent `idp` schema is still stranded (one user,
-  `mustChangePassword = true`). `pnpm reset-admin` fixes it in one command and
-  destroys nothing. Deliberately not run.
+- Nothing. The one item that stood here — the stranded dev login on the
+  persistent `idp` schema — is resolved by **D52**: drop that schema and the
+  next boot serves the first-run setup page, which is now the only way an
+  administrator is ever created. No credential to recover, and no command that
+  changes one.
 
 ---
 
 ## Review results
 
-_Empty — no owner review findings outstanding. The next round's go here, and
-are treated as pre-work ahead of anything in **Pending** above._
+### Round 1 — owner review, 2026-08-25 (**D48–D52**)
+
+Fourteen owner findings and an accompanying security / spec-completeness pass,
+all landed. Five of them changed a signed-off requirement, so each carries a
+decision number; the rest were mechanical or corrective. What follows is the
+part worth keeping: what changed, and why the obvious alternative was not it.
+
+#### The env bootstrap is gone (**D52**) — the largest of them
+
+`IDP_ADMIN_EMAIL` / `IDP_ADMIN_PASSWORD` created the first administrator, a
+forced change consumed that password at the first sign-in, and the operator was
+told to unset both variables afterwards. Nobody does. That instruction is the
+recorded root cause of this deployment's one credentials incident, and
+`idp reset-admin` existed only because the account it created could strand
+itself the moment its password was forgotten.
+
+**Both are removed.** While the `user` table is empty, `/` and `/login` lead to
+`/setup`, which collects e-mail, first name, last name and a password and makes
+that person the first administrator — signed in, no forced change, because the
+person who chose the password is the person using it.
+
+Three things about the gate are deliberate:
+
+- **It is "no users", not "no admin".** A deployment that lost its last
+  administrator must not be able to mint one from an unauthenticated page, so
+  the page closes for good the moment any account exists. A "no admin" gate
+  would have been a privilege-escalation path dressed as a convenience.
+- **The empty-table check is re-run inside the `bootstrapAdmin` advisory lock**,
+  on the direct connection. Two browsers submitting at once is the ordinary
+  race; the loser is told the deployment is already set up and creates nothing.
+  `setup.test.ts` runs exactly that race.
+- **The answer is memoised in one direction.** `false` is never re-queried —
+  `/` and `/login` are the two busiest pages a signed-out visitor loads — while
+  `true` is re-read every time, because it is about to become false. The
+  integration harness resets it per file, since one process runs every file
+  against a different schema.
+
+The cost is real and accepted: lockout recovery now needs database access. In
+order — a second administrator, the password-reset e-mail, or the one SQL
+statement in [docs/runbooks.md](docs/runbooks.md#promoting-a-user-when-nobody-can-sign-in).
+In exchange, no deployment has a password sitting in a file somebody meant to
+delete.
+
+#### Whole connection strings (**D48**)
+
+Compose used to build the application's `DATABASE_URL` out of
+`POSTGRES_PASSWORD`, and Postgres read the same password from
+`secrets/postgres_password`, so one value lived in three places and all three
+were mandatory — even for a deployment pointing at Neon, which uses none of
+them. Now `.env` holds whole connection strings and `env_file` passes them
+through untouched. `DIRECT_DATABASE_URL` became `DATABASE_URL_ADMIN` (a clean
+break, no alias; the config key `database.directUrl` is unchanged), and the
+docker `secrets:` block is gone.
+
+D43's protection survives the move, which was the one thing to check: a value
+read from `env_file` cannot be overridden by whatever happens to be exported in
+the shell that ran `docker compose`, so a host `DATABASE_URL` still cannot walk
+into the container. The pin list in `environment:` shrinks to the two variables
+that decide *which configuration* and *which schema*.
+
+#### `docker/`, and scripts that say what they do (**D51**)
+
+Nine deployment files at the repository root made the root listing a deployment
+folder with a source tree in it. They are in `docker/` now — Dockerfile,
+`Dockerfile.dockerignore` (BuildKit's per-Dockerfile ignore, which CI already
+honours because it builds with buildx), both compose files, both Caddyfiles —
+with a `.cmd`/`.sh` pair per verb copied from the `pgrest` conventions:
+`idp-create`, `idp-start`, `idp-stop`, `idp-status`, `idp-logs`, `idp-cli`,
+`idp-destroy`.
+
+`idp-create` bootstraps `.env` **and** `config/` from the shipped examples, so
+a clean checkout is one command. That last part forced a small decision:
+`config.example/oauth_clients.json` declares two clients whose secrets come from
+required placeholders, so a freshly copied config folder refused to load. The
+throwaway values now ship in `.env.example` — both clients redirect to
+`app.example.com`, so they are unusable by construction, and CI has always
+invented the same values for its own validation of that folder.
+
+#### The display name is derived (**D49**)
+
+`user.name` was a free-text field on three forms. Two people typing "Jane
+Smith" and "Smith, Jane" produce a user list that cannot be sorted and a `name`
+claim that means two different things. It is now composed from the captured
+first and last name in `site.nameFormat` order, everywhere one is written —
+sign-up, first-run setup, admin create, admin edit, the account page (read-only
+there), and the social profile mapping.
+
+The social half has one restraint worth naming: a provider that ships only
+`name` — GitHub — keeps the name it sent. Deriving from a split we invented
+would be guessing at somebody's surname.
+
+#### Clients can be registered from the admin area (**D50**)
+
+The page was read-only for a good reason: a change there is one the next
+restart would silently undo. That reason applies to **file** clients, and the
+mechanism that keeps them apart already existed — reconcile's orphan sweep is
+scoped to `user_id IS NULL`, so a row with an owner has never been an orphan.
+Admin-registered clients simply carry the creating administrator's id.
+
+Two things were checked rather than assumed before building it:
+
+- **No restart is needed.** The provider's `getClient` falls back to a database
+  lookup for ids outside `cachedTrustedClients` (verified in the installed
+  `@better-auth/oauth-provider` dist), so a new client works on the next
+  request. `cachedTrustedClients` and `clientPrivileges: () => false` are
+  untouched, and Better Auth's own client CRUD stays dead.
+- **One real gap.** `clientOrigins()` fed both CORS and the CSP `form-action`
+  list from the configuration file alone, so a database client's login would
+  have failed in Chrome — the authorization completes, the redirect back is
+  cancelled, and nothing in the log names an origin. That is the D46 failure
+  again, from a new direction. The set is now file ∪ **enabled** database
+  clients, cached in the process and refreshed at start-up and by every
+  mutation.
+
+#### Secrets stopped travelling in URLs
+
+The generated API key rode back as `?created=<secret>` and the set-password
+invite link as `?link=<url>`. Both are now stashed server-side and claimed by
+the landing loader, which consumes them — the repository's own `one-shot.ts`
+header had been arguing for exactly this since the 2FA enrolment used it.
+Claiming once is what makes "shown once" true rather than aspirational: a
+reload shows the page without the value.
+
+#### Two FR compliance gaps, found by the completeness pass
+
+- **FR-ADMIN-2's "edit (name, e-mail, verified flag)" had no implementation.**
+  The only `/admin/update-user` call in the tree set `mustChangePassword`. There
+  is now an `edit-profile` action, in a dialog, with the name derived per D49.
+- **FR-SIGNUP-5's first and last name were missing from admin create**, which
+  still asked for a single free-text `name`.
+
+#### Everything else
+
+Administration and account areas link to each other (the admin area had no way
+back out but the address bar); the user-detail actions became named controls
+that open dialogs, so "delete this account" asks rather than fires; roles are
+checkboxes from the catalog instead of a comma-separated field an administrator
+had to spell from memory; the clients page became a table; and the audit page
+resolves actors and targets to display names in one batched query per page,
+shows the `targetType` it had always fetched and never rendered, and keeps the
+full ids in tooltips. One writer that recorded an API-key revocation against
+the *user* rather than the key was corrected, so the same event has one shape.
+
+The security pass found nothing else: admin gating (route gate plus an
+authoritative per-server-function re-check), `safeReturnTo`, the reconcile
+scoping, the advisory-lock discipline and the CSP posture were all verified
+sound and left alone.
 
 ---
 
@@ -742,6 +894,12 @@ all against `idp_live_m11`, dropped afterwards.
 ---
 
 ## The dev login (P0'.1) — recoverable now, one command away
+
+> **Superseded by D52 (2026-08-25).** `pnpm reset-admin` no longer exists: the
+> command and the bootstrap account it recovered were removed together. The
+> stranded dev login is resolved by dropping the persistent `idp` schema — the
+> next boot serves the first-run setup page. The section below is kept as the
+> record of what the situation was and how it was reasoned about.
 
 **The persistent `idp` schema's bootstrap admin is still stranded**, exactly as
 the plan's P0'.1 describes: someone completed the forced password change from

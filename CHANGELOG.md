@@ -35,18 +35,29 @@ contain.
 - **An account area**: profile, password, e-mail address, sessions, API keys
   and connected applications.
 - **An administration area and API**: users with search, filters and paging;
-  approve, reject, suspend, delete; roles; sessions; API keys; a read-only view
-  of clients and roles; the audit trail; and a system page with the effective
-  configuration, the signing keys and manual rotation.
+  approve, reject, suspend, delete, edit; roles as checkboxes from the catalog;
+  sessions; API keys; OAuth clients — file-managed ones read-only, and
+  registration, disabling and removal for ones added here (**D50**); a
+  read-only view of roles; the audit trail, with actors and targets resolved to
+  names; and a system page with the effective configuration, the signing keys
+  and manual rotation.
+- **A first-run setup page** (**D52**). A deployment with no users asks for the
+  first one in the browser and signs them in as an administrator. There is no
+  bootstrap account, no password in an environment file, and nothing to unset
+  afterwards.
 - **File-driven configuration.** `config.json`, `oauth_clients.json` and
   `roles.json` are the source of truth, parsed as JSONC with `${env:…}` and
   `${file:…}` placeholders, validated in one pass with every error reported
   together, and reconciled into the database at start-up.
 - **A single container**, non-root and read-only, with the operator CLI in the
   same binary: `config validate`, `migrate`, `reconcile-clients`,
-  `reset-admin`, `rotate-keys`, `cleanup`, `version`.
-- **A reference deployment**: compose with Postgres, secrets and health checks,
-  and Caddyfiles for both a dedicated hostname and a sub-path.
+  `rotate-keys`, `cleanup`, `version`.
+- **A reference deployment** in `docker/` (**D51**): compose with Postgres and
+  health checks, Caddyfiles for both a dedicated hostname and a sub-path, and a
+  `.cmd`/`.sh` pair per lifecycle verb — `idp-create`, `idp-start`, `idp-stop`,
+  `idp-status`, `idp-logs`, `idp-cli`, `idp-destroy`. The environment contract
+  is whole connection strings — `DATABASE_URL` and `DATABASE_URL_ADMIN`
+  (**D48**) — with no secrets file and nothing assembled from a password.
 - **Documentation**: a generated configuration reference, guides for Neon and
   for registering clients, and runbooks.
 
@@ -65,7 +76,14 @@ contain.
   can change their own roles.
 - Content-Security-Policy with no third-party origin, `frame-ancestors 'none'`,
   and `form-action` limited to this origin plus the registered redirect origins
-  (**D46**).
+  — file-configured and enabled database clients alike (**D46**, **D50**).
+- **No secret ever travels in a URL.** A generated API key, a set-password
+  invite link and a new client secret each reach the browser through a
+  server-side one-shot stash and are shown once, in a dialog; the redirect
+  carries an opaque handle. A query string survives in browser history, in
+  `Referer` and in every proxy log in between.
+- **Destructive administrative actions confirm**, in the dialog that carries
+  them.
 
 ### Fixed before release
 
@@ -93,5 +111,30 @@ run. The ones that mattered:
   the account area, sent no notification.**
 - **Every confirmed e-mail address was recorded in the audit log as a
   failure.**
+
+### Changed after the first owner review (2026-08-25)
+
+The review before v1.0.0. Fourteen findings plus a security and
+spec-completeness pass; the ones that changed a requirement carry a `D` number.
+
+- **The environment bootstrap is gone**, and with it `idp reset-admin`
+  (**D52**). Both existed to work around each other: a password in `.env` that
+  survived exactly one sign-in, and a command to put it back when somebody
+  forgot it. Lockout recovery is now a second administrator, the reset e-mail,
+  or one documented SQL statement.
+- **`DIRECT_DATABASE_URL` is now `DATABASE_URL_ADMIN`** (**D48**), a clean break
+  with no alias. The docker `secrets:` file is gone and `POSTGRES_PASSWORD` is
+  an optional knob of the bundled reference database.
+- **Deployment files moved to `docker/`** with lifecycle scripts (**D51**).
+- **The display name is derived from the first and last name** and is no longer
+  an input anywhere; `site.nameFormat` chooses the order (**D49**).
+- **OAuth clients can be registered from the admin area** (**D50**).
+- **The audit page reads.** The actor and the target resolve to display names
+  in one batched query per page, the target's type is shown, and the full ids
+  are in tooltips. One writer that recorded an API-key revocation against the
+  user rather than the key was corrected.
+- **Two FR compliance gaps closed**: FR-ADMIN-2's "edit (name, e-mail, verified
+  flag)" had no implementation at all, and FR-SIGNUP-5's first and last name
+  were missing from admin create.
 
 [Unreleased]: https://github.com/semantius/semantius-idp/commits/main

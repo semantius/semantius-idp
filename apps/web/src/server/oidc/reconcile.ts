@@ -2,12 +2,16 @@
  * `oauth_clients.json` is the source of truth; this makes the database agree
  * (FR-OIDC-2, OPS-2).
  *
- * There is no client registration API and no admin UI that writes clients: the
- * file is edited, the container restarts, and the rows follow. That only works
- * if the sync is total — a client removed from the file has to *stop working*,
- * not linger because nobody deleted it. So absence is a decision, not an
- * omission: the row is disabled and its tokens revoked, or deleted outright
+ * The file is edited, the container restarts, and the rows follow. That only
+ * works if the sync is total — a client removed from the file has to *stop
+ * working*, not linger because nobody deleted it. So absence is a decision, not
+ * an omission: the row is disabled and its tokens revoked, or deleted outright
  * when `oauth.reconcile.prune` says so.
+ *
+ * **The sweep is scoped to file-managed rows** (`userId === null`), which is
+ * what lets D50's admin-registered clients coexist with these: a row with an
+ * owner is not an orphan, and no restart touches it. That scoping predates
+ * D50 — it is what made D50 cheap.
  *
  * **Everything in one transaction, under one advisory lock, on the direct
  * connection.** Two containers starting together would otherwise both compute
@@ -252,8 +256,14 @@ function equal(a: unknown, b: unknown): boolean {
   return a === b
 }
 
-type Tx = Parameters<Parameters<DbHandle["db"]["transaction"]>[0]>[0]
-type Schema = DbHandle["schema"]
+/**
+ * A transaction handle. Exported because the admin client endpoints (D50) run
+ * {@link syncResourceLinks} and {@link revokeTokensFor} in transactions of
+ * their own, and a second implementation of either would be a second chance to
+ * leave a deleted client's refresh tokens alive.
+ */
+export type Tx = Parameters<Parameters<DbHandle["db"]["transaction"]>[0]>[0]
+export type Schema = DbHandle["schema"]
 
 /**
  * Brings `oauth_client_resource` into line for one client.
@@ -263,7 +273,7 @@ type Schema = DbHandle["schema"]
  * a missing identifier would violate the foreign key and abort the whole
  * transaction over a typo in one client's `audience`.
  */
-async function syncResourceLinks(
+export async function syncResourceLinks(
   tx: Tx,
   schema: Schema,
   clientId: string,
@@ -318,7 +328,7 @@ async function syncResourceLinks(
  * and silently resuming the old one would let a removed-and-restored client
  * skip the consent screen it should have seen.
  */
-async function revokeTokensFor(
+export async function revokeTokensFor(
   tx: Tx,
   schema: Schema,
   clientId: string

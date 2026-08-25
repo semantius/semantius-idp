@@ -11,7 +11,11 @@
  *
  * - **`disableImplicitSignUp`** whenever `signUp.enabled` is false, so social
  *   sign-in succeeds only for identities that already exist (FR-SIGNUP-1).
- * - **`given_name` / `family_name` → `firstName` / `lastName`** (FR-SIGNUP-5).
+ * - **`given_name` / `family_name` → `firstName` / `lastName`** (FR-SIGNUP-5),
+ *   and the display name re-derived from them in `site.nameFormat` order
+ *   (**D49**) — but only when the provider actually shipped a part. A provider
+ *   with nothing but `name` (GitHub) keeps the name it sent, because inventing
+ *   a split from it would be guessing at somebody's surname.
  *
  * Account linking is *not* configured here: it is disabled globally in the core
  * options (FR-SOC-2), which is what makes `(providerId, accountId)` the only
@@ -20,6 +24,7 @@
 
 import type { IdpConfig } from "../../config/derive"
 import type { SocialProviderConfig } from "../../config/schema/config-schema"
+import { displayName } from "../../display-name"
 
 /** Keys the IdP consumes itself and must not forward to the provider. */
 const IDP_OWNED_KEYS = new Set([
@@ -82,9 +87,18 @@ export function buildSocialProviders(
       // so the documented default of `true` silently did nothing.
       overrideUserInfoOnSignIn: provider.syncProfile,
 
-      // FR-SIGNUP-5 / FR-SOC-4: name mapping, applied on create and on sync.
-      mapProfileToUser: (profile: Record<string, unknown>) =>
-        mapProfileNames(profile),
+      // FR-SIGNUP-5 / FR-SOC-4 / D49: name mapping, applied on create and on
+      // sync. `name` is only overridden when a part came back — otherwise the
+      // provider's own is left alone, and an empty derivation would blank it.
+      mapProfileToUser: (profile: Record<string, unknown>) => {
+        const names = mapProfileNames(profile)
+        const derived = displayName(
+          names.firstName,
+          names.lastName,
+          config.file.site.nameFormat
+        )
+        return { ...names, ...(derived === "" ? {} : { name: derived }) }
+      },
     }
   }
 

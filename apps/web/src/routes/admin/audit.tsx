@@ -14,7 +14,9 @@ import {
 import { AdminShell } from "@/components/admin/admin-shell"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
+import type { Catalog } from "@/server/i18n"
 import { fetchAuditPage } from "@/server/functions/admin"
+import type { AdminAuditRow } from "@/server/functions/admin"
 
 /**
  * `/admin/audit` — the trail (SEC-6).
@@ -28,6 +30,15 @@ import { fetchAuditPage } from "@/server/functions/admin"
  * `metadata` is printed as raw JSON on purpose. It is written by a dozen
  * different call sites, and any attempt to render it prettily would either
  * drop fields or invent structure that is not there.
+ *
+ * **Who** and **what** are resolved to names (item 13). Both columns used to
+ * show the first eight characters of a UUID: enough to tell two rows apart and
+ * not enough to tell *anyone* anything, so reading the trail meant copying an
+ * id into the user search for every line. The target column showed the id with
+ * no type at all — `targetType` was fetched and never rendered — so a row
+ * about an API key and a row about a user looked identical. The full ids are
+ * still there, in the `title` of each cell, because an id is what you paste
+ * into a query.
  */
 export const Route = createFileRoute("/admin/audit")({
   /**
@@ -152,20 +163,10 @@ function AuditPage() {
                     {event.outcome}
                   </TableCell>
                   <TableCell className="text-xs">
-                    {event.actorUserId ? (
-                      <Link
-                        to="/admin/users/$userId"
-                        params={{ userId: event.actorUserId }}
-                        className="underline underline-offset-4"
-                      >
-                        {event.actorUserId.slice(0, 8)}
-                      </Link>
-                    ) : (
-                      (event.actorType ?? "—")
-                    )}
+                    <Actor event={event} names={page.names} />
                   </TableCell>
                   <TableCell className="text-xs">
-                    {event.targetId ? event.targetId.slice(0, 8) : "—"}
+                    <Target event={event} names={page.names} t={t} />
                   </TableCell>
                   <TableCell className="max-w-sm truncate text-xs text-muted-foreground">
                     {event.metadata ?? ""}
@@ -189,5 +190,80 @@ function AuditPage() {
         </p>
       ) : null}
     </AdminShell>
+  )
+}
+
+/**
+ * Who caused the event.
+ *
+ * A user id becomes their name and links to them; a deleted account keeps the
+ * short id, because the row outlives the account. With no user id at all the
+ * actor is a machine — `system` at start-up, `cli` from the operator CLI,
+ * `anonymous` for something nobody was signed in for — and the type is the
+ * honest answer rather than a dash.
+ */
+function Actor({
+  event,
+  names,
+}: {
+  event: AdminAuditRow
+  names: Record<string, string>
+}) {
+  if (!event.actorUserId) return <>{event.actorType ?? "—"}</>
+
+  return (
+    <Link
+      to="/admin/users/$userId"
+      params={{ userId: event.actorUserId }}
+      className="underline underline-offset-4"
+      title={event.actorUserId}
+    >
+      {names[event.actorUserId] ?? event.actorUserId.slice(0, 8)}
+    </Link>
+  )
+}
+
+/**
+ * What it happened to — the type, and a label the type decides.
+ *
+ * A user resolves to a name and links; a client is already readable, since
+ * `targetId` *is* the client id; an API key has nothing readable at all, so it
+ * gets a short id. Everything else falls back to the same short id rather than
+ * pretending to know more.
+ */
+function Target({
+  event,
+  names,
+  t,
+}: {
+  event: AdminAuditRow
+  names: Record<string, string>
+  t: Catalog
+}) {
+  if (!event.targetId) return <>—</>
+
+  const type = event.targetType ?? ""
+  const short = event.targetId.slice(0, 8)
+
+  if (type === "user") {
+    return (
+      <Link
+        to="/admin/users/$userId"
+        params={{ userId: event.targetId }}
+        className="underline underline-offset-4"
+        title={event.targetId}
+      >
+        {names[event.targetId] ?? short}
+      </Link>
+    )
+  }
+
+  return (
+    <span title={event.targetId}>
+      <span className="text-muted-foreground">
+        {t.admin.audit.targetType(type || "—")}{" "}
+      </span>
+      {type === "client" ? event.targetId : short}
+    </span>
   )
 }

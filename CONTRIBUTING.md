@@ -5,15 +5,31 @@
 ```bash
 pnpm install
 cp -r config.example config
-cp .env.example .env          # fill in DATABASE_URL and IDP_SECRET at least
-pnpm --filter web run db:generate-schema
-pnpm --filter web run db:generate
+cp .env.example .env          # set IDP_SECRET, and DATABASE_URL if not Docker
 pnpm dev
 ```
 
 You need **Bun** (the runtime — pinned in `.bun-version`), **pnpm** (the
 package manager; Node is only used by tooling) and a **Postgres**. Everything
 lives in one schema, so an existing database is fine.
+
+The shipped `DATABASE_URL` points at the Postgres `docker compose` starts, on
+the compose network — running outside Docker means pointing it at something
+your host can reach.
+
+There is nothing to generate first: the Drizzle schema and the SQL migrations
+are committed, drift-gated in CI, and applied at boot. The generators below are
+for when you *change* the schema.
+
+Then open the app. A database with no users serves the first-run setup page and
+whoever completes it is the first administrator (**D52**) — there is no
+bootstrap account and no password in `.env`. Working against a schema that
+already has one and want the wizard back? Drop the schema; the next boot
+migrates a fresh one.
+
+The Docker stack lives in [`docker/`](docker/) and its lifecycle scripts are
+`docker/idp-create`, `-start`, `-stop`, `-status`, `-logs`, `-cli`, `-destroy`
+— a `.sh` and a `.cmd` of each, so `./idp-create.sh` or `idp-create.cmd`.
 
 ## The gates
 
@@ -93,11 +109,15 @@ Four layers, each answering a question the others cannot:
 
 Integration tests each get their own uniquely named schema, which is cheap
 because every table is schema-scoped. They read `IDP_TEST_DATABASE_URL`, else
-`DIRECT_DATABASE_URL`, else `DATABASE_URL`.
+`DATABASE_URL_ADMIN`, else `DATABASE_URL`.
 
-End-to-end tests bring up their own compose stacks with generated configuration
-folders, so a run can never touch your own stack or the persistent `idp`
-schema.
+End-to-end tests bring up their own compose stacks, each with a generated
+configuration folder **and a generated `.env`**, so a run can never touch your
+own stack, your connection string or the persistent `idp` schema (P0'.2). Each
+stack is then taken through the first-run setup wizard in a real browser, with
+per-run throwaway credentials that exist nowhere else — the smoke test does the
+same over HTTP. Neither reads a credential from the environment, because there
+is no longer one to read.
 
 **Coverage thresholds** are 85 % for the configuration, claims, OIDC and
 approval modules and 70 % overall, measured across unit *and* integration

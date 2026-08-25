@@ -13,6 +13,7 @@ import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as TwoFactorRouteImport } from './routes/two-factor'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SignOutRouteImport } from './routes/sign-out'
+import { Route as SetupRouteImport } from './routes/setup'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ReadyzRouteImport } from './routes/readyz'
@@ -73,6 +74,11 @@ const SignupRoute = SignupRouteImport.update({
 const SignOutRoute = SignOutRouteImport.update({
   id: '/sign-out',
   path: '/sign-out',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SetupRoute = SetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
@@ -301,6 +307,7 @@ export interface FileRoutesByFullPath {
   '/readyz': typeof ReadyzRoute
   '/reset-password': typeof ResetPasswordRoute
   '/robots.txt': typeof RobotsDottxtRoute
+  '/setup': typeof SetupRoute
   '/sign-out': typeof SignOutRoute
   '/signup': typeof SignupRoute
   '/two-factor': typeof TwoFactorRoute
@@ -346,6 +353,7 @@ export interface FileRoutesByTo {
   '/readyz': typeof ReadyzRoute
   '/reset-password': typeof ResetPasswordRoute
   '/robots.txt': typeof RobotsDottxtRoute
+  '/setup': typeof SetupRoute
   '/sign-out': typeof SignOutRoute
   '/signup': typeof SignupRoute
   '/two-factor': typeof TwoFactorRoute
@@ -394,6 +402,7 @@ export interface FileRoutesById {
   '/readyz': typeof ReadyzRoute
   '/reset-password': typeof ResetPasswordRoute
   '/robots.txt': typeof RobotsDottxtRoute
+  '/setup': typeof SetupRoute
   '/sign-out': typeof SignOutRoute
   '/signup': typeof SignupRoute
   '/two-factor': typeof TwoFactorRoute
@@ -443,6 +452,7 @@ export interface FileRouteTypes {
     | '/readyz'
     | '/reset-password'
     | '/robots.txt'
+    | '/setup'
     | '/sign-out'
     | '/signup'
     | '/two-factor'
@@ -488,6 +498,7 @@ export interface FileRouteTypes {
     | '/readyz'
     | '/reset-password'
     | '/robots.txt'
+    | '/setup'
     | '/sign-out'
     | '/signup'
     | '/two-factor'
@@ -535,6 +546,7 @@ export interface FileRouteTypes {
     | '/readyz'
     | '/reset-password'
     | '/robots.txt'
+    | '/setup'
     | '/sign-out'
     | '/signup'
     | '/two-factor'
@@ -583,6 +595,7 @@ export interface RootRouteChildren {
   ReadyzRoute: typeof ReadyzRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
+  SetupRoute: typeof SetupRoute
   SignOutRoute: typeof SignOutRoute
   SignupRoute: typeof SignupRoute
   TwoFactorRoute: typeof TwoFactorRoute
@@ -630,6 +643,13 @@ declare module '@tanstack/react-router' {
       path: '/sign-out'
       fullPath: '/sign-out'
       preLoaderRoute: typeof SignOutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/setup': {
+      id: '/setup'
+      path: '/setup'
+      fullPath: '/setup'
+      preLoaderRoute: typeof SetupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/robots.txt': {
@@ -981,6 +1001,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReadyzRoute: ReadyzRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,
+  SetupRoute: SetupRoute,
   SignOutRoute: SignOutRoute,
   SignupRoute: SignupRoute,
   TwoFactorRoute: TwoFactorRoute,

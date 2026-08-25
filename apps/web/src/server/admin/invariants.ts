@@ -15,17 +15,17 @@
  * **The last administrator.** The rule that actually protects the deployment:
  * the final account holding an admin role cannot be demoted, banned, rejected
  * or deleted, by anyone, including itself. Without it a two-admin deployment
- * can be reduced to zero in two clicks and the only way back is
- * `idp reset-admin` on the server — recoverable, but only by someone with
- * shell access, which the person clicking usually is not.
+ * can be reduced to zero in two clicks and the only way back is a hand-written
+ * SQL promotion on the server (`docs/runbooks.md`) — recoverable, but only by
+ * someone with database access, which the person clicking usually is not.
  *
  * "Last" is counted over accounts that can *actually* sign in and administer:
  * an admin who is banned or not active is not a fallback, so demoting the only
  * usable admin is refused even when a dozen suspended ones exist. The count is
  * taken inside the same request as the change, which leaves a narrow race
  * between two concurrent demotions; the loser of that race gets a deployment
- * with no admin, so the check is *also* the reason `idp reset-admin` exists
- * (D33).
+ * with no admin, and the only way back is the SQL promotion in the runbooks
+ * (D33, D52).
  *
  * Nothing here reads the database. The caller supplies the candidate set,
  * because the two callers — this app's own endpoints and the wrapper around

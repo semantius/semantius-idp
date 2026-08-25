@@ -19,6 +19,12 @@ import type { UiContext } from "@/server/ui-context"
  * Which entries exist follows the capability flags — with e-mail off there is
  * nothing to change an address to, and with API keys off the page 404s, so a
  * link to it would be a link to a dead end (FR-MAIL-2, FR-KEY-1).
+ *
+ * The header carries the way *out*: sign out, and — for an administrator — the
+ * administration area. `isAdmin` is resolved on the server, in `fetchProfile`,
+ * against `admin.adminRoles`; it never comes from `UiContext`, which is sent to
+ * anonymous browsers. It decides a link and nothing more: `/admin` is gated by
+ * its own route and re-checked by every server function beneath it.
  */
 
 export interface AccountNavItem {
@@ -44,6 +50,7 @@ export function AccountShell({
   title,
   description,
   impersonated,
+  isAdmin,
   children,
 }: {
   ui: UiContext
@@ -52,6 +59,8 @@ export function AccountShell({
   description?: ReactNode
   /** FR-ADMIN-5: an impersonated session says so on every page it renders. */
   impersonated?: boolean
+  /** Resolved server-side (`fetchProfile`); shows the administration link. */
+  isAdmin?: boolean
   children: ReactNode
 }) {
   const items = accountNavItems(ui, t)
@@ -75,14 +84,27 @@ export function AccountShell({
               {t.account.title}
             </h1>
           </div>
-          <form method="post" action={`${ui.basePath}/logout`}>
-            <button
-              type="submit"
-              className="text-sm text-muted-foreground underline underline-offset-4"
-            >
-              {t.common.signOut}
-            </button>
-          </form>
+          <div className="flex items-baseline gap-4">
+            {isAdmin ? (
+              // A plain anchor, not a `<Link>`: `/admin` sits outside this
+              // route's subtree, so a client-side navigation would have to
+              // load the whole admin bundle to find out it is allowed in.
+              <a
+                href={`${ui.basePath}/admin`}
+                className="text-sm text-muted-foreground underline underline-offset-4"
+              >
+                {t.admin.title}
+              </a>
+            ) : null}
+            <form method="post" action={`${ui.basePath}/logout`}>
+              <button
+                type="submit"
+                className="text-sm text-muted-foreground underline underline-offset-4"
+              >
+                {t.common.signOut}
+              </button>
+            </form>
+          </div>
         </header>
 
         <div className="grid gap-8 md:grid-cols-[12rem_1fr]">

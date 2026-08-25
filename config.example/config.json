@@ -49,7 +49,7 @@
     // (Neon's `-pooler` endpoint, PgBouncer): session advisory locks do not
     // hold through one, and startup, migrations, the CLI and the cleanup job
     // all rely on them. Give the direct endpoint here.
-    // "directUrl": "${env:DIRECT_DATABASE_URL}",
+    // "directUrl": "${env:DATABASE_URL_ADMIN}",
 
     // Every table, including drizzle's migration bookkeeping, lives here.
     // Nothing is created in `public`. Changing it is enough — the migrator
@@ -71,7 +71,11 @@
     // "termsUrl": "https://example.com/terms",
     // "privacyUrl": "https://example.com/privacy",
     "theme": "system",
-    "defaultLocale": "en-US"
+    "defaultLocale": "en-US",
+    // How a display name is built from the first and last name captured at
+    // sign-up. "first-last" gives "Jane Smith"; "last-first" gives
+    // "Smith, Jane". The name itself is never typed in (D49).
+    "nameFormat": "first-last"
   },
 
   // Without an API key the IdP runs in degraded mode: password reset, e-mail
@@ -205,14 +209,9 @@
   "admin": {
     "adminRoles": ["admin"],
 
-    // Created once, and only while no user holds an admin role. The account is
-    // active, verified and must change its password at first sign-in. Leave
-    // the variables unset after the first boot.
-    "bootstrap": {
-      "email": "${env:IDP_ADMIN_EMAIL:-}",
-      "password": "${env:IDP_ADMIN_PASSWORD:-}",
-      "name": "Bootstrap Admin"
-    },
+    // There is no bootstrap account and no password in the environment. While
+    // the user table is empty the IdP serves a first-run setup page, and
+    // whoever completes it is the first administrator (D52).
 
     "allowImpersonation": false
   },

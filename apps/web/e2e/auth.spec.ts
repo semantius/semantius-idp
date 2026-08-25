@@ -41,18 +41,34 @@ test.describe("signing in", () => {
     await expect(page).toHaveURL(new RegExp(`${app.basePath}/login`))
   })
 
-  test("the bootstrap admin's temporary password is changed before anything else (FR-AUTH-4)", async ({
+  test("the administrator the first-run wizard created can sign in (D52)", async ({
     page,
     app,
   }) => {
-    // `signInAsAdmin` walks the forced change when it is still pending, and
-    // signs straight in when an earlier spec already consumed it. Either way
-    // the account area is reachable afterwards and the temporary password is
-    // not the standing one.
+    // The account was made at `/setup`, in a browser, by `globalSetup`. It
+    // carries no forced change — the person who chose the password is the one
+    // using it — so this is an ordinary sign-in and nothing interposes.
     await signInAsAdmin(page, app)
     await expect(
       page.getByRole("heading", { name: "Your account" })
     ).toBeVisible()
+  })
+
+  test("the first-run wizard is gone once the deployment has a user (D52)", async ({
+    page,
+    app,
+  }) => {
+    // The security-relevant half of the gate: the page that creates an
+    // administrator without authenticating anybody must not be reachable on a
+    // deployment that already has users, or losing the last administrator
+    // would be an escalation rather than a lockout.
+    await app.goto("/setup")
+    await expect(page).toHaveURL(app.url("/login"))
+    await expect(page.getByLabel("Password", { exact: true })).toBeVisible()
+
+    // And the root now leads to the sign-in form rather than to setup.
+    await app.goto("/")
+    await expect(page).toHaveURL(app.url("/login"))
   })
 
   test("a verified user signs in, and signing out ends it (FR-AUTH-6)", async ({

@@ -2,10 +2,12 @@ import {
   PASSWORD,
   createVerifiedUser,
   onLogin,
+  openDialog,
   signIn,
   signInAsAdmin,
   signOut,
   submit,
+  submitDialog,
   uniqueEmail,
 } from "./actions"
 import { expect, test } from "./fixtures"
@@ -14,9 +16,14 @@ import { waitForMail } from "./stack"
 /**
  * The administrative surface (TST-6, FR-ADMIN-2/3, FR-ROLE-2/3).
  *
- * Every test signs in as the bootstrap administrator through the sign-in form,
- * which also means the gate on `/admin/*` is exercised on every one of them
- * rather than in a test of its own.
+ * Every test signs in as the administrator the first-run wizard created
+ * (D52) through the sign-in form, which also means the gate on `/admin/*` is
+ * exercised on every one of them rather than in a test of its own.
+ *
+ * The per-user actions are dialogs now (item 11), so anything after the trigger
+ * is scoped to the dialog: the trigger and the submit inside it usually share a
+ * name, and an unscoped match would find whichever the DOM happened to order
+ * first.
  */
 
 test.describe("the admin area", () => {
@@ -121,7 +128,7 @@ test.describe("the admin area", () => {
     )
   })
 
-  test("creating a user e-mails them a link to set a password (FR-ADMIN-2)", async ({
+  test("creating a user lands on the list and e-mails them a link (FR-ADMIN-2, FR-SIGNUP-5)", async ({
     page,
     app,
     stack,
@@ -130,17 +137,53 @@ test.describe("the admin area", () => {
     const email = uniqueEmail("created")
 
     await app.goto("/admin/users/new")
+    // FR-SIGNUP-5 / D49: two parts, never a free-text display name.
+    await page.getByLabel("First name").fill("Created")
+    await page.getByLabel("Last name").fill("Person")
     await page.getByLabel("E-mail address").fill(email)
-    await page.getByLabel("Name", { exact: true }).fill("Created Person")
+    await page.getByRole("checkbox", { name: "user" }).click()
     await submit(page, "Create")
 
+    // Item 10: both outcomes land on the list the account was created for.
+    await expect(page).toHaveURL(new RegExp(`${app.basePath}/admin/users`))
     await expect(page.getByText("The account has been created.")).toBeVisible()
+
+    await page.getByLabel("Search by name or e-mail").fill(email)
+    await submit(page, "Search")
+    await expect(page.getByRole("link", { name: email })).toBeVisible()
+    // The derived name, in `site.nameFormat` order (D49).
+    await expect(page.getByText("Created Person")).toBeVisible()
     // "It is you doing the vouching": approved and confirmed on creation.
-    await expect(page.getByText("Active").first()).toBeVisible()
+    // Scoped to the table: "Active" is also an <option> in the status filter,
+    // which sits *earlier* in the DOM and is not visible inside a closed
+    // select — so an unscoped `.first()` matches that and fails.
+    await expect(
+      page.locator("tbody").getByText("Active").first()
+    ).toBeVisible()
 
     const invite = await waitForMail(stack, email, { template: "set-password" })
     expect(invite.subject).toContain("Set up your")
     expect(invite.text).toContain(stack.baseURL)
+  })
+
+  test("an administrator can correct a profile (FR-ADMIN-2, D49)", async ({
+    page,
+    app,
+    stack,
+  }) => {
+    const user = await createVerifiedUser(page, app, stack, "edited")
+    await signInAsAdmin(page, app)
+
+    await app.goto(`/admin/users?q=${encodeURIComponent(user.email)}`)
+    await page.getByRole("link", { name: user.email }).click()
+
+    const dialog = await openDialog(page, "Edit profile")
+    await dialog.getByLabel("First name").fill("Corrected")
+    await dialog.getByLabel("Last name").fill("Name")
+    await submitDialog(page, dialog, "Save")
+
+    await expect(page.getByText("Profile updated.")).toBeVisible()
+    await expect(page.getByText("Corrected Name")).toBeVisible()
   })
 
   test("roles are assigned from the catalog and reach the account (FR-ROLE-2)", async ({
@@ -154,12 +197,12 @@ test.describe("the admin area", () => {
     await app.goto(`/admin/users?q=${encodeURIComponent(user.email)}`)
     await page.getByRole("link", { name: user.email }).click()
 
-    await page.getByLabel("Roles").fill("user, admin")
-    // Scoped to its own form: the temporary-password panel has a "Save" too.
-    await page
-      .locator('form:has(input[name="roles"])')
-      .getByRole("button", { name: "Save" })
-      .click()
+    // Item 11b: one checkbox per catalog role rather than a comma-separated
+    // field an administrator has to spell from memory.
+    const roles = await openDialog(page, "Roles")
+    await roles.getByRole("checkbox", { name: "admin" }).click()
+    await expect(roles.getByRole("checkbox", { name: "user" })).toBeChecked()
+    await submitDialog(page, roles, "Save")
     await expect(page.getByText("Roles updated.")).toBeVisible()
 
     await signOut(page, app)
@@ -186,10 +229,11 @@ test.describe("the admin area", () => {
 
     await app.goto(`/admin/users?q=${encodeURIComponent(user.email)}`)
     await page.getByRole("link", { name: user.email }).click()
-    await page
+    const ban = await openDialog(page, "Suspend")
+    await ban
       .getByLabel("Reason (recorded, not shown to the user)")
       .fill("Testing the suspension")
-    await submit(page, "Suspend")
+    await submitDialog(page, ban, "Suspend")
     await expect(page.getByText("Suspended.")).toBeVisible()
 
     await signOut(page, app)
@@ -208,7 +252,8 @@ test.describe("the admin area", () => {
     await signInAsAdmin(page, app)
     await app.goto(`/admin/users?q=${encodeURIComponent(user.email)}`)
     await page.getByRole("link", { name: user.email }).click()
-    await submit(page, "Lift the suspension")
+    const unban = await openDialog(page, "Lift the suspension")
+    await submitDialog(page, unban, "Lift the suspension")
     await expect(page.getByText("The suspension has been lifted.")).toBeVisible()
 
     await signOut(page, app)
@@ -227,25 +272,80 @@ test.describe("the admin area", () => {
     await page.getByRole("link", { name: "e2e-admin@example.com" }).click()
 
     // Both rules fit this account, and the last-administrator one is the
-    // answer that names something the reader can do (D34).
-    await expect(page.getByRole("button", { name: "Suspend" })).toBeDisabled()
+    // answer that names something the reader can do (D34). The controls live
+    // inside their dialogs now, so the refusal is asserted where it is shown.
+    const ban = await openDialog(page, "Suspend")
+    await expect(ban.getByRole("button", { name: "Suspend" })).toBeDisabled()
+    await page.keyboard.press("Escape")
+
+    const remove = await openDialog(page, "Delete this account")
     await expect(
-      page.getByRole("button", { name: "Delete this account" })
+      remove.getByRole("button", { name: "Delete this account" })
     ).toBeDisabled()
+    // The confirmation is the dialog's own text, not a sentence above a bare
+    // button that fires on the first click.
+    await expect(remove.getByText("This cannot be undone.")).toBeVisible()
   })
 
-  test("clients and roles are read-only, and the system page describes the deployment", async ({
+  test("a client can be registered, disabled and removed — and file ones cannot (D50)", async ({
+    page,
+    app,
+  }) => {
+    await signInAsAdmin(page, app)
+    await app.goto("/admin/clients")
+
+    // FR-OIDC-2: a file-managed row is labelled and carries no controls, because
+    // an edit here is one the next restart would silently undo.
+    const fileRow = page.locator("tbody tr").filter({ hasText: "e2e-app" })
+    await expect(fileRow.getByText("From the file")).toBeVisible()
+    await expect(fileRow.getByRole("button", { name: "Remove" })).toHaveCount(0)
+    await expect(fileRow.getByRole("button", { name: "Disable" })).toHaveCount(0)
+
+    // Registering one: the secret is generated here and shown once, in a
+    // dialog, and never in the address bar.
+    const form = await openDialog(page, "Add an application")
+    await form.getByLabel("Name").fill("Registered Here")
+    await form.getByLabel("Client ID").fill("e2e-registered")
+    await form
+      .getByLabel("Redirect URIs")
+      .fill("http://127.0.0.1:4599/callback")
+    await submitDialog(page, form, "Add an application")
+
+    const secretDialog = page.getByRole("dialog")
+    await expect(secretDialog).toBeVisible()
+    const secret = (
+      await secretDialog.locator('[data-slot="one-shot-value"]').innerText()
+    ).trim()
+    expect(secret.length, "a generated client secret").toBeGreaterThan(31)
+    expect(page.url(), "the secret is not in the URL").not.toContain(secret)
+    await page.keyboard.press("Escape")
+
+    const row = page.locator("tbody tr").filter({ hasText: "e2e-registered" })
+    await expect(row.getByText("Added here")).toBeVisible()
+    await expect(row.getByText("Enabled")).toBeVisible()
+
+    // A reload cannot show it again: claiming the stash consumed it.
+    await app.goto("/admin/clients")
+    expect(await page.content()).not.toContain(secret)
+
+    await row.getByRole("button", { name: "Disable" }).click()
+    await expect(page.getByText("The application has been disabled.")).toBeVisible()
+    await expect(row.getByText("Disabled")).toBeVisible()
+
+    const confirm = await openDialog(page, "Remove")
+    await submitDialog(page, confirm, "Remove")
+    await expect(page.getByText("The application has been removed.")).toBeVisible()
+    await expect(
+      page.locator("tbody tr").filter({ hasText: "e2e-registered" })
+    ).toHaveCount(0)
+  })
+
+  test("roles are read-only, and the system page describes the deployment", async ({
     page,
     app,
     stack,
   }) => {
     await signInAsAdmin(page, app)
-
-    await app.goto("/admin/clients")
-    await expect(page.getByText("E2E App")).toBeVisible()
-    await expect(page.getByText("From the file").first()).toBeVisible()
-    // FR-OIDC-2: the file is the source of truth, so there is nothing to press.
-    await expect(page.getByRole("button", { name: /create|edit|delete/i })).toHaveCount(0)
 
     await app.goto("/admin/roles")
     await expect(page.getByText("admin").first()).toBeVisible()
@@ -276,13 +376,9 @@ test.describe("the admin area", () => {
 
     await app.goto(`/admin/users?q=${encodeURIComponent(user.email)}`)
     await page.getByRole("link", { name: user.email }).click()
-    await page.getByLabel("Set a temporary password").fill(PASSWORD)
-    // Scoped to its own form: the roles panel has a "Save" too, and "the
-    // second one on the page" breaks the next time the sidebar is reordered.
-    await page
-      .locator('form:has(input[name="newPassword"])')
-      .getByRole("button", { name: "Save" })
-      .click()
+    const temporary = await openDialog(page, "Set a temporary password")
+    await temporary.getByLabel("Set a temporary password").fill(PASSWORD)
+    await submitDialog(page, temporary, "Save")
     await expect(
       page.getByText("A temporary password is set.")
     ).toBeVisible()

@@ -35,6 +35,7 @@ import {
 
 import type { SQL } from "drizzle-orm"
 
+import { claim } from "../http/one-shot"
 import { readSession } from "../http/session"
 import type { RouteSession } from "../http/session"
 import { isAdmin, splitRoles } from "../role-utils"
@@ -45,7 +46,10 @@ import type { Runtime } from "../runtime"
 export interface AdminUserRow {
   id: string
   email: string
+  /** Derived from the two parts below, in `site.nameFormat` order (D49). */
   name: string
+  firstName: string
+  lastName: string
   status: string
   banned: boolean
   banReason?: string
@@ -132,16 +136,31 @@ export interface AdminStats {
   warnings: string[]
 }
 
+/** `web` | `spa` | `native`, reconstructed from the columns 1.7.1 stores. */
+function clientTypeOf(row: {
+  applicationType: string | null
+  clientSecret: string | null
+}): "web" | "spa" | "native" {
+  if (row.applicationType === "native") return "native"
+  return row.clientSecret === null ? "spa" : "web"
+}
+
 export interface AdminClientRow {
   clientId: string
   name: string
   disabled: boolean
   isPublic: boolean
+  /** Reconstructed from the stored columns, for the table's Type column. */
+  type: "web" | "spa" | "native"
   redirectUris: string[]
+  postLogoutRedirectUris: string[]
   scopes: string[]
   audience: string[]
   skipConsent: boolean
-  /** File-managed clients cannot be edited here (FR-OIDC-2). */
+  /**
+   * File-managed clients cannot be edited here (FR-OIDC-2, D50): the next
+   * restart would undo it. Database ones can.
+   */
   managedBy: "file" | "database"
 }
 
@@ -463,6 +482,8 @@ export const fetchAuditPage = createServerFn({ method: "GET" })
       events: AdminAuditRow[]
       nextBefore: string | null
       actions: string[]
+      /** User id → display name, for every id on this page (item 13). */
+      names: Record<string, string>
     } | null> => {
       const context = await admin()
       if (!context) return null
@@ -494,12 +515,15 @@ export const fetchAuditPage = createServerFn({ method: "GET" })
         .from(auditLog)
         .orderBy(asc(auditLog.action))
 
+      const events = page.map(toAuditRow)
+
       return {
-        events: page.map(toAuditRow),
+        events,
         // Keyset, not offset: the trail only grows at the head, and an offset
         // walk silently repeats rows as new ones land between pages.
         nextBefore: rows.length > limit ? iso(page.at(-1)?.createdAt) : null,
         actions: actions.map((row) => row.action),
+        names: await resolveUserNames(runtime, events),
       }
     }
   )
@@ -523,9 +547,11 @@ export const fetchClients = createServerFn({ method: "GET" }).handler(
     const fileClients = new Set(
       runtime.config.clients.map((client) => client.clientId)
     )
-    const resourceById = new Map(
-      resources.map((row) => [row.id, row.identifier])
-    )
+    // `oauth_client_resource` references `oauth_client.client_id` and
+    // `oauth_resource.identifier` — both textual, neither a surrogate key. This
+    // used to join on `row.id` and `resource.id` instead, so the audience
+    // column was empty for every client that had one.
+    const knownResources = new Set(resources.map((row) => row.identifier))
 
     return clients.map((row) => ({
       clientId: row.clientId,
@@ -534,17 +560,94 @@ export const fetchClients = createServerFn({ method: "GET" }).handler(
       // A client with no secret is a public client; the column that would say
       // so directly does not exist on this table.
       isPublic: row.clientSecret === null,
+      type: clientTypeOf(row),
       redirectUris: row.redirectUris,
+      postLogoutRedirectUris: row.postLogoutRedirectUris ?? [],
       scopes: row.scopes ?? [],
       audience: links
-        .filter((link) => link.clientId === row.id)
-        .map((link) => resourceById.get(link.resourceId))
-        .filter((value): value is string => value !== undefined),
+        .filter(
+          (link) =>
+            link.clientId === row.clientId && knownResources.has(link.resourceId)
+        )
+        .map((link) => link.resourceId),
       skipConsent: row.skipConsent === true,
-      managedBy: fileClients.has(row.clientId) ? "file" : "database",
+      // D50: the file marker is `userId === null`, and it is what decides
+      // whether this row may be edited here at all — not merely how it is
+      // labelled. A row whose id also appears in the file is shown as
+      // file-managed either way, because the next restart will make it so.
+      managedBy:
+        fileClients.has(row.clientId) || row.userId === null
+          ? "file"
+          : "database",
     }))
   }
 )
+
+/**
+ * Display names for every user id on a page of audit rows (item 13).
+ *
+ * **One `IN` query for the whole page**, not one per row: a page of fifty
+ * events can name a dozen distinct people, and a lookup per cell would be a
+ * lookup per cell.
+ *
+ * Both columns are resolved here — the actor, and the target when it is a user
+ * — because they draw from the same table and an id that appears as both
+ * should read the same way twice. An id with no row left (a deleted account)
+ * is simply absent from the map, and the page falls back to a short id: the
+ * trail outlives the account, which is the point of an audit trail.
+ */
+async function resolveUserNames(
+  runtime: Runtime,
+  events: readonly AdminAuditRow[]
+): Promise<Record<string, string>> {
+  const ids = new Set<string>()
+  for (const event of events) {
+    if (event.actorUserId) ids.add(event.actorUserId)
+    if (event.targetType === "user" && event.targetId) ids.add(event.targetId)
+  }
+  if (ids.size === 0) return {}
+
+  const rows = await runtime.database.db
+    .select({
+      id: runtime.database.schema.user.id,
+      name: runtime.database.schema.user.name,
+      email: runtime.database.schema.user.email,
+    })
+    .from(runtime.database.schema.user)
+    .where(inArray(runtime.database.schema.user.id, [...ids]))
+
+  const names: Record<string, string> = {}
+  for (const row of rows) {
+    // The address when there is no name: it is what an administrator searches
+    // by, and a blank cell would be worse than either.
+    names[row.id] = row.name.trim() || row.email
+  }
+  return names
+}
+
+/**
+ * Claims a one-shot value an admin POST stashed, if the landing URL carries a
+ * handle.
+ *
+ * A set-password invite link, a freshly generated client secret: both are
+ * minted by a POST and have to reach the administrator who made it, and
+ * neither may travel in a query string — `server/http/one-shot.ts` says why.
+ * So the redirect carries an opaque handle and this claims it, which consumes
+ * it: the value renders on exactly one page load.
+ *
+ * Admin-gated like everything else here, because a server function is an HTTP
+ * endpoint whatever page calls it.
+ */
+export const claimAdminSecret = createServerFn({ method: "GET" })
+  .inputValidator((handle: unknown) =>
+    typeof handle === "string" ? handle : ""
+  )
+  .handler(async ({ data: handle }): Promise<string | null> => {
+    if (handle === "") return null
+    const context = await admin()
+    if (!context) return null
+    return (await claim(context.runtime, handle)) ?? null
+  })
 
 export const fetchRoles = createServerFn({ method: "GET" }).handler(
   async (): Promise<AdminRoleRow[] | null> => {
@@ -634,6 +737,8 @@ interface UserRecord {
   id: string
   email: string
   name: string | null
+  firstName: string | null
+  lastName: string | null
   status: string | null
   banned: boolean | null
   banReason: string | null
@@ -650,6 +755,8 @@ function toUserRow(row: UserRecord): AdminUserRow {
     id: row.id,
     email: row.email,
     name: row.name ?? "",
+    firstName: row.firstName ?? "",
+    lastName: row.lastName ?? "",
     status: row.status ?? "pending",
     banned: row.banned === true,
     banReason: row.banReason ?? undefined,

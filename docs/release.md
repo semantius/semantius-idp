@@ -104,11 +104,14 @@ The Neon constraints test asserts the shape. This asserts that Neon agrees.
 
 ## A last look at the deployment
 
+- [ ] On an **empty** database, the root leads to `/setup`, completing it
+      creates a working administrator, and `/setup` then redirects to `/login`
+      and stays that way (**D52**).
 - [ ] `/readyz` is 200 and `/healthz` answers without touching the database.
 - [ ] Discovery's `issuer` is byte-for-byte `server.baseUrl`.
 - [ ] Under a sub-path, the origin-root RFC 8414 document answers:
       `{origin}/.well-known/oauth-authorization-server{path}`.
-- [ ] A `SIGTERM` (`docker compose stop`) exits 0 within the grace period.
+- [ ] A `SIGTERM` (`docker/idp-stop.sh`) exits 0 within the grace period.
 - [ ] The audit log has rows for the sign-ins just performed, with sensible
       actors.
 

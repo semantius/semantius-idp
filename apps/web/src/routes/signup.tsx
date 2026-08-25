@@ -18,6 +18,7 @@ import {
   redirectWithCookies,
   withError,
 } from "@/server/http/auth-proxy"
+import { displayName } from "@/server/display-name"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
 
@@ -65,11 +66,15 @@ export const Route = createFileRoute("/signup")({
           {
             email: form.email ?? "",
             password: form.password ?? "",
-            // FR-SIGNUP-5: `name` falls back to "firstName lastName" in the
-            // database hook; sending it keeps Better Auth's own validation happy.
+            // FR-SIGNUP-5 / D49: derived from the parts, in `site.nameFormat`
+            // order. The database hook composes the same fallback; sending it
+            // here keeps Better Auth's own validation happy.
             name:
-              [firstName, lastName].filter(Boolean).join(" ") ||
-              (form.email ?? ""),
+              displayName(
+                firstName,
+                lastName,
+                runtime.config.file.site.nameFormat
+              ) || (form.email ?? ""),
             ...(firstName ? { firstName } : {}),
             ...(lastName ? { lastName } : {}),
           },

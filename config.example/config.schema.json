@@ -71,7 +71,7 @@
           "description": "Postgres connection string. Fallback env: DATABASE_URL."
         },
         "directUrl": {
-          "description": "Connection string for steps that hold a session advisory lock — startup, migrations, the CLI and the cleanup job. Required when `database.url` points at a transaction-mode connection pooler (Neon's `-pooler` endpoint, PgBouncer), where session locks do not hold. Fallback env: DIRECT_DATABASE_URL.",
+          "description": "Connection string for steps that hold a session advisory lock — startup, migrations, the CLI and the cleanup job. Required when `database.url` points at a transaction-mode connection pooler (Neon's `-pooler` endpoint, PgBouncer), where session locks do not hold. Fallback env: DATABASE_URL_ADMIN.",
           "type": "string",
           "minLength": 1
         },
@@ -160,6 +160,15 @@
           "default": "en-US",
           "description": "Only `en-US` ships in v1 (FR-I18N-1).",
           "type": "string"
+        },
+        "nameFormat": {
+          "default": "first-last",
+          "description": "How a display name is composed from the first and last name that were captured (D49). `first-last` gives \"Jane Smith\"; `last-first` gives \"Smith, Jane\". The name itself is never an input field.",
+          "type": "string",
+          "enum": [
+            "first-last",
+            "last-first"
+          ]
         }
       },
       "required": [
@@ -690,27 +699,6 @@
             "type": "string",
             "minLength": 1
           }
-        },
-        "bootstrap": {
-          "description": "Created once, iff no user holds an admin role (FR-ADMIN-1). Empty values skip bootstrap with a warning.",
-          "type": "object",
-          "properties": {
-            "email": {
-              "default": "",
-              "description": "Usually `${env:IDP_ADMIN_EMAIL:-}`, unset after first boot.",
-              "type": "string"
-            },
-            "password": {
-              "default": "",
-              "description": "The first sign-in is forced to change it. `idp reset-admin` returns the account to this value (D42).",
-              "type": "string"
-            },
-            "name": {
-              "description": "Display name for that account.",
-              "type": "string"
-            }
-          },
-          "additionalProperties": false
         },
         "allowImpersonation": {
           "description": "Lets an administrator act as another user, ≤ 1 h, never against another administrator, every action audited (FR-ADMIN-5).",

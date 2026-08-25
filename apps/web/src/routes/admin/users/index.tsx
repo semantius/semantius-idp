@@ -14,10 +14,17 @@ import {
 } from "@workspace/ui/components/table"
 
 import { AdminShell } from "@/components/admin/admin-shell"
+import { SecretDialog } from "@/components/common/dialogs"
 import { UserBadges } from "@/components/admin/user-badges"
+import { FormAlert } from "@/components/auth/form-parts"
+import { messageForNoticeCode } from "@/lib/auth-errors"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
-import { fetchRoles, fetchUsers } from "@/server/functions/admin"
+import {
+  claimAdminSecret,
+  fetchRoles,
+  fetchUsers,
+} from "@/server/functions/admin"
 
 /**
  * `/admin/users` — the list (FR-ADMIN-2).
@@ -27,6 +34,11 @@ import { fetchRoles, fetchUsers } from "@/server/functions/admin"
  * does what it looks like it does. That is worth more here than anywhere else
  * in the app — "the pending accounts" is a link an administrator sends to a
  * colleague.
+ *
+ * It is also where a creation lands (item 10). With e-mail on that is a
+ * notice; with e-mail off the one-time set-password link opens in a dialog,
+ * claimed from a server-side stash rather than read out of the query string —
+ * a link that grants a password reset does not belong in browser history.
  */
 export const Route = createFileRoute("/admin/users/")({
   /**
@@ -58,6 +70,12 @@ export const Route = createFileRoute("/admin/users/")({
       query,
       page: await fetchUsers({ data: query }),
       roles: (await fetchRoles()) ?? [],
+      notice: searchString(search.notice),
+      // Claimed, and therefore consumed: this render is the only one that can
+      // show it, which is what "it works once" has to mean on this side too.
+      inviteLink: await claimAdminSecret({
+        data: searchString(search.created) ?? "",
+      }),
     }
   },
   component: UsersPage,
@@ -66,7 +84,8 @@ export const Route = createFileRoute("/admin/users/")({
 const STATUSES = ["pending", "active", "rejected"] as const
 
 function UsersPage() {
-  const { ui, gate, query, page, roles } = Route.useLoaderData()
+  const { ui, gate, query, page, roles, notice, inviteLink } =
+    Route.useLoaderData()
   const t = getCatalog(ui.locale)
   const impersonated = gate.admin ? gate.impersonated : false
 
@@ -87,6 +106,18 @@ function UsersPage() {
         </Link>
       }
     >
+      <FormAlert variant="default">{messageForNoticeCode(notice, t)}</FormAlert>
+
+      {inviteLink ? (
+        <SecretDialog
+          t={t}
+          title={t.admin.create.linkTitle}
+          description={t.admin.create.linkHelp}
+          value={inviteLink}
+          wrap
+        />
+      ) : null}
+
       {/* GET, so the filters land in the URL rather than in component state. */}
       <form
         method="get"

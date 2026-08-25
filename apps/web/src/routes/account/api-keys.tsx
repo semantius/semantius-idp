@@ -6,6 +6,7 @@ import {
   AccountSection,
   AccountShell,
 } from "@/components/account/account-shell"
+import { ActionDialog, SecretDialog } from "@/components/common/dialogs"
 import { FormAlert, TextField } from "@/components/auth/form-parts"
 import { messageForErrorCode, messageForNoticeCode } from "@/lib/auth-errors"
 import { searchString } from "@/lib/search-params"
@@ -18,7 +19,12 @@ import {
   withError,
 } from "@/server/http/auth-proxy"
 import { requireFreshSession } from "@/server/http/fresh-session"
-import { apiKeyBelongsTo, fetchApiKeys } from "@/server/functions/account"
+import { stash } from "@/server/http/one-shot"
+import {
+  apiKeyBelongsTo,
+  claimApiKeySecret,
+  fetchApiKeys,
+} from "@/server/functions/account"
 import { getRuntime } from "@/server/runtime"
 
 const HERE = "/account/api-keys"
@@ -28,14 +34,18 @@ const HERE = "/account/api-keys"
  *
  * A key authenticates **as its owner** with the same roles, so creating one is
  * as consequential as changing a password — both are gated on a fresh session
- * (FR-AUTH-5). The secret is shown exactly once, on the redirect that follows
- * creation, and never stored anywhere this page can read: the row keeps a hash
- * and the first few characters, which is all the list needs to be useful.
+ * (FR-AUTH-5). The secret is shown exactly once, in a dialog on the page the
+ * creation redirects to, and never stored anywhere this page can read: the row
+ * keeps a hash and the first few characters, which is all the list needs to be
+ * useful.
  *
- * Carrying the secret in the query string is deliberate and bounded: it is a
- * one-shot 303 to the user's own browser over the same connection that created
- * the key. What it must never be is persisted — so it is not put in a cookie,
- * a flash store or a log line, and a refresh loses it, which is the point.
+ * **The secret does not travel in the URL.** It used to — `?created=<key>` —
+ * and that was wrong for the reasons `server/http/one-shot.ts` was written to
+ * state: a query string survives in browser history, in `Referer` on the next
+ * outbound request, and in every proxy log in between. So the POST stashes the
+ * key server-side, the redirect carries an opaque handle, and the loader
+ * claims it. Claiming consumes it, so a reload shows the page without the key
+ * — which is what "shown once" has to mean.
  */
 export const Route = createFileRoute("/account/api-keys")({
   loader: async ({ context, location }) => {
@@ -47,7 +57,12 @@ export const Route = createFileRoute("/account/api-keys")({
       ui: context.ui,
       profile: context.profile,
       keys: (await fetchApiKeys()) ?? [],
-      created: searchString(search.created),
+      // Claimed, and therefore consumed: this is the only render that can
+      // show it. `undefined` for a handle that is unknown, already claimed or
+      // expired — all three are the same answer.
+      created: await claimApiKeySecret({
+        data: searchString(search.created) ?? "",
+      }),
       notice: searchString(search.notice),
       error: searchString(search.error),
     }
@@ -133,7 +148,15 @@ export const Route = createFileRoute("/account/api-keys")({
           keyName: (form.name ?? "").trim(),
         })
 
-        return redirectWithCookies(`${here}?created=${encodeURIComponent(key)}`)
+        // The handle, never the key (SEC — see the module header). Ten minutes
+        // is far longer than the redirect needs and short enough that an
+        // abandoned tab leaves nothing claimable for long.
+        const handle = await stash(
+          runtime,
+          JSON.stringify({ userId: fresh.session.user.id, key }),
+          { ttlSeconds: 600 }
+        )
+        return redirectWithCookies(`${here}?created=${handle}`)
       },
     },
   },
@@ -151,39 +174,48 @@ function ApiKeysPage() {
       title={t.account.apiKeys.title}
       description={t.account.apiKeys.description}
       impersonated={profile.impersonated}
+      isAdmin={profile.isAdmin}
     >
       <FormAlert variant="default">{messageForNoticeCode(notice, t)}</FormAlert>
       <FormAlert>{messageForErrorCode(error, t)}</FormAlert>
 
+      {/* Opened on arrival, and this is the only render that has the value:
+          the loader claimed it, which consumed it. */}
       {created ? (
-        <AccountSection
-          title={t.account.apiKeys.create}
+        <SecretDialog
+          t={t}
+          title={t.account.apiKeys.title}
           description={t.account.apiKeys.neverShownAgain}
-        >
-          <code className="block overflow-x-auto rounded-lg bg-muted p-3 font-mono text-sm">
-            {created}
-          </code>
-        </AccountSection>
+          value={created}
+        />
       ) : null}
 
-      <AccountSection title={t.account.apiKeys.create}>
-        <form method="post" className="grid gap-4">
-          <input type="hidden" name="action" value="create" />
-          <TextField name="name" label={t.account.apiKeys.keyName} />
-          <TextField
-            name="expiresInDays"
-            label={`${t.account.apiKeys.expiresIn} (${t.account.apiKeys.days})`}
-            inputMode="numeric"
-            defaultValue={String(Math.min(365, maxDays))}
-            hint={t.account.apiKeys.expiryHint(maxDays)}
-          />
-          <div>
-            <Button type="submit">{t.account.apiKeys.create}</Button>
-          </div>
-        </form>
-      </AccountSection>
-
       <AccountSection title={t.account.apiKeys.title}>
+        <div className="mb-4">
+          <ActionDialog
+            label={t.account.apiKeys.create}
+            variant="default"
+            size="default"
+          >
+            {/* A plain form post, exactly as it was inline: the dialog decides
+                what is on screen, never how the submission travels. */}
+            <form method="post" className="grid gap-4">
+              <input type="hidden" name="action" value="create" />
+              <TextField name="name" label={t.account.apiKeys.keyName} />
+              <TextField
+                name="expiresInDays"
+                label={`${t.account.apiKeys.expiresIn} (${t.account.apiKeys.days})`}
+                inputMode="numeric"
+                defaultValue={String(Math.min(365, maxDays))}
+                hint={t.account.apiKeys.expiryHint(maxDays)}
+              />
+              <div>
+                <Button type="submit">{t.account.apiKeys.create}</Button>
+              </div>
+            </form>
+          </ActionDialog>
+        </div>
+
         {keys.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {t.account.apiKeys.empty}

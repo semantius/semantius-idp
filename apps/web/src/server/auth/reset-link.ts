@@ -4,10 +4,9 @@
  *
  * `POST /request-password-reset` mints the token *and* hands the URL to
  * `sendResetPassword`, which is the mailer. That is exactly right for the
- * public "I forgot my password" form and exactly wrong for the two cases here:
- * an administrator creating an account on a server with no mail transport, and
- * `idp reset-admin` on a machine with no network. Both need the link in their
- * hand, not in a queue.
+ * public "I forgot my password" form and exactly wrong for the case here: an
+ * administrator creating an account on a server with no mail transport, who
+ * needs the link in their hand rather than in a queue.
  *
  * So this mints the same row the endpoint would. **It is coupled to Better
  * Auth 1.7.1's identifier convention** — `reset-password:<token>`, with the

@@ -3,8 +3,8 @@
  *
  * ```
  * load + validate config → connect DB → migrate → ensure signing key
- *   → reconcile clients/resources → validate roles against the DB
- *   → bootstrap admin → listen → ready
+ *   → reconcile clients/resources → refresh client origins
+ *   → validate roles against the DB → first-run check → listen → ready
  * ```
  *
  * Two rules hold throughout:
@@ -20,10 +20,8 @@
  *   what to change.
  */
 
-import { createLocalAccountIssuer } from "@better-auth/core/db"
-
+import { isSetupPending } from "./admin/first-user"
 import { createAudit } from "./audit"
-import type { Audit } from "./audit"
 import type { IdpConfig } from "./config/derive"
 import { ConfigError } from "./config/errors"
 import type { DbHandle } from "./db/client"
@@ -31,8 +29,8 @@ import { withAdvisoryLock } from "./db/advisory-lock"
 import { migrationsAreCurrent, runMigrations } from "./db/migrate"
 import type { Logger } from "./logger"
 import type { Auth } from "./auth/instance"
-import { createUserWithoutRequest } from "./auth/provisioning"
 import { splitRoles } from "./role-utils"
+import { refreshDatabaseClientOrigins } from "./oidc/client-origins"
 import { reconcileClients } from "./oidc/reconcile"
 import type { ReconcileDiff } from "./oidc/reconcile"
 
@@ -85,9 +83,6 @@ export async function runMigrationPhase(deps: {
   return { name: "migrate", skipped: "database.migrateOnBoot is false" }
 }
 
-/** Better Auth's provider id for an e-mail + password credential. */
-const CREDENTIAL_PROVIDER_ID = "credential"
-
 /** Thrown with the single actionable message an operator should act on. */
 export class StartupError extends Error {
   constructor(message: string, options?: { cause?: unknown }) {
@@ -98,7 +93,8 @@ export class StartupError extends Error {
 
 /**
  * The rest of the sequence, run once the auth instance exists:
- * signing key → reconcile clients/resources → validate roles → bootstrap admin.
+ * signing key → reconcile clients/resources → client origins → validate roles
+ * → first-run check.
  */
 export async function runStartup(
   deps: StartupDeps,
@@ -132,14 +128,28 @@ export async function runStartup(
     })
   }
 
+  // -- client origins (D50, FR-OIDC-17, SEC-4) -----------------------------
+  // After the reconcile, because it reads the rows the reconcile just wrote.
+  // Admin-registered clients are not in the configuration file, so without
+  // this their origins are missing from CORS and from the CSP `form-action`
+  // list until somebody restarts — and the failure is a blocked redirect in
+  // Chrome with nothing in the log that names an origin.
+  await step(steps, "client origins", async () => {
+    await refreshDatabaseClientOrigins(deps.database, logger)
+  })
+
   // -- roles vs. the database (FR-ROLE-2) ----------------------------------
   await step(steps, "validate roles", async () => {
     await warnAboutUnknownRoles(deps)
   })
 
-  // -- bootstrap admin (FR-ADMIN-1) ----------------------------------------
-  await step(steps, "bootstrap admin", async () => {
-    await bootstrapAdmin(deps, locking, audit)
+  // -- first-run check (FR-ADMIN-1, D52) -----------------------------------
+  // Nothing is created here. The IdP no longer provisions an administrator
+  // from configuration — an empty `user` table opens `/setup` instead — so
+  // start-up's job is to say so, once, in the place an operator is already
+  // looking.
+  await step(steps, "first-run check", async () => {
+    await announceSetupIfPending(deps)
   })
 
   logger.info("startup complete", {
@@ -246,99 +256,23 @@ async function warnAboutUnknownRoles(deps: StartupDeps): Promise<void> {
 }
 
 /**
- * Bootstrap admin (FR-ADMIN-1).
+ * Says, at boot, that nobody can sign in yet — and where to fix that (D52).
  *
- * Created **iff no user holds an admin role** — not "if the table is empty",
- * so an operator who deletes the bootstrap account and keeps another admin does
- * not get it back. Idempotent under the lock, so two boots create exactly one.
- * The password is never logged. Automatic promotion of the first sign-up is
- * deliberately not implemented.
+ * The old sequence created an administrator here from `admin.bootstrap`. That
+ * meant a password in an environment file, a forced change at the first
+ * sign-in, and an instruction to unset two variables afterwards which nobody
+ * follows. What replaces it is a page: while the `user` table is empty, `/` and
+ * `/login` both lead to `/setup`, and whoever completes it is the first
+ * administrator.
+ *
+ * Logged at `warn` because a deployment nobody can sign in to is worth
+ * noticing in a log, and priming the memoised gate here means the first
+ * request does not pay for the query.
  */
-async function bootstrapAdmin(
-  deps: StartupDeps,
-  locking: DbHandle,
-  audit: Audit
-): Promise<void> {
-  const bootstrap = deps.config.file.admin.bootstrap
-  const email = bootstrap?.email.trim().toLowerCase() ?? ""
-  const password = bootstrap?.password ?? ""
+async function announceSetupIfPending(deps: StartupDeps): Promise<void> {
+  if (!(await isSetupPending(deps.database))) return
 
-  if (email === "" || password === "") {
-    // The config loader already warned; nothing more to do.
-    return
-  }
-
-  await withAdvisoryLock(locking.sql, "bootstrapAdmin", async () => {
-    if (await hasAnyAdmin(deps, locking)) {
-      deps.logger.info("bootstrap admin skipped: an admin already exists")
-      return
-    }
-
-    const context = await deps.auth.$context
-    const existing = await context.internalAdapter.findUserByEmail(email)
-    if (existing) {
-      // The address is taken by a non-admin. Promoting silently would be a
-      // privilege escalation nobody asked for.
-      throw new StartupError(
-        `Cannot create the bootstrap admin: ${email} already exists but holds no admin role. ` +
-          "Grant them an admin role in /admin/users, or point `admin.bootstrap.email` at a new address."
-      )
-    }
-
-    const adminRole = deps.config.adminRoles[0] ?? "admin"
-    const created = await createUserWithoutRequest(
-      context,
-      {
-        email,
-        name: bootstrap?.name ?? "Administrator",
-        emailVerified: true,
-        role: adminRole,
-        status: "active",
-        approvedAt: new Date(),
-        approvedBy: "system",
-        // FR-ADMIN-1: the first sign-in must change it.
-        mustChangePassword: true,
-      },
-      // The provisioning source drives `user.validateUserInfo`; this account
-      // comes from the operator's configuration, not from anyone signing up.
-      { method: "admin" }
-    )
-
-    await context.internalAdapter.createAccount({
-      userId: created.id,
-      providerId: CREDENTIAL_PROVIDER_ID,
-      // Better Auth namespaces local credentials so a provider id can never
-      // collide with an OAuth identity.
-      issuer: createLocalAccountIssuer(CREDENTIAL_PROVIDER_ID),
-      accountId: created.id,
-      // SEC-10: the same hashing the sign-in path verifies with.
-      password: await context.password.hash(password),
-    })
-
-    deps.logger.warn("bootstrap admin created", {
-      email,
-      role: adminRole,
-      hint: "Sign in and change the password; the environment variables can then be unset.",
-    })
-    await audit.record({
-      action: "signup.created",
-      outcome: "success",
-      actorType: "system",
-      target: { type: "user", id: created.id },
-      metadata: { bootstrap: true, role: adminRole },
-    })
+  deps.logger.warn("no users yet", {
+    hint: `Finish setup at ${deps.config.base.origin}${deps.config.base.basePath}/setup`,
   })
-}
-
-async function hasAnyAdmin(
-  deps: StartupDeps,
-  locking: DbHandle
-): Promise<boolean> {
-  const rows = await locking.db
-    .select({ role: locking.schema.user.role })
-    .from(locking.schema.user)
-  const adminRoles = new Set(deps.config.adminRoles)
-  return rows.some((row) =>
-    splitRoles(row.role).some((role) => adminRoles.has(role))
-  )
 }

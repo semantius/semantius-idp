@@ -10,13 +10,34 @@
  * The captured mail directory is bind-mounted out of the container so the
  * specs can read a verification or reset link from the host (D30). That is the
  * whole reason the capture transport writes files at all.
+ *
+ * Each stack also gets a generated `.env` (D48): whole connection strings, in
+ * the two roles a real one has — compose's interpolation source, and the
+ * `env_file` the IdP container reads `DATABASE_URL` out of.
+ *
+ * And each stack is **taken through the first-run wizard in a real browser**
+ * before any spec runs (D52). There is no bootstrap account any more, so a
+ * stack that skipped it would have nobody to sign in as; driving it with
+ * Chromium here rather than with `fetch` means the page every operator meets
+ * first is exercised by the suite exactly once, deterministically, instead of
+ * depending on which spec file Playwright happens to open first.
  */
 
 import { spawnSync } from "node:child_process"
 import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 
+import { chromium } from "@playwright/test"
+
 const REPO_ROOT = join(import.meta.dirname, "..", "..", "..")
+
+/** D51: the compose files live in `docker/`, alongside the Dockerfile. */
+const COMPOSE_FILES = [
+  "-f",
+  "docker/docker-compose.yml",
+  "-f",
+  "docker/docker-compose.e2e.yml",
+]
 
 export interface StackOptions {
   /** Compose project name; also the prefix of every container. */
@@ -42,11 +63,17 @@ export interface Stack extends StackOptions {
 const PG_PASSWORD = "e2e-postgres-password"
 const SECRET = "e2e-secret-of-at-least-thirty-two-characters"
 
-/** The bootstrap administrator every stack starts with (FR-ADMIN-1). */
+/**
+ * The administrator this run creates at the first-run wizard (FR-ADMIN-1, D52).
+ *
+ * Per-run throwaway credentials, typed into the setup page by
+ * {@link completeSetup} — not read from an environment variable, because there
+ * is no longer one to read (P0'.2).
+ */
 export const ADMIN = {
   email: "e2e-admin@example.com",
-  /** Consumed by the forced change at first sign-in. */
-  bootstrapPassword: "e2e-bootstrap-password-01",
+  firstName: "E2E",
+  lastName: "Admin",
   password: "e2e-admin-password-02",
 }
 
@@ -97,6 +124,29 @@ function docker(args: string[], env: Record<string, string>) {
 
 const behindProxy = (stack: Stack) => stack.basePath !== ""
 
+/** The generated environment file — compose's, and the container's (D48). */
+function envFile(stack: Stack): string {
+  return join(stack.workDir, "stack.env")
+}
+
+/** `docker compose` with this stack's files, project and environment file. */
+function compose(stack: Stack, args: string[]) {
+  const profile = stack.basePath === "" ? [] : ["--profile", "caddy"]
+  return docker(
+    [
+      "compose",
+      ...COMPOSE_FILES,
+      "--env-file",
+      envFile(stack),
+      "-p",
+      stack.project,
+      ...profile,
+      ...args,
+    ],
+    composeEnv(stack)
+  )
+}
+
 function composeEnv(stack: Stack): Record<string, string> {
   return {
     IDP_IMAGE: process.env.IDP_IMAGE ?? "semantius-idp:local",
@@ -107,10 +157,11 @@ function composeEnv(stack: Stack): Record<string, string> {
     IDP_BASE_URL: stack.baseURL,
     IDP_BASE_PATH: stack.basePath,
     IDP_CONFIG_HOST_DIR: join(stack.workDir, "config"),
-    IDP_SECRETS_DIR: join(stack.workDir, "secrets"),
+    // What the compose file's `env_file:` resolves to. A shell value beats
+    // `--env-file`, so this is what decides it.
+    IDP_ENV_FILE: envFile(stack),
     IDP_MAIL_HOST_DIR: stack.mailDir,
     POSTGRES_PASSWORD: PG_PASSWORD,
-    IDP_SECRET: SECRET,
     // `:80` rather than a hostname: a catch-all HTTP site. Given `localhost`
     // Caddy would issue an internal certificate, listen on 443 and redirect —
     // and the test talks plain HTTP to a published port under a different
@@ -118,14 +169,6 @@ function composeEnv(stack: Stack): Record<string, string> {
     IDP_DOMAIN: ":80",
   }
 }
-
-/** The base file plus the e2e overlay — see `docker-compose.e2e.yml`. */
-const COMPOSE_FILES = [
-  "-f",
-  "docker-compose.yml",
-  "-f",
-  "docker-compose.e2e.yml",
-]
 
 /**
  * A deep merge over plain objects, for the configuration overrides.
@@ -167,11 +210,20 @@ function writeConfig(
   overrides: Record<string, unknown> = {}
 ): void {
   const configDir = join(stack.workDir, "config")
-  const secretsDir = join(stack.workDir, "secrets")
   mkdirSync(configDir, { recursive: true })
-  mkdirSync(secretsDir, { recursive: true })
   mkdirSync(stack.mailDir, { recursive: true })
-  writeFileSync(join(secretsDir, "postgres_password"), PG_PASSWORD)
+
+  // D48: whole connection strings, in the file compose reads and the container
+  // inherits. `postgres` is the service name on the compose network.
+  writeFileSync(
+    envFile(stack),
+    [
+      `DATABASE_URL=postgres://idp:${PG_PASSWORD}@postgres:5432/idp?sslmode=disable`,
+      `POSTGRES_PASSWORD=${PG_PASSWORD}`,
+      `IDP_SECRET=${SECRET}`,
+      "",
+    ].join("\n")
+  )
 
   writeFileSync(
     join(configDir, "config.json"),
@@ -203,13 +255,9 @@ function writeConfig(
         twoFactor: { enabled: true },
         apiKeys: { enabled: true },
         jwt: { audience: stack.baseURL },
-        admin: {
-          bootstrap: {
-            email: ADMIN.email,
-            password: ADMIN.bootstrapPassword,
-            name: "E2E Admin",
-          },
-        },
+        // No `admin.bootstrap`: it no longer exists (D52). The first
+        // administrator is created by `completeSetup` below, at the page.
+        //
         // The suite signs in far more often than a person does; the SEC-2
         // limits have their own integration suite.
         rateLimit: { enabled: false },
@@ -274,51 +322,72 @@ export function makeStack(options: StackOptions): Stack {
   return { ...options, baseURL, mailDir: join(options.workDir, "mail") }
 }
 
-/** Brings the stack up and waits for `/readyz`. Throws with the logs on failure. */
+/**
+ * Brings the stack up, waits for `/readyz`, and completes the first-run wizard.
+ *
+ * Throws with the container logs on any failure — a stack that half-started is
+ * the one case where the reason is never in the Playwright output.
+ */
 export async function startStack(stack: Stack): Promise<void> {
   writeConfig(stack)
-  const env = composeEnv(stack)
-  const profile = stack.basePath === "" ? [] : ["--profile", "caddy"]
 
-  docker(
-    [
-      "compose",
-      ...COMPOSE_FILES,
-      "-p",
-      stack.project,
-      ...profile,
-      "down",
-      "-v",
-      "--remove-orphans",
-    ],
-    env
-  )
-  const up = docker(
-    [
-      "compose",
-      ...COMPOSE_FILES,
-      "-p",
-      stack.project,
-      ...profile,
-      "up",
-      "-d",
-      "--wait",
-      "--wait-timeout",
-      "180",
-    ],
-    env
-  )
+  compose(stack, ["down", "-v", "--remove-orphans"])
+  const up = compose(stack, ["up", "-d", "--wait", "--wait-timeout", "180"])
   if (up.code !== 0) {
     throw new Error(
       `stack ${stack.project} did not come up:\n${up.stderr}\n${logs(stack)}`
     )
   }
 
-  const ready = await waitForReady(stack)
-  if (!ready) {
+  if (!(await waitForReady(stack))) {
     throw new Error(
       `stack ${stack.project} never became ready:\n${logs(stack)}`
     )
+  }
+
+  await completeSetup(stack)
+}
+
+/**
+ * Creates the administrator every other spec signs in as, at the page (D52).
+ *
+ * **In a real browser**, because that is the whole point: the first-run wizard
+ * is the first thing an operator ever sees, and driving it with `fetch` would
+ * assert that the *endpoint* works while the page shipped with no submit
+ * button. One Chromium launch per stack, in `globalSetup`, is a couple of
+ * seconds against a suite that already builds an image.
+ *
+ * Doing it here rather than in a spec is what keeps it deterministic: every
+ * other spec needs this account to exist, and a spec that raced them for it
+ * would make the suite depend on the order Playwright walks the files in. That
+ * the gate then closes for good is asserted by `auth.spec.ts`.
+ */
+async function completeSetup(stack: Stack): Promise<void> {
+  const browser = await chromium.launch()
+  try {
+    const page = await browser.newPage()
+
+    // The root, not `/setup` directly: the redirect is half of what makes the
+    // wizard reachable at all, and it is deployment-shape-sensitive (OPS-10).
+    await page.goto(`${stack.baseURL}/`)
+    await page.waitForURL(`${stack.baseURL}/setup`, { timeout: 30_000 })
+
+    await page.getByLabel("First name").fill(ADMIN.firstName)
+    await page.getByLabel("Last name").fill(ADMIN.lastName)
+    await page.getByLabel("E-mail address").fill(ADMIN.email)
+    await page.getByLabel("Password", { exact: true }).fill(ADMIN.password)
+    await page.getByRole("button", { name: "Create the first account" }).click()
+
+    // The wizard signs them in, so the destination is the account page rather
+    // than the login form.
+    await page.waitForURL(`${stack.baseURL}/account`, { timeout: 30_000 })
+  } catch (error) {
+    throw new Error(
+      `stack ${stack.project} could not complete the first-run wizard: ` +
+        `${error instanceof Error ? error.message : String(error)}\n${logs(stack)}`
+    )
+  } finally {
+    await browser.close()
   }
 }
 
@@ -355,19 +424,7 @@ export async function reconfigure(
   overrides: Record<string, unknown>
 ): Promise<void> {
   writeConfig(stack, overrides)
-  const profile = stack.basePath === "" ? [] : ["--profile", "caddy"]
-  const restarted = docker(
-    [
-      "compose",
-      ...COMPOSE_FILES,
-      "-p",
-      stack.project,
-      ...profile,
-      "restart",
-      "idp",
-    ],
-    composeEnv(stack)
-  )
+  const restarted = compose(stack, ["restart", "idp"])
   if (restarted.code !== 0) {
     throw new Error(
       `stack ${stack.project} did not restart:\n${restarted.stderr}\n${logs(stack)}`
@@ -386,37 +443,14 @@ export function resetConfig(stack: Stack): Promise<void> {
 }
 
 export function logs(stack: Stack): string {
-  const result = docker(
-    [
-      "compose",
-      ...COMPOSE_FILES,
-      "-p",
-      stack.project,
-      "logs",
-      "--no-color",
-      "--tail",
-      "120",
-    ],
-    composeEnv(stack)
-  )
-  return result.stdout
+  return compose(stack, ["logs", "--no-color", "--tail", "120"]).stdout
 }
 
 export function stopStack(stack: Stack): void {
-  docker(
-    [
-      "compose",
-      ...COMPOSE_FILES,
-      "-p",
-      stack.project,
-      "--profile",
-      "caddy",
-      "down",
-      "-v",
-      "--remove-orphans",
-    ],
-    composeEnv(stack)
-  )
+  // `compose()` adds `--profile caddy` for the sub-path stack, which is the
+  // only one that ever starts a front end — so this removes everything either
+  // stack created, and nothing it did not.
+  compose(stack, ["down", "-v", "--remove-orphans"])
   rmSync(stack.workDir, { recursive: true, force: true })
 }
 

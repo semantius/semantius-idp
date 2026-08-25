@@ -331,18 +331,10 @@ export function runCrossChecks(input: CrossCheckInput): CrossCheckResult {
   }
   // D25: a social provider enabled while sign-up is off is the normal
   // invite-only deployment and is deliberately not warned about.
-  const bootstrap = config.admin.bootstrap
-  if (
-    !bootstrap ||
-    bootstrap.email.trim() === "" ||
-    bootstrap.password === ""
-  ) {
-    warnings.push({
-      code: "admin.bootstrap_skipped",
-      message:
-        "No bootstrap admin configured: if the database holds no admin yet, nobody can sign in. Set `admin.bootstrap`, or create one with `idp reset-admin`.",
-    })
-  }
+  //
+  // There is no "no bootstrap admin configured" warning any more (D52). A
+  // deployment with no users is not misconfigured — it is new, and it says so
+  // itself by serving the first-run setup page.
 
   return { issues, warnings }
 }

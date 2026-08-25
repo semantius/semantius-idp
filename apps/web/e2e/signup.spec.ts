@@ -1,12 +1,13 @@
 import {
-  PASSWORD,
   onLogin,
+  openDialog,
   openMailLink,
+  PASSWORD,
   register,
   signIn,
   signInAsAdmin,
   signOut,
-  submit,
+  submitDialog,
   uniqueEmail,
 } from "./actions"
 import { expect, test } from "./fixtures"
@@ -64,10 +65,11 @@ test.describe("signing up", () => {
 
     await signIn(page, app, email, PASSWORD)
     await expect(page).toHaveURL(app.url("/account"))
-    // The profile form is prefilled from the two name parts (FR-SIGNUP-5).
-    await expect(page.getByLabel("Name", { exact: true })).toHaveValue(
-      "Sam Signup"
-    )
+    // FR-SIGNUP-5 / D49: the parts are prefilled, and the display name is
+    // derived from them rather than being a field of its own.
+    await expect(page.getByLabel("First name")).toHaveValue("Sam")
+    await expect(page.getByLabel("Last name")).toHaveValue("Signup")
+    await expect(page.getByText("Sam Signup")).toBeVisible()
     await signOut(page, app)
   })
 
@@ -133,7 +135,10 @@ test.describe("signing up", () => {
     await page.getByRole("link", { name: email }).click()
     await expect(page.getByText("Pending").first()).toBeVisible()
 
-    await submit(page, "Approve")
+    // Item 11: the actions are dialogs now, so approving is two clicks and the
+    // second one is scoped to the dialog — the trigger shares its name.
+    const approve = await openDialog(page, "Approve")
+    await submitDialog(page, approve, "Approve")
     await expect(page.getByText("Approved.")).toBeVisible()
     await signOut(page, app)
 

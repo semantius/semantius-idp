@@ -113,7 +113,7 @@ const databaseSchema = z.strictObject({
     .min(1)
     .optional()
     .describe(
-      "Connection string for steps that hold a session advisory lock — startup, migrations, the CLI and the cleanup job. Required when `database.url` points at a transaction-mode connection pooler (Neon's `-pooler` endpoint, PgBouncer), where session locks do not hold. Fallback env: DIRECT_DATABASE_URL."
+      "Connection string for steps that hold a session advisory lock — startup, migrations, the CLI and the cleanup job. Required when `database.url` points at a transaction-mode connection pooler (Neon's `-pooler` endpoint, PgBouncer), where session locks do not hold. Fallback env: DATABASE_URL_ADMIN."
     ),
   schema: z
     .string()
@@ -184,6 +184,12 @@ const siteSchema = z.strictObject({
     .string()
     .default("en-US")
     .describe("Only `en-US` ships in v1 (FR-I18N-1)."),
+  nameFormat: z
+    .enum(["first-last", "last-first"])
+    .default("first-last")
+    .describe(
+      "How a display name is composed from the first and last name that were captured (D49). `first-last` gives \"Jane Smith\"; `last-first` gives \"Smith, Jane\". The name itself is never an input field."
+    ),
 })
 
 const emailSchema = z.strictObject({
@@ -500,24 +506,6 @@ const adminSchema = z.strictObject({
     .default(["admin"])
     .describe(
       "Holding any of these opens `/admin` and the admin API. Every name must exist in the role catalog."
-    ),
-  bootstrap: z
-    .strictObject({
-      email: z
-        .string()
-        .default("")
-        .describe("Usually `${env:IDP_ADMIN_EMAIL:-}`, unset after first boot."),
-      password: z
-        .string()
-        .default("")
-        .describe(
-          "The first sign-in is forced to change it. `idp reset-admin` returns the account to this value (D42)."
-        ),
-      name: z.string().optional().describe("Display name for that account."),
-    })
-    .optional()
-    .describe(
-      "Created once, iff no user holds an admin role (FR-ADMIN-1). Empty values skip bootstrap with a warning."
     ),
   allowImpersonation: flexBoolean()
     .default(false)

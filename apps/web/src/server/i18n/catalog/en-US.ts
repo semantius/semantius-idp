@@ -23,6 +23,9 @@ export const enUS = {
     signUp: "Create account",
     signOut: "Sign out",
     cancel: "Cancel",
+    close: "Close",
+    copy: "Copy",
+    copied: "Copied",
     continue: "Continue",
     save: "Save changes",
     back: "Back",
@@ -144,6 +147,24 @@ export const enUS = {
     },
   },
 
+  /**
+   * First-run setup (**D52**).
+   *
+   * Written for the person who has just started a container and has no idea
+   * what it wants from them: it says why the page exists, what happens next,
+   * and that it will not be there again.
+   */
+  setup: {
+    title: "Set this server up",
+    description:
+      "Nobody has an account here yet. The first one you create is an administrator.",
+    submit: "Create the first account",
+    footnote:
+      "This page is only here while the server has no users. It disappears as soon as this account exists.",
+    invalidEmail: "Enter an e-mail address.",
+    alreadyDone: "This server is already set up. Sign in instead.",
+  },
+
   consent: {
     title: (clientName: string) => `${clientName} wants to access your account`,
     description: "Review what it is asking for before you continue.",
@@ -220,6 +241,8 @@ export const enUS = {
       title: "Profile",
       saved: "Profile updated.",
       description: "Your name as it appears to applications you sign in to.",
+      nameDerived:
+        "Built from your first and last name. Change those and it follows.",
       submit: "Save",
       roles: "Roles",
       noRoles: "No roles.",
@@ -418,7 +441,11 @@ export const enUS = {
       temporaryPasswordHelp:
         "They will have to choose a new one the next time they sign in.",
       setRoles: "Roles",
-      setRolesHelp: "Comma-separated, from the catalog.",
+      setRolesHelp: "Tick the roles this account should hold.",
+      editProfile: "Edit profile",
+      emailVerifiedLabel: "E-mail address is confirmed",
+      editProfileHelp:
+        "The display name is built from the first and last name; it is not typed.",
       save: "Save",
       impersonate: "Sign in as this user",
       impersonateHelp:
@@ -444,10 +471,31 @@ export const enUS = {
     clients: {
       title: "Applications",
       description:
-        "Registered OAuth clients. File-configured ones are managed in oauth_clients.json and reconciled at start-up (FR-OIDC-2).",
+        "Registered OAuth clients. Ones from oauth_clients.json are reconciled at start-up and cannot be edited here; ones added here survive restarts and can.",
       empty: "No applications are registered.",
       managedFile: "From the file",
-      managedDatabase: "Registered dynamically",
+      managedDatabase: "Added here",
+      managedBy: "Managed by",
+      status: "Status",
+      enabled: "Enabled",
+      enable: "Enable",
+      disable: "Disable",
+      remove: "Remove",
+      removeConfirm:
+        "Removing the application revokes its tokens and disconnects everyone who allowed it. This cannot be undone.",
+      add: "Add an application",
+      addHelp:
+        "The client secret is generated here and shown once. Redirect URIs are matched exactly.",
+      clientId: "Client ID",
+      name: "Name",
+      type: "Type",
+      typeWeb: "Web — a server-side app that can keep a secret",
+      typeSpa: "Single-page app — no secret, PKCE required",
+      typeNative: "Mobile or desktop app",
+      onePerLine: "One per line. Matched exactly, so no wildcards.",
+      secretTitle: "The client secret",
+      secretHelp:
+        "Copy it now — it is stored as a hash and cannot be shown again.",
       public: "Public",
       confidential: "Confidential",
       disabled: "Disabled",
@@ -474,6 +522,8 @@ export const enUS = {
       apply: "Filter",
       empty: "Nothing matches that.",
       more: "Older events",
+      /** Prefixes the "What" cell for anything that is not a user. */
+      targetType: (type: string) => `${type}:`,
       columns: {
         when: "When",
         action: "Event",
@@ -515,6 +565,11 @@ export const enUS = {
       notAnAdmin: "Only an administrator can grant an admin role.",
       emailDisabled:
         "E-mail is turned off on this server, so nothing can be sent. Set a temporary password instead.",
+      clientExists: "An application with that client ID is already registered.",
+      clientFromFile:
+        "That application comes from oauth_clients.json. Edit the file and restart the server.",
+      clientInvalid:
+        "The application could not be registered. Check the redirect URIs and the scopes.",
     },
     notices: {
       approved: "Approved.",
@@ -529,6 +584,11 @@ export const enUS = {
       temporaryPasswordSet:
         "A temporary password is set. They must change it at the next sign-in.",
       keyRevoked: "The API key has been revoked.",
+      profileSaved: "Profile updated.",
+      clientCreated: "The application has been registered.",
+      clientDeleted: "The application has been removed.",
+      clientDisabled: "The application has been disabled.",
+      clientEnabled: "The application has been enabled.",
       created: "The account has been created.",
     },
   },

@@ -121,6 +121,7 @@ function SessionsPage() {
       title={t.account.sessions.title}
       description={t.account.sessions.description}
       impersonated={profile.impersonated}
+      isAdmin={profile.isAdmin}
     >
       <FormAlert variant="default">{messageForNoticeCode(notice, t)}</FormAlert>
       <FormAlert>{messageForErrorCode(error, t)}</FormAlert>

@@ -11,7 +11,10 @@
     "test": "turbo test",
     "test:integration": "turbo test:integration",
     "test:e2e": "turbo test:e2e",
-    "reset-admin": "pnpm --filter web run reset-admin"
+    "docker:build": "docker compose -f docker/docker-compose.yml --env-file .env build",
+    "docker:up": "docker compose -f docker/docker-compose.yml --env-file .env up -d --wait",
+    "docker:down": "docker compose -f docker/docker-compose.yml --env-file .env down",
+    "docker:smoke": "bun run scripts/smoke-test.ts --build"
   },
   "devDependencies": {
     "jose": "6.2.10",

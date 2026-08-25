@@ -63,44 +63,54 @@ small deployment actually uses.
 
 ## Quick start
 
-This is the path CI keeps honest: the shipped `config.example` is validated on
-every pull request, and [`scripts/smoke-test.ts`](scripts/smoke-test.ts) brings
-the same compose stack up against the image that will be published, signs in
-through the forced password change, and verifies a token against the JWKS.
+Everything the deployment needs lives in [`docker/`](docker/): the Dockerfile,
+the compose files, the Caddyfiles, and a `.cmd`/`.sh` pair per lifecycle verb.
 
 ```bash
-cp -r config.example config          # the annotated defaults
-cp .env.example .env                 # then fill in the values it asks for
-mkdir -p secrets && printf %s "$POSTGRES_PASSWORD" > secrets/postgres_password
-
-docker compose up -d --wait
-curl -fsS localhost:3000/readyz
+cd docker
+./idp-create.sh         # idp-create.cmd on Windows
 ```
 
-`.env` needs these:
+On a clean checkout that creates `.env` and `config/` from the shipped examples,
+builds the image, brings the stack up and waits for it to report healthy. Then
+open <http://localhost:3000/>.
+
+**The first thing you will see is a setup page**, because a fresh database has
+no accounts at all. Fill in your name, address and password and you are the
+first administrator, signed in. There is no bootstrap password and nothing to
+unset afterwards.
+
+Before a real run, put your own values in `.env` at the repository root:
 
 ```bash
-POSTGRES_PASSWORD=…                  # also copied into secrets/postgres_password
-IDP_SECRET=…                         # ≥ 32 random bytes: openssl rand -base64 48
-IDP_ADMIN_EMAIL=you@example.com      # ← this is your login
-IDP_ADMIN_PASSWORD=…                 # ← and this; you change it at first sign-in
-
-# The two example clients in config/oauth_clients.json refer to these. Give
-# them any 32-character value, or delete that file — it is optional, and
-# without it you simply have no OAuth clients yet.
-EXAMPLE_WEB_CLIENT_SECRET=…
-EXAMPLE_FIRSTPARTY_CLIENT_SECRET=…
+IDP_SECRET=…            # ≥ 32 random bytes: openssl rand -base64 48
+DATABASE_URL=…          # only to point somewhere other than the bundled Postgres
 ```
 
-Then open <http://localhost:3000/> and sign in with those last two. You land on
-`/change-password` and cannot skip it — the bootstrap account is created with
-`mustChangePassword` set, so the password in `.env` survives exactly one
-sign-in. Unset both variables afterwards: they are read only when the database
-holds no administrator.
+`IDP_SECRET` is the one value with no sensible default: it encrypts the signing
+keys and signs every session. `DATABASE_URL` already points at the Postgres
+compose starts — a whole connection string, which is the contract (**D48**):
+nothing is assembled from a password and there is no secrets file to keep in
+step. Point it at your own Postgres or at Neon and the bundled one becomes
+irrelevant.
 
-> **Nothing else creates an account.** There is no default user and no built-in
-> password. If you leave those two variables empty, start-up says so loudly and
-> nobody can sign in — see [locked out](#if-you-get-locked-out).
+The rest of the verbs read the same way:
+
+```bash
+./idp-status.sh     # created / running (healthy) / exited
+./idp-logs.sh       # follow the IdP's log
+./idp-stop.sh       # stop the containers, keep them
+./idp-start.sh      # resume the ones create made
+./idp-cli.sh …      # the operator CLI inside the container
+./idp-destroy.sh    # remove containers, network and volumes — all data
+```
+
+`pnpm docker:build`, `docker:up`, `docker:down` and `docker:smoke` do the same
+things from the repository root, for anyone who would rather not change
+directory. CI keeps the path honest: the shipped `config.example` is validated
+on every pull request, and [`scripts/smoke-test.ts`](scripts/smoke-test.ts)
+brings this exact stack up against the image that will be published, completes
+the setup wizard, and verifies a token against the JWKS.
 
 > **Changing the port or the hostname?** Set `IDP_BASE_URL` to match, and edit
 > the example first-party client in `config/oauth_clients.json` — its redirect
@@ -108,20 +118,32 @@ holds no administrator.
 > issuer's own origin. Start-up refuses and says exactly that rather than
 > issuing tokens to somewhere unexpected.
 
+> **Caddy is never in the image.** It is an optional compose profile in front of
+> it, for TLS or for serving the IdP under a sub-path — see
+> [behind a reverse proxy](#behind-a-reverse-proxy). Of the test suites only the
+> Playwright sub-path project starts one, because that deployment shape is where
+> a wrong cookie `Path` or a stripped prefix shows up; everything else runs
+> without it.
+
 ### Without Docker
 
 ```bash
 pnpm install
-pnpm --filter web run db:generate-schema   # Drizzle schema from Better Auth
-pnpm --filter web run db:generate          # SQL migrations
 pnpm dev
 ```
 
 `IDP_CONFIG_DIR` points at the configuration folder (`/config` in the
 container). `DATABASE_URL` and `IDP_SECRET` are the two things it cannot start
-without.
+without — and `DATABASE_URL` has to be reachable from your host, so the shipped
+`postgres://idp:idp@postgres:5432/idp` (a compose-network name) becomes
+something like `postgres://idp:idp@localhost:5432/idp`.
 
-> **`DIRECT_DATABASE_URL`** is required when `DATABASE_URL` points at a
+Migrations apply at boot, and the Drizzle schema and SQL are committed and
+drift-gated in CI, so there is nothing to generate before a first run. The two
+generation commands exist for when you *change* the schema —
+[Development](#development) has them.
+
+> **`DATABASE_URL_ADMIN`** is required when `DATABASE_URL` points at a
 > transaction-mode connection pooler — Neon's `-pooler` endpoint, PgBouncer.
 > Session advisory locks do not hold through one, and start-up, migrations and
 > the operator CLI all rely on them. For Neon it is the same URL with `-pooler`
@@ -204,9 +226,16 @@ value you set in `jwt.claims`, which is what Neon and PostgREST expect.
 ## Clients
 
 An entry in `oauth_clients.json` is an application allowed to ask for tokens.
-The file is the source of truth: start-up validates it and reconciles it into
-the database, disabling anything that has disappeared. Client-creation
-endpoints are unreachable, and the admin UI shows them read-only.
+The file is the source of truth for the clients it names: start-up validates it
+and reconciles it into the database, disabling anything that has disappeared.
+Those rows are read-only in the admin UI, because a change there is a change the
+next restart would silently undo.
+
+Clients can also be **registered from `/admin/clients`** (**D50**). They are
+stored with the creating administrator as their owner, which is exactly the
+marker reconciliation's sweep skips, so the two kinds coexist and neither
+disturbs the other. A client registered that way works immediately, with no
+restart. Dynamic client registration — the protocol endpoint — remains off.
 
 ```jsonc
 {
@@ -245,15 +274,16 @@ Everything a client needs is discoverable from `server.baseUrl`:
 Under a sub-path the RFC 8414 document **also** lives at the origin root —
 `https://apps.example.com/.well-known/oauth-authorization-server/idp` — because
 that is where a strict client looks. The shipped
-[Caddyfile.subpath](Caddyfile.subpath) adds that route.
+[docker/Caddyfile.subpath](docker/Caddyfile.subpath) adds that route.
 
 ## Behind a reverse proxy
 
-Two shapes ship, both as working Caddyfiles:
+Caddy is **not part of the image**. It is an optional service in the compose
+file, started by a profile, and two shapes ship as working Caddyfiles:
 
-- **[Caddyfile](Caddyfile)** — the IdP owns a hostname. Automatic HTTPS,
-  nothing else to think about.
-- **[Caddyfile.subpath](Caddyfile.subpath)** — the IdP lives at
+- **[docker/Caddyfile](docker/Caddyfile)** — the IdP owns a hostname. Automatic
+  HTTPS, nothing else to think about.
+- **[docker/Caddyfile.subpath](docker/Caddyfile.subpath)** — the IdP lives at
   `https://apps.example.com/idp` beside another application. Two rules matter
   and both fail quietly when wrong: proxy `{path}/*` **without stripping the
   prefix**, and route the origin-root RFC 8414 document back to the IdP.
@@ -263,7 +293,12 @@ one rate-limit bucket. `server.baseUrl` must also resolve **from inside the
 deployment**: RP-initiated logout verifies an `id_token_hint` against the key
 set fetched from that URL.
 
-Start `docker compose up --profile caddy` to run the reference proxy alongside.
+To run the reference proxy alongside:
+
+```bash
+cd docker
+docker compose --env-file ../.env --profile caddy up -d --wait
+```
 
 ## E-mail
 
@@ -340,43 +375,35 @@ the same API the admin pages use — is [docs/admin-api.md](docs/admin-api.md).
 The operator CLI is the same binary:
 
 ```bash
-docker compose exec idp idp config validate   # print the effective config, masked
-docker compose exec idp idp migrate
-docker compose exec idp idp reconcile-clients
-docker compose exec idp idp reset-admin       # the way back in
-docker compose exec idp idp rotate-keys
-docker compose exec idp idp cleanup
-docker compose exec idp idp version
+cd docker
+./idp-cli.sh config validate      # print the effective config, masked
+./idp-cli.sh migrate
+./idp-cli.sh reconcile-clients
+./idp-cli.sh rotate-keys
+./idp-cli.sh cleanup
+./idp-cli.sh version
 ```
 
 ### If you get locked out
 
-`idp reset-admin` is the answer, in development and in production alike:
+There is no `reset-admin` command and no bootstrap password to fall back on —
+both went with the environment bootstrap they belonged to (**D52**). In
+descending order of preference:
 
-```bash
-pnpm reset-admin                          # from a checkout
-docker compose exec idp idp reset-admin   # against a running container
-```
+1. **Another administrator.** Give a second account an admin role before you
+   need one; the last-admin invariant already refuses to leave you with none.
+2. **The password-reset e-mail**, if a transport is configured. It reaches the
+   address on the account and needs nobody else.
+3. **One SQL statement**, as a last resort, documented in
+   [docs/runbooks.md](docs/runbooks.md#promoting-a-user-when-nobody-can-sign-in):
 
-It puts the password back to `admin.bootstrap.password` (`IDP_ADMIN_PASSWORD`),
-re-arms the forced change so that value survives exactly one sign-in, makes the
-account reachable again if it was suspended or un-approved, and ends every
-existing session. Nothing is destroyed: the user row, its id and its audit
-history all survive.
+   ```sql
+   update idp."user" set role = 'admin' where email = 'you@example.com';
+   ```
 
-Two things it will not do, both on purpose:
-
-- **It never grants an admin role.** An address that exists and holds none is
-  refused — otherwise a command with database access would be a one-line
-  privilege escalation for anyone who can read the configuration folder.
-- **It never creates an address you typed.** With no argument it creates
-  `admin.bootstrap.email` on a database that has no administrator, which is the
-  bootstrap contract. `idp reset-admin adnim@example.com` fails rather than
-  quietly provisioning a second administrator from a typo.
-
-The situation arises because the bootstrap step runs **only when no user holds
-an admin role** — so changing `IDP_ADMIN_PASSWORD` afterwards does nothing —
-and because the forced first change consumes that password.
+That is the accepted trade of removing the bootstrap account: the recovery
+needs database access rather than a command, and in exchange no deployment ever
+has a password sitting in an environment file that somebody meant to unset.
 
 ### Backups
 
@@ -394,7 +421,7 @@ set.
 | Neon rejects the token | The algorithm. Neon validates ES256 and RS256 only, and needs a `kid` — both are the default here, so check you are not overriding `jwt.algorithm`. |
 | Signed in, then immediately signed out | Secure cookies over plain HTTP. Either terminate TLS in front, or set `server.allowInsecureHttp` for local work. |
 | Start-up: "Environment variable … is not set" | A `${env:…}` placeholder with no value and no default. The message names the file and the JSON pointer. |
-| Start-up hangs on migrations | Another instance holds the advisory lock, or `DATABASE_URL` is a pooler and `DIRECT_DATABASE_URL` is unset. |
+| Start-up hangs on migrations | Another instance holds the advisory lock, or `DATABASE_URL` is a pooler and `DATABASE_URL_ADMIN` is unset. |
 | Nothing arrives by e-mail | No `email.resend.apiKey`: the deployment is in degraded mode and says so at start-up. |
 | `/signup` is 404 | `signUp.enabled` is false. That is the default. |
 
@@ -410,15 +437,21 @@ pnpm --filter web run test:e2e           # needs Docker; drives the built image
 ```
 
 Integration tests run against a real Postgres, each file in its own uniquely
-named schema. They read `IDP_TEST_DATABASE_URL`, else `DIRECT_DATABASE_URL`,
+named schema. They read `IDP_TEST_DATABASE_URL`, else `DATABASE_URL_ADMIN`,
 else `DATABASE_URL`.
+
+End-to-end runs take each stack through the first-run setup wizard in a real
+browser before any spec starts, with per-run throwaway credentials — there is no
+administrator to configure and none to leave behind.
 
 End-to-end tests drive the **built image** in a browser, at the host root and
 behind Caddy under a sub-path, including a complete OIDC login through the
 sample relying party in [`apps/web/e2e/sample-rp.ts`](apps/web/e2e/sample-rp.ts).
 
-After changing the auth configuration or upgrading Better Auth, regenerate and
-commit both the schema and the migrations:
+**Only when you change the schema** — a Better Auth upgrade, a new column —
+regenerate and commit both the Drizzle schema and the migrations. They are
+committed outputs, and CI compares them byte-for-byte, so a first run needs
+neither:
 
 ```bash
 pnpm --filter web run db:generate-schema

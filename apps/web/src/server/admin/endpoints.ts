@@ -14,6 +14,8 @@
  * query into it makes that number say less than it does now.
  */
 
+import { randomBytes } from "node:crypto"
+
 import { APIError, createAuthEndpoint } from "better-auth/api"
 import { and, count, desc, eq, gte, lt } from "drizzle-orm"
 import { z } from "zod"
@@ -21,12 +23,18 @@ import { z } from "zod"
 import type { Audit } from "../audit"
 import type { IdpConfig } from "../config/derive"
 import { maskConfig } from "../config/mask"
+import { clientSchema } from "../config/schema/clients-schema"
+import { withAdvisoryLock } from "../db/advisory-lock"
 import { createDb  } from "../db/client"
 import type {DbHandle} from "../db/client";
 import type { Logger } from "../logger"
 import type { Mailer } from "../email/mailer"
+import { refreshDatabaseClientOrigins } from "../oidc/client-origins"
+import { isPublic, resourceLinksFor, toClientRow } from "../oidc/client-mapping"
+import { revokeTokensFor, syncResourceLinks } from "../oidc/reconcile"
 import { rotateKeys } from "../oidc/rotate-keys"
 import { revokeAllForUser } from "../oidc/revoke-user-tokens"
+import { hashClientSecret } from "../oidc/secret-hash"
 import { splitRoles } from "../role-utils"
 import { revision, version } from "../version"
 import type { AdminContext } from "./context"
@@ -332,13 +340,309 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
     }
   )
 
+  /**
+   * Registering an OAuth client from the admin UI (**D50**, FR-OIDC-2/4,
+   * FR-ADMIN-2, SEC-4).
+   *
+   * File clients and database clients coexist, and the thing that keeps them
+   * apart is one column: reconciliation's orphan sweep is scoped to
+   * `userId === null`, so a row that carries the creating administrator's id
+   * survives every restart untouched. That scoping is not new — it is what made
+   * this feature a hundred lines rather than a redesign.
+   *
+   * Three properties are load-bearing:
+   *
+   *  - **The entry is validated by the same zod schema `oauth_clients.json`
+   *    is.** A redirect URI that the file would refuse — a wildcard, a
+   *    fragment, plain http off loopback — is refused here too, from one
+   *    definition rather than two that drift.
+   *  - **The secret is generated server-side and shown once.** An administrator
+   *    typing one is a secret that exists in a browser history; 48 random bytes
+   *    is well past the schema's 32-character floor.
+   *  - **The origin cache is refreshed before the response returns**, or the
+   *    new client's first sign-in is blocked by `form-action` in Chrome and by
+   *    CORS at the token endpoint, with nothing in the logs naming either.
+   *
+   * The provider needs no restart: `getClient` falls back to a database lookup
+   * for ids outside its trusted-client cache, so a client created here works on
+   * the next request.
+   */
+  const createClient = createAuthEndpoint(
+    "/idp/create-client",
+    {
+      method: "POST",
+      body: z.object({
+        clientId: z.string().min(1),
+        name: z.string().min(1),
+        type: z.string().min(1),
+        redirectUris: z.array(z.string()).min(1),
+        postLogoutRedirectUris: z.array(z.string()).optional(),
+        scopes: z.array(z.string()).optional(),
+        skipConsent: z.boolean().optional(),
+        enableEndSession: z.boolean().optional(),
+      }),
+      requireHeaders: true,
+      use: [gate],
+    },
+    async (ctx) => {
+      const handle = db(deps)
+      const actor = ctx.context.session.user
+
+      // Public clients keep no secret; the schema refuses one outright, so it
+      // is generated only where it belongs.
+      const secret = ctx.body.type === "web" ? generateClientSecret() : undefined
+
+      const parsed = clientSchema.safeParse({
+        clientId: ctx.body.clientId,
+        name: ctx.body.name,
+        type: ctx.body.type,
+        redirectUris: ctx.body.redirectUris,
+        ...(ctx.body.postLogoutRedirectUris?.length
+          ? { postLogoutRedirectUris: ctx.body.postLogoutRedirectUris }
+          : {}),
+        ...(ctx.body.scopes?.length ? { scopes: ctx.body.scopes } : {}),
+        ...(ctx.body.skipConsent === undefined
+          ? {}
+          : { skipConsent: ctx.body.skipConsent }),
+        ...(ctx.body.enableEndSession === undefined
+          ? {}
+          : { enableEndSession: ctx.body.enableEndSession }),
+        ...(secret ? { clientSecret: secret } : {}),
+      })
+      if (!parsed.success) {
+        throw new APIError("BAD_REQUEST", {
+          code: "INVALID_CLIENT_DEFINITION",
+          // The zod message, which already names the offending URI and says
+          // why. Re-wording it here would only make it vaguer.
+          message: parsed.error.issues
+            .map((issue) => issue.message)
+            .join(" "),
+        })
+      }
+      const entry = parsed.data
+
+      // Scopes a client may ask for are bounded by the deployment's own list
+      // (FR-OIDC-3); the file schema cannot check that because it does not see
+      // `config.json`, and the cross-checks that do only run at load.
+      const allowed = new Set(deps.config.file.oauth.scopes)
+      const stray = (entry.scopes ?? []).filter((scope) => !allowed.has(scope))
+      if (stray.length > 0) {
+        throw new APIError("BAD_REQUEST", {
+          code: "SCOPE_NOT_ALLOWED",
+          message: `Not in \`oauth.scopes\`: ${stray.join(", ")}.`,
+        })
+      }
+
+      // The same lock reconciliation takes, on a direct connection: a client
+      // created while a container is booting must not race the sweep that
+      // decides which rows are orphans (D27, S4).
+      const locking = createDb(deps.config, { direct: true, max: 1 })
+      try {
+        await withAdvisoryLock(locking.sql, "reconcileClients", async () => {
+          await handle.db.transaction(async (tx) => {
+            const [existing] = await tx
+              .select({ clientId: handle.schema.oauthClient.clientId })
+              .from(handle.schema.oauthClient)
+              .where(eq(handle.schema.oauthClient.clientId, entry.clientId))
+              .limit(1)
+            if (existing) {
+              throw new APIError("CONFLICT", {
+                code: "CLIENT_ALREADY_EXISTS",
+                message: "A client with that id is already registered.",
+              })
+            }
+
+            await tx.insert(handle.schema.oauthClient).values({
+              id: crypto.randomUUID(),
+              ...toClientRow(entry, {
+                ...(secret ? { hashedSecret: hashClientSecret(secret) } : {}),
+                // The marker. Everything about how this row is treated at the
+                // next restart follows from it (D50).
+                userId: actor.id,
+              }),
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            })
+
+            await syncResourceLinks(
+              tx,
+              handle.schema,
+              entry.clientId,
+              resourceLinksFor(entry, deps.config)
+            )
+          })
+        })
+      } finally {
+        await locking.close().catch(() => undefined)
+      }
+
+      await refreshDatabaseClientOrigins(handle, deps.logger)
+      await deps.audit?.record({
+        action: "client.created",
+        outcome: "success",
+        actorType: "session",
+        actorUserId: actor.id,
+        target: { type: "client", id: entry.clientId },
+        // Never the secret (SEC-6, SEC-10).
+        metadata: { type: entry.type, redirectUris: entry.redirectUris.length },
+      })
+
+      // The only time the secret is ever readable. The row holds a hash.
+      return ctx.json({
+        clientId: entry.clientId,
+        clientSecret: secret ?? null,
+        isPublic: isPublic(entry),
+      })
+    }
+  )
+
+  /**
+   * Removing an admin-registered client (**D50**).
+   *
+   * Tokens and consents go with it, for the same reason reconciliation revokes
+   * them when a client leaves the file: a client that is gone must stop
+   * working, and a refresh token outliving its client is a credential with no
+   * owner. Consents too — a client that comes back is a new grant decision.
+   */
+  const deleteClient = createAuthEndpoint(
+    "/idp/delete-client",
+    {
+      method: "POST",
+      body: z.object({ clientId: z.string().min(1) }),
+      requireHeaders: true,
+      use: [gate],
+    },
+    async (ctx) => {
+      const handle = db(deps)
+      const actor = ctx.context.session.user
+      await assertMutableClient(handle, ctx.body.clientId)
+
+      const locking = createDb(deps.config, { direct: true, max: 1 })
+      try {
+        await withAdvisoryLock(locking.sql, "reconcileClients", async () => {
+          await handle.db.transaction(async (tx) => {
+            await revokeTokensFor(tx, handle.schema, ctx.body.clientId)
+            await tx
+              .delete(handle.schema.oauthClientResource)
+              .where(
+                eq(handle.schema.oauthClientResource.clientId, ctx.body.clientId)
+              )
+            await tx
+              .delete(handle.schema.oauthClient)
+              .where(eq(handle.schema.oauthClient.clientId, ctx.body.clientId))
+          })
+        })
+      } finally {
+        await locking.close().catch(() => undefined)
+      }
+
+      await refreshDatabaseClientOrigins(handle, deps.logger)
+      await deps.audit?.record({
+        action: "client.deleted",
+        outcome: "success",
+        actorType: "session",
+        actorUserId: actor.id,
+        target: { type: "client", id: ctx.body.clientId },
+      })
+      return ctx.json({ ok: true })
+    }
+  )
+
+  /**
+   * Switching an admin-registered client off, and on again (**D50**).
+   *
+   * Disabling revokes what it was holding — the point is that it stops working
+   * now, not when its access tokens expire — and takes its origin out of the
+   * CORS and `form-action` sets, which is the difference between "cannot get a
+   * token" and "cannot be redirected to at all".
+   */
+  const setClientDisabled = createAuthEndpoint(
+    "/idp/set-client-disabled",
+    {
+      method: "POST",
+      body: z.object({ clientId: z.string().min(1), disabled: z.boolean() }),
+      requireHeaders: true,
+      use: [gate],
+    },
+    async (ctx) => {
+      const handle = db(deps)
+      const actor = ctx.context.session.user
+      await assertMutableClient(handle, ctx.body.clientId)
+
+      await handle.db.transaction(async (tx) => {
+        await tx
+          .update(handle.schema.oauthClient)
+          .set({ disabled: ctx.body.disabled, updatedAt: new Date() })
+          .where(eq(handle.schema.oauthClient.clientId, ctx.body.clientId))
+        if (ctx.body.disabled) {
+          await revokeTokensFor(tx, handle.schema, ctx.body.clientId)
+        }
+      })
+
+      await refreshDatabaseClientOrigins(handle, deps.logger)
+      await deps.audit?.record({
+        action: "client.disabled",
+        outcome: "success",
+        actorType: "session",
+        actorUserId: actor.id,
+        target: { type: "client", id: ctx.body.clientId },
+        metadata: { disabled: ctx.body.disabled },
+      })
+      return ctx.json({ ok: true })
+    }
+  )
+
+  /**
+   * Refuses to touch a row the configuration file owns.
+   *
+   * `userId === null` is the file marker (FR-OIDC-2). Editing one here would be
+   * a change the next restart silently undoes, which is worse than no control
+   * at all — it is the exact reason this page was read-only until D50.
+   */
+  async function assertMutableClient(
+    handle: DbHandle,
+    clientId: string
+  ): Promise<void> {
+    const [row] = await handle.db
+      .select({ userId: handle.schema.oauthClient.userId })
+      .from(handle.schema.oauthClient)
+      .where(eq(handle.schema.oauthClient.clientId, clientId))
+      .limit(1)
+    if (!row) {
+      throw new APIError("NOT_FOUND", {
+        code: "CLIENT_NOT_FOUND",
+        message: "No such client.",
+      })
+    }
+    if (row.userId === null) {
+      throw new APIError("BAD_REQUEST", {
+        code: "CLIENT_MANAGED_BY_FILE",
+        message:
+          "That client comes from oauth_clients.json. Edit the file and restart.",
+      })
+    }
+  }
+
   return {
     resetTwoFactor,
     adminStats,
     auditQuery,
     systemInfo,
     rotateKeys: rotateKeysEndpoint,
+    createClient,
+    deleteClient,
+    setClientDisabled,
   }
+}
+
+/**
+ * A client secret nobody chose.
+ *
+ * 48 random bytes, base64url — 64 characters, well past the schema's 32, and
+ * generated where it is stored rather than typed into a form.
+ */
+function generateClientSecret(): string {
+  return randomBytes(48).toString("base64url")
 }
 
 function totalFor(

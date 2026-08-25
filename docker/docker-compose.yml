@@ -1,27 +1,36 @@
-# The reference deployment (OPS-7).
+# The reference deployment (OPS-7, D51).
 #
-# `docker compose up` gives a working IdP on http://localhost:3000 with its own
-# Postgres. Add `--profile caddy` for automatic HTTPS in front of it.
+# Everything here runs **from this folder**, because compose resolves every
+# relative path in the file against the file's own directory, and the
+# interpolation `.env` against the directory it is invoked from:
+#
+#   cd docker
+#   docker compose --env-file ../.env up -d
+#
+# The `idp-*` scripts next to this file do exactly that, and are the documented
+# way in (`./idp-create.sh`, `idp-create.cmd`).
 #
 # Before the first run:
 #
 #   cp .env.example .env          # then fill in every value it asks for
 #   cp -r config.example config   # the annotated defaults; edit to taste
-#   mkdir -p secrets && printf %s "$POSTGRES_PASSWORD" > secrets/postgres_password
+#
+# — both at the *repository root*, one level up. `idp-create` does the first
+# for you.
 #
 # `config/` is bind-mounted **read-only**: the container never writes to its own
 # configuration, and CFG-1's "restart to apply" is a property of the mount
 # rather than a promise in the documentation.
 #
-# **Where the database password lives, and why it is in two places.** `.env` is
-# the source of truth — `env_file` is how the IdP gets `DATABASE_URL`, and the
-# config loader expands `${env:…}` in a single non-recursive pass, so it cannot
-# reach into a secret file from a value that itself came from the environment.
-# The third line above copies that one value into `secrets/postgres_password`,
-# which is what Postgres reads. The gain is narrow and worth stating plainly:
-# the password is not in the *database* container's environment, so it does not
-# appear in its `docker inspect` output or in a support bundle taken from it.
-# It is still in `.env`, which is what `env_file` means.
+# **Where the database connection lives (D48).** `.env` holds whole connection
+# strings — `DATABASE_URL`, and `DATABASE_URL_ADMIN` when the first one goes
+# through a transaction pooler — and this file passes them through `env_file`
+# unchanged. It does not assemble a URL out of a password, and there is no
+# secrets file to keep in step with one: an operator pointing `DATABASE_URL` at
+# a hosted Postgres should not also have to satisfy a bundled database they are
+# not using. `POSTGRES_PASSWORD` below is a knob of the bundled reference
+# database only, and it defaults, so it is one fewer thing a first run has to
+# know.
 
 name: semantius-idp
 
@@ -33,13 +42,16 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: idp
-      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      # Optional and defaulted (D48). This database is `expose:`-only — it is
+      # reachable from the compose network and nowhere else — so a shipped
+      # default is a starting point rather than an exposure. Hardening it means
+      # changing this *and* the password inside `DATABASE_URL`, which is the one
+      # place the application reads.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-idp}
       POSTGRES_DB: idp
       # Postgres wants a locale at initdb time and never again; setting it here
       # keeps `initdb` from picking one up from the host.
       POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
-    secrets:
-      - postgres_password
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -60,7 +72,12 @@ services:
   idp:
     image: ${IDP_IMAGE:-ghcr.io/semantius/semantius-idp:latest}
     build:
-      context: .
+      # The build context is the repository root — the image needs the whole
+      # workspace — while the Dockerfile lives here. BuildKit reads its ignore
+      # list from `<dockerfile>.dockerignore` when that file exists, which is
+      # why the one next to it is called `Dockerfile.dockerignore`.
+      context: ..
+      dockerfile: docker/Dockerfile
       args:
         IDP_VERSION: ${IDP_VERSION:-0.0.0-dev}
         IDP_REVISION: ${IDP_REVISION:-}
@@ -72,9 +89,18 @@ services:
         # that is still initialising fails the whole start-up (OPS-2).
         condition: service_healthy
     env_file:
-      # Optional, because CI and the TST-8 smoke test run this stack with no
-      # `.env` at all and compose treats a missing one as an error otherwise.
-      - path: .env
+      # **This is how the database URLs reach the container** (D48), and the
+      # reason they are not in `environment:` below: a value read from
+      # `env_file` cannot be overridden by whatever happens to be exported in
+      # the shell that ran `docker compose`, so a host `DATABASE_URL` pointing
+      # at somebody's production database can no longer walk into the stack —
+      # which is the protection D43 asked for, kept while the variable moved.
+      #
+      # The path is a variable so a test can hand a whole stack a generated
+      # environment file without touching the operator's; optional, because a
+      # first `docker compose config` before `.env` exists should describe the
+      # stack rather than fail.
+      - path: ${IDP_ENV_FILE:-../.env}
         required: false
     environment:
       # **Pinned here, and not merely defaulted in the image.** `environment`
@@ -87,20 +113,6 @@ services:
       # it is not negotiable.
       IDP_CONFIG_DIR: /config
 
-      # **The same reasoning, and a worse failure.** `DIRECT_DATABASE_URL` is a
-      # bootstrap fallback for `database.directUrl` — the connection every
-      # advisory-locked step uses: migrations, the signing key, the client
-      # reconcile, the bootstrap admin. A developer's `.env` has it pointing at
-      # their real database, and passed through it would make this container
-      # *serve* from the compose Postgres while *migrating* somebody else's.
-      # Blanked here, because the compose Postgres is not behind a pooler and
-      # needs no separate direct endpoint. Point `database.directUrl` at one in
-      # `config/config.json` if you move the database somewhere that does.
-      #
-      # This is not hypothetical: it happened on the first run of the TST-8
-      # smoke test, which reached a production Neon endpoint and was refused
-      # only because the SSL mode did not match.
-      DIRECT_DATABASE_URL: ""
       # Likewise: a host `.env` that names a throwaway schema must not decide
       # where a container puts its tables.
       IDP_SCHEMA_NAME: ${IDP_SCHEMA_NAME:-idp}
@@ -108,14 +120,9 @@ services:
       # The other bootstrap variables (`HOST`, `PORT`, `LOG_LEVEL`,
       # `IDP_MIGRATE_ON_BOOT`) need no pin: each applies only when the config
       # file leaves the setting out, and the shipped `config.example` sets all
-      # of them. The four above are pinned because each decides *which
-      # database* or *which configuration* — the answers where a stray host
-      # value is not a wrong setting but the wrong deployment.
-      # The compose network resolves `postgres`. `sslmode=disable` is correct
-      # *here* and nowhere else: this connection never leaves the compose
-      # network. Pointing `DATABASE_URL` at a hosted Postgres means putting it
-      # in `.env` with the sslmode that database requires, and this line goes.
-      DATABASE_URL: postgres://idp:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/idp?sslmode=disable
+      # of them. The two above are pinned because each decides *which
+      # configuration* or *which schema* — the answers where a stray host value
+      # is not a wrong setting but the wrong deployment.
       IDP_BASE_URL: ${IDP_BASE_URL:-http://localhost:3000}
       # OPS-3: the health check has to know the mount path, because under a
       # sub-path `/healthz` is at `/idp/healthz` and a probe of the origin root
@@ -123,8 +130,10 @@ services:
       IDP_HEALTH_URL: http://127.0.0.1:3000${IDP_BASE_PATH:-}/healthz
     volumes:
       # The path is a variable so the TST-8 smoke test can point a whole stack
-      # at a generated config folder without touching the operator's.
-      - ${IDP_CONFIG_HOST_DIR:-./config}:/config:ro
+      # at a generated config folder without touching the operator's. The
+      # default is `../config` because this file lives in `docker/` and the
+      # config folder does not.
+      - ${IDP_CONFIG_HOST_DIR:-../config}:/config:ro
     ports:
       - "${IDP_PORT:-3000}:3000"
     # OPS-1: nothing writes to the image. The application needs exactly one
@@ -157,6 +166,11 @@ services:
   # `--profile caddy`. Automatic HTTPS in front of the IdP (OPS-7, OPS-9).
   # Without the profile this service does not start and the IdP is reachable
   # on ${IDP_PORT} directly, which is what a local run wants.
+  #
+  # Caddy is **never in the image** — it is this optional service and nothing
+  # else. Of the test suites only the Playwright sub-path project brings it up,
+  # because OPS-10 is a different deployment as far as every URL is concerned;
+  # unit, integration and the TST-8 smoke test all run without it.
   caddy:
     image: caddy:2.10-alpine
     profiles: ["caddy"]
@@ -184,10 +198,3 @@ volumes:
   pgdata:
   caddy_data:
   caddy_config:
-
-secrets:
-  postgres_password:
-    # A file, not an environment variable: `docker inspect` shows every
-    # variable a container was started with, and a password in there is a
-    # password in every support bundle anyone ever pastes.
-    file: ${IDP_SECRETS_DIR:-./secrets}/postgres_password

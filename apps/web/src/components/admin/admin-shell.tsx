@@ -20,6 +20,11 @@ import type { UiContext } from "@/server/ui-context"
  * session can reach, and the two shells are the two ways to reach one. A
  * shared component would be one import away from being dropped by a future
  * refactor of either.
+ *
+ * The header carries the way back out — the administrator's own account, and
+ * sign out. Without them `/admin` was a room with no door: every page linked
+ * to the other admin pages and to nothing else, so the only way to reach
+ * `/account` was to type it.
  */
 
 export interface AdminNavItem {
@@ -77,27 +82,48 @@ export function AdminShell({
               {t.admin.title}
             </h1>
           </div>
-          <nav aria-label={t.admin.title} className="flex flex-wrap gap-1">
-            {items.map((item) => (
-              <Link
-                key={item.to}
-                to={item.to}
-                // `exact` on the overview only: every other entry should stay
-                // highlighted while a child page (a user's detail) is open.
-                activeOptions={{ exact: item.to === "/admin" }}
-                activeProps={{
-                  "aria-current": "page",
-                  className: "bg-background shadow-sm",
-                }}
-                className={cn(
-                  "rounded-md px-3 py-1.5 text-sm font-medium",
-                  "text-muted-foreground hover:text-foreground"
-                )}
+          <div className="flex flex-wrap items-baseline gap-4">
+            <nav aria-label={t.admin.title} className="flex flex-wrap gap-1">
+              {items.map((item) => (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  // `exact` on the overview only: every other entry should stay
+                  // highlighted while a child page (a user's detail) is open.
+                  activeOptions={{ exact: item.to === "/admin" }}
+                  activeProps={{
+                    "aria-current": "page",
+                    className: "bg-background shadow-sm",
+                  }}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-sm font-medium",
+                    "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </nav>
+
+            <div className="flex items-baseline gap-4">
+              {/* A plain anchor rather than a `<Link>`: `/account` is outside
+                  this route's subtree, and the two shells are separate trees. */}
+              <a
+                href={`${ui.basePath}/account`}
+                className="text-sm text-muted-foreground underline underline-offset-4"
               >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
+                {t.account.title}
+              </a>
+              <form method="post" action={`${ui.basePath}/logout`}>
+                <button
+                  type="submit"
+                  className="text-sm text-muted-foreground underline underline-offset-4"
+                >
+                  {t.common.signOut}
+                </button>
+              </form>
+            </div>
+          </div>
         </header>
 
         <section>

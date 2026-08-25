@@ -16,15 +16,17 @@ import {
 } from "@workspace/ui/components/table"
 
 import { AdminShell, Field } from "@/components/admin/admin-shell"
+import { RoleCheckboxes } from "@/components/admin/role-checkboxes"
+import { ActionDialog } from "@/components/common/dialogs"
 import { UserBadges } from "@/components/admin/user-badges"
 import { FormAlert } from "@/components/auth/form-parts"
 import { messageForErrorCode, messageForNoticeCode } from "@/lib/auth-errors"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
 import { runAdminAction } from "@/server/http/admin-actions"
-import { readForm, redirectWithCookies } from "@/server/http/auth-proxy"
+import { readFormMulti, redirectWithCookies } from "@/server/http/auth-proxy"
 import { requireFreshSession } from "@/server/http/fresh-session"
-import { fetchUserDetail } from "@/server/functions/admin"
+import { fetchRoles, fetchUserDetail } from "@/server/functions/admin"
 import { getRuntime } from "@/server/runtime"
 
 /**
@@ -41,6 +43,13 @@ import { getRuntime } from "@/server/runtime"
  * The whole page is behind the freshness gate. Administrative actions are the
  * definition of a "sensitive operation" in FR-AUTH-5, and an admin session
  * left open on a shared machine is exactly the case it exists for.
+ *
+ * **The actions are links that open dialogs** (item 11). Eleven inline forms in
+ * one column is a wall of controls where the important ones — suspend, delete —
+ * sit at the same weight as the rest, and where "delete this account" was a
+ * bare button with a sentence above it. Each is now a named control that opens
+ * the form it has always had; the POST bodies, the `action` values and the
+ * dispatcher underneath them are unchanged.
  */
 export const Route = createFileRoute("/admin/users/$userId")({
   loader: async ({ context, params, location }) => {
@@ -51,6 +60,9 @@ export const Route = createFileRoute("/admin/users/$userId")({
       ui: context.ui,
       gate: context.gate,
       user,
+      // The catalog, so roles are checkboxes rather than a comma-separated
+      // field an administrator has to spell from memory (item 11b).
+      roles: (await fetchRoles()) ?? [],
       notice: searchString(search.notice),
       error: searchString(search.error),
     }
@@ -67,7 +79,14 @@ export const Route = createFileRoute("/admin/users/$userId")({
         const fresh = await requireFreshSession(runtime, request, here)
         if (!fresh.ok) return fresh.response
 
-        const form = await readForm(request)
+        // `readFormMulti`, because the roles control repeats its field and
+        // the plain reader keeps only the last ticked box.
+        const { fields: form, list: valuesOf } = await readFormMulti(request)
+        if (form.action === "set-roles") {
+          // `set-roles` has always split a comma string; joining here keeps
+          // the dispatcher and its tests untouched by the UI change.
+          form.roles = valuesOf("roles").join(",")
+        }
         const outcome = await runAdminAction(form.action ?? "", {
           runtime,
           request,
@@ -100,7 +119,7 @@ const BAN_DURATIONS = [
 ]
 
 function UserDetailPage() {
-  const { ui, gate, user, notice, error } = Route.useLoaderData()
+  const { ui, gate, user, roles, notice, error } = Route.useLoaderData()
   const t = getCatalog(ui.locale)
   const impersonated = gate.admin ? gate.impersonated : false
   const self = gate.admin && gate.email === user.email
@@ -289,157 +308,270 @@ function UserDetailPage() {
           </Section>
         </div>
 
-        <aside className="grid gap-4">
+        <aside className="grid gap-2">
           <h3 className="text-sm font-medium">{t.admin.actions.title}</h3>
 
           {user.status === "pending" ? (
             <>
-              <Action action="approve" label={t.admin.actions.approve} />
-              <form method="post" className="grid gap-2 rounded-lg border p-3">
-                <input type="hidden" name="action" value="reject" />
-                <label className="flex items-center gap-2 text-sm">
-                  <Checkbox name="notify" />
-                  {t.admin.detail.notifyRejection}
-                </label>
-                <Button type="submit" variant="outline">
-                  {t.admin.actions.reject}
-                </Button>
-              </form>
+              <ConfirmAction
+                action="approve"
+                label={t.admin.actions.approve}
+                submit={t.admin.actions.approve}
+              />
+              <ActionDialog
+                label={t.admin.actions.reject}
+                className="w-full justify-start"
+              >
+                <form method="post" className="grid gap-4">
+                  <input type="hidden" name="action" value="reject" />
+                  <Label className="group/field-label flex items-center gap-2 text-sm font-normal">
+                    {/* See `role-checkboxes.tsx`: Base UI's control is a span,
+                        so the wrapping label does not name it. */}
+                    <Checkbox
+                      name="notify"
+                      aria-label={t.admin.detail.notifyRejection}
+                    />
+                    {t.admin.detail.notifyRejection}
+                  </Label>
+                  <Button type="submit" variant="outline">
+                    {t.admin.actions.reject}
+                  </Button>
+                </form>
+              </ActionDialog>
             </>
           ) : null}
 
-          {user.banned ? (
-            <Action action="unban" label={t.admin.actions.unban} />
-          ) : (
-            <form method="post" className="grid gap-2 rounded-lg border p-3">
-              <input type="hidden" name="action" value="ban" />
-              <Label htmlFor="banReason">{t.admin.actions.banReason}</Label>
-              <Input id="banReason" name="banReason" />
-              <Label htmlFor="banExpiresIn">
-                {t.admin.actions.banDuration}
+          <ActionDialog
+            label={t.admin.actions.editProfile}
+            description={t.admin.actions.editProfileHelp}
+            className="w-full justify-start"
+          >
+            <form method="post" className="grid gap-4">
+              <input type="hidden" name="action" value="edit-profile" />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-1.5">
+                  <Label htmlFor="firstName">{t.common.firstName}</Label>
+                  <Input
+                    id="firstName"
+                    name="firstName"
+                    defaultValue={user.firstName}
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="lastName">{t.common.lastName}</Label>
+                  <Input
+                    id="lastName"
+                    name="lastName"
+                    defaultValue={user.lastName}
+                    autoComplete="off"
+                  />
+                </div>
+              </div>
+              <div className="grid gap-1.5">
+                <Label htmlFor="email">{t.common.email}</Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  defaultValue={user.email}
+                  autoComplete="off"
+                />
+              </div>
+              <Label className="group/field-label flex items-center gap-2 text-sm font-normal">
+                <Checkbox
+                  name="emailVerified"
+                  aria-label={t.admin.actions.emailVerifiedLabel}
+                  defaultChecked={user.emailVerified}
+                />
+                {t.admin.actions.emailVerifiedLabel}
               </Label>
-              <select
-                id="banExpiresIn"
-                name="banExpiresIn"
-                className="h-9 rounded-md border bg-transparent px-3 text-sm"
-              >
-                {BAN_DURATIONS.map((duration) => (
-                  <option key={duration.value} value={duration.value}>
-                    {duration.labelKey
-                      ? t.admin.actions.banForever
-                      : duration.label}
-                  </option>
-                ))}
-              </select>
-              <Button type="submit" variant="destructive" disabled={self}>
-                {t.admin.actions.ban}
-              </Button>
+              <Button type="submit">{t.admin.actions.save}</Button>
             </form>
+          </ActionDialog>
+
+          {user.banned ? (
+            <ConfirmAction
+              action="unban"
+              label={t.admin.actions.unban}
+              submit={t.admin.actions.unban}
+            />
+          ) : (
+            <ActionDialog
+              label={t.admin.actions.ban}
+              className="w-full justify-start"
+            >
+              <form method="post" className="grid gap-4">
+                <input type="hidden" name="action" value="ban" />
+                <div className="grid gap-1.5">
+                  <Label htmlFor="banReason">{t.admin.actions.banReason}</Label>
+                  <Input id="banReason" name="banReason" />
+                </div>
+                <div className="grid gap-1.5">
+                  <Label htmlFor="banExpiresIn">
+                    {t.admin.actions.banDuration}
+                  </Label>
+                  <select
+                    id="banExpiresIn"
+                    name="banExpiresIn"
+                    className="h-9 rounded-md border bg-transparent px-3 text-sm"
+                  >
+                    {BAN_DURATIONS.map((duration) => (
+                      <option key={duration.value} value={duration.value}>
+                        {duration.labelKey
+                          ? t.admin.actions.banForever
+                          : duration.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <Button type="submit" variant="destructive" disabled={self}>
+                  {t.admin.actions.ban}
+                </Button>
+              </form>
+            </ActionDialog>
           )}
 
-          <form method="post" className="grid gap-2 rounded-lg border p-3">
-            <input type="hidden" name="action" value="set-roles" />
-            <Label htmlFor="roles">{t.admin.actions.setRoles}</Label>
-            <Input
-              id="roles"
-              name="roles"
-              defaultValue={user.roles.join(", ")}
-              aria-describedby="roles-help"
-            />
-            <p id="roles-help" className="text-xs text-muted-foreground">
-              {t.admin.actions.setRolesHelp}
-            </p>
-            <Button type="submit" variant="outline" disabled={self}>
-              {t.admin.actions.save}
-            </Button>
-          </form>
+          <ActionDialog
+            label={t.admin.actions.setRoles}
+            description={t.admin.actions.setRolesHelp}
+            className="w-full justify-start"
+          >
+            <form method="post" className="grid gap-4">
+              <input type="hidden" name="action" value="set-roles" />
+              <RoleCheckboxes
+                roles={roles}
+                legend={t.admin.actions.setRoles}
+                checked={user.roles}
+              />
+              <Button type="submit" variant="outline" disabled={self}>
+                {t.admin.actions.save}
+              </Button>
+            </form>
+          </ActionDialog>
 
-          <Action
+          <ConfirmAction
             action="revoke-sessions"
             label={t.admin.actions.revokeSessions}
+            submit={t.admin.actions.revokeSessions}
           />
 
           {user.twoFactorEnabled ? (
-            <Action
+            <ConfirmAction
               action="reset-two-factor"
               label={t.admin.actions.resetTwoFactor}
+              submit={t.admin.actions.resetTwoFactor}
             />
           ) : null}
 
           {ui.emailEnabled ? (
-            <form method="post" className="rounded-lg border p-3">
-              <input type="hidden" name="action" value="send-reset" />
-              <input type="hidden" name="email" value={user.email} />
-              <Button type="submit" variant="outline" className="w-full">
-                {t.admin.actions.sendReset}
-              </Button>
-            </form>
+            <ActionDialog
+              label={t.admin.actions.sendReset}
+              className="w-full justify-start"
+            >
+              <form method="post" className="grid gap-4">
+                <input type="hidden" name="action" value="send-reset" />
+                <input type="hidden" name="email" value={user.email} />
+                <Button type="submit" variant="outline">
+                  {t.admin.actions.sendReset}
+                </Button>
+              </form>
+            </ActionDialog>
           ) : null}
 
-          <form method="post" className="grid gap-2 rounded-lg border p-3">
-            <input type="hidden" name="action" value="temporary-password" />
-            <Label htmlFor="newPassword">
-              {t.admin.actions.temporaryPassword}
-            </Label>
-            <Input
-              id="newPassword"
-              name="newPassword"
-              type="text"
-              autoComplete="off"
-              aria-describedby="temp-help"
-            />
-            <p id="temp-help" className="text-xs text-muted-foreground">
-              {t.admin.actions.temporaryPasswordHelp}
-            </p>
-            <Button type="submit" variant="outline">
-              {t.admin.actions.save}
-            </Button>
-          </form>
-
-          <Separator />
-
-          <form method="post" className="grid gap-2 rounded-lg border p-3">
-            <input type="hidden" name="action" value="impersonate" />
-            <p className="text-xs text-muted-foreground">
-              {ui.allowImpersonation
-                ? t.admin.actions.impersonateHelp
-                : t.admin.actions.impersonateDisabled}
-            </p>
-            <Button
-              type="submit"
-              variant="outline"
-              disabled={!ui.allowImpersonation || self}
-            >
-              {t.admin.actions.impersonate}
-            </Button>
-          </form>
-
-          <form
-            method="post"
-            className="grid gap-2 rounded-lg border border-destructive/40 p-3"
+          <ActionDialog
+            label={t.admin.actions.temporaryPassword}
+            description={t.admin.actions.temporaryPasswordHelp}
+            className="w-full justify-start"
           >
-            <input type="hidden" name="action" value="delete" />
-            <p className="text-xs text-muted-foreground">
-              {t.admin.actions.deleteConfirm}
-            </p>
-            <Button type="submit" variant="destructive" disabled={self}>
-              {t.admin.actions.delete}
-            </Button>
-          </form>
+            <form method="post" className="grid gap-4">
+              <input type="hidden" name="action" value="temporary-password" />
+              <div className="grid gap-1.5">
+                <Label htmlFor="newPassword">
+                  {t.admin.actions.temporaryPassword}
+                </Label>
+                <Input
+                  id="newPassword"
+                  name="newPassword"
+                  type="text"
+                  autoComplete="off"
+                />
+              </div>
+              <Button type="submit" variant="outline">
+                {t.admin.actions.save}
+              </Button>
+            </form>
+          </ActionDialog>
+
+          <Separator className="my-2" />
+
+          <ActionDialog
+            label={t.admin.actions.impersonate}
+            description={
+              ui.allowImpersonation
+                ? t.admin.actions.impersonateHelp
+                : t.admin.actions.impersonateDisabled
+            }
+            className="w-full justify-start"
+          >
+            <form method="post" className="grid gap-4">
+              <input type="hidden" name="action" value="impersonate" />
+              <Button
+                type="submit"
+                variant="outline"
+                disabled={!ui.allowImpersonation || self}
+              >
+                {t.admin.actions.impersonate}
+              </Button>
+            </form>
+          </ActionDialog>
+
+          {/* The one action nothing undoes, so it is the one that asks. */}
+          <ActionDialog
+            label={t.admin.actions.delete}
+            description={t.admin.actions.deleteConfirm}
+            variant="destructive"
+            className="w-full justify-start"
+          >
+            <form method="post" className="grid gap-4">
+              <input type="hidden" name="action" value="delete" />
+              <Button type="submit" variant="destructive" disabled={self}>
+                {t.admin.actions.delete}
+              </Button>
+            </form>
+          </ActionDialog>
         </aside>
       </div>
     </AdminShell>
   )
 }
 
-function Action({ action, label }: { action: string; label: string }) {
+/**
+ * An action with nothing to fill in — a dialog whose whole body is the
+ * confirmation and the button.
+ *
+ * These could have stayed inline buttons, and deliberately did not: a column
+ * where some controls open a dialog and others fire on the first click is a
+ * column where the difference has to be learnt by pressing one.
+ */
+function ConfirmAction({
+  action,
+  label,
+  submit,
+}: {
+  action: string
+  label: string
+  submit: string
+}) {
   return (
-    <form method="post" className="rounded-lg border p-3">
-      <input type="hidden" name="action" value={action} />
-      <Button type="submit" variant="outline" className="w-full">
-        {label}
-      </Button>
-    </form>
+    <ActionDialog label={label} className="w-full justify-start">
+      <form method="post" className="grid gap-4">
+        <input type="hidden" name="action" value={action} />
+        <Button type="submit" variant="outline">
+          {submit}
+        </Button>
+      </form>
+    </ActionDialog>
   )
 }
 

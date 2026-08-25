@@ -16,6 +16,7 @@
 
 import { callAuth, errorCodeFor } from "./auth-proxy"
 import type { AuthCallResult } from "./auth-proxy"
+import { displayName } from "../display-name"
 import { revokeAllForUser } from "../oidc/revoke-user-tokens"
 import type { Runtime } from "../runtime"
 
@@ -52,6 +53,7 @@ export type AdminActionName =
   | "send-reset"
   | "temporary-password"
   | "set-roles"
+  | "edit-profile"
   | "impersonate"
   | "revoke-key"
 
@@ -194,6 +196,57 @@ export async function runAdminAction(
       return { notice: "temporaryPasswordSet" }
     }
 
+    /**
+     * FR-ADMIN-2's "edit (name, e-mail, verified flag)", which had no
+     * implementation at all: the only `/admin/update-user` call in the codebase
+     * set `mustChangePassword`, so an administrator could ban, delete and
+     * re-role an account but not correct a typo in its address.
+     *
+     * The display name is **derived** from the two parts rather than typed
+     * (D49) — the same rule the account page and the sign-up form follow, so a
+     * name an administrator fixes reads the same way as one its owner did.
+     */
+    case "edit-profile": {
+      const firstName = (input.form.firstName ?? "").trim()
+      const lastName = (input.form.lastName ?? "").trim()
+      const email = (input.form.email ?? "").trim().toLowerCase()
+
+      const data: Record<string, unknown> = {
+        firstName,
+        lastName,
+        name:
+          displayName(
+            firstName,
+            lastName,
+            input.runtime.config.file.site.nameFormat
+          ) || email,
+        // An unticked checkbox posts nothing, so absence is `false` — which is
+        // the point: this control takes verification *away* as well as gives
+        // it, and an admin who unticks it means it.
+        emailVerified: input.form.emailVerified === "on",
+      }
+      // Only when one was typed. An empty field is "leave it alone", not
+      // "clear the address", which the unique index would refuse anyway.
+      if (email !== "") data.email = email
+
+      const result = await callAuth(
+        input.runtime,
+        "/admin/update-user",
+        { userId: input.userId, data },
+        input.request
+      )
+      if (!result.ok) return failed(result)
+      await input.runtime.audit.record({
+        action: "user.profile_changed",
+        outcome: "success",
+        actorType: "session",
+        actorUserId: input.actorId,
+        target: { type: "user", id: input.userId },
+        metadata: { emailChanged: email !== "", emailVerified: data.emailVerified },
+      })
+      return { notice: "profileSaved" }
+    }
+
     case "set-roles": {
       const roles = (input.form.roles ?? "")
         .split(",")
@@ -242,8 +295,12 @@ export async function runAdminAction(
         outcome: "success",
         actorType: "session",
         actorUserId: input.actorId,
-        target: { type: "user", id: input.userId },
-        metadata: { keyId: input.form.keyId ?? null },
+        // The **key** is what was acted on, and the owner is context. This
+        // used to be the other way round while `/account/api-keys` recorded
+        // the key — so the same event had two shapes and the audit page's
+        // "What" column could not resolve either reliably.
+        target: { type: "apikey", id: input.form.keyId ?? "" },
+        metadata: { userId: input.userId },
       })
       return { notice: "keyRevoked" }
     }

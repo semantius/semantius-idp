@@ -142,7 +142,7 @@ undecryptable. That is a re-key, not a restart —
 You can rotate on demand from `/admin/system`, or:
 
 ```bash
-docker compose exec idp idp rotate-keys
+cd docker && ./idp-cli.sh rotate-keys
 ```
 
 ## The revocation caveat

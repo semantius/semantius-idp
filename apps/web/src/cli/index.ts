@@ -8,11 +8,14 @@
  * shape M12 fills in: argv dispatch, one function per command, a single exit
  * path, and a usage line that lists what is real rather than what is planned.
  *
- * All seven OPS-6 commands are here as of M12. Each is a thin wrapper: the
- * rules live in the module that owns them (`server/oidc/rotate-keys.ts`,
- * `server/cleanup.ts`, `server/admin/reset-admin.ts`), so `docker run <image>
- * idp <cmd>` and the running process do the same thing rather than two
- * similar things.
+ * All six OPS-6 commands are here. Each is a thin wrapper: the rules live in
+ * the module that owns them (`server/oidc/rotate-keys.ts`,
+ * `server/cleanup.ts`), so `docker run <image> idp <cmd>` and the running
+ * process do the same thing rather than two similar things.
+ *
+ * `reset-admin` was the seventh and is gone with the env bootstrap it
+ * recovered from (**D52**). Lockout recovery is now another administrator, the
+ * password-reset e-mail, or the one SQL statement in `docs/runbooks.md`.
  *
  * **Every mutating command runs on the direct connection under its own
  * advisory lock** (D27). A session lock does not hold through a transaction
@@ -23,7 +26,6 @@
  *   bun run src/cli/index.ts version
  */
 
-import { resetAdmin } from "../server/admin/reset-admin"
 import { cleanupTotal, runCleanup } from "../server/cleanup"
 import { createAudit, createLogOnlyAudit } from "../server/audit"
 import { createAuth } from "../server/auth/instance"
@@ -45,10 +47,6 @@ Usage:
   idp config validate     Load and check the configuration, then exit (CFG-5)
   idp migrate             Apply pending database migrations (DM-1, OPS-6)
   idp reconcile-clients   Sync oauth_clients.json into the database (FR-OIDC-2)
-  idp reset-admin [email] Reset an administrator to the configured bootstrap
-                          password and force a change at the next sign-in.
-                          Defaults to admin.bootstrap.email. Creates the
-                          account if the address holds none (FR-ADMIN-1).
   idp rotate-keys         Publish a successor signing key (FR-OIDC-16)
   idp cleanup             Purge what DM-5 retires, now (OPS-8)
   idp version             Print the running version
@@ -136,65 +134,6 @@ async function reconcile(): Promise<void> {
         : `Created ${diff.created.length}, updated ${diff.updated.length}, ` +
             `disabled ${diff.disabled.length}, deleted ${diff.deleted.length}, ` +
             `relinked ${diff.relinked.length}.\n`
-    )
-  } finally {
-    await locking.close().catch(() => undefined)
-    await database.close().catch(() => undefined)
-  }
-}
-
-/**
- * `idp reset-admin [email]` — the lockout recovery (OPS-6, FR-ADMIN-1).
- *
- * The rules live in `server/admin/reset-admin.ts`; what belongs here is the
- * wiring, and one thing the module cannot do for itself: **a Better Auth
- * instance**. `context.password.hash` is the only way to produce a hash the
- * sign-in path will verify (SEC-10), and it lives on the instance — so the
- * command builds one, exactly as start-up does, rather than reaching for a
- * hashing library and inventing a second parameter set.
- *
- * The migration is *not* run first. A database this command can reset an admin
- * on is one an IdP has already booted against; migrating here would make a
- * recovery command a schema-changing one, which is not what an operator locked
- * out of their own deployment should be reaching for.
- */
-async function resetAdminCommand(email?: string): Promise<void> {
-  const { config, logger } = prepare()
-
-  const database = createDb(config, { max: 2 })
-  const locking = createDb(config, { direct: true, max: 2 })
-  try {
-    const auth = createAuth({ config, database, logger })
-    // The OAuth provider plugin seeds `oauth_resource` from its own `init()`;
-    // awaiting the context here means that finishes before anything else runs,
-    // and surfaces a connection failure as this command's error rather than as
-    // an unhandled rejection later.
-    await auth.$context
-
-    const result = await resetAdmin(
-      {
-        config,
-        database,
-        locking,
-        auth,
-        logger,
-        audit: createAudit(database, logger),
-      },
-      email ? { email } : {}
-    )
-
-    process.stdout.write(
-      (result.created
-        ? `Created ${result.email} as ${result.role}.\n`
-        : `Reset ${result.email}.\n`) +
-        (result.reactivated
-          ? "The account was not reachable (banned, pending or rejected) and is now active.\n"
-          : "") +
-        (result.sessionsRevoked > 0
-          ? `Signed out ${result.sessionsRevoked} session(s).\n`
-          : "") +
-        "The password is admin.bootstrap.password (IDP_ADMIN_PASSWORD). " +
-        "The next sign-in must change it.\n"
     )
   } finally {
     await locking.close().catch(() => undefined)
@@ -363,9 +302,6 @@ export async function run(argv: readonly string[]): Promise<number> {
       return 0
     case "reconcile-clients":
       await reconcile()
-      return 0
-    case "reset-admin":
-      await resetAdminCommand(rest[0])
       return 0
     case "rotate-keys":
       await rotate()

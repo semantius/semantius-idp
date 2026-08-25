@@ -29,7 +29,7 @@ the process; there is no hot reload and `SIGHUP` is ignored (CFG-5).
 | `server.shutdownTimeoutSeconds` | integer | `10` | SIGTERM drain budget. |
 | `secret` | string | — **required** | ≥ 32 random bytes. Fallback env: BETTER_AUTH_SECRET. Must be a placeholder in production. |
 | `database.url` | string | — **required** | Postgres connection string. Fallback env: DATABASE_URL. |
-| `database.directUrl` | string | — | Connection string for steps that hold a session advisory lock — startup, migrations, the CLI and the cleanup job. Required when `database.url` points at a transaction-mode connection pooler (Neon's `-pooler` endpoint, PgBouncer), where session locks do not hold. Fallback env: DIRECT_DATABASE_URL. |
+| `database.directUrl` | string | — | Connection string for steps that hold a session advisory lock — startup, migrations, the CLI and the cleanup job. Required when `database.url` points at a transaction-mode connection pooler (Neon's `-pooler` endpoint, PgBouncer), where session locks do not hold. Fallback env: DATABASE_URL_ADMIN. |
 | `database.schema` | string | `idp` | All IdP tables and the drizzle migrations table live here; nothing is created in `public`. |
 | `database.ssl` | `disable` \| `require` \| `verify-full` | — | Overrides the connection string's sslmode. Defaults to `require` unless the host is localhost. |
 | `database.sslCa` | string | — | PEM certificate authority, typically `${file:/run/secrets/ca.pem}`. |
@@ -44,6 +44,7 @@ the process; there is no hot reload and `SIGHUP` is ignored (CFG-5).
 | `site.privacyUrl` | string | — | Linked from the sign-up form and the consent screen. |
 | `site.theme` | `system` \| `light` \| `dark` | `system` | `system` follows the browser. The built-in themes are the only ones; there is no custom CSS hook in v1. |
 | `site.defaultLocale` | string | `en-US` | Only `en-US` ships in v1 (FR-I18N-1). |
+| `site.nameFormat` | `first-last` \| `last-first` | `first-last` | How a display name is composed from the first and last name that were captured (D49). `first-last` gives "Jane Smith"; `last-first` gives "Smith, Jane". The name itself is never an input field. |
 | `email.resend.apiKey` | string | — | Absent ⇒ degraded mode: every e-mail feature is disabled (FR-MAIL-2). |
 | `email.from` | string | — | Required whenever an API key is configured. |
 | `email.replyTo` | string | — | Where a reply goes. Absent, replies go to `email.from`, which is usually a mailbox nobody reads. |
@@ -88,9 +89,6 @@ the process; there is no hot reload and `SIGHUP` is ignored (CFG-5).
 | `oauth.resources` | { … }[] | `[]` | Extra RFC 8707 resources beyond `jwt.audience` and the per-client ones, each optionally with its own allowed scopes and token lifetime. |
 | `oauth.reconcile.prune` | boolean | `false` | Delete rows for clients no longer in the file instead of disabling them (FR-OIDC-2). |
 | `admin.adminRoles` | string[] | `["admin"]` | Holding any of these opens `/admin` and the admin API. Every name must exist in the role catalog. |
-| `admin.bootstrap.email` | string | `""` | Usually `${env:IDP_ADMIN_EMAIL:-}`, unset after first boot. |
-| `admin.bootstrap.password` | string | `""` | The first sign-in is forced to change it. `idp reset-admin` returns the account to this value (D42). |
-| `admin.bootstrap.name` | string | — | Display name for that account. |
 | `admin.allowImpersonation` | boolean | `false` | Lets an administrator act as another user, ≤ 1 h, never against another administrator, every action audited (FR-ADMIN-5). |
 | `rateLimit.enabled` | boolean | `true` | Turning this off removes the SEC-2 limits on sign-in, reset, 2FA and the token endpoint. For tests. |
 | `rateLimit.storage` | `database` \| `memory` | `database` | `database` survives a restart, which is the point of a limit. `memory` is for a single process nobody restarts to get past it. |

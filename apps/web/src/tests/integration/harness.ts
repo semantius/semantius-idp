@@ -6,7 +6,7 @@
  * value (DM-4): creating and dropping one schema is fast even on a shared
  * hosted database, so runs stay isolated without a per-file database.
  *
- * Connection: `IDP_TEST_DATABASE_URL`, else `DIRECT_DATABASE_URL`, else
+ * Connection: `IDP_TEST_DATABASE_URL`, else `DATABASE_URL_ADMIN`, else
  * `DATABASE_URL`. The direct endpoint is preferred because advisory locks do
  * not hold through a transaction pooler (S4) and several tests exercise them.
  */
@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url"
 
 import { createAdminContext } from "@/server/admin/context"
 import type { AdminContext } from "@/server/admin/context"
+import { resetSetupGate } from "@/server/admin/first-user"
 import { createAuth } from "@/server/auth/instance"
 import { deriveConfig } from "@/server/config/derive"
 import type { IdpConfig } from "@/server/config/derive"
@@ -57,7 +58,7 @@ function repoEnv(): Record<string, string> {
 export function testDatabaseUrl(): string {
   const env = { ...repoEnv(), ...process.env }
   const url =
-    env.IDP_TEST_DATABASE_URL ?? env.DIRECT_DATABASE_URL ?? env.DATABASE_URL
+    env.IDP_TEST_DATABASE_URL ?? env.DATABASE_URL_ADMIN ?? env.DATABASE_URL
   if (!url) {
     throw new Error(
       "No test database. Set IDP_TEST_DATABASE_URL, or DATABASE_URL in the repo-root .env. " +
@@ -135,6 +136,12 @@ export async function createTestContext(
     clientSchema.parse(client)
   )
   const config = deriveConfig(file, clients, options.roles ?? BUILT_IN_ROLES)
+
+  // D52's first-run gate memoises "a user exists" for the life of the process,
+  // and one process runs every file in this suite against a different schema.
+  // Forgetting it here is what keeps the second file from inheriting the first
+  // file's answer.
+  resetSetupGate()
 
   const database = createDb(config, { max: 4 })
   await database.sql.unsafe(

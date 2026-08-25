@@ -30,8 +30,6 @@ describe("config.example/", () => {
     RESEND_API_KEY: "re_example",
     EXAMPLE_WEB_CLIENT_SECRET: "w".repeat(40),
     EXAMPLE_FIRSTPARTY_CLIENT_SECRET: "f".repeat(40),
-    IDP_ADMIN_EMAIL: "admin@example.com",
-    IDP_ADMIN_PASSWORD: "correct horse battery staple",
   }
 
   it("validates as a production deployment", () => {
@@ -52,8 +50,9 @@ describe("config.example/", () => {
     ])
     expect(config.roles.map((role) => role.name)).toEqual(["admin", "user"])
     expect(config.defaultRole).toBe("user")
-    // No literal-secret complaints and no bootstrap warning: every secret in
-    // the example comes from a placeholder.
+    // No literal-secret complaints: every secret in the example comes from a
+    // placeholder. And no administrator warning either — there is nothing to
+    // configure any more (D52).
     expect(warnings.map((warning) => warning.code)).toEqual([])
   })
 
@@ -91,8 +90,9 @@ describe("config.example/", () => {
     // and the literal-secret rule does not apply.
     expect(config.base.origin).toBe("http://localhost:3000")
     expect(config.emailEnabled).toBe(false)
+    // Only the degraded-mail one. A deployment with no users is not
+    // misconfigured, so there is no bootstrap warning any more (D52).
     expect(warnings.map((warning) => warning.code).sort()).toEqual([
-      "admin.bootstrap_skipped",
       "email.degraded",
     ])
   })

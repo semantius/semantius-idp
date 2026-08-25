@@ -38,7 +38,7 @@ const SERVER_ONLY_MARKERS = [
   { marker: "drizzle", what: "Drizzle ORM" },
   { marker: "better-auth", what: "Better Auth" },
   { marker: "BETTER_AUTH_SECRET", what: "the secret's fallback env var" },
-  { marker: "DIRECT_DATABASE_URL", what: "the direct connection string (D27)" },
+  { marker: "DATABASE_URL_ADMIN", what: "the direct connection string (D27)" },
   { marker: "__drizzle_migrations", what: "the migrations table" },
 ]
 

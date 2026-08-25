@@ -254,6 +254,7 @@ function SecurityPage() {
       t={t}
       title={t.account.security.title}
       impersonated={profile.impersonated}
+      isAdmin={profile.isAdmin}
     >
       <FormAlert variant="default">{messageForNoticeCode(notice, t)}</FormAlert>
       <FormAlert>{messageForErrorCode(error, t)}</FormAlert>

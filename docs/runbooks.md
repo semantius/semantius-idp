@@ -6,9 +6,14 @@ says what it changes, what it does not, and how to tell it worked.
 Every command below has the same two shapes:
 
 ```bash
-docker compose exec idp idp <command>    # against a running container
+cd docker && ./idp-cli.sh <command>         # against a running container
 pnpm --filter web exec bun src/cli/index.ts <command>   # from a checkout
 ```
+
+`docker/idp-cli.sh` (and `idp-cli.cmd`) is a two-line wrapper around `docker compose exec idp idp`,
+and every other `docker compose` line below is run from `docker/` with
+`--env-file ../.env`, which is where the compose file and the environment file
+each live (**D51**). The `idp-*` scripts do that for you.
 
 `idp config validate` prints the effective configuration with secrets masked
 and exits non-zero if anything is wrong. Run it first whenever a change did not
@@ -22,10 +27,11 @@ Migrations are **forward-only**. There is no downgrade path, so a backup taken
 before the upgrade is the only way back.
 
 ```bash
-pg_dump "$DIRECT_DATABASE_URL" --schema=idp -Fc -f idp-before-upgrade.dump
+pg_dump "$DATABASE_URL_ADMIN" --schema=idp -Fc -f idp-before-upgrade.dump
 
-docker compose pull
-docker compose up -d --wait
+cd docker
+docker compose --env-file ../.env pull
+docker compose --env-file ../.env up -d --wait
 curl -fsS localhost:3000/readyz
 ```
 
@@ -38,14 +44,57 @@ exits non-zero — it does not limp along in a half-migrated state. Restore the
 dump and pin the previous tag:
 
 ```bash
-docker compose down
-psql "$DIRECT_DATABASE_URL" -c 'drop schema idp cascade'
-pg_restore -d "$DIRECT_DATABASE_URL" idp-before-upgrade.dump
-IDP_IMAGE=ghcr.io/adenin/semantius-idp:1.2.3 docker compose up -d --wait
+docker compose --env-file ../.env down
+psql "$DATABASE_URL_ADMIN" -c 'drop schema idp cascade'
+pg_restore -d "$DATABASE_URL_ADMIN" idp-before-upgrade.dump
+IDP_IMAGE=ghcr.io/adenin/semantius-idp:1.2.3 \
+  docker compose --env-file ../.env up -d --wait
 ```
 
 **Pin a version in production.** `latest` means the next `docker compose pull`
 is an upgrade nobody scheduled.
+
+---
+
+## Promoting a user when nobody can sign in
+
+The last resort, and the price of removing the environment bootstrap (**D52**).
+Try the other two first: give a second account an admin role *before* you need
+it, or use the password-reset e-mail. Neither needs database access; this does.
+
+```sql
+update idp."user" set role = 'admin' where email = 'you@example.com';
+```
+
+Multiple roles are stored comma-separated in that one column, so preserve what
+is there if the account already holds some:
+
+```sql
+update idp."user" set role = concat_ws(',', nullif(role, ''), 'admin')
+where email = 'you@example.com';
+```
+
+`admin` here is whatever `admin.adminRoles` names; the default catalog calls it
+`admin`. The change takes effect on the account's **next request** — the
+session cookie cache is at most five minutes, and every admin page re-reads the
+row authoritatively anyway.
+
+The account also has to be usable: `status = 'active'`, not banned, and its
+address verified if `auth.requireEmailVerification` is on.
+
+```sql
+update idp."user"
+set status = 'active', banned = false, ban_expires = null, email_verified = true
+where email = 'you@example.com';
+```
+
+Record it. This is an out-of-band privilege grant and the audit trail cannot
+see it — nothing wrote a row, because nothing in the application did it.
+
+> **The first-run setup page is not a way back in.** It exists only while the
+> `user` table is *empty*, and it closes for good the moment any account exists
+> — otherwise losing your last administrator would be an escalation rather than
+> a lockout.
 
 ---
 
@@ -57,7 +106,7 @@ the longest token lifetime plus an hour, comfortably longer than the one-hour
 JWKS cache a verifier like Neon keeps).
 
 ```bash
-docker compose exec idp idp rotate-keys
+cd docker && ./idp-cli.sh rotate-keys
 ```
 
 or the **Rotate the signing key now** button on `/admin/system`.
@@ -96,14 +145,14 @@ The sequence:
 #    token in flight will stop verifying.
 
 # 2. Stop the IdP.
-docker compose stop idp
+cd docker && docker compose --env-file ../.env stop idp
 
 # 3. Delete the key rows. They cannot be decrypted with the new secret and a
 #    stale row is worse than no row.
-psql "$DIRECT_DATABASE_URL" -c 'delete from idp.jwks'
+psql "$DATABASE_URL_ADMIN" -c 'delete from idp.jwks'
 
 # 4. Put the new secret in place, then start.
-docker compose up -d --wait idp
+docker compose --env-file ../.env up -d --wait idp
 
 # 5. A fresh key is generated on the first boot. Confirm it:
 curl -s https://idp.example.com/.well-known/jwks.json | jq '.keys[0].kid'
@@ -123,7 +172,7 @@ operation and does none of the above.
 client is to edit the file and restart. To apply it without a restart:
 
 ```bash
-docker compose exec idp idp reconcile-clients
+cd docker && ./idp-cli.sh reconcile-clients
 ```
 
 What it does, transactionally and under an advisory lock:
@@ -135,6 +184,12 @@ What it does, transactionally and under an advisory lock:
   and consents;
 - deletes them instead when `oauth.reconcile.prune` is true;
 - seeds resources and links each client to the default audience and its own.
+
+**Clients registered at `/admin/clients` are not touched** (**D50**). The sweep
+that disables absent clients is scoped to rows the file owns — the ones with no
+`userId` — so an admin-registered client is not an orphan and survives every
+reconcile and every restart. If a client id appears in *both* places, the file
+wins at the next reconcile and the row becomes file-managed.
 
 The diff is written to the audit log, and `/admin/clients` shows the last
 reconcile time and any warnings.
@@ -152,7 +207,7 @@ jitter and an advisory lock, so replicas cannot duplicate the work. To run it
 now:
 
 ```bash
-docker compose exec idp idp cleanup
+cd docker && ./idp-cli.sh cleanup
 ```
 
 What it purges, and why each is safe:
@@ -267,7 +322,8 @@ has not migrated should not receive traffic.
 
 ## Shutting down
 
-`SIGTERM` — which is what `docker compose stop` sends — stops accepting new
+`SIGTERM` — which is what `docker compose stop` and `docker/idp-stop.sh` send —
+stops accepting new
 requests, drains for up to `server.shutdownTimeoutSeconds` (10 by default),
 closes the pool and exits 0. The compose file sets `stop_grace_period: 30s`, so
 Docker does not kill the process in the middle of the thing that exists to

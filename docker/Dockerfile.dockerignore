@@ -13,14 +13,19 @@ packages/*/dist
 **/.vite
 
 # Secrets. `config/` is the *running* deployment's folder — it holds real
-# connection strings and the bootstrap password — and `config.example/` is the
-# one that ships (CFG-1). Getting these two the wrong way round would bake an
-# operator's credentials into a published image.
+# connection strings — and `config.example/` is the one that ships (CFG-1).
+# Getting these two the wrong way round would bake an operator's credentials
+# into a published image.
 config/
 .env
 .env.*
 *.pem
 *.key
+
+# The deployment artefacts themselves (D51). The Dockerfile is passed to the
+# builder by path and never read out of the context, and the compose file and
+# the `idp-*` scripts are how you *run* the image rather than anything it needs.
+docker/
 
 # History and tooling that the image has no use for.
 .git

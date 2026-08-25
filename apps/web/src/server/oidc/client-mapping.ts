@@ -7,9 +7,12 @@
  *
  * Two things the mapping is *not* allowed to do, both from S5:
  *
- * - **`userId` stays `null`.** A config-synced client belongs to the
- *   deployment, not to whoever happened to be signed in. It is also how a
- *   reconciled row is told apart from anything else (FR-OIDC-2).
+ * - **`userId` stays `null` for a file client.** A config-synced client belongs
+ *   to the deployment, not to whoever happened to be signed in — and that is
+ *   also the marker reconciliation scopes its orphan sweep by, so a row with a
+ *   `userId` survives every restart (FR-OIDC-2, **D50**). An administrator
+ *   registering a client through `/admin/clients` is the one caller that passes
+ *   one: their own id.
  * - **`resourceServer` is not a column.** 1.7.1 decides introspection
  *   authorisation from the `oauth_client_resource` links, so the flag becomes
  *   a link at reconcile time — see {@link resourceLinksFor} — and is mirrored
@@ -49,13 +52,20 @@ export interface ClientRow {
   tos: string | null
   policy: string | null
   metadata: Record<string, unknown> | null
-  /** Always `null`: a config-synced client has no owning user (FR-OIDC-2). */
-  userId: null
+  /**
+   * `null` for a config-synced client (FR-OIDC-2), the creating administrator's
+   * id for one registered through `/admin/clients` (**D50**). Reconciliation's
+   * orphan sweep is scoped to `userId === null`, so this is what keeps an
+   * admin-created client alive across a restart.
+   */
+  userId: string | null
 }
 
 export interface MappingOptions {
   /** Already hashed by the caller, which owns the hashing function (R4). */
   hashedSecret?: string
+  /** The owning administrator, for a client registered through the admin UI. */
+  userId?: string
 }
 
 /**
@@ -109,7 +119,7 @@ export function toClientRow(
     tos: entry.tos ?? null,
     policy: entry.policy ?? null,
     metadata: metadataFor(entry),
-    userId: null,
+    userId: options.userId ?? null,
   }
 }
 

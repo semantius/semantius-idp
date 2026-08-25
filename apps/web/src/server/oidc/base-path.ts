@@ -86,6 +86,8 @@ export function createBasePaths(base: BasePathInfo): BasePaths {
 export const APP_ROUTES = {
   login: "/login",
   signup: "/signup",
+  /** First-run setup, reachable only while the `user` table is empty (D52). */
+  setup: "/setup",
   forgotPassword: "/forgot-password",
   resetPassword: "/reset-password",
   verifyEmail: "/verify-email",

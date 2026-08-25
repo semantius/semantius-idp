@@ -19,7 +19,6 @@ const SECRET_POINTERS: readonly RegExp[] = [
   /^\/database\/sslCa$/,
   /^\/email\/resend\/apiKey$/,
   /^\/social\/[^/]+\/clientSecret$/,
-  /^\/admin\/bootstrap\/password$/,
   /^\/clients\/\d+\/clientSecret$/,
 ]
 

@@ -23,6 +23,7 @@ import type { Audit } from "../../audit"
 import type { IdpConfig } from "../../config/derive"
 import type { DbHandle } from "../../db/client"
 import type { Mailer } from "../../email/mailer"
+import { displayName } from "../../display-name"
 import type { Logger } from "../../logger"
 import { isAdmin } from "../../role-utils"
 import {
@@ -311,16 +312,17 @@ export function buildDatabaseHooks(
               ? "pending"
               : "active"
 
-          // FR-SIGNUP-5: `name` falls back to "firstName lastName".
+          // FR-SIGNUP-5 / D49: `name` falls back to the two parts, composed
+          // in `site.nameFormat` order — the same helper every caller uses,
+          // so a fallback and an explicit derivation cannot disagree.
           const first =
             typeof user.firstName === "string" ? user.firstName.trim() : ""
           const last =
             typeof user.lastName === "string" ? user.lastName.trim() : ""
-          const composed = [first, last].filter(Boolean).join(" ")
           const name =
             typeof user.name === "string" && user.name.trim() !== ""
               ? user.name
-              : composed
+              : displayName(first, last, config.file.site.nameFormat)
 
           return {
             data: {

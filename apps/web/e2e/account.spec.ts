@@ -1,9 +1,11 @@
 import {
   appFor,
   createVerifiedUser,
+  openDialog,
   signIn,
   signOut,
   submit,
+  submitDialog,
 } from "./actions"
 import { expect, test } from "./fixtures"
 import { waitForMail } from "./stack"
@@ -31,16 +33,16 @@ test.describe("the account area", () => {
     await expect(page.getByText(user.email)).toBeVisible()
     await expect(page.getByText("Confirmed")).toBeVisible()
 
-    await page.getByLabel("Name", { exact: true }).fill("Renamed Person")
+    // D49: the two parts are the inputs; the display name is derived from
+    // them and shown read-only, so there is nothing here to type it into.
     await page.getByLabel("First name").fill("Renamed")
     await page.getByLabel("Last name").fill("Person")
     await submit(page, "Save")
 
     await expect(page.getByText("Profile updated.")).toBeVisible()
     await page.reload()
-    await expect(page.getByLabel("Name", { exact: true })).toHaveValue(
-      "Renamed Person"
-    )
+    await expect(page.getByLabel("First name")).toHaveValue("Renamed")
+    await expect(page.getByText("Renamed Person")).toBeVisible()
   })
 
   test("the password changes from the security page and comes back to it", async ({
@@ -114,17 +116,23 @@ test.describe("the account area", () => {
     await app.goto("/account/api-keys")
     await expect(page.getByText("No API keys yet.")).toBeVisible()
 
-    await page.getByLabel("What is this key for?").fill("Deploy script")
-    await submit(page, "Create key")
+    const form = await openDialog(page, "Create key")
+    await form.getByLabel("What is this key for?").fill("Deploy script")
+    await submitDialog(page, form, "Create key")
 
+    // Shown once, in a dialog, and **not** in the URL: the POST stashes the key
+    // server-side and the redirect carries an opaque handle (one-shot.ts).
+    const shown = page.getByRole("dialog")
     await expect(
-      page.getByText("Copy this key now — it will not be shown again.")
+      shown.getByText("Copy this key now — it will not be shown again.")
     ).toBeVisible()
     const secret = (
-      await page.locator("code.font-mono").first().innerText()
+      await shown.locator('[data-slot="one-shot-value"]').innerText()
     ).trim()
     expect(secret.length, "the key itself").toBeGreaterThan(20)
+    expect(page.url(), "the key is not in the URL").not.toContain(secret)
 
+    await page.keyboard.press("Escape")
     await expect(page.getByText("Deploy script")).toBeVisible()
 
     // FR-MAIL-1: a credential that can act as you is announced.
@@ -133,7 +141,8 @@ test.describe("the account area", () => {
     })
     expect(notice.text).toContain("Deploy script")
 
-    // Reloading the list must not show the secret a second time.
+    // Reloading the list must not show the secret a second time — claiming the
+    // stash consumed it, which is what makes "shown once" true.
     await app.goto("/account/api-keys")
     expect(await page.content()).not.toContain(secret)
 

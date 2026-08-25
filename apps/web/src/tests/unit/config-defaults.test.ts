@@ -31,7 +31,12 @@ describe("CFG-4 defaults", () => {
         connectTimeoutSeconds: 30,
         migrateOnBoot: true,
       },
-      site: { name: "Test IdP", theme: "system", defaultLocale: "en-US" },
+      site: {
+        name: "Test IdP",
+        theme: "system",
+        defaultLocale: "en-US",
+        nameFormat: "first-last",
+      },
       email: { resend: {} },
       signUp: {
         enabled: false,

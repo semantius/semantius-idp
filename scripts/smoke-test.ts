@@ -11,31 +11,38 @@
  *
  * The sequence, in order, because each step depends on the last:
  *
- *   1. compose up, against a **generated** config folder and its own project
- *      name, so it can never touch the operator's stack or the persistent
- *      `idp` schema (P0'.2);
+ *   1. compose up, against a **generated** config folder, a generated `.env`
+ *      and its own project name, so it can never touch the operator's stack or
+ *      the persistent `idp` schema (P0'.2);
  *   2. `/readyz` — and the time it took, which is OPS-13's start-up budget;
  *   3. discovery and the JWKS, fetched as a client would;
- *   4. **the forced password change, scripted.** A fresh stack's only account
- *      is the bootstrap admin, and it carries `mustChangePassword`. A smoke
- *      test that only posted the `.env` password would be asserting that a
- *      sign-in *starts*, not that anyone can use the deployment;
+ *   4. **the first-run setup wizard, scripted.** A fresh stack has no accounts
+ *      at all (D52): `/` leads to `/setup`, and the form there is what creates
+ *      the first administrator. A smoke test that skipped it would be asserting
+ *      that a deployment *starts*, not that anyone can use it;
  *   5. a session JWT, verified against the JWKS published in step 3 — which is
  *      what proves the signing key survived the image build;
  *   6. RSS, from `docker stats`, against OPS-13's ceiling;
  *   7. SIGTERM, and the exit code. `docker compose stop` sends exactly that,
  *      and OPS-4 says the answer is 0.
  *
- * Run it locally with `bun run scripts/smoke-test.ts --build`; CI runs it
- * against an image it has already built.
+ * Run it locally with `pnpm docker:smoke` (`--build`); CI runs it against an
+ * image it has already built.
  */
 
 import { spawnSync } from "node:child_process"
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 
 import { createLocalJWKSet, jwtVerify } from "jose"
+
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..")
+
+/** D51: the deployment artefacts live in `docker/`, and the build context is `..`. */
+const COMPOSE_FILE = "docker/docker-compose.yml"
+const DOCKERFILE = "docker/Dockerfile"
 
 const PROJECT = "idp-smoke"
 const PORT = Number(process.env.SMOKE_PORT ?? 3399)
@@ -49,9 +56,16 @@ const BUDGET = {
   imageBytes: 300 * 1024 * 1024,
 }
 
-const ADMIN_EMAIL = "smoke-admin@example.com"
-const BOOTSTRAP_PASSWORD = "smoke-bootstrap-password-01"
-const CHOSEN_PASSWORD = "smoke-chosen-password-02"
+const PG_PASSWORD = "smoke-pg-password"
+const SECRET = "smoke-test-secret-of-at-least-thirty-two-chars"
+
+/** Chosen by this run, at the wizard, and known nowhere else (D52). */
+const ADMIN = {
+  email: "smoke-admin@example.com",
+  firstName: "Smoke",
+  lastName: "Admin",
+  password: "smoke-chosen-password-02",
+}
 
 let failures = 0
 
@@ -68,7 +82,7 @@ function run(
   options: { cwd?: string; env?: Record<string, string>; quiet?: boolean } = {}
 ): { code: number; stdout: string; stderr: string } {
   const result = spawnSync(command, args, {
-    cwd: options.cwd,
+    cwd: options.cwd ?? REPO_ROOT,
     env: { ...process.env, ...options.env },
     encoding: "utf8",
     maxBuffer: 32 * 1024 * 1024,
@@ -106,14 +120,30 @@ async function waitFor(
   return undefined
 }
 
-/** A throwaway config folder, so no operator file is read or written. */
-function makeStack(dir: string): { configDir: string; secretsDir: string } {
+/**
+ * A throwaway config folder and environment file, so no operator file is read
+ * or written.
+ *
+ * The `.env` is the same file in both of the roles a real one has (D48): it is
+ * compose's interpolation source *and* the `env_file` the IdP container reads
+ * its connection string out of.
+ */
+function makeStack(dir: string): { configDir: string; envFile: string } {
   const configDir = join(dir, "config")
-  const secretsDir = join(dir, "secrets")
   mkdirSync(configDir, { recursive: true })
-  mkdirSync(secretsDir, { recursive: true })
 
-  writeFileSync(join(secretsDir, "postgres_password"), "smoke-pg-password")
+  const envFile = join(dir, "smoke.env")
+  writeFileSync(
+    envFile,
+    [
+      // The compose network resolves `postgres`; `sslmode=disable` is correct
+      // there and nowhere else.
+      `DATABASE_URL=postgres://idp:${PG_PASSWORD}@postgres:5432/idp?sslmode=disable`,
+      `POSTGRES_PASSWORD=${PG_PASSWORD}`,
+      `IDP_SECRET=${SECRET}`,
+      "",
+    ].join("\n")
+  )
 
   writeFileSync(
     join(configDir, "config.json"),
@@ -126,7 +156,7 @@ function makeStack(dir: string): { configDir: string; secretsDir: string } {
           allowInsecureHttp: true,
           shutdownTimeoutSeconds: 10,
         },
-        secret: "smoke-test-secret-of-at-least-thirty-two-chars",
+        secret: "${env:IDP_SECRET}",
         database: {
           url: "${env:DATABASE_URL}",
           schema: "idp",
@@ -135,14 +165,7 @@ function makeStack(dir: string): { configDir: string; secretsDir: string } {
         site: { name: "Smoke IdP" },
         jwt: { audience: `http://127.0.0.1:${PORT}` },
         auth: { requireEmailVerification: false },
-        admin: {
-          bootstrap: {
-            email: ADMIN_EMAIL,
-            password: BOOTSTRAP_PASSWORD,
-            name: "Smoke Admin",
-          },
-        },
-        // The whole point is one clean sign-in; a limiter here would only
+        // The whole point is one clean first run; a limiter here would only
         // measure how fast this script types.
         rateLimit: { enabled: false },
         logging: { level: "info", format: "json" },
@@ -178,20 +201,19 @@ function makeStack(dir: string): { configDir: string; secretsDir: string } {
     )
   )
 
-  return { configDir, secretsDir }
+  return { configDir, envFile }
 }
 
-function composeEnv(configDir: string, secretsDir: string) {
+function composeEnv(configDir: string, envFile: string) {
   return {
     IDP_IMAGE: IMAGE,
     IDP_PORT: String(PORT),
     IDP_BASE_URL: ORIGIN,
     IDP_CONFIG_HOST_DIR: configDir,
-    IDP_SECRETS_DIR: secretsDir,
-    POSTGRES_PASSWORD: "smoke-pg-password",
-    IDP_SECRET: "smoke-test-secret-of-at-least-thirty-two-chars",
-    IDP_ADMIN_EMAIL: ADMIN_EMAIL,
-    IDP_ADMIN_PASSWORD: BOOTSTRAP_PASSWORD,
+    // What the compose file's `env_file:` resolves to. A shell value beats
+    // `--env-file`, so this decides it.
+    IDP_ENV_FILE: envFile,
+    POSTGRES_PASSWORD: PG_PASSWORD,
   }
 }
 
@@ -219,10 +241,14 @@ function cookiesFrom(response: Response, previous = ""): string {
 
 async function main(): Promise<void> {
   const workDir = mkdtempSync(join(tmpdir(), "idp-smoke-"))
-  const { configDir, secretsDir } = makeStack(workDir)
-  const env = composeEnv(configDir, secretsDir)
+  const { configDir, envFile } = makeStack(workDir)
+  const env = composeEnv(configDir, envFile)
   const compose = (...args: string[]) =>
-    run("docker", ["compose", "-p", PROJECT, ...args], { env })
+    run(
+      "docker",
+      ["compose", "-f", COMPOSE_FILE, "--env-file", envFile, "-p", PROJECT, ...args],
+      { env }
+    )
 
   try {
     if (process.argv.includes("--build")) {
@@ -231,6 +257,8 @@ async function main(): Promise<void> {
         "build",
         "-t",
         IMAGE,
+        "-f",
+        DOCKERFILE,
         "--build-arg",
         "IDP_VERSION=0.0.0-smoke",
         ".",
@@ -283,45 +311,58 @@ async function main(): Promise<void> {
       `${keyCount} key(s)`
     )
 
-    // ---- 4. sign in, through the forced change --------------------------
-    const post = (path: string, body: unknown, cookie: string) =>
-      fetch(`${ORIGIN}${path}`, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          origin: ORIGIN,
-          ...(cookie ? { cookie } : {}),
-        },
-        body: JSON.stringify(body),
-      })
-
-    const signedIn = await post(
-      "/api/auth/sign-in/email",
-      { email: ADMIN_EMAIL, password: BOOTSTRAP_PASSWORD },
-      ""
+    // ---- 4. the first-run wizard (D52) ----------------------------------
+    //
+    // A fresh stack has no accounts, so the root leads to `/setup` and the
+    // form there is the only way in. Until this succeeds the deployment has no
+    // administrator — which is the state the old `IDP_ADMIN_*` bootstrap
+    // existed to avoid, and the reason it is gone.
+    const root = await fetch(`${ORIGIN}/`, { redirect: "manual" })
+    check(
+      "a fresh deployment leads to /setup",
+      isRedirect(root) &&
+        (root.headers.get("location") ?? "").endsWith("/setup"),
+      `${root.status} → ${root.headers.get("location") ?? ""}`
     )
-    check("bootstrap admin signs in", signedIn.status === 200)
-    let cookie = cookiesFrom(signedIn)
 
-    // FR-ADMIN-1: the account exists only to be used once. Until this
-    // succeeds, the deployment has no usable administrator.
-    const changed = await post(
-      "/api/auth/change-password",
-      {
-        currentPassword: BOOTSTRAP_PASSWORD,
-        newPassword: CHOSEN_PASSWORD,
+    const setupPage = await fetch(`${ORIGIN}/setup`)
+    check("the setup page renders", setupPage.status === 200)
+
+    const wizard = await fetch(`${ORIGIN}/setup`, {
+      method: "POST",
+      redirect: "manual",
+      headers: {
+        "content-type": "application/x-www-form-urlencoded",
+        origin: ORIGIN,
       },
-      cookie
-    )
-    check("forced password change completes", changed.status === 200)
-    cookie = cookiesFrom(changed, cookie)
+      body: new URLSearchParams({
+        email: ADMIN.email,
+        firstName: ADMIN.firstName,
+        lastName: ADMIN.lastName,
+        password: ADMIN.password,
+      }).toString(),
+    })
+    check("the wizard creates the first administrator", wizard.status === 303)
+    let cookie = cookiesFrom(wizard)
+    check("the wizard signs them straight in", cookie !== "")
 
-    const again = await post(
-      "/api/auth/sign-in/email",
-      { email: ADMIN_EMAIL, password: CHOSEN_PASSWORD },
-      ""
+    // The gate closed: a second visit is no longer the setup page.
+    const afterwards = await fetch(`${ORIGIN}/setup`, { redirect: "manual" })
+    check(
+      "the setup page is gone once an account exists",
+      isRedirect(afterwards),
+      `${afterwards.status} → ${afterwards.headers.get("location") ?? ""}`
     )
-    check("the new password signs in", again.status === 200)
+
+    const again = await fetch(`${ORIGIN}/api/auth/sign-in/email`, {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: ORIGIN },
+      body: JSON.stringify({
+        email: ADMIN.email,
+        password: ADMIN.password,
+      }),
+    })
+    check("the chosen password signs in", again.status === 200)
     cookie = cookiesFrom(again)
 
     // ---- 5. a token, verified against the published keys -----------------
@@ -419,6 +460,20 @@ async function main(): Promise<void> {
     failures === 0 ? "\nsmoke test passed\n" : `\n${failures} check(s) failed\n`
   )
   process.exit(failures === 0 ? 0 : 1)
+}
+
+/**
+ * Any 3xx carrying a `Location`.
+ *
+ * Which one the framework picks is not the assertion — pinning the number
+ * would make this fail on an upgrade that changed nothing observable.
+ */
+function isRedirect(response: Response): boolean {
+  return (
+    response.status >= 300 &&
+    response.status < 400 &&
+    response.headers.has("location")
+  )
 }
 
 /**

@@ -1,0 +1,176 @@
+import { useState } from "react"
+import type { ReactNode } from "react"
+
+import { Check, Copy } from "lucide-react"
+
+import { Button } from "@workspace/ui/components/button"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@workspace/ui/components/dialog"
+
+import type { Catalog } from "@/server/i18n"
+
+/**
+ * The two dialogs this application needs, and nothing else.
+ *
+ * **Forms inside dialogs stay plain `<form method="post">`.** The dialog is
+ * chrome: it decides what is on screen, never how a submission travels. So the
+ * POST → 303 → notice pattern is exactly what it was when the same form was
+ * inline, and a page full of six actions is still six ordinary form posts —
+ * which is why none of the server handlers below them changed.
+ *
+ * Requiring JavaScript for the *chrome* is allowed (D31) and is the whole
+ * trade: an admin page with a dozen inline forms is unreadable, and the
+ * alternative — a page per action — is a navigation for something that is one
+ * field and a button.
+ */
+
+/**
+ * A button that opens a dialog with something in it.
+ *
+ * The trigger is rendered as the house `<Button>` through Base UI's `render`
+ * prop, so it is the same control it would have been inline — same variants,
+ * same focus ring, same accessible name.
+ */
+export function ActionDialog({
+  label,
+  title,
+  description,
+  variant = "outline",
+  size = "sm",
+  className,
+  children,
+}: {
+  /** The trigger's text, and the dialog's accessible name when no title is given. */
+  label: string
+  title?: string
+  description?: ReactNode
+  variant?: "default" | "outline" | "ghost" | "destructive" | "secondary"
+  size?: "default" | "sm" | "lg"
+  className?: string
+  children: ReactNode
+}) {
+  return (
+    <Dialog>
+      <DialogTrigger
+        render={<Button variant={variant} size={size} className={className} />}
+      >
+        {label}
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{title ?? label}</DialogTitle>
+          {description ? (
+            <DialogDescription>{description}</DialogDescription>
+          ) : null}
+        </DialogHeader>
+        {children}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/**
+ * A value that exists exactly once, shown exactly once.
+ *
+ * An API key, a client secret, a set-password link: each is minted by a POST
+ * and has to reach the browser that made it, and **none of them may travel in
+ * the URL**. `server/http/one-shot.ts` says why at length — a query string
+ * survives in history, in `Referer` and in every proxy log between here and
+ * the user — so the redirect carries an opaque handle, the loader claims it,
+ * and what lands on screen is this.
+ *
+ * Opened by default and closable, because there is nothing to come back to: a
+ * claim consumes the stash, so a refresh shows the page without it. That is
+ * intended, and the description says so.
+ */
+export function SecretDialog({
+  t,
+  title,
+  description,
+  value,
+  /** A URL wraps; a key should not be broken across lines by accident. */
+  wrap = false,
+}: {
+  t: Catalog
+  title: string
+  description?: ReactNode
+  value: string
+  wrap?: boolean
+}) {
+  return (
+    <Dialog defaultOpen>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          {description ? (
+            <DialogDescription>{description}</DialogDescription>
+          ) : null}
+        </DialogHeader>
+
+        <div className="flex items-start gap-2">
+          <code
+            data-slot="one-shot-value"
+            className={
+              wrap
+                ? "min-w-0 flex-1 rounded-lg bg-muted p-3 font-mono text-xs break-all"
+                : "min-w-0 flex-1 overflow-x-auto rounded-lg bg-muted p-3 font-mono text-xs whitespace-pre"
+            }
+          >
+            {value}
+          </code>
+          <CopyButton t={t} value={value} />
+        </div>
+
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline" />}>
+            {t.common.close}
+          </DialogClose>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/**
+ * Copies a value to the clipboard and says so for a moment.
+ *
+ * `navigator.clipboard` can be absent (an insecure origin that is not
+ * localhost) and can reject (permission denied). Neither is worth an error
+ * message: the value is on screen and selectable, so a copy that did not
+ * happen leaves the user exactly where they already were.
+ */
+function CopyButton({ t, value }: { t: Catalog; value: string }) {
+  const [copied, setCopied] = useState(false)
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="icon"
+      aria-label={copied ? t.common.copied : t.common.copy}
+      onClick={() => {
+        // Typed as always present and genuinely is not: an insecure origin
+        // that is not localhost has no `navigator.clipboard` at all.
+        const clipboard = navigator.clipboard as Clipboard | undefined
+        if (!clipboard) return
+        void clipboard
+          .writeText(value)
+          .then(() => {
+            setCopied(true)
+            setTimeout(() => setCopied(false), 2000)
+          })
+          .catch(() => undefined)
+      }}
+    >
+      {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+    </Button>
+  )
+}

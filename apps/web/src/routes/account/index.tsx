@@ -18,6 +18,7 @@ import {
   withError,
 } from "@/server/http/auth-proxy"
 import { readSession } from "@/server/http/session"
+import { displayName } from "@/server/display-name"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
 
@@ -27,6 +28,11 @@ import { getRuntime } from "@/server/runtime"
  * Only the display fields are editable here. The address is a *security*
  * change (it is what a reset link goes to), so it lives on `/account/security`
  * behind the freshness gate; changing a first name does not need one.
+ *
+ * **The display name is not one of them** (**D49**). It is derived from the
+ * first and last name in `site.nameFormat` order and shown read-only, so a
+ * deployment's user list sorts and reads one way rather than however each
+ * person happened to type their own name in. Saving recomputes it.
  */
 export const Route = createFileRoute("/account/")({
   loader: ({ context, location }) => {
@@ -54,15 +60,25 @@ export const Route = createFileRoute("/account/")({
         }
 
         const form = await readForm(request)
-        // `name` is what applications display; the two parts feed the
-        // `given_name`/`family_name` claims (FR-SIGNUP-5, FR-OIDC-7).
+        const firstName = (form.firstName ?? "").trim()
+        const lastName = (form.lastName ?? "").trim()
+        // The two parts feed the `given_name`/`family_name` claims
+        // (FR-SIGNUP-5, FR-OIDC-7); `name` is what applications display and is
+        // recomputed from them here rather than accepted from the form (D49).
+        // A person with neither part keeps their address as the display name,
+        // because a blank one renders as an empty row in every admin table.
         const result = await callAuth(
           runtime,
           "/update-user",
           {
-            name: (form.name ?? "").trim(),
-            firstName: (form.firstName ?? "").trim(),
-            lastName: (form.lastName ?? "").trim(),
+            name:
+              displayName(
+                firstName,
+                lastName,
+                runtime.config.file.site.nameFormat
+              ) || session.user.email,
+            firstName,
+            lastName,
           },
           request
         )
@@ -93,18 +109,13 @@ function ProfilePage() {
       title={t.account.profile.title}
       description={t.account.profile.description}
       impersonated={profile.impersonated}
+      isAdmin={profile.isAdmin}
     >
       <FormAlert variant="default">{messageForNoticeCode(notice, t)}</FormAlert>
       <FormAlert>{messageForErrorCode(error, t)}</FormAlert>
 
       <AccountSection title={t.account.profile.title}>
         <form method="post" className="grid gap-4">
-          <TextField
-            name="name"
-            label={t.common.name}
-            defaultValue={profile.name}
-            autoComplete="name"
-          />
           <div className="grid gap-4 sm:grid-cols-2">
             <TextField
               name="firstName"
@@ -120,6 +131,17 @@ function ProfilePage() {
               autoComplete="family-name"
               required={false}
             />
+          </div>
+          {/* Read-only, and recomputed on save. Not a disabled input: a
+              greyed-out field invites people to try to type in it. */}
+          <div className="grid gap-1.5">
+            <p className="text-sm font-medium">{t.common.name}</p>
+            <p className="text-sm text-muted-foreground">
+              {profile.name || profile.email}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {t.account.profile.nameDerived}
+            </p>
           </div>
           <div>
             <Button type="submit">{t.account.profile.submit}</Button>

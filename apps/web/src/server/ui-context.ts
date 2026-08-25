@@ -68,6 +68,14 @@ export interface UiContext {
    * and the operator who turned it off is not usually the one clicking.
    */
   allowImpersonation: boolean
+  /**
+   * `oauth.scopes` — every scope a client may be registered with (FR-OIDC-3).
+   *
+   * Public information: they are already in the discovery document, and the
+   * admin client form needs them to render its checkboxes. The endpoint
+   * re-checks the list, so this decides which boxes exist and nothing else.
+   */
+  oauthScopes: string[]
   /** FR-SOC-1: only providers that are actually configured render a button. */
   socialProviders: SocialProviderView[]
 }
@@ -170,6 +178,7 @@ export function buildUiContext(config: IdpConfig, locale: string): UiContext {
       Math.floor(file.apiKeys.maxExpiresIn / 86_400)
     ),
     passwordMinLength: file.auth.password.minLength,
+    oauthScopes: [...file.oauth.scopes],
 
     socialProviders: Object.entries(file.social)
       .filter(([, provider]) => provider.enabled)

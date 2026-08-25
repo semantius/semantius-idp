@@ -115,6 +115,7 @@ function ConsentsPage() {
       title={t.account.consents.title}
       description={t.account.consents.description}
       impersonated={profile.impersonated}
+      isAdmin={profile.isAdmin}
     >
       <FormAlert variant="default">{messageForNoticeCode(notice, t)}</FormAlert>
       <FormAlert>{messageForErrorCode(error, t)}</FormAlert>

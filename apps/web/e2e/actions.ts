@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto"
 
 import { expect } from "@playwright/test"
-import type { Page } from "@playwright/test"
+import type { Locator, Page } from "@playwright/test"
 
 import type { App } from "./fixtures"
 import { ADMIN, linkFrom, waitForMail } from "./stack"
@@ -77,27 +77,45 @@ export async function completeForcedChange(
 }
 
 /**
- * Signs in as the bootstrap administrator, doing the forced change if this is
- * the first spec in the run to get here.
+ * Signs in as the administrator this run created (FR-ADMIN-1, D52).
  *
- * **Deliberately order-independent.** The bootstrap account starts with
- * `mustChangePassword` (FR-ADMIN-1) and exactly one spec can consume that; a
- * helper that assumed it was the first would make the suite depend on the
- * order Playwright happens to walk the files in. So it tries the settled
- * password, and falls back.
+ * One password, no fallback. The account is made by the first-run wizard in
+ * `globalSetup` before any spec runs, and it carries no forced change — the
+ * person who chose the password is the person using it — so the two-attempt
+ * dance the old bootstrap account needed is gone with it.
  */
 export async function signInAsAdmin(page: Page, app: App): Promise<void> {
   await signIn(page, app, ADMIN.email, ADMIN.password)
-  if (onLogin(page, app)) {
-    await signIn(page, app, ADMIN.email, ADMIN.bootstrapPassword)
-    await completeForcedChange(
-      page,
-      app,
-      ADMIN.bootstrapPassword,
-      ADMIN.password
-    )
-  }
   await expect(page).toHaveURL(app.url("/account"))
+}
+
+/**
+ * Opens the dialog a named control carries, and returns it.
+ *
+ * The admin actions became triggers rather than inline forms (item 11), and
+ * the trigger and the submit inside usually share a name — "Suspend" opens a
+ * dialog whose button also says "Suspend". Everything after the click is
+ * therefore scoped to the returned dialog, which is the only way those two
+ * assertions can be told apart.
+ */
+export async function openDialog(page: Page, name: string): Promise<Locator> {
+  // Before the click the dialog is not in the DOM at all (Base UI portals on
+  // open), so the trigger is the only thing this can match.
+  await page.getByRole("button", { name, exact: true }).first().click()
+  const dialog = page.getByRole("dialog")
+  await expect(dialog).toBeVisible()
+  return dialog
+}
+
+/** {@link submit}, scoped to a dialog. */
+export async function submitDialog(
+  page: Page,
+  dialog: Locator,
+  name: string
+): Promise<void> {
+  const before = page.url()
+  await dialog.getByRole("button", { name, exact: true }).click()
+  await page.waitForURL((url) => url.href !== before)
 }
 
 /** Fills the registration form and submits it (FR-SIGNUP-1). */

@@ -26,6 +26,8 @@ export function messageForErrorCode(
       return t.auth.signUp.domainNotAllowed
     case "password_length":
       return t.auth.signUp.passwordHint(12)
+    case "invalid_email":
+      return t.setup.invalidEmail
     case "password_mismatch":
       return t.auth.resetPassword.mismatch
     case "wrong_current_password":
@@ -67,6 +69,15 @@ export function messageForErrorCode(
       return t.admin.actions.impersonateDisabled
     case "email_disabled":
       return t.admin.refusals.emailDisabled
+    case "client_already_exists":
+      return t.admin.refusals.clientExists
+    case "client_managed_by_file":
+      return t.admin.refusals.clientFromFile
+    case "client_not_found":
+      return t.errors.notFound.description
+    case "invalid_client_definition":
+    case "scope_not_allowed":
+      return t.admin.refusals.clientInvalid
     case "rate_limited":
       return t.errors.rateLimited.description
     case "server_error":
@@ -100,6 +111,7 @@ export const NOTICE_CODES = new Set([
   "consent_revoked",
   "twofactor_on",
   "twofactor_off",
+  "already_setup",
 ])
 
 export function messageForNoticeCode(
@@ -138,6 +150,10 @@ export function messageForNoticeCode(
       return t.account.twoFactor.turnedOn
     case "twofactor_off":
       return t.account.twoFactor.turnedOff
+    case "already_setup":
+      // D52: the loser of a concurrent first-run POST, and anyone who kept the
+      // `/setup` bookmark. Neutral either way.
+      return t.setup.alreadyDone
     default:
       // The admin pages name their notices after the catalog key directly:
       // there are a dozen of them, they are all one-line confirmations, and a

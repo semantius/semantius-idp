@@ -17,7 +17,6 @@
     "db:generate-schema": "bun run scripts/generate-auth-schema.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun run src/cli/index.ts migrate",
-    "reset-admin": "bun run src/cli/index.ts reset-admin",
     "config:schemas": "bun run scripts/export-json-schemas.ts",
     "docs:config": "bun run scripts/generate-config-reference.ts"
   },

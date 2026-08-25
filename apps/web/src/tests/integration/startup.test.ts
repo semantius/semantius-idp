@@ -1,7 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest"
 
-import { eq } from "drizzle-orm"
-
 import { runStartup } from "@/server/startup"
 import { splitRoles } from "@/server/role-utils"
 import { createAudit } from "@/server/audit"
@@ -16,8 +14,12 @@ import type { TestContext } from "./harness"
  *
  * The harness already migrates, so these tests exercise the steps that run
  * after the auth instance exists: the signing key, the role check and the
- * bootstrap admin. The migration step itself is covered by the S4 spike and by
+ * first-run check. The migration step itself is covered by the S4 spike and by
  * every other integration file implicitly.
+ *
+ * Nothing here creates an administrator any more. D52 replaced the bootstrap
+ * step with a page (`integration/setup.test.ts`), and what start-up does now is
+ * say that the deployment has no users yet.
  */
 describe("startup sequence (OPS-2)", () => {
   const contexts: TestContext[] = []
@@ -58,8 +60,10 @@ describe("startup sequence (OPS-2)", () => {
     expect(result.steps.map((step) => step.name)).toEqual([
       "signing key",
       "reconcile clients",
+      // D50: after the reconcile, because it reads the rows it just wrote.
+      "client origins",
       "validate roles",
-      "bootstrap admin",
+      "first-run check",
     ])
   })
 
@@ -80,125 +84,49 @@ describe("startup sequence (OPS-2)", () => {
     expect(second[0]!.id).toBe(first[0]!.id)
   })
 
-  describe("bootstrap admin (FR-ADMIN-1)", () => {
-    const bootstrap = {
-      email: "Bootstrap.Admin@Example.COM",
-      password: "correct horse battery staple",
-      name: "Bootstrap Admin",
-    }
-
-    it("creates exactly one admin across two boots", async () => {
-      const ctx = await createTestContext("startup-bootstrap", {
-        config: { admin: { bootstrap } },
-      })
-      contexts.push(ctx)
-
-      await start(ctx)
-      await start(ctx)
-
-      const users = await ctx.database.db
-        .select()
-        .from(ctx.database.schema.user)
-      expect(users).toHaveLength(1)
-
-      const admin = users[0]!
-      // FR-AUTH-1: normalised on the way in.
-      expect(admin.email).toBe("bootstrap.admin@example.com")
-      expect(splitRoles(admin.role)).toContain("admin")
-      expect(admin.status).toBe("active")
-      expect(admin.emailVerified).toBe(true)
-      expect(admin.mustChangePassword).toBe(true)
-      expect(admin.approvedBy).toBe("system")
-    })
-
-    it("never logs the password", async () => {
-      const ctx = await createTestContext("startup-bootstrap-secrecy", {
-        config: { admin: { bootstrap } },
-      })
+  describe("first-run check (FR-ADMIN-1, D52)", () => {
+    it("says where to finish setup while the user table is empty", async () => {
+      const ctx = await createTestContext("startup-first-run")
       contexts.push(ctx)
 
       const { lines } = await start(ctx)
-      const everything = JSON.stringify(lines)
-      expect(everything).not.toContain(bootstrap.password)
-      expect(everything).toContain("bootstrap admin created")
+      const notice = lines.find((line) => line.msg === "no users yet")
+      expect(notice).toBeDefined()
+      expect(notice!.level).toBe("warn")
+      expect(String(notice!.fields.hint)).toContain(
+        "http://localhost:3000/setup"
+      )
     })
 
-    it("writes an audit row for the creation (SEC-6)", async () => {
-      const ctx = await createTestContext("startup-bootstrap-audit", {
-        config: { admin: { bootstrap } },
-      })
+    it("creates nobody — the page is the only way in", async () => {
+      const ctx = await createTestContext("startup-creates-nobody")
       contexts.push(ctx)
 
       await start(ctx)
-      const rows = await ctx.database.db
-        .select()
-        .from(ctx.database.schema.auditLog)
-      expect(rows).toHaveLength(1)
-      expect(rows[0]).toMatchObject({
-        action: "signup.created",
-        outcome: "success",
-        actorType: "system",
-        targetType: "user",
-      })
-      expect(rows[0]!.metadata).toMatchObject({
-        bootstrap: true,
-        role: "admin",
-      })
-    })
-
-    it("skips with a loud warning when no bootstrap admin is configured", async () => {
-      const ctx = await createTestContext("startup-bootstrap-absent")
-      contexts.push(ctx)
-
       await start(ctx)
+
       const users = await ctx.database.db
         .select()
         .from(ctx.database.schema.user)
       expect(users).toHaveLength(0)
-      // The warning itself comes from the config loader, which the harness
-      // bypasses; what matters here is that nothing was created.
-      expect(ctx.config.file.admin.bootstrap).toBeUndefined()
-    })
 
-    it("does not create a second admin once one exists by another route", async () => {
-      const ctx = await createTestContext("startup-bootstrap-existing-admin", {
-        config: { admin: { bootstrap } },
-      })
-      contexts.push(ctx)
-
-      const context = await ctx.auth.$context
-      await createUserWithoutRequest(
-      context,
-        {
-          email: "someone.else@example.com",
-          name: "Existing Admin",
-          emailVerified: true,
-          role: "admin",
-          status: "active",
-        },
-        { method: "admin" }
-      )
-
-      await start(ctx)
-      const users = await ctx.database.db
+      // And no audit row either: nothing happened, so nothing is recorded.
+      const rows = await ctx.database.db
         .select()
-        .from(ctx.database.schema.user)
-      expect(users).toHaveLength(1)
-      expect(users[0]!.email).toBe("someone.else@example.com")
+        .from(ctx.database.schema.auditLog)
+      expect(rows).toHaveLength(0)
     })
 
-    it("refuses rather than silently promoting an existing non-admin", async () => {
-      const ctx = await createTestContext("startup-bootstrap-collision", {
-        config: { admin: { bootstrap } },
-      })
+    it("stays quiet once any user exists", async () => {
+      const ctx = await createTestContext("startup-has-users")
       contexts.push(ctx)
 
       const context = await ctx.auth.$context
       await createUserWithoutRequest(
-      context,
+        context,
         {
-          email: "bootstrap.admin@example.com",
-          name: "Ordinary User",
+          email: "someone@example.com",
+          name: "Someone",
           emailVerified: true,
           role: "user",
           status: "active",
@@ -206,17 +134,8 @@ describe("startup sequence (OPS-2)", () => {
         { method: "admin" }
       )
 
-      await expect(start(ctx)).rejects.toThrow(
-        /already exists but holds no admin role/
-      )
-
-      const [row] = await ctx.database.db
-        .select()
-        .from(ctx.database.schema.user)
-        .where(
-          eq(ctx.database.schema.user.email, "bootstrap.admin@example.com")
-        )
-      expect(row!.role).toBe("user")
+      const { lines } = await start(ctx)
+      expect(lines.find((line) => line.msg === "no users yet")).toBeUndefined()
     })
   })
 

@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router"
+import { createFileRoute, Link, redirect } from "@tanstack/react-router"
 
 import { Button } from "@workspace/ui/components/button"
 import { Separator } from "@workspace/ui/components/separator"
@@ -21,6 +21,7 @@ import {
   withError,
 } from "@/server/http/auth-proxy"
 import { resolveSignInDestination } from "@/server/http/post-login"
+import { fetchSetupPending } from "@/server/functions/setup"
 import { readOauthQuery } from "@/lib/oauth-query"
 import {
   OAUTH_QUERY_FIELD,
@@ -47,7 +48,14 @@ import type { UiContext } from "@/server/ui-context"
  * Wrong password and unknown address produce the same code (SEC-7).
  */
 export const Route = createFileRoute("/login")({
-  loader: ({ context, location }) => {
+  loader: async ({ context, location }) => {
+    // D52: on a database with no users there is nobody to sign in as, and the
+    // form would only ever refuse. The setup page is the whole deployment
+    // until somebody finishes it.
+    if (await fetchSetupPending()) {
+      throw redirect({ to: APP_ROUTES.setup })
+    }
+
     const search = location.search as Record<string, unknown>
     return {
       ui: context.ui,

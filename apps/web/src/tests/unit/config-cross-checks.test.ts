@@ -327,13 +327,16 @@ describe("CFG-5 cross-checks", () => {
       ).not.toContain("pre-existing social")
     })
 
-    it("warns loudly when no bootstrap admin is configured", () => {
-      expect(load().warnings.map((warning) => warning.code)).toContain(
+    it("says nothing about administrators on a fresh deployment (D52)", () => {
+      // The bootstrap warning is gone with the bootstrap. A database with no
+      // users is the ordinary state of a new deployment, and the IdP announces
+      // it by serving `/setup` rather than by warning about configuration.
+      expect(load().warnings.map((warning) => warning.code)).not.toContain(
         "admin.bootstrap_skipped"
       )
     })
 
-    it("does not warn when a bootstrap admin is configured", () => {
+    it("rejects `admin.bootstrap`, which no longer exists (D52)", () => {
       const config = {
         ...baseConfig(),
         admin: {
@@ -343,9 +346,9 @@ describe("CFG-5 cross-checks", () => {
           },
         },
       }
-      expect(
-        load({ config }).warnings.map((warning) => warning.code)
-      ).not.toContain("admin.bootstrap_skipped")
+      // A clean break, not an ignored key: an operator upgrading with the old
+      // block still in place is told, rather than quietly getting no admin.
+      expect(messages({ config })).toContain("`bootstrap`")
     })
   })
 

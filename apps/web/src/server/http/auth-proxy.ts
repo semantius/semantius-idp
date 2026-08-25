@@ -119,6 +119,14 @@ export function errorCodeFor(result: AuthCallResult): string {
     case "ONLY_ADMINS_GRANT_ADMIN_ROLES":
     case "IMPERSONATION_DISABLED":
       return code.toLowerCase()
+    // D50: the client endpoints answer with their own codes, each of which
+    // names something the administrator can change.
+    case "CLIENT_ALREADY_EXISTS":
+    case "CLIENT_MANAGED_BY_FILE":
+    case "CLIENT_NOT_FOUND":
+    case "INVALID_CLIENT_DEFINITION":
+    case "SCOPE_NOT_ALLOWED":
+      return code.toLowerCase()
     case "USER_ALREADY_EXISTS":
       // SEC-7: sign-up must not confirm that an address is taken.
       return "signup_failed"
@@ -170,4 +178,36 @@ export async function readForm(
     if (typeof value === "string") result[key] = value.trim()
   }
   return result
+}
+
+/**
+ * The same, plus the repeated fields {@link readForm} collapses.
+ *
+ * A checkbox group posts its name once per ticked box, and the record above
+ * keeps only the last one — which is correct for every other form here and
+ * exactly wrong for "roles". Rather than change a helper a dozen handlers rely
+ * on, this returns both views of the same body: `fields` for the ordinary
+ * ones, `list(name)` for the repeated ones.
+ *
+ * The body can only be read once, so a handler picks one of the two and never
+ * both.
+ */
+export async function readFormMulti(request: Request): Promise<{
+  fields: Record<string, string>
+  list: (name: string) => string[]
+}> {
+  const form = await request.formData()
+  const fields: Record<string, string> = {}
+  for (const [key, value] of form.entries()) {
+    if (typeof value === "string") fields[key] = value.trim()
+  }
+  return {
+    fields,
+    list: (name) =>
+      form
+        .getAll(name)
+        .filter((value): value is string => typeof value === "string")
+        .map((value) => value.trim())
+        .filter((value) => value !== ""),
+  }
 }

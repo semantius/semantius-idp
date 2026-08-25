@@ -27,7 +27,7 @@ import type { Runtime } from "../runtime"
 import { claim } from "../http/one-shot"
 import { readSession } from "../http/session"
 import type { RouteSession } from "../http/session"
-import { effectiveRoles } from "../role-utils"
+import { effectiveRoles, isAdmin } from "../role-utils"
 
 export interface ProfileView {
   email: string
@@ -37,6 +37,17 @@ export interface ProfileView {
   lastName: string
   /** Catalog-filtered, in catalog order (FR-ROLE-2). */
   roles: string[]
+  /**
+   * Whether any held role opens `/admin` (FR-ROLE-3).
+   *
+   * Resolved here, on the server, against `admin.adminRoles` — not in the
+   * browser from `roles`, and pointedly not in `UiContext`, which is sent to
+   * anonymous visitors. It exists so the account shell can offer the
+   * administrator a way *into* the admin area; the area itself is gated by
+   * `routes/admin.tsx` and re-checked by every server function under it, so
+   * this flag decides a link and nothing else.
+   */
+  isAdmin: boolean
   twoFactorEnabled: boolean
   /** True while an administrator is impersonating (FR-ADMIN-5). */
   impersonated: boolean
@@ -108,6 +119,10 @@ export const fetchProfile = createServerFn({ method: "GET" }).handler(
       firstName: current.user.firstName ?? "",
       lastName: current.user.lastName ?? "",
       roles: effectiveRoles(current.user.roles.join(","), runtime.config.roles),
+      isAdmin: isAdmin(
+        current.user.roles.join(","),
+        runtime.config.adminRoles
+      ),
       twoFactorEnabled: current.user.twoFactorEnabled,
       impersonated: current.session.impersonatedBy !== undefined,
     }
@@ -217,6 +232,35 @@ export async function apiKeyBelongsTo(
     .limit(1)
   return row !== undefined
 }
+
+/**
+ * Claims the API key a creation just minted, if the landing URL carries a
+ * handle (FR-KEY-1).
+ *
+ * The key itself never appears in a URL — the module header of
+ * `server/http/one-shot.ts` is the argument, and this is the same shape the
+ * 2FA enrolment below uses. Claiming consumes the stash, so the value can be
+ * rendered on exactly one page load and a reload shows nothing.
+ */
+export const claimApiKeySecret = createServerFn({ method: "GET" })
+  .inputValidator((handle: unknown) =>
+    typeof handle === "string" ? handle : ""
+  )
+  .handler(async ({ data: handle }): Promise<string | null> => {
+    if (handle === "") return null
+    const runtime = await getRuntime()
+    const current = await readSession(runtime, getRequest())
+    if (!current) return null
+
+    const stashed = await claim(runtime, handle)
+    if (!stashed) return null
+
+    const payload = JSON.parse(stashed) as { userId: string; key: string }
+    // The handle is unguessable, but a stash claimed by the wrong account
+    // would still be a bug worth refusing rather than rendering.
+    if (payload.userId !== current.user.id) return null
+    return payload.key
+  })
 
 /**
  * Claims a pending 2FA enrolment, if the landing URL carries a handle.

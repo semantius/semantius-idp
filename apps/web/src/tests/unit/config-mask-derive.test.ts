@@ -18,7 +18,6 @@ describe("mask.ts (CFG-5, SEC-5)", () => {
       social: {
         github: { clientId: "public-id", clientSecret: "very-secret" },
       },
-      admin: { bootstrap: { email: "admin@example.com", password: "hunter2" } },
       clients: [{ clientId: "web", clientSecret: "s".repeat(40) }],
     })
     expect(masked).toEqual({
@@ -26,7 +25,6 @@ describe("mask.ts (CFG-5, SEC-5)", () => {
       site: { name: "IdP" },
       email: { resend: { apiKey: "***" } },
       social: { github: { clientId: "public-id", clientSecret: "***" } },
-      admin: { bootstrap: { email: "admin@example.com", password: "***" } },
       clients: [{ clientId: "web", clientSecret: "***" }],
     })
   })

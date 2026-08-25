@@ -1,6 +1,6 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-25 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `22db5a3`
+**As of:** 2026-08-25 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `fb0e5a1`
 **Plan:** `~/.claude/plans/finish-idp-v1-s3-m6-m14.md`
 **Spec:** [spec-v1.md](spec-v1.md) — amended through **D38**
 
@@ -959,6 +959,8 @@ troubleshooting — is still to come.
 This session, newest first:
 
 ```
+fb0e5a1 feat(m12): the image, and seven things that only running it could find
+94a0ae7 docs(status): point the handoff at the commit it describes
 22db5a3 fix(dev): the sign-in page had no CSS, and no gate could see it (+ M12 lifecycle)
 cffdc65 feat(security): headers, the request log that never existed, and real rate limits (M11)
 1c56e9f feat(admin): the admin surface, and the rules Better Auth has no opinion about (M10)

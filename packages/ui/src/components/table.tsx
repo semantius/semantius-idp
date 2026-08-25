@@ -1,15 +1,9 @@
+"use client"
+
 import * as React from "react"
 
 import { cn } from "@workspace/ui/lib/utils"
 
-/**
- * A table, wrapped in its own horizontal scroller.
- *
- * The wrapper is not decoration: the admin user list has more columns than a
- * phone has room for, and without it the *page* scrolls sideways — which moves
- * the navigation off screen and is the one layout failure a small screen never
- * recovers from gracefully.
- */
 function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (
     <div
@@ -63,7 +57,7 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
     <tr
       data-slot="table-row"
       className={cn(
-        "border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted",
+        "border-b transition-colors hover:bg-muted/50 has-aria-expanded:bg-muted/50 data-[state=selected]:bg-muted",
         className
       )}
       {...props}
@@ -112,11 +106,11 @@ function TableCaption({
 
 export {
   Table,
+  TableHeader,
   TableBody,
-  TableCaption,
-  TableCell,
   TableFooter,
   TableHead,
-  TableHeader,
   TableRow,
+  TableCell,
+  TableCaption,
 }

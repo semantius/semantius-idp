@@ -4,6 +4,11 @@ The contract for any agent working in this repository. `CLAUDE.md` is a symlink
 to this file, because tools disagree about the name and the knowledge should not
 be duplicated to satisfy them.
 
+> Git stores `CLAUDE.md` as a symlink (mode `120000`). On a Windows checkout
+> without Developer Mode it materialises as a one-line text file containing
+> `AGENTS.md` — that is expected. Do not "fix" it by copying the content across;
+> two copies is the thing the symlink exists to prevent.
+
 **Everything an agent must remember lives here, in the repository.** Not in a
 per-user memory store outside it — that is invisible to review, invisible to
 every other agent and to every human, and it is lost with the machine. If you

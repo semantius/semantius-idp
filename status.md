@@ -1,15 +1,20 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-24 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `c0d8d8e`
+**As of:** 2026-08-25 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `cffdc65`
 **Plan:** `~/.claude/plans/finish-idp-v1-s3-m6-m14.md`
 **Spec:** [spec-v1.md](spec-v1.md) — amended through **D38**
 
-**S3, M6, M7, M8 and M9 are done and committed; M10 is done and awaiting its
-commit.** Every gate green: lint, typecheck, unit (362), integration (173
-across eighteen files), coverage thresholds including the 85 % per-module
+**S3 and M6–M11 are done and committed. M12 is started, not finished:** its
+lifecycle half (OPS-4 draining, the health-check exclusions) and the CLI
+recovery command are in; the container, compose, Caddy and CI halves are not —
+see "M12 — what is in and what is not". Every gate green: lint, typecheck,
+unit (435), integration (204 across twenty-two files), coverage thresholds including the 85 % per-module
 gates, schema-drift, config-schema staleness, dependency pinning, and the
-client-bundle gate — the admin area is route-split, so the largest new chunk
-is the 18 KB user-detail page rather than anything on the sign-in path.
+client-bundle gate.
+
+**If you are wondering why the sign-in page looked unstyled** — it was, for
+every developer, on every page, since spike S3, and no gate in this repository
+could see it. That story is the first section below.
 
 ---
 
@@ -20,7 +25,146 @@ treated as pre-work before any further milestone starts._
 
 ---
 
-## What this session did, and what it broke open
+## The sign-in page had no CSS, and nothing could tell
+
+**Reported by the owner as "the login page is unbranded".** It was, and not
+only the login page: under `vite dev`, *every* page had been arriving with no
+stylesheet, no client entry and no hot reload. What made it look like a
+branding bug rather than a total one is that the server-rendered markup was
+perfect — the site name, the layout, every Tailwind class name, all present.
+Only the paint was missing.
+
+**Cause.** `vite.config.ts` set `base: "./"`, which spike S3 chose so that one
+build relocates to any mount path. Vite 7 and earlier coerced a relative base
+back to `/` for the dev server; Vite 8.0.16 does not, and prefixes every
+transform URL with `/./` instead. A real path survives that — `/./src/router.tsx`
+still resolves against the root, which is why the app itself kept working — but
+Vite's own URLs are recognised by their `/@` prefix and do not:
+
+```
+vite:resolve  /./@fs/C:/…/packages/ui/src/styles/globals.css  ->  null
+```
+
+`/@fs/…`, `/@id/…` and `/@vite/client` all resolved to null, fell through to
+the application router, and came back as its 404 page — behind a stylesheet
+link that looked perfectly well-formed. **Fixed** by making the relative base a
+*build* concern only: `base: command === "build" ? "./" : "/"`. The built output
+is unaffected — `dist/server` still emits `"./assets/globals-<hash>.css"`, which
+is exactly what `assetUrl()` rewrites onto the mount path — so S3's sub-path
+property is untouched, and that was checked by building rather than by
+reasoning.
+
+**Why no gate caught it, which is the more important half.** Every gate here
+reads HTML or JSON. `test:e2e` has been declared-but-inert since M1, there is
+no `playwright.config.ts`, and not one test had ever asked a dev server for an
+asset. The markup assertions all passed because the markup was right.
+`src/tests/integration/dev-server.test.ts` is the missing gate: it starts a real
+Vite dev server and fetches `/@vite/client` and the stylesheet, asserting the
+second is `text/css` containing compiled Tailwind. Putting the old config back
+makes all three of its cases fail, which was checked rather than assumed.
+
+That closes the specific hole. **The general one is still open:** nothing in
+this repository renders a page in a browser and looks at it. That is M13's job
+(TST-6 plus axe), and this is the second time a purely visual defect has
+shipped past a green board — R-1 was the first.
+
+---
+
+## M12 — what is in and what is not
+
+**In, and verified:**
+
+- **OPS-4 draining.** `server/http/lifecycle.ts` splits shutdown into the two
+  things it actually is: *stop being chosen* (`/readyz` answers 503 the moment
+  SIGTERM lands) and *stop holding* (the pool closes only once the in-flight
+  requests have finished). `src/serve.ts` owns the socket, so the handlers live
+  there: begin draining → `server.stop()` → force-close past
+  `server.shutdownTimeoutSeconds` → `releaseResources()` → exit 0. A second
+  signal exits at once. `/healthz` keeps answering 200 throughout, because a
+  container draining on purpose is not one to restart.
+  `runtime.shutdownRuntime()` closes a runtime **only if one was built** — the
+  obvious `getRuntime().then((r) => r.shutdown())` would run the whole OPS-2
+  sequence, migrations included, on the way out of the door.
+
+  The *ordering* is extracted as `runDrain` and tested with fakes
+  (`tests/unit/lifecycle.test.ts`), and `/readyz`'s 503 is tested against the
+  real route handler (`tests/unit/readyz-draining.test.ts`). Both exist for a
+  blunt reason: **Windows cannot deliver SIGTERM to a handler at all** —
+  `uv_kill` maps it to `TerminateProcess` — so the real path cannot be
+  exercised on the machine this is built on. Only TST-8's containerised smoke
+  test will, and it does not exist yet. Treat the signal wiring itself as
+  unverified until then; the sequence it drives is not.
+
+  One thing found while building it: importing `lifecycle.ts` from
+  `server-entry.ts` dragged `runtime.ts` — Better Auth, its plugin graph and
+  Drizzle — out of a lazily-loaded chunk and into the entry, taking
+  `server-entry.js` from 279 kB to 1.56 MB. The runtime import is dynamic now
+  and the entry is 282 kB. Noticed only because the build output was read
+  rather than skimmed.
+- **Health-check exclusions.** Already true, and now stated where it is
+  checked: the request log skips both paths (`isQuietPath`, unit-tested), and
+  neither is a Better Auth route, so no rate-limit bucket has ever applied to
+  them.
+- **`idp reset-admin`** (`server/admin/reset-admin.ts`, `pnpm reset-admin`) —
+  the plan's `create-admin` under the name the owner asked for, and what makes
+  P0'.1 stop being a schema drop.
+
+**Not started:** the image, compose, the two Caddyfiles, `branding.$.ts`, the
+`smoke-test.ts`, the CI docker job, the cleanup job, and the remaining OPS-6
+commands (`config validate`, `rotate-keys`, `cleanup`). M12 is not done, and
+the drain is proven by reading the code rather than by signalling a container —
+TST-8's smoke test is where that proof belongs, and it does not exist yet.
+
+### `idp reset-admin`, and the two things it refuses
+
+It resets the named administrator's credential password back to
+`admin.bootstrap.password`, re-arms `mustChangePassword`, makes the account
+reachable again (active, unbanned, verified) and deletes every session — all
+under the `bootstrapAdmin` advisory lock, so it cannot race a booting
+container. The password is never printed, logged or written to the audit trail.
+
+Two refusals, both deliberate and both tested:
+
+1. **It does not promote.** An address that exists and holds no admin role is
+   refused. A local command that promoted whatever it was pointed at would be a
+   one-line privilege escalation for anyone who can read the config folder.
+2. **It does not create an address you typed.** With no argument it will create
+   `admin.bootstrap.email` — that is the bootstrap contract, and running it
+   against a fresh database is an intended path. But
+   `idp reset-admin adnim@example.com` fails rather than quietly provisioning a
+   second administrator. Found by running it: the first version created one.
+
+Proof is `src/tests/integration/reset-admin.test.ts`, which lives through the
+whole incident — create, sign in, change the password to something only the
+operator knows, lose it, reset, sign in again with the `.env` value.
+
+### The `azp` discriminator, deferred from M10 and now fixed
+
+`sessionTokenPayload` decided "did this come from an API key?" with
+`typeof session.session.token !== "string"`. In 1.7.1 the api-key plugin puts
+the **key string** there, so the test was always false: every key-issued JWT
+claimed `azp: "idp"`, and `apiKeys.tokenClientId` was configuration that did
+nothing. It stayed invisible for two reasons, not one — `tokens.test.ts`
+asserted the behaviour the bug produced, *and* the test config left
+`tokenClientId` at its `"idp"` default, so that assertion would have passed
+whichever way the discriminator went.
+
+The answer now comes from `isApiKeySession`, reading a marker
+`options/api-key-gate.ts` stamps on the session it watched the plugin build —
+the one place in the process that knows. The marker is a `Symbol.for` key for
+two reasons that both matter: `JSON.stringify` ignores it, so `/get-session`
+answers exactly what it answered before; and no request body, database row or
+parsed JSON can ever produce a symbol, so a caller cannot claim to be an API
+key by sending a field. `azp` is authorization-relevant, so that second
+property is pinned by its own unit test.
+
+`tokens.test.ts` now sets `tokenClientId: "api-key-client"` and asserts both
+halves — the key exchange carries it, and the same endpoint reached with a
+session cookie carries `"idp"`.
+
+---
+
+## S3–M8: what those sessions did, and what they broke open
 
 Four milestones landed in plan order: **S3** (one build, two mount points),
 **M6** (2FA + social enforcement), **M7** (the account area, API keys, the
@@ -202,7 +346,7 @@ all against `idp_live_m11`, dropped afterwards.
 
 ---
 
-## One thing waiting on you: the dev login
+## The dev login (P0'.1) — recoverable now, one command away
 
 **The persistent `idp` schema's bootstrap admin is still stranded**, exactly as
 the plan's P0'.1 describes: someone completed the forced password change from
@@ -223,17 +367,27 @@ which is what the standing rule asks for and what the runtime-schema machinery
   (`dev-web`, `dev-spa`), so the reconcile step has something to do and the M13
   sample RP has a client to use.
 
-**Two ways to fix the dev login, and the choice is yours:**
+**This no longer needs a schema drop, and it no longer needs a decision from
+you.** `pnpm reset-admin` is the recovery: it puts the password back to
+whatever `.env`'s `IDP_ADMIN_PASSWORD` says, re-arms the forced change, and
+ends the stale session. Nothing is destroyed — the user row, its audit history
+and its id all survive, which the drop would not have managed.
 
-1. If you remember the password typed at 09:29 on 2026-08-24, put it in `.env`
-   as `IDP_ADMIN_PASSWORD` with a comment and nothing else changes.
-2. Otherwise `drop schema idp cascade` through `DIRECT_DATABASE_URL` and boot;
-   the startup sequence re-bootstraps from `.env`. It destroys one stranded
-   user, one stale session and three audit rows.
+Against the persistent schema, with no environment override:
 
-It was left for you because it is irreversible and nothing blocks on it.
-**M12 makes it stop mattering**: `idp create-admin` recovers a stranded admin
-without dropping anything, and M14's README is written around that.
+```
+pnpm reset-admin
+```
+
+Then sign in with `IDP_ADMIN_PASSWORD` and choose a new password when the
+forced-change page asks. The `drop schema idp cascade` option is retired, and
+M14's README lockout section is written around this command instead.
+
+**It has not been run against the persistent `idp` schema.** Every exercise of
+it in this session used throwaway schemas (`idp_test_reset_admin_*` from the
+integration suite, `idp_cli_check` for the CLI itself, dropped afterwards), per
+the standing rule — the one command whose whole purpose is to change a
+persistent credential is not one to fire unannounced.
 
 ---
 
@@ -649,22 +803,28 @@ schema identifier in the committed SQL. And **`buildRuntime` had to become
 async**, because the OAuth provider queries `oauth_resource` from its own
 `init()`; on a fresh database the process died before it could migrate.
 
-## Not done (M12–M14)
+## Not done (the rest of M12, M13, M14)
 
-The container and CLI, e2e and docs. Everything before them is done.
+The image and everything around it, e2e, and docs. What is left of M12 is
+listed in "M12 — what is in and what is not" above; M13 and M14 are untouched.
 
 Accepted deviations, unchanged: `drizzle.config.ts` sits in `apps/web/`
-because drizzle-kit resolves paths relative to itself; `test:e2e` stays
-declared-but-inert until M13; `.agents/skills/` is committed tooling.
+because drizzle-kit resolves paths relative to itself; `.agents/skills/` is
+committed tooling.
 
-New deviation, recorded as **D33**: `pending_authorization` is generated into
-the schema and never written to — 1.7.1's signed continuation makes the store
+**`test:e2e` is no longer merely inert — it is now a known gap with a name.**
+Nothing in this repository renders a page in a browser, which is how a sign-in
+page with no stylesheet passed every gate for four milestones. M13 is where
+that is fixed, and it should be read as load-bearing rather than as polish.
+
+Deviation **D33**, unchanged: `pending_authorization` is generated into the
+schema and never written to — 1.7.1's signed continuation makes the store
 unnecessary. See the M9 section above.
 
-New since the last update: `src/serve.ts` is the `Bun.serve` wrapper spike S3
-needed — static files out of `dist/client` with the mount path stripped. M12
-extends it with OPS-4 draining, health-check exclusions and the SEC-5 request
-log rather than starting from nothing.
+`src/serve.ts` is the `Bun.serve` wrapper spike S3 needed — static files out of
+`dist/client` with the mount path stripped — and now also carries M12's OPS-4
+signal handling. The SEC-5 request log and the SEC-4 headers live one layer
+down in `src/server-entry.ts`, so `vite dev` gets them too.
 
 ---
 
@@ -714,8 +874,8 @@ confirmation page for the no-hint case.
 | M8   | **OIDC core**                                     | ✅ done — a, b and c                                                                  |
 | M9   | Authorize UX: continuation, consent, end-session  | ✅ done                                                                               |
 | M10  | Admin UI + API                                    | ✅ done                                                                               |
-| M11  | Security hardening                                | ⬜ **next** — partial, see below                                                      |
-| M12  | Container, compose, Caddy, CLI, ops               | ⬜ not started                                                                        |
+| M11  | Security hardening                                | ✅ done                                                                               |
+| M12  | Container, compose, Caddy, CLI, ops               | 🟨 **in progress** — lifecycle + `reset-admin` in; image, compose, Caddy, CI, cleanup job not |
 | M13  | E2E, sample RP, a11y                              | ⬜ not started                                                                        |
 | M14  | Docs & release — **including the README (DOC-1)** | ⬜ not started                                                                        |
 

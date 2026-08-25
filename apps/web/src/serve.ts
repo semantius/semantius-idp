@@ -16,20 +16,27 @@
  * a `Request` does not carry it — so it is stamped into a private header for
  * the entry to resolve `server.trustProxy` against.
  *
- * M12 extends this with SIGTERM draining and health-check exclusions; what is
- * here is what spike S3 needed to prove the sub-path build, plus M11's edge.
+ * **Draining (M12, OPS-4).** SIGTERM and SIGINT are handled here because this
+ * is the layer that owns the socket. The sequence is deliberately two-phase —
+ * say not-ready, *then* let go — and the reasoning for that split is in
+ * `server/http/lifecycle.ts`.
  */
 
 import { loadConfig } from "./server/config/loader"
 import { loadDevEnv } from "./server/dev-env"
 import { SOCKET_ADDRESS_HEADER } from "./server/http/client-ip"
+import { runDrain } from "./server/http/lifecycle"
 
 const DEFAULT_ENTRY = new URL("../dist/server/server-entry.js", import.meta.url)
   .href
 const DEFAULT_CLIENT_DIR = new URL("../dist/client/", import.meta.url)
 
 interface ServerEntryModule {
-  default: { fetch: (request: Request) => Response | Promise<Response> }
+  default: {
+    fetch: (request: Request) => Response | Promise<Response>
+    beginDraining: () => void
+    releaseResources: () => Promise<void>
+  }
 }
 
 loadDevEnv()
@@ -112,6 +119,59 @@ const server = Bun.serve({
     return entry.fetch(withSocketAddress(request, listener.requestIP(request)))
   },
 })
+
+/**
+ * SIGTERM/SIGINT → drain → exit 0 (OPS-4).
+ *
+ * Three things happen, in this order and for three different reasons:
+ *
+ *  1. `beginDraining()` — `/readyz` answers 503 immediately, so an orchestrator
+ *     takes this instance out of rotation while it is still perfectly able to
+ *     finish what it has.
+ *  2. `server.stop()` — stop accepting, and resolve once the in-flight requests
+ *     have finished. Bounded by `server.shutdownTimeoutSeconds`: past that,
+ *     `server.stop(true)` cuts the remaining connections, because a request
+ *     that has not finished by then is not going to.
+ *  3. `releaseResources()` — the database pool closes **last**, after nothing
+ *     is using it. Closing it in step 1 would turn the drain into a burst of
+ *     500s, which is the failure this whole sequence exists to avoid.
+ *
+ * Exit is always 0. A signalled shutdown is the orchestrator getting what it
+ * asked for, and reporting it as a failure makes every rolling deploy look
+ * like a crash in whatever is reading exit codes.
+ *
+ * A second signal during the drain exits at once — that is an operator who has
+ * decided not to wait, and the polite answer is to stop.
+ */
+let draining = false
+
+async function drain(signal: NodeJS.Signals): Promise<void> {
+  if (draining) {
+    console.log(`idp: ${signal} again — exiting now`)
+    process.exit(0)
+  }
+  draining = true
+
+  const seconds = config.file.server.shutdownTimeoutSeconds
+  console.log(`idp: ${signal} received, draining for up to ${seconds}s`)
+
+  await runDrain({
+    beginDraining: () => entry.beginDraining(),
+    stopAccepting: () => server.stop(),
+    forceClose: () => {
+      console.log("idp: drain timed out, closing remaining connections")
+      void server.stop(true)
+    },
+    release: () => entry.releaseResources().catch(() => undefined),
+    timeoutMs: seconds * 1000,
+  })
+
+  console.log("idp: stopped")
+  process.exit(0)
+}
+
+process.on("SIGTERM", () => void drain("SIGTERM"))
+process.on("SIGINT", () => void drain("SIGINT"))
 
 console.log(
   `idp listening on http://${server.hostname}:${server.port}${basePath}`

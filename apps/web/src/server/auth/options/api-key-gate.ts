@@ -30,6 +30,28 @@ import type { GateUser } from "./database-hooks"
 /** The header the api-key plugin reads, and the one this gate watches for. */
 export const API_KEY_HEADER = "x-api-key"
 
+/**
+ * Marks a session the api-key plugin synthesised from a key.
+ *
+ * **A symbol, on purpose, twice over.** `JSON.stringify` ignores symbol keys,
+ * so `/get-session` answers exactly what it answered before — the marker is
+ * for this process, not for the caller. And a symbol cannot arrive from
+ * outside: no request body, no database row and no JSON payload can ever
+ * produce one, so a client cannot claim to be an API key by sending a field.
+ *
+ * `Symbol.for` rather than `Symbol()` because the server bundle and the CLI
+ * are separate module graphs, and a marker that only matches within one of
+ * them is a marker that fails silently in the other.
+ */
+export const API_KEY_SESSION = Symbol.for("semantius-idp.apiKeySession")
+
+/** Whether this session came from an API key rather than a browser sign-in. */
+export function isApiKeySession(session: {
+  session?: Record<PropertyKey, unknown> | null
+}): boolean {
+  return session.session?.[API_KEY_SESSION] === true
+}
+
 export interface ApiKeyGateDeps {
   /** Absent during schema generation. */
   audit?: Audit
@@ -40,6 +62,7 @@ interface GateContext {
   context: {
     session?: {
       user?: (GateUser & { id?: unknown }) | null
+      session?: Record<PropertyKey, unknown> | null
     } | null
   }
 }
@@ -80,6 +103,11 @@ function wrap(entry: HookEntry, deps: ApiKeyGateDeps): HookEntry {
     // No session means the key was already refused — invalid, expired or
     // revoked — and the plugin has thrown.
     if (!user) return result
+
+    // The session in hand was built from a key, and this is the only place
+    // that knows it. `azp` in a session JWT depends on it (FR-KEY-3).
+    const built = gate.context.session?.session
+    if (built) built[API_KEY_SESSION] = true
 
     try {
       assertUserMaySignIn(user)

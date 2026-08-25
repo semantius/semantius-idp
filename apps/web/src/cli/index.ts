@@ -8,10 +8,10 @@
  * shape M12 fills in: argv dispatch, one function per command, a single exit
  * path, and a usage line that lists what is real rather than what is planned.
  *
- * The remaining OPS-6 commands — `config validate`, `create-admin`,
- * `rotate-keys`, `cleanup` — arrive with the milestones that give them
- * something to do. A command that exists but does nothing is worse than one
- * that is honestly absent, so they are not stubbed here.
+ * The remaining OPS-6 commands — `config validate`, `rotate-keys`, `cleanup` —
+ * arrive with the milestones that give them something to do. A command that
+ * exists but does nothing is worse than one that is honestly absent, so they
+ * are not stubbed here.
  *
  * **Every mutating command runs on the direct connection under its own
  * advisory lock** (D27). A session lock does not hold through a transaction
@@ -22,7 +22,9 @@
  *   bun run src/cli/index.ts version
  */
 
-import { createLogOnlyAudit } from "../server/audit"
+import { resetAdmin } from "../server/admin/reset-admin"
+import { createAudit, createLogOnlyAudit } from "../server/audit"
+import { createAuth } from "../server/auth/instance"
 import { loadConfig } from "../server/config/loader"
 import { createDb } from "../server/db/client"
 import { runMigrations } from "../server/db/migrate"
@@ -36,6 +38,10 @@ const USAGE = `idp ${version}
 Usage:
   idp migrate             Apply pending database migrations (DM-1, OPS-6)
   idp reconcile-clients   Sync oauth_clients.json into the database (FR-OIDC-2)
+  idp reset-admin [email] Reset an administrator to the configured bootstrap
+                          password and force a change at the next sign-in.
+                          Defaults to admin.bootstrap.email. Creates the
+                          account if the address holds none (FR-ADMIN-1).
   idp version             Print the running version
 
 Configuration is read from IDP_CONFIG_DIR, or /config (CFG-1).`
@@ -125,12 +131,80 @@ async function reconcile(): Promise<void> {
   }
 }
 
+/**
+ * `idp reset-admin [email]` — the lockout recovery (OPS-6, FR-ADMIN-1).
+ *
+ * The rules live in `server/admin/reset-admin.ts`; what belongs here is the
+ * wiring, and one thing the module cannot do for itself: **a Better Auth
+ * instance**. `context.password.hash` is the only way to produce a hash the
+ * sign-in path will verify (SEC-10), and it lives on the instance — so the
+ * command builds one, exactly as start-up does, rather than reaching for a
+ * hashing library and inventing a second parameter set.
+ *
+ * The migration is *not* run first. A database this command can reset an admin
+ * on is one an IdP has already booted against; migrating here would make a
+ * recovery command a schema-changing one, which is not what an operator locked
+ * out of their own deployment should be reaching for.
+ */
+async function resetAdminCommand(email?: string): Promise<void> {
+  loadDevEnv()
+  const { config, warnings } = loadConfig()
+  const logger = createLogger({
+    level: config.file.logging.level,
+    format: config.file.logging.format,
+    base: { service: "idp-cli" },
+  })
+  for (const warning of warnings) {
+    logger.warn(warning.message, { warningCode: warning.code })
+  }
+
+  const database = createDb(config, { max: 2 })
+  const locking = createDb(config, { direct: true, max: 2 })
+  try {
+    const auth = createAuth({ config, database, logger })
+    // The OAuth provider plugin seeds `oauth_resource` from its own `init()`;
+    // awaiting the context here means that finishes before anything else runs,
+    // and surfaces a connection failure as this command's error rather than as
+    // an unhandled rejection later.
+    await auth.$context
+
+    const result = await resetAdmin(
+      {
+        config,
+        database,
+        locking,
+        auth,
+        logger,
+        audit: createAudit(database, logger),
+      },
+      email ? { email } : {}
+    )
+
+    process.stdout.write(
+      (result.created
+        ? `Created ${result.email} as ${result.role}.\n`
+        : `Reset ${result.email}.\n`) +
+        (result.reactivated
+          ? "The account was not reachable (banned, pending or rejected) and is now active.\n"
+          : "") +
+        (result.sessionsRevoked > 0
+          ? `Signed out ${result.sessionsRevoked} session(s).\n`
+          : "") +
+        "The password is admin.bootstrap.password (IDP_ADMIN_PASSWORD). " +
+        "The next sign-in must change it.\n"
+    )
+  } finally {
+    await locking.close().catch(() => undefined)
+    await database.close().catch(() => undefined)
+  }
+}
+
 function printVersion(): void {
   process.stdout.write(revision ? `${version} (${revision})\n` : `${version}\n`)
 }
 
 export async function run(argv: readonly string[]): Promise<number> {
-  const [command] = argv
+  const [command, ...rest] = argv
 
   switch (command) {
     case "migrate":
@@ -138,6 +212,9 @@ export async function run(argv: readonly string[]): Promise<number> {
       return 0
     case "reconcile-clients":
       await reconcile()
+      return 0
+    case "reset-admin":
+      await resetAdminCommand(rest[0])
       return 0
     case "version":
     case "--version":

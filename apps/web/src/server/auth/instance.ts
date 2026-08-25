@@ -39,7 +39,7 @@ import { buildAdminEndpoints } from "../admin/endpoints"
 import { buildAdminAfterHook, buildAdminGuard } from "../admin/guard"
 import { SOCKET_ADDRESS_HEADER } from "../http/client-ip"
 import { buildEmailCallbacks } from "./options/email-callbacks"
-import { gateApiKeyPlugin } from "./options/api-key-gate"
+import { gateApiKeyPlugin, isApiKeySession } from "./options/api-key-gate"
 import { buildAfterHook, buildBeforeHook } from "./options/hooks"
 import { buildSocialProviders } from "./options/social"
 import { buildValidateUserInfo } from "./options/social-sync"
@@ -554,9 +554,17 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
  *
  * `azp` is the honest answer to "who is presenting this": an API-key exchange
  * is not the browser session it borrows, so it says so —
- * `apiKeys.tokenClientId` rather than the IdP itself. The api-key plugin
- * synthesises a session whose `id` is the *key's* id, which is what makes the
- * two distinguishable at all.
+ * `apiKeys.tokenClientId` rather than the IdP itself.
+ *
+ * **The discriminator was wrong until M12.** It asked whether
+ * `session.session.token` was a string, on the theory that a synthesised
+ * session has no session token; in 1.7.1 the api-key plugin puts the *key
+ * string* there, so the test was always false, every key-issued JWT claimed
+ * `azp: "idp"`, and `apiKeys.tokenClientId` was configuration that did
+ * nothing. Worse, it was invisible: `tokens.test.ts` asserted the behaviour
+ * the bug produced. The answer now comes from `isApiKeySession`, which reads a
+ * marker our own gate stamps on the session it watched the plugin build — the
+ * one place in the process that knows.
  *
  * A non-active user gets nothing, whatever the session says:
  * `assertUserMaySignIn` runs on every mint, because a session or a key can
@@ -568,10 +576,7 @@ function sessionTokenPayload(
 ): Record<string, unknown> {
   assertUserMaySignIn(session.user)
 
-  // The api-key plugin builds a session object by hand, with the key's id as
-  // the session id and the key itself as the token; a real session row is the
-  // only one whose token is a session token.
-  const fromApiKey = typeof session.session.token !== "string"
+  const fromApiKey = isApiKeySession(session)
   return {
     ...buildUserClaims(session.user, config),
     azp: fromApiKey ? config.file.apiKeys.tokenClientId : IDP_PLUGIN_ID,

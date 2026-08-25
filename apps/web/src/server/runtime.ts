@@ -69,6 +69,24 @@ export function setRuntime(next: Runtime): void {
   pending = Promise.resolve(next)
 }
 
+/**
+ * Closes the runtime **if one was ever built** (OPS-4).
+ *
+ * Pointedly not `getRuntime().then(r => r.shutdown())`: that would *build* a
+ * runtime in order to close it, so a process signalled before it served its
+ * first request would run migrations, seed a signing key and reconcile clients
+ * on its way to exiting. A start-up that failed is also nothing to close —
+ * awaiting the rejected promise here would turn a shutdown into a crash, so it
+ * is swallowed.
+ */
+export async function shutdownRuntime(): Promise<void> {
+  const current = pending
+  if (!current) return
+  pending = undefined
+  const runtime = await current.catch(() => undefined)
+  await runtime?.shutdown().catch(() => undefined)
+}
+
 export async function buildRuntime(): Promise<Runtime> {
   loadDevEnv()
   const { config, warnings, dir } = loadConfig()

@@ -53,6 +53,11 @@ beforeAll(async () => {
     config: {
       signUp: { enabled: true, requireApproval: false },
       auth: { requireEmailVerification: false },
+      // Deliberately *not* the "idp" default. `azp` for a key exchange is
+      // supposed to be this value, and with the default the assertion below
+      // would pass whether the discriminator worked or not — which is exactly
+      // how it passed for two milestones while it did not.
+      apiKeys: { tokenClientId: "api-key-client" },
       oauth: {
         scopes: ["openid", "profile", "email", "offline_access"],
         resources: [
@@ -546,13 +551,28 @@ describe("the session JWT from an API key (FR-KEY-3)", () => {
     expect(payload.email).toBe(EMAIL)
     expect(payload.roles).toEqual(["admin", "user"])
     // `azp` is the honest answer to "who is presenting this": a key exchange
-    // is not the browser session it borrows.
-    expect(payload.azp).toBe("idp")
+    // is not the browser session it borrows, so it carries the configured
+    // `apiKeys.tokenClientId` — and never the IdP's own id, which is what a
+    // JWT minted from a real browser session says.
+    expect(payload.azp).toBe("api-key-client")
+    expect(payload.azp).not.toBe("idp")
     expect(payload.sid).toBeTruthy()
 
     await expect(
       jwtVerify(jwt, await jwks(), { issuer: ISSUER })
     ).resolves.toBeTruthy()
+
+    // The other half of the same claim: the identical endpoint, reached with a
+    // browser session instead of a key, says the IdP is presenting it. Without
+    // this the assertion above only proves that *some* constant is emitted.
+    const fromSession = await context.auth.handler(
+      new Request(`${ISSUER}/api/auth/token`, { headers: { cookie } })
+    )
+    expect(fromSession.status).toBe(200)
+    const { token: sessionJwt } = (await fromSession.json()) as {
+      token: string
+    }
+    expect(decodeJwt(sessionJwt).azp).toBe("idp")
   })
 })
 

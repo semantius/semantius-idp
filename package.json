@@ -10,7 +10,8 @@
     "typecheck": "turbo typecheck",
     "test": "turbo test",
     "test:integration": "turbo test:integration",
-    "test:e2e": "turbo test:e2e"
+    "test:e2e": "turbo test:e2e",
+    "reset-admin": "pnpm --filter web run reset-admin"
   },
   "devDependencies": {
     "prettier": "3.8.3",

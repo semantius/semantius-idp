@@ -49,6 +49,7 @@ import {
   requestIdFrom,
   withRequestContext,
 } from "./server/http/request-log"
+import { beginDraining, releaseResources } from "./server/http/lifecycle"
 import {
   withSecurityHeaders,
   withStandardRetryAfter,
@@ -140,7 +141,20 @@ function unmountServerFnRequest(request: Request): Request {
   return new Request(url, request)
 }
 
-export type ServerEntry = { fetch: RequestHandler<Register> }
+export type ServerEntry = {
+  fetch: RequestHandler<Register>
+  /**
+   * OPS-4, step one: `/readyz` starts answering 503 so the load balancer stops
+   * choosing this instance. In-flight requests are untouched.
+   */
+  beginDraining: () => void
+  /**
+   * OPS-4, step two: closes the database pool. Called by `src/serve.ts` only
+   * after the in-flight requests have finished, because closing it under one
+   * of them is how an orderly rollout produces 500s.
+   */
+  releaseResources: () => Promise<void>
+}
 
 const entry: ServerEntry = {
   fetch: async (request, ...rest) => {
@@ -186,6 +200,8 @@ const entry: ServerEntry = {
     withHeaders.headers.set("X-Request-Id", requestId)
     return withHeaders
   },
+  beginDraining,
+  releaseResources,
 }
 
 export default entry

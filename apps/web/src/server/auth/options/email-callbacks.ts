@@ -10,7 +10,7 @@
 
 import type { IdpConfig } from "../../config/derive"
 import type { Mailer } from "../../email/mailer"
-import { createBasePaths, APP_ROUTES } from "../../oidc/base-path"
+import { AUTH_BASE_PATH, createBasePaths, APP_ROUTES } from "../../oidc/base-path"
 
 export interface EmailCallbackDeps {
   config: IdpConfig
@@ -38,6 +38,41 @@ export function issuerLink(
   return url.toString()
 }
 
+/**
+ * The link a verification e-mail carries.
+ *
+ * **It points at Better Auth's own endpoint, not at `/verify-email`.** The
+ * app route of that name renders the *outcome* — confirmed, expired, already
+ * used — and has no way to spend a token; a link straight to it opened a page
+ * that offered to send another one, and the address was never confirmed. The
+ * e2e suite is what finally noticed, because it is the only layer that opens
+ * the link the way a person does.
+ *
+ * So the token goes where it is consumed, and `callbackURL` brings the browser
+ * back to the branded page afterwards. That also keeps the mutation inside
+ * Better Auth's handler, where the SEC-6 audit hook for `/verify-email`
+ * already lives, and out of a route loader — loaders are isomorphic and run on
+ * client navigations too, which is no place for something that spends a
+ * single-use token.
+ *
+ * On failure Better Auth appends `&error=<code>` to this URL rather than
+ * replacing it, which is why the page reads `error` in preference to
+ * `status` (`routes/verify-email.tsx`).
+ *
+ * Still built from `server.baseUrl` only, so a poisoned `Host` header cannot
+ * redirect the confirmation anywhere (SEC-1).
+ */
+export function verificationLink(config: IdpConfig, token: string): string {
+  const paths = createBasePaths(config.base)
+  const url = new URL(paths.url(`${AUTH_BASE_PATH}/verify-email`))
+  url.searchParams.set("token", token)
+  url.searchParams.set(
+    "callbackURL",
+    `${paths.path(APP_ROUTES.verifyEmail)}?status=success`
+  )
+  return url.toString()
+}
+
 export function buildEmailCallbacks(deps: EmailCallbackDeps) {
   const { config, mailer } = deps
 
@@ -48,7 +83,7 @@ export function buildEmailCallbacks(deps: EmailCallbackDeps) {
       token: string
     }) => {
       await mailer.send("verifyEmail", data.user.email, {
-        url: issuerLink(config, APP_ROUTES.verifyEmail, data.token),
+        url: verificationLink(config, data.token),
       })
     },
 
@@ -73,7 +108,7 @@ export function buildEmailCallbacks(deps: EmailCallbackDeps) {
       token: string
     }) => {
       await mailer.send("verifyEmail", data.newEmail, {
-        url: issuerLink(config, APP_ROUTES.verifyEmail, data.token),
+        url: verificationLink(config, data.token),
       })
     },
   }

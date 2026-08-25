@@ -7,6 +7,7 @@ import {
   messageForErrorCode,
   messageForNoticeCode,
 } from "@/lib/auth-errors"
+import { errorCodeFor } from "@/server/http/auth-proxy"
 import { getCatalog } from "@/server/i18n"
 
 /**
@@ -92,5 +93,29 @@ describe("error codes", () => {
 
   it("says nothing when there is no error at all", () => {
     expect(messageForErrorCode(undefined, t)).toBeUndefined()
+  })
+})
+
+describe("errorCodeFor (FR-ADMIN-4, SEC-7)", () => {
+  function codeFor(code: string, status = 403): string {
+    return errorCodeFor({ ok: false, status, body: { code }, cookies: [] })
+  }
+
+  it("maps both ban refusals onto the page that explains a suspension", () => {
+    // Two refusals reach the sign-in handler for the same state. The gate in
+    // `database-hooks.ts` raises `ACCOUNT_BANNED`; Better Auth's admin plugin
+    // has a ban check of its own on `session.create` that runs first and
+    // raises `BANNED_USER`. Only the first was mapped, so an account suspended
+    // from `/admin/users` was told its password was wrong.
+    expect(codeFor("ACCOUNT_BANNED")).toBe("banned")
+    expect(codeFor("BANNED_USER")).toBe("banned")
+  })
+
+  it("still collapses an unknown refusal into the neutral one", () => {
+    // SEC-7: a wrong password and an address with no account are the same
+    // answer, and anything unrecognised joins them rather than leaking.
+    expect(codeFor("SOMETHING_NEW")).toBe("invalid_credentials")
+    expect(codeFor("ANYTHING", 429)).toBe("rate_limited")
+    expect(codeFor("ANYTHING", 500)).toBe("server_error")
   })
 })

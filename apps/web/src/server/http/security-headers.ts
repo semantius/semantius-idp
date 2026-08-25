@@ -47,13 +47,32 @@ export interface SecurityHeaderOptions {
    * own shell has somewhere documented to put it rather than editing this file.
    */
   connectSrc?: readonly string[]
+  /**
+   * Origins a form on these pages may end up submitting to: every registered
+   * client's redirect and post-logout origin (FR-OIDC-17's list, reused).
+   *
+   * **Without this, no OAuth login can complete in Chrome.** The sign-in form
+   * posts to this origin and the response is a 303 to the client's redirect
+   * URI, and Chromium applies `form-action` to the *redirect* as well as to
+   * the submission — so a bare `form-action 'self'` cancels the navigation
+   * with `ERR_ABORTED`, leaving the browser sitting on a filled-in sign-in
+   * form while the server has already issued the authorization code. Firefox
+   * does not check redirects, so it worked there, which is worse than if it
+   * had failed everywhere.
+   *
+   * These are the origins the operator has already trusted with authorization
+   * codes; the policy is no wider than the deployment's own client list.
+   */
+  formAction?: readonly string[]
 }
 
 /** The Content-Security-Policy value. Exported so a test can read it apart. */
 export function contentSecurityPolicy({
   connectSrc = [],
-}: Pick<SecurityHeaderOptions, "connectSrc"> = {}): string {
+  formAction = [],
+}: Pick<SecurityHeaderOptions, "connectSrc" | "formAction"> = {}): string {
   const connect = ["'self'", ...connectSrc].join(" ")
+  const forms = ["'self'", ...formAction].join(" ")
   return [
     "default-src 'self'",
     // See the module header: streamed framework scripts leave no seam for a
@@ -67,7 +86,7 @@ export function contentSecurityPolicy({
     "font-src 'self'",
     `connect-src ${connect}`,
     "frame-ancestors 'none'",
-    "form-action 'self'",
+    `form-action ${forms}`,
     "base-uri 'self'",
     "object-src 'none'",
     // Nothing here is ever framed, and nothing navigates a top-level frame.

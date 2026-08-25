@@ -44,7 +44,7 @@ export const Route = createFileRoute("/consent")({
     return {
       ui: context.ui,
       request: await fetchConsentRequest({
-        data: readOauthQuery({ search, searchStr: location.searchStr }) ?? "",
+        data: readOauthQuery({ search }) ?? "",
       }),
       error: searchString(search.error),
     }

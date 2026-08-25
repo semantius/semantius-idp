@@ -7,18 +7,29 @@ import { makeStack, startStack } from "./stack"
 import type { Stack } from "./stack"
 
 /**
- * Brings both stacks up before any spec runs (TST-6).
+ * Brings the stacks up before any spec runs (TST-6).
  *
  * The handles are written to a file rather than kept in memory, because
  * Playwright runs `globalSetup`, the workers and `globalTeardown` in separate
  * processes — a module-level variable here is invisible to every spec.
+ *
+ * **`E2E_ONLY` starts a subset**, e.g. `E2E_ONLY=host-root` while a spec is
+ * being written: one stack instead of two turns a four-minute wait into a
+ * two-minute one. It is not derived from `--project`, because the config
+ * `globalSetup` receives lists every project whatever was asked for, and a
+ * filter that silently did nothing would be worse than no filter. CI sets
+ * neither and gets both.
  */
 export const STACKS_FILE = join(tmpdir(), "idp-e2e-stacks.json")
 
 export default async function globalSetup(): Promise<void> {
   const workDir = mkdtempSync(join(tmpdir(), "idp-e2e-"))
+  const only = (process.env.E2E_ONLY ?? "")
+    .split(",")
+    .map((name) => name.trim())
+    .filter((name) => name !== "")
 
-  const stacks: Record<string, Stack> = {
+  const all: Record<string, Stack> = {
     "host-root": makeStack({
       project: E2E.hostRoot.project,
       port: E2E.hostRoot.port,
@@ -32,6 +43,13 @@ export default async function globalSetup(): Promise<void> {
       workDir: join(workDir, "subpath"),
     }),
   }
+
+  const stacks =
+    only.length === 0
+      ? all
+      : Object.fromEntries(
+          Object.entries(all).filter(([name]) => only.includes(name))
+        )
 
   writeFileSync(STACKS_FILE, JSON.stringify(stacks, null, 2))
 

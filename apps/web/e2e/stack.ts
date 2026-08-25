@@ -50,11 +50,35 @@ export const ADMIN = {
   password: "e2e-admin-password-02",
 }
 
-/** A confidential client for the OIDC specs. */
+/**
+ * The port the sample relying party listens on (`e2e/sample-rp.ts`).
+ *
+ * One port for both clients below, because the specs run one RP at a time and
+ * a second port would only be a second thing to keep in step with the
+ * registered redirect URIs.
+ */
+export const RP_PORT = 4571
+
+/** A confidential client for the OIDC specs. Consent is skipped (FR-OIDC-10). */
 export const CLIENT = {
   clientId: "e2e-app",
   clientSecret: "e2e-client-secret-of-at-least-32-chars",
-  redirectUri: "http://127.0.0.1:4571/callback",
+  redirectUri: `http://127.0.0.1:${RP_PORT}/callback`,
+  postLogoutRedirectUri: `http://127.0.0.1:${RP_PORT}/post-logout`,
+}
+
+/**
+ * The same application with `skipConsent: false`.
+ *
+ * A separate client rather than a reconfiguration of the first: consent is a
+ * per-client property, and two clients is how a real deployment expresses
+ * "this one asks and that one does not" (FR-OIDC-10).
+ */
+export const CONSENT_CLIENT = {
+  clientId: "e2e-consent",
+  clientSecret: "e2e-consent-secret-of-at-least-32-chars",
+  redirectUri: CLIENT.redirectUri,
+  postLogoutRedirectUri: CLIENT.postLogoutRedirectUri,
 }
 
 function docker(args: string[], env: Record<string, string>) {
@@ -104,13 +128,44 @@ const COMPOSE_FILES = [
 ]
 
 /**
+ * A deep merge over plain objects, for the configuration overrides.
+ *
+ * Deliberately shallow about arrays — an override that names `oauth.scopes`
+ * means *those* scopes, not those appended to the defaults.
+ */
+function merge(
+  base: Record<string, unknown>,
+  patch: Record<string, unknown>
+): Record<string, unknown> {
+  const result: Record<string, unknown> = { ...base }
+  for (const [key, value] of Object.entries(patch)) {
+    const existing = result[key]
+    result[key] =
+      isPlainObject(existing) && isPlainObject(value)
+        ? merge(existing, value)
+        : value
+  }
+  return result
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return (
+    typeof value === "object" && value !== null && !Array.isArray(value)
+  )
+}
+
+/**
  * Writes the config folder this stack runs on.
  *
  * Sign-up is **on** and approval **off**: TST-6 drives registration,
  * verification and reset, and a queue in front of them would only test the
- * queue. The approval spec turns it back on for itself.
+ * queue. The approval spec turns it back on for itself, through
+ * {@link reconfigure}.
  */
-function writeConfig(stack: Stack): void {
+function writeConfig(
+  stack: Stack,
+  overrides: Record<string, unknown> = {}
+): void {
   const configDir = join(stack.workDir, "config")
   const secretsDir = join(stack.workDir, "secrets")
   mkdirSync(configDir, { recursive: true })
@@ -121,7 +176,7 @@ function writeConfig(stack: Stack): void {
   writeFileSync(
     join(configDir, "config.json"),
     JSON.stringify(
-      {
+      merge({
         server: {
           baseUrl: stack.baseURL,
           host: "0.0.0.0",
@@ -159,7 +214,7 @@ function writeConfig(stack: Stack): void {
         // limits have their own integration suite.
         rateLimit: { enabled: false },
         logging: { level: "info", format: "json" },
-      },
+      }, overrides),
       null,
       2
     )
@@ -178,7 +233,19 @@ function writeConfig(stack: Stack): void {
             redirectUris: [CLIENT.redirectUri],
             scopes: ["openid", "profile", "email", "offline_access"],
             enableEndSession: true,
-            postLogoutRedirectUris: [CLIENT.redirectUri],
+            postLogoutRedirectUris: [CLIENT.postLogoutRedirectUri],
+          },
+          {
+            clientId: CONSENT_CLIENT.clientId,
+            type: "web",
+            name: "E2E Consent App",
+            clientSecret: CONSENT_CLIENT.clientSecret,
+            redirectUris: [CONSENT_CLIENT.redirectUri],
+            scopes: ["openid", "profile", "email", "offline_access"],
+            // The whole reason this client exists (FR-OIDC-10).
+            skipConsent: false,
+            enableEndSession: true,
+            postLogoutRedirectUris: [CONSENT_CLIENT.postLogoutRedirectUri],
           },
         ],
       },
@@ -267,6 +334,55 @@ async function waitForReady(stack: Stack): Promise<boolean> {
     await new Promise((resolve) => setTimeout(resolve, 250))
   }
   return false
+}
+
+/**
+ * Restarts the IdP on a changed `config.json` (CFG-5).
+ *
+ * Configuration is read once at start-up and there is no hot reload, so a spec
+ * that needs different settings — sign-up off, approval on — has to restart
+ * the container. That is cheaper than a third stack, and it is also what an
+ * operator does.
+ *
+ * The database survives, which is the point: a user registered before the
+ * restart is still there afterwards.
+ *
+ * Always pair with {@link resetConfig} in an `afterAll`, or the next spec file
+ * inherits settings it never asked for.
+ */
+export async function reconfigure(
+  stack: Stack,
+  overrides: Record<string, unknown>
+): Promise<void> {
+  writeConfig(stack, overrides)
+  const profile = stack.basePath === "" ? [] : ["--profile", "caddy"]
+  const restarted = docker(
+    [
+      "compose",
+      ...COMPOSE_FILES,
+      "-p",
+      stack.project,
+      ...profile,
+      "restart",
+      "idp",
+    ],
+    composeEnv(stack)
+  )
+  if (restarted.code !== 0) {
+    throw new Error(
+      `stack ${stack.project} did not restart:\n${restarted.stderr}\n${logs(stack)}`
+    )
+  }
+  if (!(await waitForReady(stack))) {
+    throw new Error(
+      `stack ${stack.project} never became ready after a restart:\n${logs(stack)}`
+    )
+  }
+}
+
+/** Back to the configuration every other spec assumes. */
+export function resetConfig(stack: Stack): Promise<void> {
+  return reconfigure(stack, {})
 }
 
 export function logs(stack: Stack): string {

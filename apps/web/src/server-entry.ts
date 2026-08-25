@@ -42,6 +42,7 @@ import type { IdpConfig } from "./server/config/derive"
 import { loadConfig } from "./server/config/loader"
 import { loadDevEnv } from "./server/dev-env"
 import { SOCKET_ADDRESS_HEADER, clientIpFrom } from "./server/http/client-ip"
+import { clientOrigins } from "./server/http/cors"
 import {
   buildLogEntry,
   isQuietPath,
@@ -193,6 +194,9 @@ const entry: ServerEntry = {
       {
         https: context?.config.base.secure ?? false,
         basePath: base,
+        // The registered redirect origins, so a completed authorization can
+        // actually reach the client that asked for it (SEC-4, D46).
+        formAction: context ? [...clientOrigins(context.config)] : [],
       }
     )
     // Echoed so an operator reading a 500 in a browser can quote the id that

@@ -131,6 +131,81 @@ jobs:
         run: pnpm --filter web run test:coverage
 
   # ---------------------------------------------------------------------------
+  # End-to-end, in a browser, against the built image (TST-6).
+  #
+  # The class of defect this exists for is the one that survives every other
+  # gate: markup that is correct and a page that is nevertheless unusable. The
+  # sign-in page shipped with no stylesheet for four milestones because every
+  # gate in this repository read HTML, and the HTML was perfect.
+  #
+  # Both deployment shapes run, because the sub-path one is a different
+  # application as far as every URL is concerned (OPS-10, risk R3): a wrong
+  # cookie `Path`, a stripped prefix or a missing origin-root RFC 8414 route
+  # only shows up when a browser drives it.
+  #
+  # It builds its own image rather than waiting for the `docker` job, so the
+  # two run in parallel; the layer cache is shared, and `docker` is the job
+  # that writes it.
+  # ---------------------------------------------------------------------------
+  e2e:
+    if: github.event_name != 'schedule'
+    name: e2e · host root + sub-path
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: [check]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Build the image the suite drives (OPS-1)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: semantius-idp:e2e
+          build-args: |
+            IDP_VERSION=0.0.0-e2e
+            IDP_REVISION=${{ github.sha }}
+          # Read-only: the `docker` job owns this cache.
+          cache-from: type=gha
+
+      - name: Browsers
+        # `--with-deps` because a bare runner has none of the shared libraries
+        # Chromium needs, and the failure otherwise is a linker error inside a
+        # browser nobody can see.
+        run: pnpm --filter web exec playwright install --with-deps chromium
+
+      - name: End-to-end (TST-6)
+        env:
+          IDP_IMAGE: semantius-idp:e2e
+        run: pnpm --filter web run test:e2e
+
+      - name: Report
+        # Traces, screenshots and video for the run that failed — retained only
+        # then, because a green run should leave nothing behind.
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report
+            apps/web/test-results
+          retention-days: 7
+
+  # ---------------------------------------------------------------------------
   # The image, and the only test that exercises it (OPS-1, TST-8, SEC-9).
   #
   # Everything above tests the application. This tests the artefact: that what

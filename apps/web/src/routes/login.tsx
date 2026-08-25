@@ -27,6 +27,7 @@ import {
   resumeAuthorization,
 } from "@/server/oidc/continuation"
 import { APP_ROUTES } from "@/server/oidc/base-path"
+import { banNoticeFor } from "@/server/auth/ban-notice"
 import { getRuntime } from "@/server/runtime"
 import type { UiContext } from "@/server/ui-context"
 
@@ -56,7 +57,7 @@ export const Route = createFileRoute("/login")({
       // The provider puts the whole signed authorization request in the query
       // when it sends someone here to sign in (FR-OIDC-9). Carried through
       // the form unread: only the provider can verify it.
-      oauthQuery: readOauthQuery({ search, searchStr: location.searchStr }),
+      oauthQuery: readOauthQuery({ search }),
     }
   },
   component: LoginPage,
@@ -92,8 +93,22 @@ export const Route = createFileRoute("/login")({
             )
           }
           if (code === "banned") {
+            // FR-ADMIN-4: the page shows the reason and the expiry, and takes
+            // both from the **ban record** — never from anything the browser
+            // sent. Until this looked them up, `/banned` had the wording for
+            // both and was never given either, so a suspended user was
+            // stonewalled and kept retrying a password that was correct.
+            //
+            // Read here rather than carried out of the refusal, because the
+            // refusal that fires on this path is the admin plugin's own
+            // `BANNED_USER`, which carries neither. Reading it discloses
+            // nothing: the ban check runs at session creation, so the password
+            // has already been verified and the only person who reaches this
+            // line is the account's owner (SEC-7 intact).
+            const banned = await banNoticeFor(runtime, form.email ?? "")
             return redirectWithCookies(
-              `${runtime.config.base.basePath}${APP_ROUTES.banned}`
+              `${runtime.config.base.basePath}${APP_ROUTES.banned}` +
+                (banned ? `?${banned}` : "")
             )
           }
           return redirectWithCookies(

@@ -2,22 +2,22 @@
 
 **As of:** 2026-08-25 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `fd5aa4b`
 **Plan:** `~/.claude/plans/finish-idp-v1-s3-m6-m14.md`
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D44**
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D47**
 
-**S3 and M6–M12 are done. M13 is started** — the Playwright harness runs
-against the built image in both deployment shapes, and the gate that would have
-caught the unstyled sign-in page now exists. **M14 (docs, release) is
-untouched.** Every gate green: lint, typecheck, unit (464), integration
-(210 across twenty-three files), coverage thresholds including the 85 %
-per-module gates, schema-drift,
-config-schema staleness, dependency pinning, the client-bundle gate — and, new
-in M12, the **TST-8 container smoke test**, which drives the built image from
-`compose up` through a scripted forced password change to a verified JWT and a
-clean SIGTERM.
+**S3 and M6–M13 are done. M14 (docs, release) is untouched.** Every gate
+green: lint, typecheck, unit (478), integration (210 across twenty-three
+files), coverage thresholds including the 85 % per-module gates, schema-drift,
+config-schema staleness, dependency pinning, the client-bundle gate, the TST-8
+container smoke test — and, new in M13, the **TST-6 end-to-end suite**: 68
+tests in a real browser against the built image, in both deployment shapes.
 
-**If you are wondering why the sign-in page looked unstyled** — it was, for
-every developer, on every page, since spike S3, and no gate in this repository
-could see it. That story is the first section below.
+**What that suite did on its first complete run is the story below.** It found
+fourteen defects, three of which meant a documented feature did not work at
+all — the e-mail verification link went to a page that cannot spend a token, no
+OIDC login could resume through the sign-in page, and `form-action 'self'`
+cancelled the redirect that carries an authorization code, so no OAuth login
+could complete in Chrome. None of them was visible to any other gate, because
+every other gate in this repository reads HTML, JSON or a database row.
 
 ---
 
@@ -26,21 +26,7 @@ could see it. That story is the first section below.
 Everything not yet done, in the order it should be done. Nothing else in this
 file is a to-do list.
 
-### 1. M13 — finish it
-
-- **Flow specs** in `apps/web/e2e/`, per TST-6: login variants · signup on/off ·
-  verification and reset through captured mail · 2FA enrol and challenge ·
-  consent · end-session · the account area · the admin surface · full OIDC
-  through the sample RP. Both projects.
-- **axe** — `@axe-core/playwright`, a new devDependency that must be **pinned
-  exactly** (the CI gate refuses ranges). Zero serious/critical per page; closes
-  R-1's automated a11y check.
-- **Sample RP** — `apps/web/e2e/sample-rp.ts`: `Bun.serve` + `openid-client`
-  6.8.7 (already pinned), discovery, code + PKCE, token display. DOC-3 refers
-  to it.
-- **CI e2e job** — built image, both projects, merge-required.
-
-### 2. M14 — none of it is started
+### 1. M14 — none of it is started
 
 - `apps/web/scripts/generate-config-reference.ts` (CFG-4) with `--check` in CI.
 - Rewrite `README.md` per DOC-1. The quick start must be the **exact**
@@ -53,7 +39,7 @@ file is a to-do list.
   **Stop at the mandatory gate** — tagging v1.0.0 and publishing the image need
   owner sign-off.
 
-### 3. Open, non-blocking
+### 2. Open, non-blocking
 
 - The dev login on the persistent `idp` schema is still stranded (one user,
   `mustChangePassword = true`). `pnpm reset-admin` fixes it in one command and
@@ -109,6 +95,136 @@ than the session's token type (**D41**), `reset-admin`'s two refusals
 (**D42**), the four `docker-compose.yml` pins that decide *which* database and
 *which* configuration (**D43**), and `site.logo` accepting both `logo.svg` and
 `branding/logo.svg` (**D44**).
+
+---
+
+## M13 — the browser found fourteen things
+
+The milestone is what TST-6 asks for: flow specs for every interstitial and
+every page of the account and admin areas, an axe pass over all of them, a
+sample relying party the suite drives, and a CI job that runs the lot against
+the built image in both deployment shapes.
+
+What it is *for* is the paragraph below. Fourteen defects, none of which any
+other gate could see, because every other gate in this repository reads HTML,
+JSON or a database row — and each of these needed a browser to follow a
+redirect, apply a policy, or render a page.
+
+**Three of them made a documented feature simply not work.**
+
+- **The e-mail verification link did nothing.** It pointed at
+  `/verify-email?token=…` — the page that *reports* the outcome, which has no
+  way to spend a token. Every self-registered account stayed unverified, and
+  with `auth.requireEmailVerification` on that means it could never sign in.
+  The link now goes to the endpoint that consumes the token, with a
+  `callbackURL` back to the branded page; the page reads Better Auth's refusal
+  codes so an expired link still says so.
+- **No OIDC login could resume through an interstitial (FR-OIDC-9).** The
+  provider signs the authorization request and lists the signed parameter names
+  in a **repeated** `ba_param` key. The page carried the request back using
+  `location.searchStr`, and Start does not keep the bytes it received — its
+  serialiser writes a repeated key as one JSON array, so the string never
+  matched its own signature. `/oauth2/continue` answered 400, the resume was
+  abandoned, and the user landed on `auth.defaultRedirect` looking like a
+  client that had asked for nothing. `readOauthQuery` now rebuilds the query
+  from the parsed search, which restores the values the verifier actually
+  reads.
+- **`form-action 'self'` made every OAuth login impossible in Chrome.** A
+  completed authorization is a 303 *from a form* to the client's redirect URI,
+  and Chromium applies `form-action` to the redirect a submission follows, not
+  only to where it is posted. The navigation was cancelled with `ERR_ABORTED`:
+  the browser sat on a filled-in sign-in form while the server had already
+  issued the authorization code, and the only trace was a console refusal.
+  Firefox does not check redirects, which is how it survived every manual
+  walk-through. The directive now allows the registered redirect origins —
+  FR-OIDC-17's list, nothing wider — recorded as **D46**.
+
+**Four were the page telling the user something untrue.**
+
+- **Saving your profile appeared to do nothing.** `/account` read the
+  cookie-cached copy of the user, so the redirect after a save re-rendered the
+  name that had just been replaced. The cached cookie Better Auth re-mints on
+  `/update-user` was also being dropped instead of replayed.
+- **"Sign out everywhere else" did not sign anyone out** for up to five
+  minutes — the same cookie cache, against a requirement (FR-OIDC-12,
+  "revocation is immediate at all IdP endpoints") that the sessions page states
+  in its own description. `fetchProfile` is authoritative now, which is what
+  `functions/admin.ts` had already decided for the same reason.
+- **A suspended account was told its password was wrong.** Better Auth's admin
+  plugin has a ban check of its own that runs ahead of this deployment's gate
+  and answers `BANNED_USER`; unmapped, it collapsed into
+  `invalid_credentials`. Both codes reach `/banned` now, and the page is given
+  the reason and expiry from the ban record — wording it has always had and was
+  never given (FR-ADMIN-4).
+- **Pagination did nothing.** `/admin/users` and `/admin/audit` had no
+  `loaderDeps`, so a client-side link to `page=2` moved the URL and left page
+  one on the screen. The GET forms worked, because a form submits as a real
+  navigation, which is why nothing had noticed.
+
+**Three were RP-initiated logout, which nothing had ever driven.** FR-OIDC-11
+had no behavioural test at all before this milestone, and all three of its parts
+were broken at once (**D47**): the route skipped the provider entirely when no
+`id_token_hint` was present, so the signed confirmation cookie it depends on was
+never minted; `/sign-out` then posted the original request back to
+`/oauth2/end-session`, which asked the same question again rather than
+completing anything; and when the provider does decide to ask, its own
+unbranded `<h1>Confirm logout</h1>` reached the browser instead of this
+deployment page. The GET is forwarded now, an HTML answer becomes a redirect to
+`/sign-out` **carrying the provider's `Set-Cookie`**, and that page posts
+`action: "confirm"` to the endpoint which actually finishes the logout.
+
+**Four were quieter, and two of those were about the record.**
+
+- **Turning two-factor authentication on or off sent no e-mail.** The template
+  has existed since M6 and nothing ever called it (FR-MAIL-1) — and this is the
+  message whose whole purpose is to reach someone when it was not them who
+  turned it off.
+- **Changing a password from `/account/security` sent nothing either.**
+  `onPasswordReset` covers the reset path and only the reset path.
+- **Every confirmed e-mail address was audited as a failure.** `ctx.redirect()`
+  builds an `APIError` and the endpoint *throws* it, so the after-hook read
+  "threw" as "failed" — and the verification endpoint redirects only on the
+  success path. An audit trail that reports every success as a failure is worse
+  than none (SEC-6).
+- **The active entry in the account navigation was styled as an inactive one.**
+  `activeProps.className` is appended rather than merged, so
+  `text-muted-foreground` and `text-foreground` sat at equal specificity and
+  whichever Tailwind emitted later won. It was the muted one — which is also
+  why axe reported the contrast failure that found it.
+
+**And one was spec debt rather than a defect.** Discovery advertises
+`{baseUrl}/.well-known/jwks.json` as `jwks_uri`, while FR-OIDC-15 still called
+`/api/auth/jwks` canonical. The code is right — FR-OIDC-16 lets a deployment
+publish only `/.well-known/*` for Neon to reach, and a `jwks_uri` under
+`/api/auth` would advertise a key set that deployment cannot serve. Recorded as
+**D45**; DOC-2 now names the advertised URL.
+
+### What the suite is
+
+`apps/web/e2e/`, run by Playwright against the built image in two projects —
+host root and `/idp` behind Caddy — with one compose stack each, a generated
+config folder and its own Postgres, so a run can never touch the operator's
+stack or the persistent `idp` schema.
+
+- **`actions.ts`** — sign in, register, open a link out of the captured mail,
+  complete a forced change. Written against the rendered page rather than the
+  endpoints underneath: a helper that signed in with `fetch` would keep working
+  the day the form stopped submitting.
+- **Flow specs** — `auth`, `signup` (which restarts the container to drive
+  sign-up on/off and approval on/off, and puts the configuration back),
+  `password-reset`, `two-factor` (real RFC 6238 codes from the integration
+  suite's own implementation), `account`, `admin`, `oidc`, plus the `rendering`
+  gate M13 already had.
+- **`a11y.spec.ts`** — `@axe-core/playwright`, pinned exactly, zero serious or
+  critical violations on every public, account and admin page. This is R-1's
+  automated half; the manual half stays in the release checklist.
+- **`sample-rp.ts`** — `Bun.serve` and `openid-client`, discovery through
+  code + PKCE to a displayed token, plus RP-initiated logout. DOC-3 points a
+  reader at this file, so the suite drives **that file**, run the way the
+  documentation says to run it, rather than an `openid-client` instance built
+  inside a test.
+- **CI** — a merge-required `e2e` job that builds the image and runs both
+  projects, uploading traces only when something fails.
 
 ---
 
@@ -315,7 +431,7 @@ session cookie carries `"idp"`.
 
 ---
 
-## M13 — the browser gate exists now
+## M13, the first half — the browser gate exists now
 
 **The hole this closes is the one this session opened with.** Nothing in the
 repository had ever rendered a page and looked at it, which is how a sign-in
@@ -373,12 +489,10 @@ Two harness defects, both found by running it:
    asked for at once — reachable in the natural tab order, and the accessible
    name changes with the state.
 
-### What is left of M13
+### What was left of M13
 
-The flow specs (sign-up, verification and reset through captured mail, 2FA
-enrolment and challenge, consent, end-session, the account area, the admin
-surface), axe with zero serious/critical per page, the sample relying party,
-and the CI e2e job.
+The flow specs, axe, the sample relying party and the CI job — all of which
+landed, and all of which are described in the section above.
 
 ---
 
@@ -1021,10 +1135,9 @@ schema identifier in the committed SQL. And **`buildRuntime` had to become
 async**, because the OAuth provider queries `oauth_resource` from its own
 `init()`; on a fresh database the process died before it could migrate.
 
-## Not done (the rest of M13, and M14)
+## Not done (M14)
 
-The e2e flow specs, axe, the sample RP and the CI e2e job; then docs and the
-release. What M13 has so far is above.
+Docs and the release. Everything before it has landed.
 
 Accepted deviations, unchanged: `drizzle.config.ts` sits in `apps/web/`
 because drizzle-kit resolves paths relative to itself; `.agents/skills/` is
@@ -1096,7 +1209,7 @@ confirmation page for the no-hint case.
 | M10  | Admin UI + API                                    | ✅ done                                                                               |
 | M11  | Security hardening                                | ✅ done                                                                               |
 | M12  | Container, compose, Caddy, CLI, ops               | ✅ done — image, compose, both Caddyfiles, all seven CLI commands, cleanup job, TST-8 smoke |
-| M13  | E2E, sample RP, a11y                              | 🟨 **in progress** — harness + rendering specs green in both shapes; flows, axe and the sample RP to come |
+| M13  | E2E, sample RP, a11y                              | ✅ done — 68 tests in both shapes: flows, axe, the sample RP, and a merge-required CI job |
 | M14  | Docs & release — **including the README (DOC-1)** | ⬜ not started                                                                        |
 
 `README.md` is **DOC-1, in M14**. It currently carries a minimal

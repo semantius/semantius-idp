@@ -29,8 +29,20 @@ import { fetchRoles, fetchUsers } from "@/server/functions/admin"
  * colleague.
  */
 export const Route = createFileRoute("/admin/users/")({
-  loader: async ({ context, location }) => {
-    const search = location.search as Record<string, unknown>
+  /**
+   * The loader re-runs when the search changes.
+   *
+   * **Without `loaderDeps` it does not**, and that is not a subtlety: every
+   * control on this page is a link or a GET form, so "the state of the screen is
+   * the URL" only holds if a new URL re-reads the data. A form submits as a real
+   * navigation and looked fine; the pagination links are client-side, so Next
+   * moved the URL to `page=2` and left page one on the screen. Pagination did
+   * nothing at all, and nothing could see it — a loader with no declared
+   * dependency is cached against the *route*, not the query.
+   */
+  loaderDeps: ({ search }) => search as Record<string, unknown>,
+  loader: async ({ context, deps }) => {
+    const search = deps
     const query = {
       q: searchString(search.q),
       status: searchString(search.status),

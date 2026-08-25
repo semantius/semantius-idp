@@ -45,6 +45,14 @@ test.describe("the sign-in page is actually rendered", () => {
     // 2. A stylesheet is present *and the browser parsed rules out of it*. A
     //    <link> that 404s still appears in `document.styleSheets` with zero
     //    rules, so counting sheets is not enough — counting rules is.
+    //
+    //    The threshold is deliberately far below what the page actually loads.
+    //    Tailwind emits only the utilities in use and Vite splits the result
+    //    across chunks, so the exact count moves whenever a class is added
+    //    anywhere in the application — it once dropped from 103 to 87 and
+    //    failed a gate that had nothing to say about the change. Zero versus
+    //    not-zero is the real signal; the substance is the computed style
+    //    below.
     const rules = await page.evaluate(() =>
       [...document.styleSheets].reduce((total, sheet) => {
         try {
@@ -54,7 +62,7 @@ test.describe("the sign-in page is actually rendered", () => {
         }
       }, 0)
     )
-    expect(rules, "CSS rules the browser parsed").toBeGreaterThan(100)
+    expect(rules, "CSS rules the browser parsed").toBeGreaterThan(20)
 
     // 3. The card is laid out. Tailwind's `max-w-sm` and the centring on the
     //    shell are the two properties that would be gone with no stylesheet —

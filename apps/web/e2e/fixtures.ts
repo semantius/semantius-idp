@@ -46,15 +46,22 @@ export interface App {
   basePath: string
 }
 
-export const test = base.extend<{ stack: Stack; app: App }>({
-  // eslint-disable-next-line no-empty-pattern -- Playwright's fixture signature
-  stack: async ({}, use, testInfo) => {
-    const stack = stacks()[testInfo.project.name]
-    if (!stack) {
-      throw new Error(`no stack for the ${testInfo.project.name} project`)
-    }
-    await use(stack)
-  },
+export const test = base.extend<{ app: App }, { stack: Stack }>({
+  // **Worker-scoped**, which is what it actually is: one stack serves every
+  // test the worker runs. It also has to be, because `afterAll` can only see
+  // worker fixtures, and the spec that reconfigures the stack puts the
+  // configuration back there (`signup.spec.ts`).
+  stack: [
+    // eslint-disable-next-line no-empty-pattern -- Playwright's fixture signature
+    async ({}, use, workerInfo) => {
+      const stack = stacks()[workerInfo.project.name]
+      if (!stack) {
+        throw new Error(`no stack for the ${workerInfo.project.name} project`)
+      }
+      await use(stack)
+    },
+    { scope: "worker" },
+  ],
 
   app: async ({ page, stack }, use) => {
     const url = (path: string) =>

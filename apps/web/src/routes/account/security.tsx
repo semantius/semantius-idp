@@ -87,9 +87,21 @@ export const Route = createFileRoute("/account/security")({
               fresh.session.user.id
             )
           case "confirm-2fa":
-            return confirmTwoFactor(runtime, request, form, here)
+            return confirmTwoFactor(
+              runtime,
+              request,
+              form,
+              here,
+              fresh.session.user.email
+            )
           case "disable-2fa":
-            return disableTwoFactor(runtime, request, form, here)
+            return disableTwoFactor(
+              runtime,
+              request,
+              form,
+              here,
+              fresh.session.user.email
+            )
           default:
             return redirectWithCookies(withError(here, "not_found"))
         }
@@ -174,11 +186,22 @@ async function enableTwoFactor(
   )
 }
 
+/**
+ * Enrolment finishes here, and so does the notification (FR-MAIL-1, FR-2FA-1).
+ *
+ * **Sent from the route rather than from a hook**, because "the second factor
+ * changed" is a fact about the *enrolment*, and only these two handlers know
+ * which way it went. The template existed from M6 and nothing had ever called
+ * it: turning 2FA on or off sent no message at all, which is exactly the
+ * change an account's owner most needs to hear about from someone other than
+ * whoever made it. The e2e suite is what noticed.
+ */
 async function confirmTwoFactor(
   runtime: Runtime,
   request: Request,
   form: Form,
-  here: string
+  here: string,
+  email: string
 ): Promise<Response> {
   const result = await callAuth(
     runtime,
@@ -189,6 +212,7 @@ async function confirmTwoFactor(
   if (!result.ok) {
     return redirectWithCookies(withError(here, "two_factor_invalid"))
   }
+  await runtime.mailer.send("twoFactorChanged", email, { enabled: true })
   return redirectWithCookies(`${here}?notice=twofactor_on`, result.cookies)
 }
 
@@ -196,7 +220,8 @@ async function disableTwoFactor(
   runtime: Runtime,
   request: Request,
   form: Form,
-  here: string
+  here: string,
+  email: string
 ): Promise<Response> {
   const result = await callAuth(
     runtime,
@@ -215,6 +240,7 @@ async function disableTwoFactor(
       )
     )
   }
+  await runtime.mailer.send("twoFactorChanged", email, { enabled: false })
   return redirectWithCookies(`${here}?notice=twofactor_off`, result.cookies)
 }
 

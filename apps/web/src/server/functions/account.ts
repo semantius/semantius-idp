@@ -79,11 +79,26 @@ export interface ConsentView {
   createdAt: string
 }
 
-/** Profile plus the flags the account pages branch on. */
+/**
+ * Profile plus the flags the account pages branch on.
+ *
+ * **Authoritative**, for the same reason `functions/admin.ts` is: this is the
+ * guard on `/account/*` as well as the data behind it, and the ≤ 5 min cookie
+ * cache carries a *copy* of the user as they were when it was minted. Two
+ * things went wrong with the cached copy, and the e2e suite found both. A
+ * session signed out from "Sign out everywhere else" kept working in the other
+ * browser until the cache expired — which FR-OIDC-12 ("revocation is immediate
+ * at all IdP endpoints") does not allow, and which the sessions page
+ * flatly contradicts in its own description. And saving the profile appeared
+ * to do nothing: the redirect re-read the cache, so the form came back with
+ * the name the user had just replaced.
+ */
 export const fetchProfile = createServerFn({ method: "GET" }).handler(
   async (): Promise<ProfileView | null> => {
     const runtime = await getRuntime()
-    const current = await readSession(runtime, getRequest())
+    const current = await readSession(runtime, getRequest(), {
+      authoritative: true,
+    })
     if (!current) return null
 
     return {

@@ -16,6 +16,7 @@ import {
   withError,
 } from "@/server/http/auth-proxy"
 import { resolveSignInDestination } from "@/server/http/post-login"
+import { readSession } from "@/server/http/session"
 import { readOauthQuery } from "@/lib/oauth-query"
 import {
   OAUTH_QUERY_FIELD,
@@ -44,7 +45,7 @@ export const Route = createFileRoute("/change-password")({
       // Empty, not `/account`: an absent value has to fall through to
       // `auth.defaultRedirect` when the form is submitted (D28).
       returnTo: safeReturnTo(searchString(search.returnTo), ""),
-      oauthQuery: readOauthQuery({ search, searchStr: location.searchStr }),
+      oauthQuery: readOauthQuery({ search }),
       error: searchString(search.error),
     }
   },
@@ -92,6 +93,19 @@ export const Route = createFileRoute("/change-password")({
             ? "wrong_current_password"
             : errorCodeFor(result)
           return redirectWithCookies(withError(here, mapped))
+        }
+
+        // FR-AUTH-3, FR-MAIL-1: "your password was changed" is the message
+        // that tells someone their account has been taken, so it cannot be
+        // reserved for the reset path. `onPasswordReset` covers that one; this
+        // is the other half, and it was missing — changing a password from
+        // `/account/security` sent nothing at all.
+        //
+        // Read before the redirect and after the change, because the session
+        // survives it (only the *other* sessions are revoked).
+        const changed = await readSession(runtime, request)
+        if (changed) {
+          await runtime.mailer.send("passwordChanged", changed.user.email)
         }
 
         // Re-resolved rather than round-tripped: this is the far end of the

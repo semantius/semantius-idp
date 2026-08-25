@@ -26,8 +26,48 @@ export const OAUTH_QUERY_PARAM = "oauth_query"
 export interface OauthQuerySource {
   /** The parsed search parameters, as the router hands them over. */
   search: Record<string, unknown>
-  /** The raw query string, with or without its leading `?`. */
-  searchStr: string
+}
+
+/**
+ * The query string the request arrived with, rebuilt from the parsed search.
+ *
+ * **Not `location.searchStr`**, which is where this used to come from and is
+ * the reason no authorization ever resumed through an interstitial. Start
+ * re-serialises the search object rather than keeping the bytes it received,
+ * and its serialiser writes a repeated key as **one JSON array**:
+ *
+ *     sent   ba_param=ba_iat&ba_param=client_id&ba_param=exp
+ *     got    ba_param=%5B%22ba_iat%22%2C%22client_id%22%2C%22exp%22%5D
+ *
+ * The provider signs the authorization request and lists the signed parameter
+ * names in exactly that repeated `ba_param`, so the string the page posted
+ * back never matched its own signature: `/oauth2/continue` answered 400, the
+ * resume was abandoned, and the user landed on `auth.defaultRedirect` looking
+ * like a client that had asked for nothing. Every integration test passed
+ * throughout, because none of them goes through a router.
+ *
+ * Rebuilding from the parsed object restores the *values*, which is all the
+ * verifier reads — it parses the string with `URLSearchParams` and
+ * canonicalises before hashing, so neither parameter order nor the choice
+ * between `+` and `%20` matters.
+ *
+ * Numbers and booleans are stringified back: Start's parser is JSON-based, so
+ * `exp=1787657695` arrives as a number and `String()` returns the same digits.
+ * A value that was JSON to begin with (`state=[1,2]`) would not survive the
+ * round trip — no client sends one, and the signature would fail loudly rather
+ * than quietly if one did.
+ */
+export function rawSearch(search: Record<string, unknown>): string {
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(search)) {
+    if (value === undefined) continue
+    if (Array.isArray(value)) {
+      for (const item of value) params.append(key, String(item))
+    } else {
+      params.append(key, String(value))
+    }
+  }
+  return params.toString()
 }
 
 /**
@@ -39,7 +79,6 @@ export interface OauthQuerySource {
  */
 export function readOauthQuery({
   search,
-  searchStr,
 }: OauthQuerySource): string | undefined {
   const carried = search[OAUTH_QUERY_PARAM]
   if (typeof carried === "string" && carried !== "") return carried
@@ -47,6 +86,5 @@ export function readOauthQuery({
   if (typeof search.sig !== "string" || typeof search.client_id !== "string") {
     return undefined
   }
-  const raw = searchStr.startsWith("?") ? searchStr.slice(1) : searchStr
-  return raw === "" ? undefined : raw
+  return rawSearch(search) || undefined
 }

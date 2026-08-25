@@ -53,10 +53,14 @@ describe("e-mail flows", () => {
       const message = ctx.mailer.captured.last("verify-email")
       expect(message).toBeDefined()
       expect(message!.to).toBe(email)
-      // SEC-1: the link is built from server.baseUrl, never from a header.
+      // SEC-1: the link is built from server.baseUrl, never from a header —
+      // and it points at the endpoint that *consumes* the token, not at the
+      // page that reports the outcome, which is where it used to point and
+      // why confirming an address never worked in a browser.
       expect(message!.html).toContain(
-        "http://localhost:3000/verify-email?token="
+        "http://localhost:3000/api/auth/verify-email?token="
       )
+      expect(message!.text).toContain("callbackURL=%2Fverify-email%3Fstatus")
 
       // Unverified: password sign-in is refused (FR-AUTH-2).
       const beforeVerify = await ctx.auth.handler(

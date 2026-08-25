@@ -70,7 +70,13 @@ export const Route = createFileRoute("/account/")({
         if (!result.ok) {
           return redirectWithCookies(withError(here, errorCodeFor(result)))
         }
-        return redirectWithCookies(`${here}?notice=profile_saved`)
+        // Replayed, like every other proxied call: `/update-user` re-mints the
+        // cached session cookie with the new name, and dropping it left the
+        // page rendering the old one.
+        return redirectWithCookies(
+          `${here}?notice=profile_saved`,
+          result.cookies
+        )
       },
     },
   },

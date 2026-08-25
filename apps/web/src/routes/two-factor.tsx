@@ -52,7 +52,7 @@ export const Route = createFileRoute("/two-factor")({
       ui: context.ui,
       backup: searchFlag(search.backup),
       returnTo: safeReturnTo(searchString(search.returnTo), ""),
-      oauthQuery: readOauthQuery({ search, searchStr: location.searchStr }),
+      oauthQuery: readOauthQuery({ search }),
       error: searchString(search.error),
     }
   },

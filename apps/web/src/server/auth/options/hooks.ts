@@ -339,6 +339,22 @@ function subjectOf(returned: unknown, session: unknown): string | undefined {
   return typeof fromSession === "string" ? fromSession : undefined
 }
 
+/**
+ * Whether a thrown value is a redirect rather than a failure.
+ *
+ * `ctx.redirect(url)` builds an `APIError` with a 302 and the endpoint
+ * **throws** it, so "did it throw" is not the same question as "did it fail".
+ * Every successful e-mail verification was recorded as `email.verified
+ * failure` because of this — the endpoint answers a redirect to its
+ * `callbackURL` on success, and the only path that does not redirect is the
+ * one nothing uses. An audit trail that reports every success as a failure is
+ * worse than none: SEC-6 exists so somebody can tell the two apart afterwards.
+ */
+export function isRedirect(value: Error): boolean {
+  const status = (value as { statusCode?: unknown }).statusCode
+  return typeof status === "number" && status >= 300 && status < 400
+}
+
 export function buildAfterHook(
   deps: AfterHookDeps
 ): NonNullable<BetterAuthOptions["hooks"]>["after"] {
@@ -354,7 +370,7 @@ export function buildAfterHook(
     // when it threw. That is the whole success signal — verified against the
     // live hook rather than assumed.
     const returned = context.returned
-    const ok = !(returned instanceof Error)
+    const ok = !(returned instanceof Error) || isRedirect(returned)
 
     const event = auditEventFor(ctx.path, ok, {
       twoFactorPending: isTwoFactorChallenge(returned),

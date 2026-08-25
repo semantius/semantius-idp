@@ -93,7 +93,13 @@ export function errorCodeFor(result: AuthCallResult): string {
       return "pending_approval"
     case "ACCOUNT_REJECTED":
       return "unavailable"
+    // Two codes, one page. The admin plugin has a ban check of its own on
+    // `session.create` that runs before this deployment's gate, so an account
+    // suspended from /admin/users is refused with `BANNED_USER` and never
+    // reaches `ACCOUNT_BANNED`. Unmapped, it collapsed into
+    // `invalid_credentials` and told a suspended user their password was wrong.
     case "ACCOUNT_BANNED":
+    case "BANNED_USER":
       return "banned"
     case "EMAIL_DOMAIN_NOT_ALLOWED":
       return "domain_not_allowed"

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { auditEventFor } from "@/server/auth/options/hooks"
+import { auditEventFor, isRedirect } from "@/server/auth/options/hooks"
 
 /**
  * SEC-6 — which endpoint produces which audit event.
@@ -142,5 +142,25 @@ describe("auditEventFor", () => {
       expect(auditEventFor(path, true)).toBeUndefined()
       expect(auditEventFor(path, false)).toBeUndefined()
     }
+  })
+})
+
+describe("a redirect is a success, not a failure (SEC-6)", () => {
+  /** The shape better-calls own `ctx.redirect` throws. */
+  function redirect(statusCode: number): Error {
+    return Object.assign(new Error("redirect"), { statusCode })
+  }
+
+  it("tells a thrown redirect apart from a thrown failure", () => {
+    // `ctx.redirect(url)` builds an APIError with a 302 and the endpoint
+    // *throws* it, so "did it throw" is not "did it fail". Every confirmed
+    // e-mail address was recorded as `email.verified failure` until these were
+    // told apart: the endpoint answers a redirect to its `callbackURL` on the
+    // success path, and only on the success path.
+    expect(isRedirect(redirect(302))).toBe(true)
+    expect(isRedirect(redirect(303))).toBe(true)
+    expect(isRedirect(redirect(400))).toBe(false)
+    expect(isRedirect(redirect(500))).toBe(false)
+    expect(isRedirect(new Error("boom"))).toBe(false)
   })
 })

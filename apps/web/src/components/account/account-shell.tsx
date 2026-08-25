@@ -90,15 +90,26 @@ export function AccountShell({
             <ul className="flex flex-wrap gap-1 md:flex-col">
               {items.map((item) => (
                 <li key={item.to}>
+                  {/*
+                    The colour lives in `activeProps`/`inactiveProps` and never
+                    in the base class. Both are *appended* to `className` —
+                    nothing merges them — so a base `text-muted-foreground`
+                    stayed on the active entry beside `text-foreground`, at
+                    equal specificity, and whichever utility Tailwind happened
+                    to emit later won. It was the muted one: the current page
+                    was styled exactly like the others, and muted text on
+                    `bg-muted` failed the axe contrast check that found this.
+                  */}
                   <Link
                     to={item.to}
                     activeOptions={{ exact: item.to === "/account" }}
-                    className={cn(
-                      "block rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-muted"
-                    )}
+                    className={cn("block rounded-lg px-3 py-2 text-sm")}
                     activeProps={{
                       className: "bg-muted font-medium text-foreground",
                       "aria-current": "page",
+                    }}
+                    inactiveProps={{
+                      className: "text-muted-foreground hover:bg-muted",
                     }}
                   >
                     {item.label}

@@ -33,8 +33,15 @@ export const Route = createFileRoute("/verify-email")({
       /** Set after sign-up: "we sent you a link". */
       sent: searchFlag(search.sent),
       email: searchString(search.email),
-      /** Set by the verification endpoint's redirect. */
-      status: searchString(search.status),
+      /**
+       * Set by the verification endpoint's redirect.
+       *
+       * `error` wins over `status`: the `callbackURL` the link carries already
+       * says `status=success`, and Better Auth signals a refusal by *appending*
+       * its own code rather than by rewriting the URL — so a page that read
+       * `status` alone would tell someone their expired link had worked.
+       */
+      status: verificationStatus(search),
       notice: searchString(search.notice),
     }
   },
@@ -65,6 +72,21 @@ export const Route = createFileRoute("/verify-email")({
     },
   },
 })
+
+/**
+ * Better Auth's four refusals, in this page's vocabulary.
+ *
+ * `TOKEN_EXPIRED` is the one worth separating: "that link has expired" tells
+ * the reader to ask for another, and everything else tells them the link is
+ * not one we issued.
+ */
+function verificationStatus(
+  search: Record<string, unknown>
+): string | undefined {
+  const error = searchString(search.error)
+  if (!error) return searchString(search.status)
+  return /EXPIRED/i.test(error) ? "expired" : "invalid"
+}
 
 function VerifyEmailPage() {
   const { ui, sent, email, status, notice } = Route.useLoaderData()

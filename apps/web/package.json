@@ -45,6 +45,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
     "@playwright/test": "1.62.1",
     "@tanstack/devtools-vite": "0.7.0",
     "@tanstack/eslint-config": "0.4.0",

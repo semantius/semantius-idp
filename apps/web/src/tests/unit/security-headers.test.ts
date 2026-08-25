@@ -59,6 +59,30 @@ describe("the Content-Security-Policy", () => {
     expect(policy).toContain("form-action 'self'")
   })
 
+  it("also allows the registered redirect origins, or no OAuth login completes", () => {
+    // Chromium applies `form-action` to the redirect a form submission
+    // *follows*, not only to where it is posted. The sign-in form posts here
+    // and the answer is a 303 to the client's redirect URI, so a bare
+    // `'self'` cancels the navigation with `ERR_ABORTED` — the browser sits on
+    // a filled-in sign-in form while the server has already issued the code.
+    // Firefox does not check redirects, which is how it survived review.
+    const withClients = contentSecurityPolicy({
+      formAction: ["https://app.example.com", "http://127.0.0.1:4571"],
+    })
+    expect(withClients).toContain(
+      "form-action 'self' https://app.example.com http://127.0.0.1:4571"
+    )
+    // And no wider than that: named origins, never a wildcard or a bare
+    // scheme. These are the origins already trusted with authorization codes
+    // (FR-OIDC-17's list), and nothing else.
+    const directive = withClients
+      .split("; ")
+      .find((part) => part.startsWith("form-action "))
+    expect(directive).toBe(
+      "form-action 'self' https://app.example.com http://127.0.0.1:4571"
+    )
+  })
+
   it("allows data: images, because the TOTP QR code is one", () => {
     expect(policy).toContain("img-src 'self' data:")
   })

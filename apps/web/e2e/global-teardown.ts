@@ -13,6 +13,17 @@ import type { Stack } from "./stack"
  * dependent without anyone deciding it should be.
  */
 export default function globalTeardown(): void {
+  // A stack that outlives the run, for the ten minutes after a failure when
+  // the question is "what did the container actually do". `docker compose -p
+  // idp-e2e-root ... down -v` ends it; the next run brings up its own.
+  if (process.env.E2E_KEEP) {
+    process.stdout.write(
+      "e2e: E2E_KEEP is set — leaving the stacks up. Take them down with\n" +
+        "    docker compose -f docker-compose.yml -f docker-compose.e2e.yml -p idp-e2e-root down -v\n"
+    )
+    return
+  }
+
   let stacks: Record<string, Stack>
   try {
     stacks = JSON.parse(readFileSync(STACKS_FILE, "utf8")) as Record<

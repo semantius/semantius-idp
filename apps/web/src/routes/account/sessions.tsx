@@ -141,7 +141,11 @@ function SessionsPage() {
                   <p className="font-medium">
                     {session.userAgent ?? t.account.sessions.unknownDevice}
                     {session.current ? (
-                      <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs font-normal text-muted-foreground">
+                      // Muted text on `bg-muted` is the one pairing in this
+                      // palette that does not clear 4.5:1 — axe called it, and
+                      // it is the badge that tells someone which of the
+                      // sessions is the one they are reading it on.
+                      <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs font-normal text-foreground">
                         {t.account.sessions.current}
                       </span>
                     ) : null}

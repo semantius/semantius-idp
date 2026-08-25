@@ -1,6 +1,6 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-25 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `dde07bf`
+**As of:** 2026-08-25 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `8d4937b`
 **Plan:** `~/.claude/plans/finish-idp-v1-s3-m6-m14.md`
 **Spec:** [spec-v1.md](spec-v1.md) — amended through **D47**
 
@@ -1288,6 +1288,8 @@ troubleshooting — is still to come.
 This session, newest first:
 
 ```
+8d4937b docs(m14): the README, the guides, and a generated configuration reference
+787f888 docs(status): head, and the M13 commits
 dde07bf feat(m13): a browser, and the fourteen things only a browser could see
 5385535 docs(status): the spec debt is paid, and Pending starts at M13
 fd5aa4b docs(spec): the seven amendments M12 and M13 never wrote

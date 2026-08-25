@@ -1,7 +1,7 @@
 /**
  * Creating a user when there is no request behind it.
  *
- * The bootstrap admin (FR-ADMIN-1), `idp create-admin` (OPS-6) and the test
+ * The bootstrap admin (FR-ADMIN-1), `idp reset-admin` (OPS-6) and the test
  * fixtures all provision accounts outside any HTTP endpoint, and Better Auth
  * 1.7.1 refuses that as soon as `user.validateUserInfo` is configured — which
  * it is, because FR-SOC-3 and D24 have nowhere else to run. `createUser` looks

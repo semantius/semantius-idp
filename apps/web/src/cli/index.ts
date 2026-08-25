@@ -203,6 +203,26 @@ async function resetAdminCommand(email?: string): Promise<void> {
 }
 
 /**
+ * Where the resolved SSL mode came from.
+ *
+ * The value is optional in three different ways and an operator who sees only
+ * the answer cannot tell which one applied — so the answer says. `(default)`
+ * is the one worth noticing: it means nothing stated a preference and the mode
+ * was inferred from the host.
+ */
+function sslSource(config: IdpConfig): string {
+  if (config.file.database.ssl !== undefined) return "  (database.ssl)"
+  try {
+    if (new URL(config.file.database.url).searchParams.get("sslmode")) {
+      return "  (sslmode in the connection string)"
+    }
+  } catch {
+    /* an unparseable URL is reported elsewhere */
+  }
+  return "  (default for this host)"
+}
+
+/**
  * `idp config validate` — the whole of CFG-5, and nothing else (OPS-6).
  *
  * It touches no database. That is the point: an operator changing
@@ -227,6 +247,12 @@ function validateConfig(): void {
     `Configuration in ${dir} is valid.\n` +
       `  issuer      ${config.base.origin}${config.base.basePath}\n` +
       `  database    ${maskConnectionString(config.file.database.url)}\n` +
+      // Printed because it is *derived*, and the three inputs that decide it —
+      // `database.ssl`, the connection string's `sslmode`, and whether the host
+      // is local — do not agree often enough for an operator to guess. Getting
+      // it wrong produces `connection is insecure` or `socket disconnected
+      // before secure TLS`, neither of which names a setting.
+      `  ssl         ${config.databaseSsl}${sslSource(config)}\n` +
       `  schema      ${config.file.database.schema}\n` +
       `  clients     ${config.clients.length}\n` +
       `  roles       ${config.roles.length}\n` +

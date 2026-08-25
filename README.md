@@ -139,20 +139,41 @@ relative path.
 
 ### If you get locked out
 
-The bootstrap step runs **only when no user holds an admin role**. So:
+**`idp reset-admin` is the answer**, in development and in production alike:
 
-- Changing `IDP_ADMIN_PASSWORD` after an administrator already exists does
-  **nothing** — the step is skipped, and the log says
-  `bootstrap admin skipped: an admin already exists`.
-- To start over in development, drop the schema and let the next boot rebuild
-  it:
-  ```bash
-  psql "$DIRECT_DATABASE_URL" -c 'drop schema idp cascade'
-  ```
-  Everything is in that one schema, so this destroys users, sessions, tokens and
-  signing keys and nothing else.
-- In production, `idp create-admin` is the supported route. It arrives with the
-  operator CLI in M12.
+```bash
+pnpm reset-admin                       # from a checkout
+docker compose exec idp idp reset-admin   # against a running container
+```
+
+It puts the password back to `admin.bootstrap.password` (`IDP_ADMIN_PASSWORD`),
+re-arms the forced change so that value survives exactly one sign-in, makes the
+account reachable again if it was banned or un-approved, and ends every existing
+session. Nothing is destroyed: the user row, its id and its audit history all
+survive.
+
+Two things it will not do, both on purpose:
+
+- **It never grants an admin role.** An address that exists and holds none is
+  refused — otherwise a command with database access would be a one-line
+  privilege escalation for anyone who can read the config folder.
+- **It never creates an address you typed.** With no argument it will create
+  `admin.bootstrap.email` on a database that has no administrator, which is the
+  bootstrap contract. But `idp reset-admin adnim@example.com` fails rather than
+  quietly provisioning a second administrator from a typo.
+
+Some background on why the situation arises at all:
+
+- The bootstrap step runs **only when no user holds an admin role**, so changing
+  `IDP_ADMIN_PASSWORD` after an administrator exists does **nothing** — the step
+  is skipped and the log says `bootstrap admin skipped: an admin already exists`.
+- The forced first change **consumes** the `.env` password: after it, the only
+  copy of the working password is in the operator's head. That is the whole
+  reason this section exists.
+- Dropping the schema (`psql "$DIRECT_DATABASE_URL" -c 'drop schema idp
+  cascade'`) still works and still destroys every user, session, token and
+  signing key in the deployment. It is no longer the documented recovery, and
+  there is no longer a reason to reach for it.
 
 ### How it is wired
 
@@ -179,8 +200,7 @@ Things worth knowing about that account:
   silently promoting them.
 - Leaving the variables empty skips the step with a loud warning. Nobody can
   sign in until an administrator exists, so this is the one warning worth
-  reading. (`idp create-admin` is the alternative and arrives with the operator
-  CLI in M12.)
+  reading — set the two variables and run `idp reset-admin`.
 - The password is never written to a log.
 
 ## Configuration in brief

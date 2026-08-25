@@ -16,7 +16,7 @@
  * the final account holding an admin role cannot be demoted, banned, rejected
  * or deleted, by anyone, including itself. Without it a two-admin deployment
  * can be reduced to zero in two clicks and the only way back is
- * `idp create-admin` on the server — recoverable, but only by someone with
+ * `idp reset-admin` on the server — recoverable, but only by someone with
  * shell access, which the person clicking usually is not.
  *
  * "Last" is counted over accounts that can *actually* sign in and administer:
@@ -24,7 +24,7 @@
  * usable admin is refused even when a dozen suspended ones exist. The count is
  * taken inside the same request as the change, which leaves a narrow race
  * between two concurrent demotions; the loser of that race gets a deployment
- * with no admin, so the check is *also* the reason `idp create-admin` exists
+ * with no admin, so the check is *also* the reason `idp reset-admin` exists
  * (D33).
  *
  * Nothing here reads the database. The caller supplies the candidate set,

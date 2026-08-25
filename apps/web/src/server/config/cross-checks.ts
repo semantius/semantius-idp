@@ -340,7 +340,7 @@ export function runCrossChecks(input: CrossCheckInput): CrossCheckResult {
     warnings.push({
       code: "admin.bootstrap_skipped",
       message:
-        "No bootstrap admin configured: if the database holds no admin yet, nobody can sign in. Set `admin.bootstrap`, or create one with `idp create-admin`.",
+        "No bootstrap admin configured: if the database holds no admin yet, nobody can sign in. Set `admin.bootstrap`, or create one with `idp reset-admin`.",
     })
   }
 

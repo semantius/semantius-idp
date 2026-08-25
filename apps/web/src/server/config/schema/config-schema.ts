@@ -134,8 +134,14 @@ const databaseSchema = z.strictObject({
     .describe(
       "PEM certificate authority, typically `${file:/run/secrets/ca.pem}`."
     ),
-  poolMax: flexInt({ min: 1, max: 200 }).default(10),
-  connectTimeoutSeconds: flexInt({ min: 1, max: 300 }).default(30),
+  poolMax: flexInt({ min: 1, max: 200 })
+    .default(10)
+    .describe(
+      "Maximum pooled connections. One instance is the supported topology (OPS-11), so this is the whole deployment's budget."
+    ),
+  connectTimeoutSeconds: flexInt({ min: 1, max: 300 })
+    .default(30)
+    .describe("How long a new connection may take before start-up gives up."),
   migrateOnBoot: flexBoolean()
     .default(true)
     .describe("Also settable with IDP_MIGRATE_ON_BOOT."),
@@ -150,11 +156,30 @@ const siteSchema = z.strictObject({
     .string()
     .optional()
     .describe("Path under `branding/` or an absolute URL."),
-  favicon: z.string().optional(),
-  supportEmail: z.email().optional(),
-  termsUrl: absoluteUrl().optional(),
-  privacyUrl: absoluteUrl().optional(),
-  theme: z.enum(["system", "light", "dark"]).default("system"),
+  favicon: z
+    .string()
+    .optional()
+    .describe(
+      "As `site.logo`. Both `icon.png` and `branding/icon.png` name the same file (D44)."
+    ),
+  supportEmail: z
+    .email()
+    .optional()
+    .describe(
+      "Shown to someone who cannot get in — on the suspended-account page, and in the rejection e-mail."
+    ),
+  termsUrl: absoluteUrl()
+    .optional()
+    .describe("Linked from the sign-up form and the consent screen."),
+  privacyUrl: absoluteUrl()
+    .optional()
+    .describe("Linked from the sign-up form and the consent screen."),
+  theme: z
+    .enum(["system", "light", "dark"])
+    .default("system")
+    .describe(
+      "`system` follows the browser. The built-in themes are the only ones; there is no custom CSS hook in v1."
+    ),
   defaultLocale: z
     .string()
     .default("en-US")
@@ -176,7 +201,12 @@ const emailSchema = z.strictObject({
     .string()
     .optional()
     .describe("Required whenever an API key is configured."),
-  replyTo: z.string().optional(),
+  replyTo: z
+    .string()
+    .optional()
+    .describe(
+      "Where a reply goes. Absent, replies go to `email.from`, which is usually a mailbox nobody reads."
+    ),
 })
 
 const signUpSchema = z.strictObject({
@@ -247,8 +277,16 @@ const authSchema = z.strictObject({
     ),
   password: z
     .strictObject({
-      minLength: flexInt({ min: 8, max: 128 }).default(12),
-      maxLength: flexInt({ min: 12, max: 512 }).default(128),
+      minLength: flexInt({ min: 8, max: 128 })
+        .default(12)
+        .describe(
+          "Length is the only strength rule here. Composition rules push people towards P@ssw0rd1 and are not worth the support load."
+        ),
+      maxLength: flexInt({ min: 12, max: 512 })
+        .default(128)
+        .describe(
+          "An upper bound exists because the hash is computed over the whole value; it is not a strength policy."
+        ),
       breachCheck: flexBoolean()
         .default(false)
         .describe(
@@ -258,21 +296,33 @@ const authSchema = z.strictObject({
     .prefault({}),
   passwordReset: z
     .strictObject({
-      tokenTtlMinutes: flexInt({ min: 1, max: 1440 }).default(60),
+      tokenTtlMinutes: flexInt({ min: 1, max: 1440 })
+        .default(60)
+        .describe(
+          "Reset links expire after this; verification links are fixed at 24 h."
+        ),
     })
     .prefault({}),
 })
 
 const sessionSchema = z.strictObject({
-  expiresIn: duration({ min: 60 }).prefault("7d"),
-  updateAge: duration({ min: 60 }).prefault("1d"),
+  expiresIn: duration({ min: 60 })
+    .prefault("7d")
+    .describe("How long a browser session lives without being renewed."),
+  updateAge: duration({ min: 60 })
+    .prefault("1d")
+    .describe("A session older than this is extended on the next request."),
   cookieCacheMinutes: flexInt({ min: 0, max: 5 })
     .default(5)
     .describe("Capped at 5 so revocations bite quickly (FR-AUTH-5)."),
   freshAgeMinutes: flexInt({ min: 1, max: 1440 })
     .default(15)
     .describe("Sensitive actions require a session fresher than this."),
-  revokeOAuthTokensOnLogout: flexBoolean().default(false),
+  revokeOAuthTokensOnLogout: flexBoolean()
+    .default(false)
+    .describe(
+      "Whether signing out of the IdP also kills the OAuth tokens issued to clients from that session. Off by default: a user closing this tab does not usually mean to sign out of every application they use (FR-AUTH-6)."
+    ),
 })
 
 /**
@@ -281,15 +331,23 @@ const sessionSchema = z.strictObject({
  * provider verbatim (FR-SOC-1).
  */
 const socialProviderSchema = z.looseObject({
-  enabled: flexBoolean().default(true),
-  clientId: z.string().min(1),
-  clientSecret: z.string().min(1),
+  enabled: flexBoolean()
+    .default(true),
+  clientId: z.string().min(1).describe("From the provider's own console."),
+  clientSecret: z
+    .string()
+    .min(1)
+    .describe("A `${env:…}` placeholder in production; never a literal."),
   syncProfile: flexBoolean()
     .default(true)
     .describe(
       "Refresh profile fields from the provider on every sign-in (FR-SOC-4)."
     ),
-  allowedEmailDomains: flexArray(z.string().min(1)).default([]),
+  allowedEmailDomains: flexArray(z.string().min(1))
+    .default([])
+    .describe(
+      "Restricts this provider to addresses in these domains. Empty = no restriction."
+    ),
   tenantId: z
     .string()
     .optional()
@@ -299,24 +357,40 @@ const socialProviderSchema = z.looseObject({
 })
 
 const twoFactorSchema = z.strictObject({
-  enabled: flexBoolean().default(true),
+  enabled: flexBoolean()
+    .default(true)
+    .describe(
+      "Whether users may enrol at all. Enrolment is per user and always optional (FR-2FA-1); turning this off hides the whole feature."
+    ),
   issuer: z
     .string()
     .optional()
     .describe("TOTP issuer label. Defaults to site.name."),
-  trustDeviceDays: flexInt({ min: 0, max: 365 }).default(30),
+  trustDeviceDays: flexInt({ min: 0, max: 365 })
+    .default(30)
+    .describe(
+      "How long a device stays trusted after a successful challenge. `0` asks every time and removes the checkbox."
+    ),
 })
 
 const apiKeysSchema = z.strictObject({
-  enabled: flexBoolean().default(true),
-  defaultExpiresIn: duration({ min: 60 }).prefault("365d"),
-  maxExpiresIn: duration({ min: 60 }).prefault("730d"),
+  enabled: flexBoolean()
+    .default(true)
+    .describe("Off hides the account page and 404s its route (FR-KEY-1)."),
+  defaultExpiresIn: duration({ min: 60 })
+    .prefault("365d")
+    .describe("Pre-filled expiry on the create form."),
+  maxExpiresIn: duration({ min: 60 })
+    .prefault("730d")
+    .describe("The longest expiry a user may choose."),
   tokenClientId: z
     .string()
     .min(1)
     .default("idp")
     .describe("`azp` of JWTs exchanged from an API key (FR-KEY-3)."),
-  tokenTtl: duration({ min: 60, max: 86400 }).prefault(3600),
+  tokenTtl: duration({ min: 60, max: 86400 })
+    .prefault(3600)
+    .describe("Lifetime of a JWT exchanged from a key (FR-KEY-3)."),
 })
 
 const jwtSchema = z.strictObject({
@@ -331,7 +405,11 @@ const jwtSchema = z.strictObject({
     .describe(
       "Default RFC 8707 resource, applied whenever a client sends no `resource` parameter. Becomes the JWT `aud`."
     ),
-  includeUserData: flexBoolean().default(true),
+  includeUserData: flexBoolean()
+    .default(true)
+    .describe(
+      "Whether access tokens carry the user's name, address and roles at all. Off removes exactly that set (FR-OIDC-7)."
+    ),
   userClaims: flexArray(z.enum(USER_CLAIM_NAMES))
     .optional()
     .describe(
@@ -342,8 +420,16 @@ const jwtSchema = z.strictObject({
     .describe(
       'Static claims merged into access tokens, e.g. `{ "role": "authenticated" }` for Neon/PostgREST.'
     ),
-  claimsInIdToken: flexBoolean().default(false),
-  rotationInterval: duration({ min: 3600 }).prefault("90d"),
+  claimsInIdToken: flexBoolean()
+    .default(false)
+    .describe(
+      "Also merge `jwt.claims` into ID tokens. Off by default: an ID token asserts authentication, and profile data belongs at userinfo."
+    ),
+  rotationInterval: duration({ min: 3600 })
+    .prefault("90d")
+    .describe(
+      "How often a new signing key is created. The old one keeps verifying for `jwt.gracePeriod` (FR-OIDC-16)."
+    ),
   gracePeriod: duration({ min: 60 })
     .optional()
     .describe(
@@ -351,7 +437,11 @@ const jwtSchema = z.strictObject({
     ),
   sessionToken: z
     .strictObject({
-      ttl: duration({ min: 60, max: 86400 }).prefault(3600),
+      ttl: duration({ min: 60, max: 86400 })
+        .prefault(3600)
+        .describe(
+          "Lifetime of a JWT from `GET /api/auth/token`, the first-party session exchange (FR-OIDC-14)."
+        ),
     })
     .prefault({}),
 })
@@ -367,18 +457,33 @@ const oauthResourceSchema = z.union([
 ])
 
 const oauthSchema = z.strictObject({
-  accessTokenTtl: duration({ min: 60 }).prefault("15m"),
+  accessTokenTtl: duration({ min: 60 })
+    .prefault("15m")
+    .describe(
+      "Also the window in which a revoked token still verifies for a stateless resource server (FR-OIDC-12)."
+    ),
   idTokenTtl: duration({ min: 60 }).prefault("1h"),
-  codeTtl: duration({ min: 10, max: 600 }).prefault("60s"),
-  refreshTokenTtl: duration({ min: 60 }).prefault("30d"),
-  refreshTokenMaxLifetime: duration({ min: 60 }).prefault("90d"),
-  scopes: flexArray(z.string().min(1)).default([
-    "openid",
-    "profile",
-    "email",
-    "offline_access",
-  ]),
-  resources: flexArray(oauthResourceSchema).default([]),
+  codeTtl: duration({ min: 10, max: 600 })
+    .prefault("60s")
+    .describe("Authorization codes are single-use as well as short-lived."),
+  refreshTokenTtl: duration({ min: 60 })
+    .prefault("30d")
+    .describe("Sliding: every use rotates the token and restarts this clock."),
+  refreshTokenMaxLifetime: duration({ min: 60 })
+    .prefault("90d")
+    .describe(
+      "The ceiling the sliding window cannot pass. After this the user signs in again."
+    ),
+  scopes: flexArray(z.string().min(1))
+    .default(["openid", "profile", "email", "offline_access"])
+    .describe(
+      "Every scope any client may request. A client's own `scopes` must be a subset."
+    ),
+  resources: flexArray(oauthResourceSchema)
+    .default([])
+    .describe(
+      "Extra RFC 8707 resources beyond `jwt.audience` and the per-client ones, each optionally with its own allowed scopes and token lifetime."
+    ),
   reconcile: z
     .strictObject({
       prune: flexBoolean()
@@ -391,28 +496,61 @@ const oauthSchema = z.strictObject({
 })
 
 const adminSchema = z.strictObject({
-  adminRoles: flexArray(z.string().min(1)).default(["admin"]),
+  adminRoles: flexArray(z.string().min(1))
+    .default(["admin"])
+    .describe(
+      "Holding any of these opens `/admin` and the admin API. Every name must exist in the role catalog."
+    ),
   bootstrap: z
     .strictObject({
-      email: z.string().default(""),
-      password: z.string().default(""),
-      name: z.string().optional(),
+      email: z
+        .string()
+        .default("")
+        .describe("Usually `${env:IDP_ADMIN_EMAIL:-}`, unset after first boot."),
+      password: z
+        .string()
+        .default("")
+        .describe(
+          "The first sign-in is forced to change it. `idp reset-admin` returns the account to this value (D42)."
+        ),
+      name: z.string().optional().describe("Display name for that account."),
     })
     .optional()
     .describe(
       "Created once, iff no user holds an admin role (FR-ADMIN-1). Empty values skip bootstrap with a warning."
     ),
-  allowImpersonation: flexBoolean().default(false),
+  allowImpersonation: flexBoolean()
+    .default(false)
+    .describe(
+      "Lets an administrator act as another user, ≤ 1 h, never against another administrator, every action audited (FR-ADMIN-5)."
+    ),
 })
 
 const rateLimitSchema = z.strictObject({
-  enabled: flexBoolean().default(true),
-  storage: z.enum(["database", "memory"]).default("database"),
+  enabled: flexBoolean()
+    .default(true)
+    .describe(
+      "Turning this off removes the SEC-2 limits on sign-in, reset, 2FA and the token endpoint. For tests."
+    ),
+  storage: z
+    .enum(["database", "memory"])
+    .default("database")
+    .describe(
+      "`database` survives a restart, which is the point of a limit. `memory` is for a single process nobody restarts to get past it."
+    ),
 })
 
 const loggingSchema = z.strictObject({
-  level: z.enum(["trace", "debug", "info", "warn", "error"]).default("info"),
-  format: z.enum(["json", "pretty"]).default("json"),
+  level: z
+    .enum(["trace", "debug", "info", "warn", "error"])
+    .default("info")
+    .describe("Also settable with LOG_LEVEL."),
+  format: z
+    .enum(["json", "pretty"])
+    .default("json")
+    .describe(
+      "`json` for anything that collects logs; `pretty` for a terminal. Also settable with LOG_FORMAT."
+    ),
 })
 
 export const configFileSchema = z.strictObject({
@@ -428,7 +566,12 @@ export const configFileSchema = z.strictObject({
   signUp: signUpSchema.prefault({}),
   auth: authSchema.prefault({}),
   session: sessionSchema.prefault({}),
-  social: z.record(z.string(), socialProviderSchema).prefault({}),
+  social: z
+    .record(z.string(), socialProviderSchema)
+    .prefault({})
+    .describe(
+      "Keyed by provider id — `google`, `github`, `microsoft`. Each entry needs `clientId` and `clientSecret`; `microsoft` also needs `tenantId` (FR-SOC-5)."
+    ),
   twoFactor: twoFactorSchema.prefault({}),
   apiKeys: apiKeysSchema.prefault({}),
   jwt: jwtSchema,
@@ -438,11 +581,21 @@ export const configFileSchema = z.strictObject({
   logging: loggingSchema.prefault({}),
   cleanup: z
     .strictObject({
-      intervalMinutes: flexInt({ min: 1, max: 1440 }).default(60),
+      intervalMinutes: flexInt({ min: 1, max: 1440 })
+        .default(60)
+        .describe(
+          "How often the retention job runs: expired sessions, spent verification rows, dead tokens, stale rate-limit rows and retired keys (OPS-8, DM-5)."
+        ),
     })
     .prefault({}),
   audit: z
-    .strictObject({ retentionDays: flexInt({ min: 1, max: 3650 }).default(90) })
+    .strictObject({
+      retentionDays: flexInt({ min: 1, max: 3650 })
+        .default(90)
+        .describe(
+          "How long audit rows are kept. They are the answer to what happened, so a short window is a decision, not a saving."
+        ),
+    })
     .prefault({}),
 })
 

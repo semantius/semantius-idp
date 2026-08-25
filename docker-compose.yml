@@ -58,7 +58,7 @@ services:
       - "5432"
 
   idp:
-    image: ${IDP_IMAGE:-ghcr.io/adenin/semantius-idp:latest}
+    image: ${IDP_IMAGE:-ghcr.io/semantius/semantius-idp:latest}
     build:
       context: .
       args:

@@ -1,0 +1,284 @@
+# Registering an application
+
+`oauth_clients.json` is the list of applications allowed to ask this IdP for
+tokens. The file is the **source of truth**: start-up validates it and
+reconciles it into the database — inserting what is new, updating what changed,
+and disabling anything that has disappeared. There are no client-creation
+endpoints, and `/admin/clients` is read-only.
+
+That means adding an application is a file edit and a restart, and the same
+file always produces the same deployment.
+
+```jsonc
+{
+  "$schema": "./oauth_clients.schema.json",
+  "clients": [
+    { "clientId": "…", "…": "…" }
+  ]
+}
+```
+
+An object with a named array — not a bare array. The loader says so and refuses
+to start otherwise.
+
+## Which kind of application is it?
+
+| `type` | Can it keep a secret? | Use for |
+| --- | --- | --- |
+| `web` | yes | Anything with a server: Next.js, Rails, a Go binary |
+| `spa` | no | A browser application with no backend |
+| `native` | no | Mobile and desktop applications |
+
+`spa` and `native` are **public** clients: no secret, `tokenEndpointAuthMethod`
+is `none`, and PKCE is mandatory. `web` is confidential: a `clientSecret` of at
+least 32 characters, sent with `client_secret_basic` by default.
+
+PKCE is on for every type, including confidential ones. There is no reason to
+turn it off and `plain` challenges are rejected outright.
+
+## A confidential server application
+
+```jsonc
+{
+  "clientId": "web-app",
+  "name": "Web App",
+  "type": "web",
+  "clientSecret": "${env:WEB_APP_CLIENT_SECRET}",
+  "redirectUris": ["https://app.example.com/auth/callback"],
+  "postLogoutRedirectUris": ["https://app.example.com/"],
+  "scopes": ["openid", "profile", "email", "offline_access"],
+  "enableEndSession": true
+}
+```
+
+The secret is a `${env:…}` placeholder, always. A literal secret in a file with
+an https `baseUrl` fails validation — that is not a style rule, it is a
+start-up error.
+
+Give it `offline_access` only if it needs refresh tokens. A server-rendered
+application that signs people in and keeps its own session usually does not.
+
+## A public SPA
+
+```jsonc
+{
+  "clientId": "dashboard",
+  "name": "Dashboard",
+  "type": "spa",
+  "redirectUris": [
+    "https://dashboard.example.com/callback",
+    "http://localhost:5173/callback"
+  ],
+  "scopes": ["openid", "profile", "email"]
+}
+```
+
+No `clientSecret` — including it is a validation error, because a secret
+shipped to a browser is not a secret. `http://localhost` and
+`http://127.0.0.1` are the only non-https redirect URIs allowed, which is what
+makes local development possible without weakening anything.
+
+**Refresh tokens in a browser:** ask for `offline_access` and you get rotation
+with reuse detection — a token used twice kills the whole family. Silent renew
+in a hidden iframe (`prompt=none`) is not supported: the session cookie is
+`SameSite=Lax`, so a cross-site iframe sends nothing.
+
+## A native application
+
+```jsonc
+{
+  "clientId": "mobile",
+  "name": "Mobile App",
+  "type": "native",
+  "redirectUris": ["com.example.app:/oauth2redirect", "http://127.0.0.1/callback"],
+  "scopes": ["openid", "profile", "email", "offline_access"]
+}
+```
+
+Private-use schemes are allowed for `native` and nowhere else. Loopback with an
+ephemeral port is the other accepted pattern — register
+`http://127.0.0.1/callback` and the port is not matched.
+
+## A first-party application
+
+`firstParty` means the application runs on the **same host** as the IdP, so it
+shares the session cookie:
+
+```jsonc
+{
+  "clientId": "console",
+  "name": "Console",
+  "type": "web",
+  "firstParty": true,
+  "clientSecret": "${env:CONSOLE_CLIENT_SECRET}",
+  "redirectUris": ["https://apps.example.com/console/callback"],
+  "scopes": ["openid", "profile", "email"]
+}
+```
+
+The IdP at `https://apps.example.com/idp` and the application at
+`https://apps.example.com/console` are first-party to each other. An
+application on `console.example.com` is **not** — cookies here are host-only,
+so a different subdomain sees nothing.
+
+Validation enforces this: every redirect URI of a `firstParty` client must be
+on the issuer's own origin, and start-up fails with that sentence if one is
+not.
+
+What it buys is the session-JWT exchange — no authorization round trip at all:
+
+```js
+const response = await fetch("/idp/api/auth/token", { credentials: "include" })
+const { token } = await response.json()   // a JWT from the same claims builder
+```
+
+Same-origin only, and refused for a pending or suspended user. This is the
+sub-path deployment's whole reason for existing.
+
+## Any client library
+
+Point it at the issuer and let discovery do the rest. With
+[`openid-client`](https://github.com/panva/openid-client):
+
+```js
+import * as client from "openid-client"
+
+const config = await client.discovery(
+  new URL("https://idp.example.com"),
+  "web-app",
+  process.env.WEB_APP_CLIENT_SECRET,
+  // `web` clients authenticate with client_secret_basic by default.
+  client.ClientSecretBasic(process.env.WEB_APP_CLIENT_SECRET)
+)
+
+const verifier = client.randomPKCECodeVerifier()
+const url = client.buildAuthorizationUrl(config, {
+  redirect_uri: "https://app.example.com/auth/callback",
+  scope: "openid profile email",
+  state: client.randomState(),
+  code_challenge: await client.calculatePKCECodeChallenge(verifier),
+  code_challenge_method: "S256",
+})
+```
+
+A complete, runnable relying party — discovery, PKCE, the code exchange,
+userinfo and RP-initiated logout in about two hundred lines — lives in
+[`apps/web/e2e/sample-rp.ts`](../apps/web/e2e/sample-rp.ts). The end-to-end
+suite drives that exact file against the built image on every run, so it cannot
+rot into something that no longer works:
+
+```bash
+RP_ISSUER=https://idp.example.com \
+RP_CLIENT_ID=web-app \
+RP_CLIENT_SECRET=… \
+bun apps/web/e2e/sample-rp.ts
+```
+
+## Audiences, and why you probably need none
+
+Every access token is a signed JWT, which requires an audience to be resolved.
+`jwt.audience` supplies one whenever a client asks for no `resource`, so a
+client that knows nothing about RFC 8707 still gets a valid token — that is the
+default path and it is the one to take.
+
+Set a per-client `audience` when that application's tokens are for a *different*
+API than everything else:
+
+```jsonc
+{ "clientId": "reports", "audience": "https://reports-api.example.com", "…": "…" }
+```
+
+An explicit `resource` parameter is honoured when the client is linked to it,
+and refused with `invalid_target` when it is not. The effective registry is
+`oauth.resources` plus `jwt.audience` plus every per-client `audience`;
+reconciliation links each client to the default and to its own.
+
+## Consent
+
+`skipConsent` defaults to **true** for every client in this file, because an
+administrator put it there — asking the user to approve an application their
+own organisation registered is a click that teaches them to click. Set it to
+`false` for the applications where the question is real:
+
+```jsonc
+{ "clientId": "third-party-tool", "skipConsent": false, "…": "…" }
+```
+
+The consent page shows the client's name, icon, homepage, terms and privacy
+links, and one line per scope. Consent is remembered per client and scope set,
+re-asked on escalation, and revocable by the user at `/account/consents` —
+which also revokes that client's tokens.
+
+`prompt=consent` forces the page regardless.
+
+## Logout
+
+With `enableEndSession: true` and at least one `postLogoutRedirectUris` entry,
+a client can end the IdP session:
+
+```
+GET {baseUrl}/oauth2/end-session
+  ?id_token_hint=…
+  &post_logout_redirect_uri=https://app.example.com/
+  &state=…
+```
+
+The `post_logout_redirect_uri` must exactly match a registered value, and
+`state` is echoed. Without a usable hint the user is asked to confirm on the
+IdP's own page first — a GET that ends a session would otherwise let any page
+sign someone out with an `<img>` tag.
+
+## Removing an application
+
+Delete it from the file and restart. The row is **disabled**, not deleted, and
+its tokens and consents are revoked — so a client that comes back keeps its
+history, and one that does not stops working immediately. Set
+`oauth.reconcile.prune` to delete the rows instead.
+
+## There is no machine-to-machine grant
+
+`client_credentials` does not exist in v1, and `grant_types_supported` says so.
+A client entry that asks for it fails validation rather than being silently
+ignored.
+
+**For scripted access, use a per-user API key.** A user creates one at
+`/account/api-keys`, and it exchanges for a JWT from the same claims builder:
+
+```bash
+curl -H "x-api-key: $IDP_API_KEY" https://idp.example.com/api/auth/token
+# { "token": "eyJ…" }
+```
+
+The token carries that user's `sub` and roles, so everything downstream — audit
+trails, row-level security, revocation — keeps working exactly as it does for a
+browser session. Revoke the key and it stops, immediately.
+
+The difference from a client-credentials token is that this one **belongs to
+somebody**. When a script does something surprising at three in the morning,
+there is a person to ask.
+
+## Every field
+
+| Field | Default | Notes |
+| --- | --- | --- |
+| `clientId` | — **required** | Unique. What the client sends. |
+| `name` | — | Shown on the consent screen and in `/admin/clients`. |
+| `type` | — **required** | `web`, `spa` or `native`. |
+| `clientSecret` | — | Required for `web`, forbidden otherwise. ≥ 32 characters, and a placeholder in production. |
+| `redirectUris` | `[]` | Absolute, exact-match, no wildcards or fragments. https except loopback; private-use schemes for `native`. |
+| `postLogoutRedirectUris` | `[]` | Required if `enableEndSession` is on. |
+| `scopes` | — | A subset of `oauth.scopes`. |
+| `audience` | — | Overrides `jwt.audience` for this client. String or array. |
+| `grantTypes` | `["authorization_code", "refresh_token"]` | The only two there are. |
+| `responseTypes` | `["code"]` | The only one there is. |
+| `requirePKCE` | `true` | |
+| `skipConsent` | `true` | |
+| `firstParty` | `false` | Same-host applications; see above. |
+| `enableEndSession` | `true` | RP-initiated logout. |
+| `disabled` | `false` | Keeps the registration, refuses the client. |
+| `uri` `icon` `contacts` `tos` `policy` `metadata` | — | Shown on the consent screen, or kept for your own use. |
+
+Unknown fields are rejected. So are duplicate `clientId`s, a public client with
+a secret, a confidential one without, an undeclared scope, and an
+authorization-code client with no redirect URIs — all at start-up, all naming
+the file and the JSON pointer.

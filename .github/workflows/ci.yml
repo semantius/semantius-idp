@@ -58,6 +58,24 @@ jobs:
       - name: Config JSON Schemas are up to date (CFG-1)
         run: pnpm --filter web run config:schemas -- --check
 
+      - name: The shipped example configuration validates (TST-1)
+        # config.example/ is what the quick start tells an operator to copy.
+        # It is validated here so it cannot rot into a folder that does not
+        # load — the placeholders are given throwaway values because that is
+        # exactly what the operator supplies next.
+        env:
+          IDP_CONFIG_DIR: config.example
+          DATABASE_URL: postgres://idp@localhost:5432/idp
+          IDP_SECRET: ci-example-secret-of-at-least-32-chars
+          EXAMPLE_WEB_CLIENT_SECRET: ci-example-client-secret-32-chars-x
+          EXAMPLE_FIRSTPARTY_CLIENT_SECRET: ci-example-client-secret-32-chars-y
+        run: bun apps/web/src/cli/index.ts config validate
+
+      - name: The configuration reference is up to date (CFG-4, DOC-1)
+        # Generated from the same zod schemas the loader validates against, so
+        # a default can never change without the documentation following it.
+        run: pnpm --filter web run docs:config -- --check
+
       - name: Database schema has not drifted (DM-1)
         # Regenerates from the installed Better Auth and fails on any
         # difference, so the committed migrations can never describe a schema

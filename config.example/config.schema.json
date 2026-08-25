@@ -95,11 +95,13 @@
           "type": "string"
         },
         "poolMax": {
+          "description": "Maximum pooled connections. One instance is the supported topology (OPS-11), so this is the whole deployment's budget.",
           "type": "integer",
           "minimum": 1,
           "maximum": 200
         },
         "connectTimeoutSeconds": {
+          "description": "How long a new connection may take before start-up gives up.",
           "type": "integer",
           "minimum": 1,
           "maximum": 300
@@ -127,21 +129,26 @@
           "type": "string"
         },
         "favicon": {
+          "description": "As `site.logo`. Both `icon.png` and `branding/icon.png` name the same file (D44).",
           "type": "string"
         },
         "supportEmail": {
+          "description": "Shown to someone who cannot get in — on the suspended-account page, and in the rejection e-mail.",
           "type": "string",
           "format": "email",
           "pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
         },
         "termsUrl": {
+          "description": "Linked from the sign-up form and the consent screen.",
           "type": "string"
         },
         "privacyUrl": {
+          "description": "Linked from the sign-up form and the consent screen.",
           "type": "string"
         },
         "theme": {
           "default": "system",
+          "description": "`system` follows the browser. The built-in themes are the only ones; there is no custom CSS hook in v1.",
           "type": "string",
           "enum": [
             "system",
@@ -180,6 +187,7 @@
           "type": "string"
         },
         "replyTo": {
+          "description": "Where a reply goes. Absent, replies go to `email.from`, which is usually a mailbox nobody reads.",
           "type": "string"
         }
       },
@@ -226,11 +234,13 @@
           "type": "object",
           "properties": {
             "minLength": {
+              "description": "Length is the only strength rule here. Composition rules push people towards P@ssw0rd1 and are not worth the support load.",
               "type": "integer",
               "minimum": 8,
               "maximum": 128
             },
             "maxLength": {
+              "description": "An upper bound exists because the hash is computed over the whole value; it is not a strength policy.",
               "type": "integer",
               "minimum": 12,
               "maximum": 512
@@ -247,6 +257,7 @@
           "type": "object",
           "properties": {
             "tokenTtlMinutes": {
+              "description": "Reset links expire after this; verification links are fixed at 24 h.",
               "type": "integer",
               "minimum": 1,
               "maximum": 1440
@@ -262,6 +273,7 @@
       "type": "object",
       "properties": {
         "expiresIn": {
+          "description": "How long a browser session lives without being renewed.",
           "default": "7d",
           "anyOf": [
             {
@@ -273,6 +285,7 @@
           ]
         },
         "updateAge": {
+          "description": "A session older than this is extended on the next request.",
           "default": "1d",
           "anyOf": [
             {
@@ -296,12 +309,14 @@
           "maximum": 1440
         },
         "revokeOAuthTokensOnLogout": {
+          "description": "Whether signing out of the IdP also kills the OAuth tokens issued to clients from that session. Off by default: a user closing this tab does not usually mean to sign out of every application they use (FR-AUTH-6).",
           "type": "boolean"
         }
       },
       "additionalProperties": false
     },
     "social": {
+      "description": "Keyed by provider id — `google`, `github`, `microsoft`. Each entry needs `clientId` and `clientSecret`; `microsoft` also needs `tenantId` (FR-SOC-5).",
       "default": {},
       "type": "object",
       "propertyNames": {
@@ -315,17 +330,20 @@
           },
           "clientId": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "From the provider's own console."
           },
           "clientSecret": {
             "type": "string",
-            "minLength": 1
+            "minLength": 1,
+            "description": "A `${env:…}` placeholder in production; never a literal."
           },
           "syncProfile": {
             "description": "Refresh profile fields from the provider on every sign-in (FR-SOC-4).",
             "type": "boolean"
           },
           "allowedEmailDomains": {
+            "description": "Restricts this provider to addresses in these domains. Empty = no restriction.",
             "type": "array",
             "items": {
               "type": "string",
@@ -349,6 +367,7 @@
       "type": "object",
       "properties": {
         "enabled": {
+          "description": "Whether users may enrol at all. Enrolment is per user and always optional (FR-2FA-1); turning this off hides the whole feature.",
           "type": "boolean"
         },
         "issuer": {
@@ -356,6 +375,7 @@
           "type": "string"
         },
         "trustDeviceDays": {
+          "description": "How long a device stays trusted after a successful challenge. `0` asks every time and removes the checkbox.",
           "type": "integer",
           "minimum": 0,
           "maximum": 365
@@ -368,9 +388,11 @@
       "type": "object",
       "properties": {
         "enabled": {
+          "description": "Off hides the account page and 404s its route (FR-KEY-1).",
           "type": "boolean"
         },
         "defaultExpiresIn": {
+          "description": "Pre-filled expiry on the create form.",
           "default": "365d",
           "anyOf": [
             {
@@ -382,6 +404,7 @@
           ]
         },
         "maxExpiresIn": {
+          "description": "The longest expiry a user may choose.",
           "default": "730d",
           "anyOf": [
             {
@@ -399,6 +422,7 @@
           "minLength": 1
         },
         "tokenTtl": {
+          "description": "Lifetime of a JWT exchanged from a key (FR-KEY-3).",
           "default": 3600,
           "anyOf": [
             {
@@ -440,6 +464,7 @@
           "description": "Default RFC 8707 resource, applied whenever a client sends no `resource` parameter. Becomes the JWT `aud`."
         },
         "includeUserData": {
+          "description": "Whether access tokens carry the user's name, address and roles at all. Off removes exactly that set (FR-OIDC-7).",
           "type": "boolean"
         },
         "userClaims": {
@@ -478,9 +503,11 @@
           }
         },
         "claimsInIdToken": {
+          "description": "Also merge `jwt.claims` into ID tokens. Off by default: an ID token asserts authentication, and profile data belongs at userinfo.",
           "type": "boolean"
         },
         "rotationInterval": {
+          "description": "How often a new signing key is created. The old one keeps verifying for `jwt.gracePeriod` (FR-OIDC-16).",
           "default": "90d",
           "anyOf": [
             {
@@ -507,6 +534,7 @@
           "type": "object",
           "properties": {
             "ttl": {
+              "description": "Lifetime of a JWT from `GET /api/auth/token`, the first-party session exchange (FR-OIDC-14).",
               "default": 3600,
               "anyOf": [
                 {
@@ -528,6 +556,7 @@
       "type": "object",
       "properties": {
         "accessTokenTtl": {
+          "description": "Also the window in which a revoked token still verifies for a stateless resource server (FR-OIDC-12).",
           "default": "15m",
           "anyOf": [
             {
@@ -550,6 +579,7 @@
           ]
         },
         "codeTtl": {
+          "description": "Authorization codes are single-use as well as short-lived.",
           "default": "60s",
           "anyOf": [
             {
@@ -561,6 +591,7 @@
           ]
         },
         "refreshTokenTtl": {
+          "description": "Sliding: every use rotates the token and restarts this clock.",
           "default": "30d",
           "anyOf": [
             {
@@ -572,6 +603,7 @@
           ]
         },
         "refreshTokenMaxLifetime": {
+          "description": "The ceiling the sliding window cannot pass. After this the user signs in again.",
           "default": "90d",
           "anyOf": [
             {
@@ -583,6 +615,7 @@
           ]
         },
         "scopes": {
+          "description": "Every scope any client may request. A client's own `scopes` must be a subset.",
           "type": "array",
           "items": {
             "type": "string",
@@ -590,6 +623,7 @@
           }
         },
         "resources": {
+          "description": "Extra RFC 8707 resources beyond `jwt.audience` and the per-client ones, each optionally with its own allowed scopes and token lifetime.",
           "type": "array",
           "items": {
             "anyOf": [
@@ -650,6 +684,7 @@
       "type": "object",
       "properties": {
         "adminRoles": {
+          "description": "Holding any of these opens `/admin` and the admin API. Every name must exist in the role catalog.",
           "type": "array",
           "items": {
             "type": "string",
@@ -662,19 +697,23 @@
           "properties": {
             "email": {
               "default": "",
+              "description": "Usually `${env:IDP_ADMIN_EMAIL:-}`, unset after first boot.",
               "type": "string"
             },
             "password": {
               "default": "",
+              "description": "The first sign-in is forced to change it. `idp reset-admin` returns the account to this value (D42).",
               "type": "string"
             },
             "name": {
+              "description": "Display name for that account.",
               "type": "string"
             }
           },
           "additionalProperties": false
         },
         "allowImpersonation": {
+          "description": "Lets an administrator act as another user, ≤ 1 h, never against another administrator, every action audited (FR-ADMIN-5).",
           "type": "boolean"
         }
       },
@@ -685,10 +724,12 @@
       "type": "object",
       "properties": {
         "enabled": {
+          "description": "Turning this off removes the SEC-2 limits on sign-in, reset, 2FA and the token endpoint. For tests.",
           "type": "boolean"
         },
         "storage": {
           "default": "database",
+          "description": "`database` survives a restart, which is the point of a limit. `memory` is for a single process nobody restarts to get past it.",
           "type": "string",
           "enum": [
             "database",
@@ -704,6 +745,7 @@
       "properties": {
         "level": {
           "default": "info",
+          "description": "Also settable with LOG_LEVEL.",
           "type": "string",
           "enum": [
             "trace",
@@ -715,6 +757,7 @@
         },
         "format": {
           "default": "json",
+          "description": "`json` for anything that collects logs; `pretty` for a terminal. Also settable with LOG_FORMAT.",
           "type": "string",
           "enum": [
             "json",
@@ -729,6 +772,7 @@
       "type": "object",
       "properties": {
         "intervalMinutes": {
+          "description": "How often the retention job runs: expired sessions, spent verification rows, dead tokens, stale rate-limit rows and retired keys (OPS-8, DM-5).",
           "type": "integer",
           "minimum": 1,
           "maximum": 1440
@@ -741,6 +785,7 @@
       "type": "object",
       "properties": {
         "retentionDays": {
+          "description": "How long audit rows are kept. They are the answer to what happened, so a short window is a decision, not a saving.",
           "type": "integer",
           "minimum": 1,
           "maximum": 3650

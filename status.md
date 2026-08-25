@@ -4,12 +4,19 @@
 **Plan:** `~/.claude/plans/finish-idp-v1-s3-m6-m14.md`
 **Spec:** [spec-v1.md](spec-v1.md) — amended through **D47**
 
-**S3 and M6–M13 are done. M14 (docs, release) is untouched.** Every gate
-green: lint, typecheck, unit (478), integration (210 across twenty-three
-files), coverage thresholds including the 85 % per-module gates, schema-drift,
-config-schema staleness, dependency pinning, the client-bundle gate, the TST-8
-container smoke test — and, new in M13, the **TST-6 end-to-end suite**: 68
-tests in a real browser against the built image, in both deployment shapes.
+**S3 and M6–M14 are done, up to the release gate.** Every gate green: lint,
+typecheck, unit (478), integration (210 across twenty-three files), coverage
+thresholds including the 85 % per-module gates, schema-drift, config-schema
+staleness, the **new** configuration-reference and example-config gates,
+dependency pinning, the client-bundle gate, the TST-8 container smoke test, and
+the TST-6 end-to-end suite — 68 tests in a real browser against the built
+image, in both deployment shapes.
+
+**What is left needs the owner.** Tagging `v1.0.0` and publishing the image are
+the mandatory sign-off gate, and the two checks that cannot be automated are
+written down but not performed: the manual social walk-through against Google,
+GitHub and Entra, and one real token validated against a real Neon project.
+Both are [docs/release.md](docs/release.md).
 
 **What that suite did on its first complete run is the story below.** It found
 fourteen defects, three of which meant a documented feature did not work at
@@ -26,18 +33,20 @@ every other gate in this repository reads HTML, JSON or a database row.
 Everything not yet done, in the order it should be done. Nothing else in this
 file is a to-do list.
 
-### 1. M14 — none of it is started
+### 1. The release — **owner sign-off required**
 
-- `apps/web/scripts/generate-config-reference.ts` (CFG-4) with `--check` in CI.
-- Rewrite `README.md` per DOC-1. The quick start must be the **exact**
-  smoke-test commands so CI keeps it honest. The lockout section is already
-  written around `idp reset-admin` — keep it.
-- `docs/neon.md` (DOC-2) · `docs/clients.md` (DOC-3, explicit no-M2M note) ·
-  `docs/admin-api.md` (FR-ADMIN-6) · runbooks (DOC-4) · `SECURITY.md` ·
-  `CONTRIBUTING.md` · `CHANGELOG.md`.
-- Release: TST-7 manual social checklist, and one real Neon token validation.
-  **Stop at the mandatory gate** — tagging v1.0.0 and publishing the image need
-  owner sign-off.
+Everything buildable is built. What remains cannot be done from here:
+
+- **The manual social walk-through** against real Google, GitHub and Entra
+  consoles, on a staging deployment with public HTTPS (TST-7). The checklist is
+  [docs/release.md](docs/release.md); the Entra item that matters most is that
+  renaming an account's UPN still reaches the same user, because keying on
+  e-mail instead would silently create a second one.
+- **One real token against a real Neon project** — including a key rotation,
+  to see the grace period behave.
+- **Tagging `v1.0.0`**, which builds and publishes the image under a name
+  people will pull. This is the mandatory gate: it needs the owner's decision,
+  not a green board.
 
 ### 2. Open, non-blocking
 
@@ -95,6 +104,60 @@ than the session's token type (**D41**), `reset-admin`'s two refusals
 (**D42**), the four `docker-compose.yml` pins that decide *which* database and
 *which* configuration (**D43**), and `site.logo` accepting both `logo.svg` and
 `branding/logo.svg` (**D44**).
+
+---
+
+## M14 — the documentation, and the two things it found
+
+DOC-1 through DOC-4, and the release checklist. Nine files, one of them
+generated:
+
+- **[docs/configuration.md](docs/configuration.md)** — every key of
+  `config.json`, generated from the zod schemas by
+  `apps/web/scripts/generate-config-reference.ts`, with `--check` in CI so a
+  default cannot change without the documentation following it. Writing the
+  generator meant giving **twenty-eight keys a `.describe()` they never had**,
+  which improves the editor JSON Schemas by the same stroke.
+- **[README.md](README.md)** — DOC-1 in full: what it is and is not, the quick
+  start, configuration, roles, clients, the well-known endpoints, proxying,
+  e-mail, social, Neon, security notes, operations, troubleshooting,
+  development, versioning.
+- **[docs/neon.md](docs/neon.md)** (DOC-2), **[docs/clients.md](docs/clients.md)**
+  (DOC-3, with the explicit no-M2M note), **[docs/admin-api.md](docs/admin-api.md)**
+  (FR-ADMIN-6), **[docs/runbooks.md](docs/runbooks.md)** (DOC-4),
+  **[docs/release.md](docs/release.md)** (TST-7's manual checklist and the real
+  Neon validation), **[SECURITY.md](SECURITY.md)**,
+  **[CONTRIBUTING.md](CONTRIBUTING.md)**, **[CHANGELOG.md](CHANGELOG.md)**.
+
+### Writing it down found two more things
+
+Neither is dramatic, and both are the ordinary result of checking a claim
+before making it.
+
+- **The reference deployment pointed at an image that is never published.**
+  `docker-compose.yml` and `.env.example` defaulted to
+  `ghcr.io/adenin/semantius-idp`; CI pushes to `ghcr.io/${{ github.repository }}`,
+  which is `ghcr.io/semantius/semantius-idp`. A `docker compose up` with no
+  `IDP_IMAGE` would have tried to pull something that does not exist.
+- **TST-1's example-config gate did not exist.** The gate list has always
+  included "example-config validation" and CI has never run it. It does now:
+  `idp config validate` against `config.example/`, which is the folder the
+  quick start tells an operator to copy. It passes.
+
+### The quick start, checked rather than asserted
+
+DOC-1 asks for a quick start CI keeps honest. What CI actually covers is now
+stated precisely rather than sweepingly: the example folder is validated on
+every pull request, and `scripts/smoke-test.ts` brings the same compose stack
+up against the image that would be published, signs in through the forced
+password change, and verifies a token against the JWKS.
+
+Running the documented commands by hand also turned up something worth a note
+in the README rather than a fix: copy `config.example` and change the port, and
+start-up refuses, because the example's first-party client has a redirect URI
+on `localhost:3000` and a `firstParty` client must be on the issuer's own
+origin. The refusal is correct and says exactly that; the README now warns
+before the reader meets it.
 
 ---
 
@@ -1135,9 +1198,10 @@ schema identifier in the committed SQL. And **`buildRuntime` had to become
 async**, because the OAuth provider queries `oauth_resource` from its own
 `init()`; on a fresh database the process died before it could migrate.
 
-## Not done (M14)
+## Not done (the release)
 
-Docs and the release. Everything before it has landed.
+The manual social walk-through, one real Neon token, and the tag. Everything
+else has landed — see **Pending** at the top.
 
 Accepted deviations, unchanged: `drizzle.config.ts` sits in `apps/web/`
 because drizzle-kit resolves paths relative to itself; `.agents/skills/` is
@@ -1210,7 +1274,7 @@ confirmation page for the no-hint case.
 | M11  | Security hardening                                | ✅ done                                                                               |
 | M12  | Container, compose, Caddy, CLI, ops               | ✅ done — image, compose, both Caddyfiles, all seven CLI commands, cleanup job, TST-8 smoke |
 | M13  | E2E, sample RP, a11y                              | ✅ done — 68 tests in both shapes: flows, axe, the sample RP, and a merge-required CI job |
-| M14  | Docs & release — **including the README (DOC-1)** | ⬜ not started                                                                        |
+| M14  | Docs & release — **including the README (DOC-1)** | ✅ written — the release itself waits on owner sign-off |
 
 `README.md` is **DOC-1, in M14**. It currently carries a minimal
 getting-started and first-sign-in section; the full DOC-1 README — features,

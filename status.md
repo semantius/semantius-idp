@@ -1,8 +1,8 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-25 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `19ed39a`
+**As of:** 2026-08-25 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `fd5aa4b`
 **Plan:** `~/.claude/plans/finish-idp-v1-s3-m6-m14.md`
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D38**
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D44**
 
 **S3 and M6–M12 are done. M13 is started** — the Playwright harness runs
 against the built image in both deployment shapes, and the gate that would have
@@ -26,34 +26,7 @@ could see it. That story is the first section below.
 Everything not yet done, in the order it should be done. Nothing else in this
 file is a to-do list.
 
-### 1. Spec debt — do this first
-
-`spec-v1.md` is amended through **D38** and has not been touched since; the
-convention is that amendments ride the feature commit, and for M12/M13 they did
-not.
-
-- **D30 is reserved but never written.** Record it: the capture transport
-  writes each message to a directory as JSON; `IDP_EMAIL_TRANSPORT=capture` and
-  `IDP_EMAIL_CAPTURE_DIR` are CFG-3 env-only variables; add the TST-1 sentence.
-- **OPS-6 and FR-ADMIN-1 still say `idp create-admin`.** The command is
-  `idp reset-admin`. Update both.
-- **DM-2 and DM-5 inventories omit `pending_authorization` and
-  `oauth_client_assertion`.** Add the one-liners; the cleanup job purges both.
-- **Number the following from D39:**
-  - Vite `base` is relative for the **build only** — 8.x stopped coercing a
-    relative base to `/` in dev and broke every `/@…` URL.
-  - An explicit `sslmode` in the connection string wins over the
-    not-localhost heuristic; `prefer` and `allow` are deliberately ignored.
-  - `azp` for a key-issued JWT comes from a `Symbol.for` marker stamped by the
-    api-key gate, not from the session's token type (FR-KEY-3).
-  - `idp reset-admin` never promotes, and never creates an address typed on the
-    command line — only `admin.bootstrap.email`.
-  - `docker-compose.yml` pins `IDP_CONFIG_DIR`, `DATABASE_URL`,
-    `DIRECT_DATABASE_URL` and `IDP_SCHEMA_NAME` against `env_file` leaking the
-    host's values.
-  - `site.logo` accepts both `logo.svg` and `branding/logo.svg`.
-
-### 2. M13 — finish it
+### 1. M13 — finish it
 
 - **Flow specs** in `apps/web/e2e/`, per TST-6: login variants · signup on/off ·
   verification and reset through captured mail · 2FA enrol and challenge ·
@@ -67,7 +40,7 @@ not.
   to it.
 - **CI e2e job** — built image, both projects, merge-required.
 
-### 3. M14 — none of it is started
+### 2. M14 — none of it is started
 
 - `apps/web/scripts/generate-config-reference.ts` (CFG-4) with `--check` in CI.
 - Rewrite `README.md` per DOC-1. The quick start must be the **exact**
@@ -80,7 +53,7 @@ not.
   **Stop at the mandatory gate** — tagging v1.0.0 and publishing the image need
   owner sign-off.
 
-### 4. Open, non-blocking
+### 3. Open, non-blocking
 
 - The dev login on the persistent `idp` schema is still stranded (one user,
   `mustChangePassword = true`). `pnpm reset-admin` fixes it in one command and
@@ -92,6 +65,50 @@ not.
 
 _Empty — no owner review findings outstanding. The next round's go here, and
 are treated as pre-work ahead of anything in **Pending** above._
+
+---
+
+## The spec debt, paid
+
+The convention is that a spec amendment rides the commit that makes it true.
+For M12 and M13 it did not, so `spec-v1.md` stood at **D38** while the tree had
+moved past it in seven places. All seven are written now, and none of them
+changed a line of code: every amendment describes behaviour that already ships
+and is already tested.
+
+**D30 was reserved and never filled in.** It is the capture transport. With the
+env-only `IDP_EMAIL_TRANSPORT=capture` set, each message is written to
+`IDP_EMAIL_CAPTURE_DIR` (default `/tmp/idp-mail`, the image's only writable
+path) as one JSON file instead of being sent, and the Playwright run mounts
+that directory and reads the verification and reset links out of it. Both
+variables joined CFG-3's env-only list; TST-1 now says how the e2e layer gets
+its mail, and that there is no HTTP surface for it. The amendment carries the
+reason it is not a `config.json` key: a file key is a durable, copy-pasteable
+way to turn a production deployment into one that silently swallows every
+password-reset e-mail.
+
+**OPS-6 and FR-ADMIN-1 named a command that never shipped.** `idp create-admin`
+is `idp reset-admin`, and correcting the name was the smaller half. **D42**
+records what the command refuses to do, which is the part an operator needs:
+it never promotes an account that holds no admin role — otherwise a local
+command with database access would be a one-line privilege escalation — and it
+creates only `admin.bootstrap.email`, never an address typed on the command
+line, so a typo cannot quietly provision a second administrator.
+
+**DM-2 and DM-5 were two tables short.** `oauth_client_assertion` and
+`pending_authorization` are both in the generated schema and both in the
+cleanup job's sweep, and were in neither inventory. DM-2 now lists the
+seventeen tables DM-1 has always claimed, `pending_authorization` among them
+with D33's note that nothing writes to it and it is purged regardless.
+
+**D39–D44** are the six decisions M12 and M13 made in passing and never wrote
+down: the build-only Vite `base` (**D39**), an explicit `sslmode` beating the
+not-localhost heuristic while `prefer` and `allow` are ignored (**D40**), `azp`
+on a key-issued JWT coming from the api-key gate's `Symbol.for` marker rather
+than the session's token type (**D41**), `reset-admin`'s two refusals
+(**D42**), the four `docker-compose.yml` pins that decide *which* database and
+*which* configuration (**D43**), and `site.logo` accepting both `logo.svg` and
+`branding/logo.svg` (**D44**).
 
 ---
 
@@ -1094,6 +1111,9 @@ troubleshooting — is still to come.
 This session, newest first:
 
 ```
+fd5aa4b docs(spec): the seven amendments M12 and M13 never wrote
+781afdc docs(status): one Pending section, and the spec debt it was hiding
+19ed39a docs(status): head, and the M13 commits
 004ac26 feat(m13): the browser gate, and the sub-path deployment nobody had driven
 b0c9641 docs(ops): make the resolved SSL mode visible, and stop naming a command that never existed
 fb0e5a1 feat(m12): the image, and seven things that only running it could find

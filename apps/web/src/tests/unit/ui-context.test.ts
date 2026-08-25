@@ -42,11 +42,24 @@ describe("buildUiContext branding", () => {
 
   it("serves configured branding files from /branding", () => {
     const ui = contextFor(
-      { logo: "branding/logo.svg", favicon: "branding/favicon.ico" },
+      { logo: "logo.svg", favicon: "favicon.ico" },
       "http://localhost:3000/idp"
     )
-    expect(ui.logo).toBe("/idp/branding/branding/logo.svg")
-    expect(ui.favicon).toBe("/idp/branding/branding/favicon.ico")
+    expect(ui.logo).toBe("/idp/branding/logo.svg")
+    expect(ui.favicon).toBe("/idp/branding/favicon.ico")
+  })
+
+  it("accepts the config-folder-relative spelling as the same file", () => {
+    // The schema says "path under `branding/`" and the shipped example says
+    // `branding/logo.svg`. Both name `${configDir}/branding/logo.svg`, so both
+    // have to produce the URL that serves it — otherwise every operator who
+    // copied the example gets `/branding/branding/logo.svg` and a 404.
+    const ui = contextFor(
+      { logo: "branding/logo.svg", favicon: "/branding/favicon.ico" },
+      "http://localhost:3000/idp"
+    )
+    expect(ui.logo).toBe("/idp/branding/logo.svg")
+    expect(ui.favicon).toBe("/idp/branding/favicon.ico")
   })
 
   it("leaves an absolute logo URL alone", () => {

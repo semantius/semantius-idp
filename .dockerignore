@@ -1,0 +1,41 @@
+# The build context is the repository root, and everything here is either
+# rebuilt inside the image, useless to it, or must never be in it.
+
+# Rebuilt in the image. Copying a host `node_modules` would also copy whatever
+# platform-specific binaries the developer's machine installed.
+node_modules
+**/node_modules
+apps/*/dist
+apps/*/coverage
+packages/*/dist
+.turbo
+**/.turbo
+**/.vite
+
+# Secrets. `config/` is the *running* deployment's folder — it holds real
+# connection strings and the bootstrap password — and `config.example/` is the
+# one that ships (CFG-1). Getting these two the wrong way round would bake an
+# operator's credentials into a published image.
+config/
+.env
+.env.*
+*.pem
+*.key
+
+# History and tooling that the image has no use for.
+.git
+.github
+.vscode
+.idea
+.claude
+.agents
+docs
+audits
+*.md
+!README.md
+
+# Test and local artefacts.
+playwright-report
+test-results
+coverage
+*.log

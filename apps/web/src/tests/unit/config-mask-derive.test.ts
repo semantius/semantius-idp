@@ -173,4 +173,59 @@ describe("derive.ts", () => {
       ).databaseSsl
     ).toBe("require")
   })
+
+  describe("database.ssl and what the connection string says", () => {
+    const sslFor = (url: string, ssl?: string) =>
+      deriveConfig(
+        parse({ database: ssl ? { url, ssl } : { url } }),
+        [],
+        BUILT_IN_ROLES
+      ).databaseSsl
+
+    it("honours an explicit sslmode over the host heuristic", () => {
+      // The reference compose deployment: the host is `postgres` on a private
+      // network, so the heuristic says "require" and Postgres has no TLS. The
+      // failure is `Client network socket disconnected before secure TLS
+      // connection was established`, which names nothing an operator can act
+      // on — and the URL had said `sslmode=disable` all along.
+      expect(
+        sslFor("postgres://idp:p@postgres:5432/idp?sslmode=disable")
+      ).toBe("disable")
+      expect(
+        sslFor("postgres://idp:p@localhost:5432/idp?sslmode=require")
+      ).toBe("require")
+      expect(
+        sslFor("postgres://idp:p@localhost:5432/idp?sslmode=verify-full")
+      ).toBe("verify-full")
+    })
+
+    it("maps verify-ca onto verify-full", () => {
+      // libpq separates them by whether the hostname is checked. Skipping that
+      // check is not worth a spelling of its own.
+      expect(sslFor("postgres://u:p@db.example.com/idp?sslmode=verify-ca")).toBe(
+        "verify-full"
+      )
+    })
+
+    it("ignores the ambiguous modes and falls back to the host", () => {
+      // `prefer` and `allow` mean "try, then downgrade". Reading either as
+      // "disable" would silently drop TLS on a hosted database because a URL
+      // was copied from somewhere.
+      expect(sslFor("postgres://u:p@db.neon.tech/idp?sslmode=prefer")).toBe(
+        "require"
+      )
+      expect(sslFor("postgres://u:p@db.neon.tech/idp?sslmode=allow")).toBe(
+        "require"
+      )
+      expect(sslFor("postgres://u:p@db.neon.tech/idp?sslmode=nonsense")).toBe(
+        "require"
+      )
+    })
+
+    it("lets the config file override the connection string", () => {
+      expect(
+        sslFor("postgres://u:p@db.example.com/idp?sslmode=disable", "require")
+      ).toBe("require")
+    })
+  })
 })

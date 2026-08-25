@@ -2,8 +2,32 @@ import { createFileRoute } from "@tanstack/react-router"
 
 import { migrationsAreCurrent } from "@/server/db/migrate"
 import { isDraining } from "@/server/http/lifecycle"
+import { createLogger } from "@/server/logger"
 import { getRuntime } from "@/server/runtime"
 import { version } from "@/server/version"
+
+/**
+ * The last readiness failure that was logged.
+ *
+ * A probe runs every few seconds for ever, and `getRuntime()` re-throws the
+ * same start-up error on each one. Printing all of them buries everything else
+ * in the log; printing the *first of each distinct message* keeps the cause
+ * visible and the volume finite.
+ */
+let lastLoggedFailure: string | undefined
+
+function logReadinessFailure(error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error)
+  if (message === lastLoggedFailure) return
+  lastLoggedFailure = message
+
+  // Its own logger: the runtime is exactly the thing that could not be built,
+  // so `runtime.logger` is not available here. The defaults match what the
+  // edge uses before configuration is known.
+  createLogger({ base: { service: "idp" } }).error("not ready", {
+    reason: message,
+  })
+}
 
 /**
  * Readiness (OPS-3): config loaded, database reachable, migrations current,
@@ -55,8 +79,18 @@ export const Route = createFileRoute("/readyz")({
             .from(runtime.database.schema.jwks)
             .limit(1)
           checks.signingKey = keys.length > 0
-        } catch {
-          // Leave the remaining checks false; the body says which.
+        } catch (error) {
+          // **Say why, once.** The body names which check failed and the
+          // response deliberately reveals nothing more (this endpoint is
+          // unauthenticated), but the *log* is the operator's, and leaving it
+          // silent is how a container reports `config: false` for ever with no
+          // clue anywhere as to the cause. This was written after a stack
+          // whose start-up was failing against the wrong database sat at
+          // "not-ready" for ten minutes without a single line explaining it.
+          //
+          // Once, and not per probe: a health check runs every few seconds for
+          // ever, and the same error repeated is a log nobody reads.
+          logReadinessFailure(error)
         }
 
         const ready = Object.values(checks).every(Boolean)

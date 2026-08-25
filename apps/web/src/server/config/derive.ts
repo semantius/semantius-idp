@@ -97,6 +97,49 @@ export function isLocalhostUrl(value: string): boolean {
   }
 }
 
+/**
+ * The `sslmode` a connection string states, if it states one unambiguously.
+ *
+ * **Why this is consulted at all.** The fallback below assumes "not localhost
+ * means the wire is untrusted", which is right for a hosted database and wrong
+ * for the reference deployment, where the host is `postgres` on a private
+ * compose network. Every operator following the quick start would have hit
+ * `Client network socket disconnected before secure TLS connection was
+ * established` — a message that says nothing about SSL settings — against a
+ * URL that already said `sslmode=disable`. The smoke test hit it first.
+ *
+ * `prefer` and `allow` are deliberately *not* honoured. They mean "try, then
+ * fall back", which this deployment has no way to express: it either verifies
+ * or it does not, and silently downgrading a connection because a URL said
+ * `prefer` is the opposite of what a security-relevant default should do.
+ * Those two fall through to the host heuristic.
+ *
+ * `verify-ca` maps to `verify-full`. libpq distinguishes them by whether the
+ * hostname is checked; skipping that check is not something worth offering a
+ * spelling for.
+ */
+function sslModeFromUrl(
+  value: string
+): "disable" | "require" | "verify-full" | undefined {
+  let mode: string | null
+  try {
+    mode = new URL(value).searchParams.get("sslmode")
+  } catch {
+    return undefined
+  }
+  switch (mode) {
+    case "disable":
+      return "disable"
+    case "require":
+      return "require"
+    case "verify-ca":
+    case "verify-full":
+      return "verify-full"
+    default:
+      return undefined
+  }
+}
+
 function toArray(value: string | string[]): string[] {
   return Array.isArray(value) ? value : [value]
 }
@@ -170,8 +213,12 @@ export function deriveConfig(
       ? file.auth.requireEmailVerification
       : false,
     twoFactorIssuer: file.twoFactor.issuer ?? file.site.name,
+    // Three sources, most explicit first: what the config says, what the
+    // connection string says, and — only if neither said anything — the
+    // assumption that a non-local host means an untrusted wire.
     databaseSsl:
       file.database.ssl ??
+      sslModeFromUrl(file.database.url) ??
       (isLocalhostUrl(file.database.url) ? "disable" : "require"),
     jwksGracePeriodSeconds: file.jwt.gracePeriod ?? longestTokenLifetime + 3600,
     defaultAudience,

@@ -116,17 +116,29 @@ function labelFor(providerId: string): string {
 /**
  * Turns a `site.logo` / `site.favicon` setting into a URL the browser can use.
  *
- * The setting names a file inside the config folder (`branding/logo.svg`,
- * CFG-1), which is served from `/branding`. Prefixing it with the mount path
- * is not cosmetic: a bare `branding/logo.svg` resolves against whatever page
- * is showing, and `/favicon.ico` resolves against the *origin* root — which
- * under a sub-path deployment belongs to a different application (spike S3
- * caught the 404). An absolute URL is left alone.
+ * The setting names a file inside the config folder's `branding/` directory
+ * (CFG-1), which `routes/branding.$.ts` serves at `/branding/*`. Prefixing the
+ * result with the mount path is not cosmetic: a bare `logo.svg` resolves
+ * against whatever page is showing, and `/favicon.ico` resolves against the
+ * *origin* root — which under a sub-path deployment belongs to a different
+ * application (spike S3 caught the 404). An absolute URL is left alone.
+ *
+ * **Both spellings are accepted**, and they mean the same file. The schema
+ * describes the value as a path *under* `branding/` (`logo.svg`), while the
+ * shipped `config.example/config.json` has always shown `branding/logo.svg` —
+ * a path relative to the config folder. Whichever an operator copied, the file
+ * they mean is `${configDir}/branding/logo.svg`, so the redundant prefix is
+ * dropped rather than doubled. The alternative was to serve
+ * `/branding/branding/logo.svg` to half of them and 404 the other half.
  */
 function brandingUrl(paths: BasePaths, value?: string): string | undefined {
   if (!value) return undefined
   if (/^https?:\/\//i.test(value)) return value
-  return paths.path(`/branding/${value.replace(/^\/+/, "")}`)
+  const withinBranding = value
+    .replace(/^\/+/, "")
+    .replace(/^branding\//, "")
+  if (withinBranding === "") return undefined
+  return paths.path(`/branding/${withinBranding}`)
 }
 
 export function buildUiContext(config: IdpConfig, locale: string): UiContext {

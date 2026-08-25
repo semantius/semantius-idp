@@ -36,6 +36,7 @@ import { Route as Oauth2RevokeRouteImport } from './routes/oauth2/revoke'
 import { Route as Oauth2IntrospectRouteImport } from './routes/oauth2/introspect'
 import { Route as Oauth2EndSessionRouteImport } from './routes/oauth2/end-session'
 import { Route as Oauth2AuthorizeRouteImport } from './routes/oauth2/authorize'
+import { Route as BrandingSplatRouteImport } from './routes/branding.$'
 import { Route as AdminSystemRouteImport } from './routes/admin/system'
 import { Route as AdminRolesRouteImport } from './routes/admin/roles'
 import { Route as AdminClientsRouteImport } from './routes/admin/clients'
@@ -189,6 +190,11 @@ const Oauth2AuthorizeRoute = Oauth2AuthorizeRouteImport.update({
   path: '/oauth2/authorize',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BrandingSplatRoute = BrandingSplatRouteImport.update({
+  id: '/branding/$',
+  path: '/branding/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminSystemRoute = AdminSystemRouteImport.update({
   id: '/system',
   path: '/system',
@@ -312,6 +318,7 @@ export interface FileRoutesByFullPath {
   '/admin/clients': typeof AdminClientsRoute
   '/admin/roles': typeof AdminRolesRoute
   '/admin/system': typeof AdminSystemRoute
+  '/branding/$': typeof BrandingSplatRoute
   '/oauth2/authorize': typeof Oauth2AuthorizeRoute
   '/oauth2/end-session': typeof Oauth2EndSessionRoute
   '/oauth2/introspect': typeof Oauth2IntrospectRoute
@@ -356,6 +363,7 @@ export interface FileRoutesByTo {
   '/admin/clients': typeof AdminClientsRoute
   '/admin/roles': typeof AdminRolesRoute
   '/admin/system': typeof AdminSystemRoute
+  '/branding/$': typeof BrandingSplatRoute
   '/oauth2/authorize': typeof Oauth2AuthorizeRoute
   '/oauth2/end-session': typeof Oauth2EndSessionRoute
   '/oauth2/introspect': typeof Oauth2IntrospectRoute
@@ -403,6 +411,7 @@ export interface FileRoutesById {
   '/admin/clients': typeof AdminClientsRoute
   '/admin/roles': typeof AdminRolesRoute
   '/admin/system': typeof AdminSystemRoute
+  '/branding/$': typeof BrandingSplatRoute
   '/oauth2/authorize': typeof Oauth2AuthorizeRoute
   '/oauth2/end-session': typeof Oauth2EndSessionRoute
   '/oauth2/introspect': typeof Oauth2IntrospectRoute
@@ -451,6 +460,7 @@ export interface FileRouteTypes {
     | '/admin/clients'
     | '/admin/roles'
     | '/admin/system'
+    | '/branding/$'
     | '/oauth2/authorize'
     | '/oauth2/end-session'
     | '/oauth2/introspect'
@@ -495,6 +505,7 @@ export interface FileRouteTypes {
     | '/admin/clients'
     | '/admin/roles'
     | '/admin/system'
+    | '/branding/$'
     | '/oauth2/authorize'
     | '/oauth2/end-session'
     | '/oauth2/introspect'
@@ -541,6 +552,7 @@ export interface FileRouteTypes {
     | '/admin/clients'
     | '/admin/roles'
     | '/admin/system'
+    | '/branding/$'
     | '/oauth2/authorize'
     | '/oauth2/end-session'
     | '/oauth2/introspect'
@@ -580,6 +592,7 @@ export interface RootRouteChildren {
   DotwellKnownOauthAuthorizationServerRoute: typeof DotwellKnownOauthAuthorizationServerRoute
   DotwellKnownOpenidConfigurationRoute: typeof DotwellKnownOpenidConfigurationRoute
   DotwellKnownSecurityDottxtRoute: typeof DotwellKnownSecurityDottxtRoute
+  BrandingSplatRoute: typeof BrandingSplatRoute
   Oauth2AuthorizeRoute: typeof Oauth2AuthorizeRoute
   Oauth2EndSessionRoute: typeof Oauth2EndSessionRoute
   Oauth2IntrospectRoute: typeof Oauth2IntrospectRoute
@@ -780,6 +793,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Oauth2AuthorizeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/branding/$': {
+      id: '/branding/$'
+      path: '/branding/$'
+      fullPath: '/branding/$'
+      preLoaderRoute: typeof BrandingSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/system': {
       id: '/admin/system'
       path: '/system'
@@ -971,6 +991,7 @@ const rootRouteChildren: RootRouteChildren = {
     DotwellKnownOauthAuthorizationServerRoute,
   DotwellKnownOpenidConfigurationRoute: DotwellKnownOpenidConfigurationRoute,
   DotwellKnownSecurityDottxtRoute: DotwellKnownSecurityDottxtRoute,
+  BrandingSplatRoute: BrandingSplatRoute,
   Oauth2AuthorizeRoute: Oauth2AuthorizeRoute,
   Oauth2EndSessionRoute: Oauth2EndSessionRoute,
   Oauth2IntrospectRoute: Oauth2IntrospectRoute,

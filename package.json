@@ -14,6 +14,7 @@
     "reset-admin": "pnpm --filter web run reset-admin"
   },
   "devDependencies": {
+    "jose": "6.2.10",
     "prettier": "3.8.3",
     "prettier-plugin-tailwindcss": "0.8.0",
     "turbo": "2.10.11",

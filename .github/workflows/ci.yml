@@ -131,6 +131,132 @@ jobs:
         run: pnpm --filter web run test:coverage
 
   # ---------------------------------------------------------------------------
+  # The image, and the only test that exercises it (OPS-1, TST-8, SEC-9).
+  #
+  # Everything above tests the application. This tests the artefact: that what
+  # would be published starts, migrates, serves the protocol, signs somebody in
+  # and stops when told. A missing file in the final stage, a signal that never
+  # reaches PID 1, a health check probing the wrong path — none of those are
+  # visible to a unit or integration test, and all three are the sort of thing
+  # that is only ever found in production.
+  #
+  # amd64 only on a pull request: arm64 is emulated here and roughly triples the
+  # build for an artefact nobody merges. Tags build both, because that is what
+  # gets published.
+  # ---------------------------------------------------------------------------
+  docker:
+    if: github.event_name != 'schedule'
+    name: image · smoke · scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    needs: [check]
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # `sha-<git>` and the OCI `revision` label both want the real commit,
+          # and a shallow checkout of a PR merge commit is not it.
+          fetch-depth: 0
+
+      - uses: docker/setup-qemu-action@v3
+        if: startsWith(github.ref, 'refs/tags/v')
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Derive tags (OPS-1)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix=sha-,format=short
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+
+      # Built once into the local daemon so the smoke test runs against exactly
+      # the image that will be pushed, rather than a second build of the same
+      # Dockerfile that happens to be identical.
+      - name: Build (amd64, loaded locally)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: semantius-idp:ci
+          build-args: |
+            IDP_VERSION=${{ steps.meta.outputs.version || '0.0.0-ci' }}
+            IDP_REVISION=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Smoke test (TST-8, OPS-13)
+        env:
+          IDP_IMAGE: semantius-idp:ci
+        run: bun run scripts/smoke-test.ts
+
+      - name: Vulnerability scan (SEC-9)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: semantius-idp:ci
+          format: sarif
+          output: trivy.sarif
+          # The scan reports; it does not gate. A base-image CVE with no fix
+          # available would otherwise block every merge until somebody else
+          # shipped a patch, and a gate people learn to bypass is worse than a
+          # report people read.
+          exit-code: "0"
+          ignore-unfixed: true
+
+      - name: Upload scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy.sarif
+          category: trivy-image
+
+      - name: SBOM (SEC-9)
+        uses: anchore/sbom-action@v0
+        with:
+          image: semantius-idp:ci
+          format: spdx-json
+          artifact-name: sbom.spdx.json
+
+      # Only tags publish. A merge to main builds and smokes the image; it does
+      # not put one on the registry, because OPS-1's tag set is a release act.
+      - name: Log in to GHCR
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push (amd64 + arm64)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            IDP_VERSION=${{ steps.meta.outputs.version }}
+            IDP_REVISION=${{ github.sha }}
+          cache-from: type=gha
+
+  # ---------------------------------------------------------------------------
   # Nightly dependency audit (SEC-9).
   # ---------------------------------------------------------------------------
   audit:

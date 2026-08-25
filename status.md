@@ -4,13 +4,14 @@
 **Plan:** `~/.claude/plans/finish-idp-v1-s3-m6-m14.md`
 **Spec:** [spec-v1.md](spec-v1.md) — amended through **D38**
 
-**S3 and M6–M11 are done and committed. M12 is started, not finished:** its
-lifecycle half (OPS-4 draining, the health-check exclusions) and the CLI
-recovery command are in; the container, compose, Caddy and CI halves are not —
-see "M12 — what is in and what is not". Every gate green: lint, typecheck,
-unit (435), integration (204 across twenty-two files), coverage thresholds including the 85 % per-module
-gates, schema-drift, config-schema staleness, dependency pinning, and the
-client-bundle gate.
+**S3 and M6–M12 are done. M13 (e2e, sample RP, a11y) and M14 (docs, release)
+are what remain.** Every gate green: lint, typecheck, unit (457), integration
+(210 across twenty-three files), coverage thresholds including the 85 %
+per-module gates, schema-drift,
+config-schema staleness, dependency pinning, the client-bundle gate — and, new
+in M12, the **TST-8 container smoke test**, which drives the built image from
+`compose up` through a scripted forced password change to a verified JWT and a
+clean SIGTERM.
 
 **If you are wondering why the sign-in page looked unstyled** — it was, for
 every developer, on every page, since spike S3, and no gate in this repository
@@ -70,50 +71,114 @@ shipped past a green board — R-1 was the first.
 
 ---
 
-## M12 — what is in and what is not
+## M12 — the container milestone, and the seven things it found
 
-**In, and verified:**
+**M12 is complete.** The image builds, `docker compose up` brings up a working
+IdP, both Caddyfiles validate, all seven OPS-6 commands run inside the
+container, and TST-8's smoke test drives the whole thing end to end.
 
-- **OPS-4 draining.** `server/http/lifecycle.ts` splits shutdown into the two
-  things it actually is: *stop being chosen* (`/readyz` answers 503 the moment
-  SIGTERM lands) and *stop holding* (the pool closes only once the in-flight
-  requests have finished). `src/serve.ts` owns the socket, so the handlers live
-  there: begin draining → `server.stop()` → force-close past
-  `server.shutdownTimeoutSeconds` → `releaseResources()` → exit 0. A second
-  signal exits at once. `/healthz` keeps answering 200 throughout, because a
-  container draining on purpose is not one to restart.
-  `runtime.shutdownRuntime()` closes a runtime **only if one was built** — the
-  obvious `getRuntime().then((r) => r.shutdown())` would run the whole OPS-2
-  sequence, migrations included, on the way out of the door.
+### What landed
 
-  The *ordering* is extracted as `runDrain` and tested with fakes
-  (`tests/unit/lifecycle.test.ts`), and `/readyz`'s 503 is tested against the
-  real route handler (`tests/unit/readyz-draining.test.ts`). Both exist for a
-  blunt reason: **Windows cannot deliver SIGTERM to a handler at all** —
-  `uv_kill` maps it to `TerminateProcess` — so the real path cannot be
-  exercised on the machine this is built on. Only TST-8's containerised smoke
-  test will, and it does not exist yet. Treat the signal wiring itself as
-  unverified until then; the sequence it drives is not.
+- **OPS-4 draining** (`server/http/lifecycle.ts`, `src/serve.ts`). Shutdown is
+  split into the two things it actually is: *stop being chosen* — `/readyz`
+  answers 503 the moment SIGTERM lands — and *stop holding*, where the pool
+  closes only once the in-flight requests have finished. Releasing at signal
+  time is the mistake the split exists to prevent: it turns a rolling deploy
+  into a burst of 500s. A second signal exits at once; `/healthz` keeps
+  answering 200, because a container draining on purpose is not one to restart.
+  `shutdownRuntime()` closes a runtime **only if one was built** — the obvious
+  `getRuntime().then((r) => r.shutdown())` would run the whole OPS-2 sequence,
+  migrations included, on the way out of the door.
+- **All seven OPS-6 commands.** `config validate` (no database — an operator
+  whose config is wrong may not be able to reach one), `migrate`,
+  `reconcile-clients`, `reset-admin`, `rotate-keys`, `cleanup`, `version`.
+  Verified inside the image: `docker run <image> idp config validate` prints
+  the issuer, the masked connection string, the counts and the warnings.
+- **The retention job** (`server/cleanup.ts`, OPS-8/DM-5). Nine tables, each
+  purged on the question *is this row still capable of doing anything* rather
+  than on age. Two deserve naming: token rows wait **30 days after death**
+  because a revoked token still in the table is the answer to "was this revoked
+  or did it never exist", which is the first question anyone asks after a leak;
+  and `jwks` is purged at expiry **plus the grace period**, never at expiry,
+  because a retired key still verifies tokens signed before it stepped down.
+  The interval job schedules the next run when the last one *finishes*, so a
+  slow sweep cannot stack.
+- **`routes/branding.$.ts`** (CFG-1) — the operator's logo and favicon out of
+  the read-only config mount, written as a series of refusals rather than
+  transformations, because it is the one place a URL becomes a path on disk.
+- **The image, compose, both Caddyfiles, the smoke test and the CI job.**
+  118.9 MiB against OPS-13's 300 MB ceiling.
 
-  One thing found while building it: importing `lifecycle.ts` from
-  `server-entry.ts` dragged `runtime.ts` — Better Auth, its plugin graph and
-  Drizzle — out of a lazily-loaded chunk and into the entry, taking
-  `server-entry.js` from 279 kB to 1.56 MB. The runtime import is dynamic now
-  and the entry is 282 kB. Noticed only because the build output was read
-  rather than skimmed.
-- **Health-check exclusions.** Already true, and now stated where it is
-  checked: the request log skips both paths (`isQuietPath`, unit-tested), and
-  neither is a Better Auth route, so no rate-limit bucket has ever applied to
-  them.
-- **`idp reset-admin`** (`server/admin/reset-admin.ts`, `pnpm reset-admin`) —
-  the plan's `create-admin` under the name the owner asked for, and what makes
-  P0'.1 stop being a schema drop.
+### The seven things running it found
 
-**Not started:** the image, compose, the two Caddyfiles, `branding.$.ts`, the
-`smoke-test.ts`, the CI docker job, the cleanup job, and the remaining OPS-6
-commands (`config validate`, `rotate-keys`, `cleanup`). M12 is not done, and
-the drain is proven by reading the code rather than by signalling a container —
-TST-8's smoke test is where that proof belongs, and it does not exist yet.
+The first four came out of the smoke test, in the order it runs, and none of
+them is visible to any unit or integration test. That is the argument for TST-8
+in one sentence: every one would otherwise have been found by the first person
+to follow the README.
+
+1. **`env_file: .env` sent the operator's own database into the container.**
+   The worst of the set. `DIRECT_DATABASE_URL` is a bootstrap fallback for
+   `database.directUrl` — the connection *every advisory-locked step* uses:
+   migrations, the signing key, the client reconcile, the bootstrap admin. A
+   developer's `.env` has it pointing at their real database, and compose
+   passed it straight through, so the container **served from the compose
+   Postgres while migrating somebody else's**. It happened here, on the first
+   run that got far enough: the direct handle reached a production Neon
+   endpoint. It was refused — the derived SSL mode did not match what Neon
+   requires — and the persistent `idp` schema was checked afterwards and is
+   untouched: one user, migrations dated the previous day, no audit row from
+   the run. `DIRECT_DATABASE_URL` and `IDP_SCHEMA_NAME` are now pinned in
+   `environment:`, which wins over `env_file`.
+2. **`IDP_CONFIG_DIR` leaked the same way**, and is the same fix. `.env` says
+   `./config` — a *host* path — so the container looked for its configuration
+   at a directory that does not exist inside it and restart-looped with
+   "Required file not found at C:/…/config/config.json".
+3. **`serve.ts` was copied into the image as TypeScript source.** It imports
+   across `src/`, and the final stage has no `src/`, so every start died with
+   `Cannot find module './server/config/loader'` — while the container was
+   reported only as "unhealthy". Both entrypoints are bundled now.
+4. **The reference deployment could not have worked at all.** `database.ssl`
+   defaulted to `require` for any host that is not literally localhost —
+   correct for a hosted database, wrong for compose, where the host is
+   `postgres` on a private network. Every operator following the quick start
+   would have hit `Client network socket disconnected before secure TLS
+   connection was established`, which names nothing they could act on, against
+   a URL that had said `sslmode=disable` all along. An explicit `sslmode` is
+   now honoured ahead of the heuristic. `prefer` and `allow` deliberately are
+   not: they mean "try, then downgrade", and reading either as "disable" would
+   silently drop TLS on a hosted database because a URL was copied from
+   somewhere.
+5. **`/readyz` knew why it was failing and said nothing.** Its `catch` was
+   bare, so a stack whose start-up was failing reported `config: false` for as
+   long as you cared to watch, with no line anywhere naming the cause — which
+   is how finding (1) took as long as it did. It now logs the reason once per
+   distinct message: the response stays non-revealing (it is unauthenticated),
+   the log does not.
+6. **The `jwks` purge bound a `Date` into a raw SQL template** and postgres.js
+   refused it — the identical mistake that cost M10 a 500 on the whole
+   dashboard. Subtracting the grace period from `now` instead of adding it to
+   the column is the same inequality with no raw SQL at all.
+7. **`site.logo` had two spellings and one of them 404s.** The schema describes
+   a path *under* `branding/`; the shipped example has always shown
+   `branding/logo.svg`. Both name the same file, so both now resolve to
+   `/branding/logo.svg` rather than one of them producing
+   `/branding/branding/logo.svg`.
+
+### What is deliberately not here
+
+`docker-compose.dev.yml` (the plan calls it optional) and the arm64 leg of the
+build on pull requests — arm64 is emulated in CI and roughly triples the build
+for an artefact nobody merges, so tags build both and PRs build amd64.
+
+**The SIGTERM path is now genuinely exercised** — the smoke test stops the
+container and asserts the exit code is 0 rather than 137. On Windows it still
+cannot be: `uv_kill` maps SIGTERM to `TerminateProcess`, so a developer machine
+can never run it, which is why `tests/unit/lifecycle.test.ts` covers the
+ordering with fakes as well.
+
+Smoke test, against the built image: ready in **0.38 s** (budget 5 s), idle RSS
+**202.7 MiB** (budget 256), image **118.9 MiB** (budget 300), clean exit on
+SIGTERM. All sixteen checks green.
 
 ### `idp reset-admin`, and the two things it refuses
 
@@ -803,10 +868,10 @@ schema identifier in the committed SQL. And **`buildRuntime` had to become
 async**, because the OAuth provider queries `oauth_resource` from its own
 `init()`; on a fresh database the process died before it could migrate.
 
-## Not done (the rest of M12, M13, M14)
+## Not done (M13, M14)
 
-The image and everything around it, e2e, and docs. What is left of M12 is
-listed in "M12 — what is in and what is not" above; M13 and M14 are untouched.
+E2E and docs. M13 is next and should be read as load-bearing rather than as
+polish — see below.
 
 Accepted deviations, unchanged: `drizzle.config.ts` sits in `apps/web/`
 because drizzle-kit resolves paths relative to itself; `.agents/skills/` is
@@ -824,7 +889,9 @@ unnecessary. See the M9 section above.
 `src/serve.ts` is the `Bun.serve` wrapper spike S3 needed — static files out of
 `dist/client` with the mount path stripped — and now also carries M12's OPS-4
 signal handling. The SEC-5 request log and the SEC-4 headers live one layer
-down in `src/server-entry.ts`, so `vite dev` gets them too.
+down in `src/server-entry.ts`, so `vite dev` gets them too. In the image both
+it and the CLI are **bundled**, not copied as source: the final stage has no
+`src/`.
 
 ---
 
@@ -843,7 +910,8 @@ down in `src/server-entry.ts`, so `vite dev` gets them too.
 | `/.well-known/security.txt`                                                                                        | ✅ 200 with a file in the config folder, 404 without  |
 | `/robots.txt`                                                                                                      | ✅ 200, disallow all                                  |
 | `/oauth2/authorize` `/oauth2/token` `/oauth2/userinfo` `/oauth2/introspect` `/oauth2/revoke` `/oauth2/end-session` | ✅ 200 / 405 by method                                |
-| `/admin/*`                                                                                                         | ❌ 404 — **M10**                                      |
+| `/admin/*`                                                                                                         | ✅ 200 for an administrator, 404 otherwise            |
+| `/branding/*`                                                                                                      | ✅ 200 from the config folder, 404 for anything else  |
 
 **A full authorization-code + PKCE flow works end to end**, verified against a
 live server on a throwaway schema: authorize → code → token (ES256, `kid`,
@@ -875,8 +943,8 @@ confirmation page for the no-hint case.
 | M9   | Authorize UX: continuation, consent, end-session  | ✅ done                                                                               |
 | M10  | Admin UI + API                                    | ✅ done                                                                               |
 | M11  | Security hardening                                | ✅ done                                                                               |
-| M12  | Container, compose, Caddy, CLI, ops               | 🟨 **in progress** — lifecycle + `reset-admin` in; image, compose, Caddy, CI, cleanup job not |
-| M13  | E2E, sample RP, a11y                              | ⬜ not started                                                                        |
+| M12  | Container, compose, Caddy, CLI, ops               | ✅ done — image, compose, both Caddyfiles, all seven CLI commands, cleanup job, TST-8 smoke |
+| M13  | E2E, sample RP, a11y                              | ⬜ **next**                                                                           |
 | M14  | Docs & release — **including the README (DOC-1)** | ⬜ not started                                                                        |
 
 `README.md` is **DOC-1, in M14**. It currently carries a minimal

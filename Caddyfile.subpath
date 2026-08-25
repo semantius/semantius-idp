@@ -1,0 +1,90 @@
+# The IdP under a path on a hostname it shares (OPS-10, risk R3).
+#
+# `https://apps.example.com/idp` — the rest of the hostname belongs to another
+# application. Two rules make this work, and both are easy to get wrong in ways
+# that fail quietly.
+#
+#   1. **Proxy `/idp/*` without stripping the prefix.** The IdP is told its own
+#      mount path through `server.baseUrl` and renders every link, cookie
+#      `Path`, e-mail link and redirect URI with it. Strip it here and every one
+#      of those points one level too high — sign-in appears to work and the
+#      session cookie is set on a path the browser never sends back.
+#
+#   2. **Serve the RFC 8414 metadata from the ORIGIN ROOT.** A client given the
+#      issuer `https://apps.example.com/idp` does not fetch
+#      `{issuer}/.well-known/openid-configuration`. RFC 8414 §3.1 inserts the
+#      well-known segment *between* the host and the path:
+#      `https://apps.example.com/.well-known/oauth-authorization-server/idp`.
+#      That path is at the origin root, which belongs to the other application,
+#      so it has to be routed here explicitly. Nothing else does this for you,
+#      and the symptom is a client that cannot discover an IdP which is
+#      otherwise working perfectly.
+#
+# Set `server.baseUrl` to `https://{$IDP_DOMAIN}{$IDP_BASE_PATH}` and
+# `server.trustProxy` to true in config.json, and mount this file instead of
+# `Caddyfile` in docker-compose.yml.
+
+{$IDP_DOMAIN:localhost} {
+	encode zstd gzip
+
+	log {
+		output stdout
+		format json
+	}
+
+	# --- rule 2, first, because it is the most specific ---------------------
+	#
+	# Both spellings: OAuth 2.0 Authorization Server Metadata (RFC 8414) and
+	# the OpenID Connect Discovery form some clients still use. The IdP serves
+	# both at its own root (M8c), so the path is rewritten onto the mount path
+	# and the prefix restored.
+	handle /.well-known/oauth-authorization-server{$IDP_BASE_PATH:/idp}* {
+		rewrite * {$IDP_BASE_PATH:/idp}/.well-known/oauth-authorization-server
+		reverse_proxy idp:3000 {
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
+	handle /.well-known/openid-configuration{$IDP_BASE_PATH:/idp}* {
+		rewrite * {$IDP_BASE_PATH:/idp}/.well-known/openid-configuration
+		reverse_proxy idp:3000 {
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
+	# --- rule 1: everything under the mount path, prefix intact -------------
+	handle {$IDP_BASE_PATH:/idp}* {
+		reverse_proxy idp:3000 {
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+
+			transport http {
+				dial_timeout 5s
+				response_header_timeout 30s
+			}
+
+			health_uri {$IDP_BASE_PATH:/idp}/readyz
+			health_interval 10s
+			health_timeout 3s
+		}
+	}
+
+	# --- everything else is the other application ---------------------------
+	#
+	# Replace this with whatever actually lives on this hostname. It is here so
+	# the file is complete rather than a fragment, and so that a request to the
+	# origin root does not silently fall through to the IdP.
+	handle {
+		respond "Not found" 404
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+}

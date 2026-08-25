@@ -64,8 +64,9 @@
 
   "site": {
     "name": "Example IdP",
-    // "logo": "branding/logo.svg",
-    // "favicon": "branding/favicon.ico",
+    // Files in this folder's `branding/` directory, served at /branding/*.
+    // "logo": "logo.svg",
+    // "favicon": "favicon.ico",
     // "supportEmail": "support@example.com",
     // "termsUrl": "https://example.com/terms",
     // "privacyUrl": "https://example.com/privacy",

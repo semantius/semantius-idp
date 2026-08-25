@@ -1,0 +1,193 @@
+# The reference deployment (OPS-7).
+#
+# `docker compose up` gives a working IdP on http://localhost:3000 with its own
+# Postgres. Add `--profile caddy` for automatic HTTPS in front of it.
+#
+# Before the first run:
+#
+#   cp .env.example .env          # then fill in every value it asks for
+#   cp -r config.example config   # the annotated defaults; edit to taste
+#   mkdir -p secrets && printf %s "$POSTGRES_PASSWORD" > secrets/postgres_password
+#
+# `config/` is bind-mounted **read-only**: the container never writes to its own
+# configuration, and CFG-1's "restart to apply" is a property of the mount
+# rather than a promise in the documentation.
+#
+# **Where the database password lives, and why it is in two places.** `.env` is
+# the source of truth — `env_file` is how the IdP gets `DATABASE_URL`, and the
+# config loader expands `${env:…}` in a single non-recursive pass, so it cannot
+# reach into a secret file from a value that itself came from the environment.
+# The third line above copies that one value into `secrets/postgres_password`,
+# which is what Postgres reads. The gain is narrow and worth stating plainly:
+# the password is not in the *database* container's environment, so it does not
+# appear in its `docker inspect` output or in a support bundle taken from it.
+# It is still in `.env`, which is what `env_file` means.
+
+name: semantius-idp
+
+services:
+  postgres:
+    # Pinned to a minor, because "17" would silently become 17.6 on a `pull` and
+    # a major upgrade is a data-directory migration nobody asked for.
+    image: postgres:17.4-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: idp
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_DB: idp
+      # Postgres wants a locale at initdb time and never again; setting it here
+      # keeps `initdb` from picking one up from the host.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    secrets:
+      - postgres_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # `-U idp -d idp` and not a bare `pg_isready`: the default checks that
+      # *a* server answers, which is already true while `initdb` is still
+      # running against a different socket.
+      test: ["CMD-SHELL", "pg_isready -U idp -d idp"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    # Not published. Nothing outside this network needs the database, and a
+    # `5432:5432` in a reference file is how a development Postgres ends up on
+    # the internet.
+    expose:
+      - "5432"
+
+  idp:
+    image: ${IDP_IMAGE:-ghcr.io/adenin/semantius-idp:latest}
+    build:
+      context: .
+      args:
+        IDP_VERSION: ${IDP_VERSION:-0.0.0-dev}
+        IDP_REVISION: ${IDP_REVISION:-}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        # Not `depends_on: [postgres]`, which only waits for the *container* to
+        # start: the IdP migrates on boot, and a migration against a Postgres
+        # that is still initialising fails the whole start-up (OPS-2).
+        condition: service_healthy
+    env_file:
+      # Optional, because CI and the TST-8 smoke test run this stack with no
+      # `.env` at all and compose treats a missing one as an error otherwise.
+      - path: .env
+        required: false
+    environment:
+      # **Pinned here, and not merely defaulted in the image.** `environment`
+      # wins over `env_file`, and a developer's `.env` says
+      # `IDP_CONFIG_DIR=./config` — a *host* path. Passed through, the container
+      # looks for its configuration at a directory that does not exist inside
+      # it and dies on every restart with "Required file not found at
+      # C:/…/config/config.json", which is a genuinely baffling thing to read
+      # in a container log. `/config` is where the volume below is mounted, and
+      # it is not negotiable.
+      IDP_CONFIG_DIR: /config
+
+      # **The same reasoning, and a worse failure.** `DIRECT_DATABASE_URL` is a
+      # bootstrap fallback for `database.directUrl` — the connection every
+      # advisory-locked step uses: migrations, the signing key, the client
+      # reconcile, the bootstrap admin. A developer's `.env` has it pointing at
+      # their real database, and passed through it would make this container
+      # *serve* from the compose Postgres while *migrating* somebody else's.
+      # Blanked here, because the compose Postgres is not behind a pooler and
+      # needs no separate direct endpoint. Point `database.directUrl` at one in
+      # `config/config.json` if you move the database somewhere that does.
+      #
+      # This is not hypothetical: it happened on the first run of the TST-8
+      # smoke test, which reached a production Neon endpoint and was refused
+      # only because the SSL mode did not match.
+      DIRECT_DATABASE_URL: ""
+      # Likewise: a host `.env` that names a throwaway schema must not decide
+      # where a container puts its tables.
+      IDP_SCHEMA_NAME: ${IDP_SCHEMA_NAME:-idp}
+      #
+      # The other bootstrap variables (`HOST`, `PORT`, `LOG_LEVEL`,
+      # `IDP_MIGRATE_ON_BOOT`) need no pin: each applies only when the config
+      # file leaves the setting out, and the shipped `config.example` sets all
+      # of them. The four above are pinned because each decides *which
+      # database* or *which configuration* — the answers where a stray host
+      # value is not a wrong setting but the wrong deployment.
+      # The compose network resolves `postgres`. `sslmode=disable` is correct
+      # *here* and nowhere else: this connection never leaves the compose
+      # network. Pointing `DATABASE_URL` at a hosted Postgres means putting it
+      # in `.env` with the sslmode that database requires, and this line goes.
+      DATABASE_URL: postgres://idp:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/idp?sslmode=disable
+      IDP_BASE_URL: ${IDP_BASE_URL:-http://localhost:3000}
+      # OPS-3: the health check has to know the mount path, because under a
+      # sub-path `/healthz` is at `/idp/healthz` and a probe of the origin root
+      # would report a healthy container as failing.
+      IDP_HEALTH_URL: http://127.0.0.1:3000${IDP_BASE_PATH:-}/healthz
+    volumes:
+      # The path is a variable so the TST-8 smoke test can point a whole stack
+      # at a generated config folder without touching the operator's.
+      - ${IDP_CONFIG_HOST_DIR:-./config}:/config:ro
+    ports:
+      - "${IDP_PORT:-3000}:3000"
+    # OPS-1: nothing writes to the image. The application needs exactly one
+    # writable path, and it is a tmpfs rather than a volume — what goes there
+    # is scratch, and it should not survive a restart.
+    read_only: true
+    tmpfs:
+      - /tmp:mode=1777,size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # OPS-4: the drain is bounded by `server.shutdownTimeoutSeconds` (10 s by
+    # default), and this has to be longer or Docker kills the process in the
+    # middle of the thing that exists to avoid being killed in the middle.
+    stop_grace_period: 30s
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "const r = await fetch(process.env.IDP_HEALTH_URL); process.exit(r.ok ? 0 : 1)",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+
+  # `--profile caddy`. Automatic HTTPS in front of the IdP (OPS-7, OPS-9).
+  # Without the profile this service does not start and the IdP is reachable
+  # on ${IDP_PORT} directly, which is what a local run wants.
+  caddy:
+    image: caddy:2.10-alpine
+    profiles: ["caddy"]
+    restart: unless-stopped
+    depends_on:
+      idp:
+        condition: service_healthy
+    environment:
+      # The hostname Caddy gets a certificate for. `localhost` makes it issue
+      # an internal one, which is right for a local trial and wrong for
+      # anything else.
+      IDP_DOMAIN: ${IDP_DOMAIN:-localhost}
+    volumes:
+      # Swap for `./Caddyfile.subpath` to serve the IdP at `/idp` on a domain
+      # that already hosts something else (OPS-10).
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
+
+secrets:
+  postgres_password:
+    # A file, not an environment variable: `docker inspect` shows every
+    # variable a container was started with, and a password in there is a
+    # password in every support bundle anyone ever pastes.
+    file: ${IDP_SECRETS_DIR:-./secrets}/postgres_password

@@ -28,6 +28,7 @@ import { loadConfig } from "./config/loader"
 import type { LoadedConfig } from "./config/loader"
 import type { IdpConfig } from "./config/derive"
 import { createAdminContext } from "./admin/context"
+import { startCleanupJob } from "./cleanup"
 import { createDb } from "./db/client"
 import type { DbHandle } from "./db/client"
 import { loadDevEnv } from "./dev-env"
@@ -137,6 +138,20 @@ export async function buildRuntime(): Promise<Runtime> {
     )
     adminContext.startup = startup
 
+    // **After start-up, never as part of it** (OPS-8). A sweep is not a
+    // readiness condition: making the first one block `/readyz` would delay
+    // every deploy by however long the largest table takes, for work that has
+    // no deadline. It gets its own direct handle because the lock is
+    // session-scoped and must not share a connection with a startup step that
+    // may still be finishing.
+    const cleanupLocking = createDb(config, { direct: true, max: 1 })
+    const cleanup = startCleanupJob({
+      config,
+      database,
+      locking: cleanupLocking,
+      logger,
+    })
+
     return {
       config,
       database,
@@ -148,6 +163,9 @@ export async function buildRuntime(): Promise<Runtime> {
       configDir: dir,
       warnings,
       shutdown: async () => {
+        // Stop scheduling before closing anything a sweep would use.
+        cleanup.stop()
+        await cleanupLocking.close().catch(() => undefined)
         await database.close()
         pending = undefined
       },

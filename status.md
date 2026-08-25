@@ -4,8 +4,10 @@
 **Plan:** `~/.claude/plans/finish-idp-v1-s3-m6-m14.md`
 **Spec:** [spec-v1.md](spec-v1.md) — amended through **D38**
 
-**S3 and M6–M12 are done. M13 (e2e, sample RP, a11y) and M14 (docs, release)
-are what remain.** Every gate green: lint, typecheck, unit (457), integration
+**S3 and M6–M12 are done. M13 is started** — the Playwright harness runs
+against the built image in both deployment shapes, and the gate that would have
+caught the unstyled sign-in page now exists. **M14 (docs, release) is
+untouched.** Every gate green: lint, typecheck, unit (464), integration
 (210 across twenty-three files), coverage thresholds including the 85 %
 per-module gates, schema-drift,
 config-schema staleness, dependency pinning, the client-bundle gate — and, new
@@ -226,6 +228,73 @@ property is pinned by its own unit test.
 `tokens.test.ts` now sets `tokenClientId: "api-key-client"` and asserts both
 halves — the key exchange carries it, and the same endpoint reached with a
 session cookie carries `"idp"`.
+
+---
+
+## M13 — the browser gate exists now
+
+**The hole this closes is the one this session opened with.** Nothing in the
+repository had ever rendered a page and looked at it, which is how a sign-in
+page with no stylesheet survived four milestones of a green board.
+
+`apps/web/playwright.config.ts` drives the **built image** — not `vite dev` —
+in two projects, because a sub-path deployment is a different application as
+far as every URL is concerned:
+
+- **host-root** — the image on `:3410`;
+- **subpath** — the same image behind Caddy at `/idp` on `:3411`, using
+  `Caddyfile.subpath` through `docker-compose.e2e.yml`.
+
+Both stacks are brought up by `e2e/stack.ts` with generated config folders and
+their own Postgres volumes, so a run cannot touch the operator's stack or the
+persistent `idp` schema (P0'.2).
+
+`e2e/rendering.spec.ts` is the gate itself. It asserts **computed style and
+layout**, never screenshots: how many CSS rules the browser actually parsed
+(a `<link>` that 404s still appears in `document.styleSheets` with zero rules,
+so counting sheets proves nothing), that the shell is a flex column, that the
+heading is not the browser's default 32 px, that the input has a radius, that
+every asset URL sits under this deployment's own base URL, and — by tabbing to
+the reveal control and pressing Space — that the page hydrated at all. A pixel
+baseline would fail on font rendering, get updated without being read, and stop
+meaning anything by the third time.
+
+**The sub-path deployment has now been driven end to end for the first time**
+and works: `/idp/login` serves with `/idp/assets/…` URLs, and the origin-root
+RFC 8414 route answers at `/.well-known/oauth-authorization-server/idp`.
+
+### D30, and two things the harness itself got wrong
+
+**D30 — the capture transport writes files.** `IDP_EMAIL_TRANSPORT=capture`
+(environment-only, CFG-3's env-only class) swaps Resend for a transport that
+writes each message to `/mail` as JSON, which the e2e overlay bind-mounts out
+of the container so a spec can read a verification or reset link. Files rather
+than an HTTP endpoint, because an endpoint that returns captured mail is an
+endpoint that returns password-reset links and it would exist in the shipped
+image. It is honoured **only when e-mail would otherwise work**: capturing in
+degraded mode would make FR-MAIL-2's "nothing is sent" untestable.
+
+Two harness defects, both found by running it:
+
+1. **The sub-path project was testing the wrong URL.** `page.goto("/login")`
+   resolves the way `new URL` does — an absolute path replaces the base's whole
+   path — so against `http://127.0.0.1:3411/idp` it requested the *origin root*,
+   which under a sub-path deployment belongs to somebody else's application.
+   The failure read "no Password field", which is a confusing way to learn the
+   test was wrong rather than the deployment. An `app.goto()` fixture now
+   applies the mount path, and a leading slash cannot get it wrong again.
+2. **Clicking the reveal checkbox is not how anyone uses it.** The checkbox is
+   `sr-only`; the eye icon painted over it intercepts the click, exactly as it
+   would for a person. Driving it from the keyboard asserts the two things R-1
+   asked for at once — reachable in the natural tab order, and the accessible
+   name changes with the state.
+
+### What is left of M13
+
+The flow specs (sign-up, verification and reset through captured mail, 2FA
+enrolment and challenge, consent, end-session, the account area, the admin
+surface), axe with zero serious/critical per page, the sample relying party,
+and the CI e2e job.
 
 ---
 
@@ -868,19 +937,18 @@ schema identifier in the committed SQL. And **`buildRuntime` had to become
 async**, because the OAuth provider queries `oauth_resource` from its own
 `init()`; on a fresh database the process died before it could migrate.
 
-## Not done (M13, M14)
+## Not done (the rest of M13, and M14)
 
-E2E and docs. M13 is next and should be read as load-bearing rather than as
-polish — see below.
+The e2e flow specs, axe, the sample RP and the CI e2e job; then docs and the
+release. What M13 has so far is above.
 
 Accepted deviations, unchanged: `drizzle.config.ts` sits in `apps/web/`
 because drizzle-kit resolves paths relative to itself; `.agents/skills/` is
 committed tooling.
 
-**`test:e2e` is no longer merely inert — it is now a known gap with a name.**
-Nothing in this repository renders a page in a browser, which is how a sign-in
-page with no stylesheet passed every gate for four milestones. M13 is where
-that is fixed, and it should be read as load-bearing rather than as polish.
+**`test:e2e` is no longer inert.** `pnpm --filter web test:e2e` drives the
+built image in a browser, in both deployment shapes. That was the gap that let
+a sign-in page with no stylesheet pass every gate for four milestones.
 
 Deviation **D33**, unchanged: `pending_authorization` is generated into the
 schema and never written to — 1.7.1's signed continuation makes the store
@@ -944,7 +1012,7 @@ confirmation page for the no-hint case.
 | M10  | Admin UI + API                                    | ✅ done                                                                               |
 | M11  | Security hardening                                | ✅ done                                                                               |
 | M12  | Container, compose, Caddy, CLI, ops               | ✅ done — image, compose, both Caddyfiles, all seven CLI commands, cleanup job, TST-8 smoke |
-| M13  | E2E, sample RP, a11y                              | ⬜ **next**                                                                           |
+| M13  | E2E, sample RP, a11y                              | 🟨 **in progress** — harness + rendering specs green in both shapes; flows, axe and the sample RP to come |
 | M14  | Docs & release — **including the README (DOC-1)** | ⬜ not started                                                                        |
 
 `README.md` is **DOC-1, in M14**. It currently carries a minimal

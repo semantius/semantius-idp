@@ -48,11 +48,14 @@ export interface CreateMailerOptions {
   transport?: EmailTransport
   /** Locale for the message. Defaults to `site.defaultLocale`. */
   locale?: string
+  /** Injected by tests so D30's env switch can be exercised without setting it. */
+  env?: Record<string, string | undefined>
 }
 
 export function createMailer(options: CreateMailerOptions): Mailer {
   const { config, logger } = options
-  const transport = options.transport ?? defaultTransport(config, logger)
+  const transport =
+    options.transport ?? defaultTransport(config, logger, options.env)
   const enabled = transport.kind !== "disabled"
 
   return {
@@ -89,7 +92,55 @@ export function createMailer(options: CreateMailerOptions): Mailer {
   }
 }
 
-function defaultTransport(config: IdpConfig, logger: Logger): EmailTransport {
+/**
+ * Where captured mail is written when the capture transport is switched on.
+ *
+ * `/tmp` because it is the image's **only** writable path (OPS-1: read-only
+ * root filesystem, `/config` mounted read-only). Overridable so a run outside a
+ * container can put it somewhere it can reach.
+ */
+export const DEFAULT_CAPTURE_DIR = "/tmp/idp-mail"
+
+/**
+ * D30: `IDP_EMAIL_TRANSPORT=capture` swaps the real transport for one that
+ * writes every message to disk instead of sending it.
+ *
+ * **Environment-only, and deliberately not a config-file setting** (CFG-3's
+ * env-only class). A `config.json` key would be a durable, copy-pasteable way
+ * to turn a production deployment into one that silently swallows every
+ * password-reset e-mail and writes it to a file. An environment variable is set
+ * per-run by whoever starts the process, which is the blast radius this
+ * deserves.
+ *
+ * It is honoured **only when e-mail would otherwise work**: with no Resend key
+ * the deployment is in degraded mode (FR-MAIL-2), and capturing there would
+ * make "nothing is sent" untestable — which is the one behaviour where nothing
+ * being sent is the requirement.
+ */
+function captureFromEnvironment(
+  config: IdpConfig,
+  logger: Logger,
+  env: Record<string, string | undefined>
+): EmailTransport | undefined {
+  if (env.IDP_EMAIL_TRANSPORT !== "capture") return undefined
+  if (!config.emailEnabled) return undefined
+
+  const directory = env.IDP_EMAIL_CAPTURE_DIR ?? DEFAULT_CAPTURE_DIR
+  logger.warn("e-mail capture transport is active: nothing will be sent", {
+    directory,
+    hint: "Unset IDP_EMAIL_TRANSPORT to send e-mail normally.",
+  })
+  return createCaptureTransport({ directory, logger })
+}
+
+function defaultTransport(
+  config: IdpConfig,
+  logger: Logger,
+  env: Record<string, string | undefined> = process.env
+): EmailTransport {
+  const captured = captureFromEnvironment(config, logger, env)
+  if (captured) return captured
+
   const apiKey = config.file.email.resend.apiKey
   const from = config.file.email.from
   if (!apiKey || !from) return createDisabledTransport(logger)

@@ -4,9 +4,18 @@
  * Exactly two implementations in v1, behind one interface:
  *
  * - **`resend`** — the real one.
- * - **`capture`** — keeps messages in memory. Used by tests and by the e2e run
- *   against the built image, which reads the verification and reset links back
- *   out through a test-only endpoint rather than parsing a mailbox.
+ * - **`capture`** — keeps messages in memory, and optionally writes each one to
+ *   a directory as JSON (**D30**). The in-memory half is what the integration
+ *   suite asserts against; the files are how the e2e run reads a verification
+ *   or reset link out of the **built image**, where there is no in-process
+ *   handle to reach for.
+ *
+ * D30 chose files over an HTTP endpoint deliberately. An endpoint that returns
+ * captured mail is an endpoint that returns password-reset links, and it would
+ * exist in the shipped image — one misconfiguration away from being the worst
+ * possible disclosure (SEC-10). A directory that only exists when
+ * `IDP_EMAIL_TRANSPORT=capture` is set, under the image's only writable path,
+ * has no such reachable surface.
  *
  * No SMTP in v1. When no API key is configured the IdP runs in **degraded
  * mode**: nothing is sent, the affected UI is hidden, and
@@ -105,14 +114,41 @@ export function createResendTransport(
   }
 }
 
+export interface CaptureTransportOptions {
+  /**
+   * Also write each message here as JSON (D30). Absent for the integration
+   * suite, which reads `messages` directly.
+   */
+  directory?: string
+  /** A failed write is logged, never thrown — see `send` below. */
+  logger?: Logger
+  /** Injected by tests so no file is touched. */
+  writeFile?: (path: string, contents: string) => Promise<void>
+  /** Injected by tests. */
+  mkdir?: (path: string) => Promise<void>
+}
+
+/** Filename-safe, ordered, and unique within a run. */
+let captureSequence = 0
+
 /** In-memory transport for tests and the e2e run. */
-export function createCaptureTransport(): CaptureTransport {
+export function createCaptureTransport(
+  options: CaptureTransportOptions = {}
+): CaptureTransport {
   const messages: EmailMessage[] = []
+  const write = options.directory ? fileWriter(options) : undefined
+
   return {
     kind: "capture",
     messages,
     send: async (message) => {
       messages.push(message)
+      // **After the push, and never allowed to fail the send.** The in-memory
+      // record is the contract every existing caller relies on; the file is an
+      // extra for a test harness in another process. A full disk in a
+      // container's tmpfs must not turn "the e-mail was sent" into an error
+      // the user sees.
+      if (write) await write(message)
     },
     for: (email) =>
       messages.filter(
@@ -143,5 +179,61 @@ export function createDisabledTransport(logger: Logger): EmailTransport {
         template: message.template,
       })
     },
+  }
+}
+
+/**
+ * Writes one captured message per file, as JSON.
+ *
+ * The name is `<sequence>-<template>-<recipient>.json`, which is sortable by
+ * arrival and greppable by both of the things a test looks a message up by.
+ * The recipient is sanitised rather than encoded: this builds a path, and the
+ * only characters that survive are ones that cannot leave the directory.
+ */
+function fileWriter(
+  options: CaptureTransportOptions
+): (message: EmailMessage) => Promise<void> {
+  const directory = options.directory!
+  let ready: Promise<void> | undefined
+
+  const mkdir =
+    options.mkdir ??
+    (async (path: string) => {
+      const { mkdir: make } = await import("node:fs/promises")
+      await make(path, { recursive: true })
+    })
+  const writeFile =
+    options.writeFile ??
+    (async (path: string, contents: string) => {
+      const { writeFile: write } = await import("node:fs/promises")
+      await write(path, contents, "utf8")
+    })
+
+  return async (message) => {
+    try {
+      ready ??= mkdir(directory)
+      await ready
+      // Two steps, and the second is not redundant. Stripping the separators
+      // is what stops the path escaping; collapsing runs of dots is what stops
+      // the *filename* containing a literal `..`, which nothing here would act
+      // on but plenty of tooling downstream reads as a traversal.
+      const safeRecipient = message.to
+        .replace(/[^a-zA-Z0-9._@-]/g, "_")
+        .replace(/\.{2,}/g, ".")
+      const name = `${String(++captureSequence).padStart(4, "0")}-${message.template}-${safeRecipient}.json`
+      await writeFile(
+        `${directory}/${name}`,
+        JSON.stringify({ ...message, capturedAt: new Date().toISOString() }, null, 2)
+      )
+    } catch (error) {
+      // A capture directory that cannot be written is a broken test harness,
+      // not a broken deployment.
+      options.logger?.warn("captured e-mail could not be written", {
+        template: message.template,
+        err: error,
+      })
+      // Reset so a transient failure does not poison every later message.
+      ready = undefined
+    }
   }
 }

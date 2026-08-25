@@ -171,7 +171,12 @@ describe("the draining flag", () => {
 })
 
 describe("releaseResources", () => {
-  it("does not build a runtime in order to close one", async () => {
+  // Thirty seconds, and not because the assertion is slow: `@/server/runtime`
+  // pulls Better Auth, its whole plugin graph and Drizzle through vitest's
+  // transform, which is seconds of work before the first line of the test runs.
+  // The default 5 s made it pass or fail depending on how warm the module cache
+  // happened to be — a flake, not a signal.
+  it("does not build a runtime in order to close one", { timeout: 30_000 }, async () => {
     // Closing what was never opened would run the whole OPS-2 sequence —
     // migrations, key seeding, client reconciliation — on the way out of a
     // process that never served a request.

@@ -1,0 +1,46 @@
+# The e2e overlay (TST-6, D30).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.e2e.yml up
+#
+# **A separate file on purpose.** Everything here exists only so a test can see
+# inside the container, and none of it belongs in the reference deployment an
+# operator copies. Keeping it in an overlay means `docker-compose.yml` stays a
+# description of how to run this in production and nothing else — and that the
+# capture transport cannot be switched on by editing the file people actually
+# deploy.
+
+services:
+  idp:
+    environment:
+      # D30. Swaps the Resend transport for one that writes each message to
+      # disk as JSON instead of sending it. Honoured only when e-mail would
+      # otherwise work, so the config still needs an API key it never calls.
+      IDP_EMAIL_TRANSPORT: capture
+      IDP_EMAIL_CAPTURE_DIR: /mail
+
+    volumes:
+      # Writable, and **not** under `/tmp`: `/tmp` is a tmpfs in the base file,
+      # and a bind mount cannot be placed inside one. This is the only path in
+      # the container the host can read afterwards, which is the entire point —
+      # the alternative D30 rejected was an HTTP endpoint that returns
+      # password-reset links from the shipped image.
+      - ${IDP_MAIL_HOST_DIR:?set IDP_MAIL_HOST_DIR for the e2e overlay}:/mail
+
+  caddy:
+    volumes:
+      # The sub-path project drives the OPS-10 deployment: `/idp/*` proxied
+      # without stripping, plus the origin-root RFC 8414 route. Swapping the
+      # file here is what makes the second Playwright project a different
+      # deployment rather than the same one on another port.
+      - ./Caddyfile.subpath:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      IDP_DOMAIN: ${IDP_DOMAIN:-localhost}
+      IDP_BASE_PATH: ${IDP_BASE_PATH:-/idp}
+    ports:
+      # Not 80/443: the e2e run talks plain HTTP to a published port, and
+      # binding the privileged ones would collide with anything already on
+      # them. Caddy serves HTTP here because `IDP_DOMAIN` is an address rather
+      # than a name it can get a certificate for.
+      - "${IDP_SUBPATH_PORT:-3411}:80"

@@ -1,6 +1,6 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-25 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `004ac26`
+**As of:** 2026-08-25 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `19ed39a`
 **Plan:** `~/.claude/plans/finish-idp-v1-s3-m6-m14.md`
 **Spec:** [spec-v1.md](spec-v1.md) — amended through **D38**
 
@@ -21,10 +21,77 @@ could see it. That story is the first section below.
 
 ---
 
+## Pending
+
+Everything not yet done, in the order it should be done. Nothing else in this
+file is a to-do list.
+
+### 1. Spec debt — do this first
+
+`spec-v1.md` is amended through **D38** and has not been touched since; the
+convention is that amendments ride the feature commit, and for M12/M13 they did
+not.
+
+- **D30 is reserved but never written.** Record it: the capture transport
+  writes each message to a directory as JSON; `IDP_EMAIL_TRANSPORT=capture` and
+  `IDP_EMAIL_CAPTURE_DIR` are CFG-3 env-only variables; add the TST-1 sentence.
+- **OPS-6 and FR-ADMIN-1 still say `idp create-admin`.** The command is
+  `idp reset-admin`. Update both.
+- **DM-2 and DM-5 inventories omit `pending_authorization` and
+  `oauth_client_assertion`.** Add the one-liners; the cleanup job purges both.
+- **Number the following from D39:**
+  - Vite `base` is relative for the **build only** — 8.x stopped coercing a
+    relative base to `/` in dev and broke every `/@…` URL.
+  - An explicit `sslmode` in the connection string wins over the
+    not-localhost heuristic; `prefer` and `allow` are deliberately ignored.
+  - `azp` for a key-issued JWT comes from a `Symbol.for` marker stamped by the
+    api-key gate, not from the session's token type (FR-KEY-3).
+  - `idp reset-admin` never promotes, and never creates an address typed on the
+    command line — only `admin.bootstrap.email`.
+  - `docker-compose.yml` pins `IDP_CONFIG_DIR`, `DATABASE_URL`,
+    `DIRECT_DATABASE_URL` and `IDP_SCHEMA_NAME` against `env_file` leaking the
+    host's values.
+  - `site.logo` accepts both `logo.svg` and `branding/logo.svg`.
+
+### 2. M13 — finish it
+
+- **Flow specs** in `apps/web/e2e/`, per TST-6: login variants · signup on/off ·
+  verification and reset through captured mail · 2FA enrol and challenge ·
+  consent · end-session · the account area · the admin surface · full OIDC
+  through the sample RP. Both projects.
+- **axe** — `@axe-core/playwright`, a new devDependency that must be **pinned
+  exactly** (the CI gate refuses ranges). Zero serious/critical per page; closes
+  R-1's automated a11y check.
+- **Sample RP** — `apps/web/e2e/sample-rp.ts`: `Bun.serve` + `openid-client`
+  6.8.7 (already pinned), discovery, code + PKCE, token display. DOC-3 refers
+  to it.
+- **CI e2e job** — built image, both projects, merge-required.
+
+### 3. M14 — none of it is started
+
+- `apps/web/scripts/generate-config-reference.ts` (CFG-4) with `--check` in CI.
+- Rewrite `README.md` per DOC-1. The quick start must be the **exact**
+  smoke-test commands so CI keeps it honest. The lockout section is already
+  written around `idp reset-admin` — keep it.
+- `docs/neon.md` (DOC-2) · `docs/clients.md` (DOC-3, explicit no-M2M note) ·
+  `docs/admin-api.md` (FR-ADMIN-6) · runbooks (DOC-4) · `SECURITY.md` ·
+  `CONTRIBUTING.md` · `CHANGELOG.md`.
+- Release: TST-7 manual social checklist, and one real Neon token validation.
+  **Stop at the mandatory gate** — tagging v1.0.0 and publishing the image need
+  owner sign-off.
+
+### 4. Open, non-blocking
+
+- The dev login on the persistent `idp` schema is still stranded (one user,
+  `mustChangePassword = true`). `pnpm reset-admin` fixes it in one command and
+  destroys nothing. Deliberately not run.
+
+---
+
 ## Review results
 
-_Empty — nothing outstanding. The next round's findings go here, and are
-treated as pre-work before any further milestone starts._
+_Empty — no owner review findings outstanding. The next round's go here, and
+are treated as pre-work ahead of anything in **Pending** above._
 
 ---
 

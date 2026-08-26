@@ -34,7 +34,11 @@ async function scan(page: Page, where: string): Promise<void> {
     (violation) =>
       `${violation.impact} · ${violation.id}: ${violation.help}\n` +
       violation.nodes
-        .map((node) => `    ${node.target.join(" ")}`)
+        .map(
+          (node) =>
+            `    ${node.target.join(" ")}\n      ${node.html}\n` +
+            `      ${JSON.stringify(node.any.map((check) => check.data))}`
+        )
         .join("\n")
   )
   expect(described, `serious/critical axe violations on ${where}`).toEqual([])

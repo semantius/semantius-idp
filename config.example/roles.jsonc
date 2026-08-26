@@ -1,5 +1,5 @@
 {
-  "$schema": "./roles.schema.json",
+  "$schema": "../config-schema/roles.schema.json",
 
   // The role catalog. Roles are labels for downstream applications — the IdP
   // evaluates no permissions from them; it only decides who reaches /admin/*

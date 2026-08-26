@@ -25,6 +25,11 @@ export function messageForErrorCode(
     case "invalid_credentials":
       // SEC-7: identical for a wrong password and an unknown address.
       return t.auth.signIn.failed
+    case "untrusted_origin":
+      // D57: the one refusal on this page that is *not* about the credential.
+      // It used to arrive here as `invalid_credentials`, which sent whoever
+      // hit it looking for a password problem that did not exist.
+      return t.auth.signIn.untrustedOrigin
     case "unavailable":
       return t.auth.signIn.unavailable
     case "email_not_verified":

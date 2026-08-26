@@ -108,7 +108,7 @@ services:
       # `IDP_CONFIG_DIR=./config` — a *host* path. Passed through, the container
       # looks for its configuration at a directory that does not exist inside
       # it and dies on every restart with "Required file not found at
-      # C:/…/config/config.json", which is a genuinely baffling thing to read
+      # C:/…/config/config.jsonc", which is a genuinely baffling thing to read
       # in a container log. `/config` is where the volume below is mounted, and
       # it is not negotiable.
       IDP_CONFIG_DIR: /config

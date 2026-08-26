@@ -11,7 +11,7 @@
 {$IDP_DOMAIN:localhost} {
 	encode zstd gzip
 
-	# `server.trustProxy` MUST be true in config.json behind this (OPS-9).
+	# `server.trustProxy` MUST be true in config.jsonc behind this (OPS-9).
 	# Without it the IdP resolves every caller to Caddy's address: rate limits
 	# become one shared bucket for the whole internet, and the audit trail
 	# records the proxy for every event. With it, the IdP takes the rightmost

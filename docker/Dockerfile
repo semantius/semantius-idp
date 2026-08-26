@@ -5,7 +5,8 @@
 # Three stages, and the split is not decorative: `deps` holds the pnpm store
 # and `node_modules`, `build` holds the toolchain, and `runtime` holds neither.
 # What ships is the Vite output, a production dependency tree, the CLI bundle
-# and `config.example/` — no source, no lockfile, no compilers.
+# and `config.example/` with `config-schema/` — no source, no lockfile, no
+# compilers.
 #
 # **Bun runs the application; Node never appears at runtime.** pnpm needs Node
 # to install, so the build stages have both; the final stage has only Bun,
@@ -123,7 +124,12 @@ COPY --from=build /repo/apps/web/dist ./dist
 COPY --from=build /repo/apps/web/drizzle ./drizzle
 # CFG-1: the annotated defaults ship *inside* the image, so an operator can
 # copy them out of a running container rather than hunting for the repository.
+# The generated schemas come too, from their own folder — CFG-1 says they ship
+# in the repository *and* the image, and they stopped being siblings of the
+# examples when a copied `config/` proved to be the wrong place for a
+# generated file.
 COPY --from=build /repo/config.example ./config.example
+COPY --from=build /repo/config-schema ./config-schema
 
 # `idp` on the PATH, so `docker run <image> idp migrate` reads the way OPS-6
 # writes it.

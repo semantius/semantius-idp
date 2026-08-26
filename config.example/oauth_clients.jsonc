@@ -1,5 +1,5 @@
 {
-  "$schema": "./oauth_clients.schema.json",
+  "$schema": "../config-schema/oauth_clients.schema.json",
 
   // This file is the source of truth for OAuth clients. At startup it is
   // validated and reconciled into the database under an advisory lock:

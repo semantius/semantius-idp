@@ -11,4 +11,4 @@ pnpm-lock.yaml
 # Generated — `pnpm --filter web run db:generate-schema` owns the formatting,
 # and the DM-1 drift gate compares byte-for-byte.
 apps/web/drizzle/
-config.example/*.schema.json
+config-schema/*.schema.json

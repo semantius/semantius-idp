@@ -790,5 +790,5 @@
     "jwt"
   ],
   "additionalProperties": false,
-  "title": "semantius-idp config.json"
+  "title": "semantius-idp config.jsonc"
 }

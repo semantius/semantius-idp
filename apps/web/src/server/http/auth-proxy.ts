@@ -103,6 +103,18 @@ export function errorCodeFor(result: AuthCallResult): string {
       return "banned"
     case "EMAIL_DOMAIN_NOT_ALLOWED":
       return "domain_not_allowed"
+    // SEC-3's refusal, not SEC-7's, and the distinction is the whole point.
+    // Better Auth rejects a post whose `Origin` is not a trusted one before it
+    // ever looks at a credential; unmapped, that fell through to
+    // `invalid_credentials` and the page told the operator their password was
+    // wrong. It is not — it is `server.baseUrl` (or `server.trustedOrigins`)
+    // not naming the address the browser is actually on, which is what happens
+    // the first time anyone opens a default deployment on `127.0.0.1` instead
+    // of `localhost`. Disclosing it leaks nothing: the caller chose the origin,
+    // and the request is refused either way (**D57**).
+    case "INVALID_ORIGIN":
+    case "MISSING_OR_NULL_ORIGIN":
+      return "untrusted_origin"
     case "EMAIL_NOT_VERIFIED":
       return "email_not_verified"
     case "PASSWORD_TOO_SHORT":

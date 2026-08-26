@@ -37,7 +37,7 @@ cannot reach.
    role name, and it is a *static* string for every signed-in user:
 
    ```jsonc
-   // config.json
+   // config.jsonc
    "jwt": {
      "audience": "https://idp.example.com",
      "claims": { "role": "authenticated" }
@@ -74,7 +74,7 @@ which the provider appends whenever `openid` scope is requested.
 
 | Claim | Comes from | What it is for |
 | --- | --- | --- |
-| `role` (string) | `jwt.claims` in `config.json` | A **constant**. Postgres switches to this role for every request. Usually `"authenticated"`. |
+| `role` (string) | `jwt.claims` in `config.jsonc` | A **constant**. Postgres switches to this role for every request. Usually `"authenticated"`. |
 | `roles` (array) | the user's own catalog roles | **Per user.** What your application checks to decide what they may do. |
 
 The singular `role` is never derived from a user's roles, and a user's roles

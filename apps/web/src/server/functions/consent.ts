@@ -34,7 +34,7 @@ export interface ConsentRequestView {
 }
 
 export const fetchConsentRequest = createServerFn({ method: "GET" })
-  .inputValidator((query: unknown) => (typeof query === "string" ? query : ""))
+  .validator((query: unknown) => (typeof query === "string" ? query : ""))
   .handler(async ({ data: query }): Promise<ConsentRequestView | null> => {
     if (query === "") return null
     const runtime = await getRuntime()

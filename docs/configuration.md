@@ -4,7 +4,7 @@
 
 # Configuration reference
 
-Every key of `config.json`, generated from the schemas the loader itself
+Every key of `config.jsonc`, generated from the schemas the loader itself
 validates against (CFG-4). A key marked **required** has no default and
 start-up fails without it.
 
@@ -104,7 +104,7 @@ from and how the process behaves before any of it has been parsed (CFG-3).
 
 | Variable | Default | What it does |
 | --- | --- | --- |
-| `IDP_CONFIG_DIR` | `/config` | The folder holding `config.json` and its companions. |
+| `IDP_CONFIG_DIR` | `/config` | The folder holding `config.jsonc` and its companions. |
 | `HOST` / `PORT` | `0.0.0.0` / `3000` | Where the process listens, when the file leaves `server.host`/`server.port` out. |
 | `LOG_LEVEL` / `LOG_FORMAT` | `info` / `json` | As `logging.level` / `logging.format`. |
 | `IDP_MIGRATE_ON_BOOT` | `true` | As `database.migrateOnBoot`. |

@@ -55,6 +55,11 @@ export const enUS = {
       withProvider: (provider: string) => `Continue with ${provider}`,
       // SEC-7: one message for wrong password and unknown address alike.
       failed: "That e-mail address and password combination is not correct.",
+      // D57: *not* a credential failure, and it must not read as one. The
+      // request was refused before the password was looked at, because the
+      // browser is on an address the deployment does not know.
+      untrustedOrigin:
+        "This page was opened from a web address this server does not recognise, so the sign-in was refused. Open it from the server's own address and try again.",
       unavailable: "This account is not available.",
       // FR-AUTH-5: not a failure — the session is valid but too old for what
       // was being attempted.
@@ -160,7 +165,7 @@ export const enUS = {
     title: "Set this server up",
     description:
       "Nobody has an account here yet. The first one you create is an administrator.",
-    submit: "Create the first account",
+    submit: "Create first admin account",
     footnote:
       "This page is only here while the server has no users. It disappears as soon as this account exists.",
     invalidEmail: "Enter an e-mail address.",
@@ -423,7 +428,7 @@ export const enUS = {
       notifyRejection: "Send them an e-mail about it",
       noEvents: "Nothing recorded yet.",
       unknownRoles: (roles: string) =>
-        `Holds roles that are not in the catalog and are dropped from claims: ${roles}. Add them to roles.json, or change them here.`,
+        `Holds roles that are not in the catalog and are dropped from claims: ${roles}. Add them to roles.jsonc, or change them here.`,
       profileConflict:
         "A social sign-in was refused because this address already belongs to this account. Link the provider from the account page instead.",
       impersonatedSession: "Impersonated",
@@ -478,7 +483,7 @@ export const enUS = {
     clients: {
       title: "Applications",
       description:
-        "Registered OAuth clients. Ones from oauth_clients.json are reconciled at start-up and cannot be edited here; ones added here survive restarts and can.",
+        "Registered OAuth clients. Ones from oauth_clients.jsonc are reconciled at start-up and cannot be edited here; ones added here survive restarts and can.",
       empty: "No applications are registered.",
       managedFile: "From the file",
       managedDatabase: "Added here",
@@ -519,7 +524,7 @@ export const enUS = {
     roles: {
       title: "Roles",
       description:
-        "The catalog from roles.json. Roles are assigned per user; the catalog itself is edited in the file.",
+        "The catalog from roles.jsonc. Roles are assigned per user; the catalog itself is edited in the file.",
       name: "Role",
       users: "Users",
       isDefault: "Given at sign-up",
@@ -605,7 +610,7 @@ export const enUS = {
         "E-mail is turned off on this server, so nothing can be sent. Set a temporary password instead.",
       clientExists: "An application with that client ID is already registered.",
       clientFromFile:
-        "That application comes from oauth_clients.json. Edit the file and restart the server.",
+        "That application comes from oauth_clients.jsonc. Edit the file and restart the server.",
       clientInvalid:
         "The application could not be registered. Check the redirect URIs and the scopes.",
     },

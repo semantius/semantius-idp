@@ -140,5 +140,5 @@
     }
   },
   "additionalProperties": false,
-  "title": "semantius-idp oauth_clients.json"
+  "title": "semantius-idp oauth_clients.jsonc"
 }

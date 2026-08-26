@@ -57,7 +57,7 @@ is wrong, say so — but they will not be treated as vulnerabilities.
 - **Running with `server.allowInsecureHttp`, or with rate limiting off.** Both
   are development switches and both say so.
 - **Anything requiring database or configuration-folder access.** Someone who
-  can read `config.json` already has the secret.
+  can read `config.jsonc` already has the secret.
 
 ## Supported versions
 

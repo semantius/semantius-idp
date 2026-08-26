@@ -122,6 +122,26 @@ describe("errorCodeFor (FR-ADMIN-4, SEC-7)", () => {
     expect(codeFor("BANNED_USER")).toBe("banned")
   })
 
+  it("separates a rejected origin from a rejected credential (D57)", () => {
+    // The refusal that costs the most time of any in this application. Better
+    // Auth turns a post from an untrusted `Origin` away before it looks at the
+    // password; unmapped, that arrived as `invalid_credentials` and the page
+    // said the password was wrong — so the operator whose `server.baseUrl`
+    // says `localhost` and whose browser says `127.0.0.1` goes hunting for a
+    // credential bug that does not exist. The account it happens to first is
+    // the one the first-run wizard just created, which is also the one nobody
+    // can prove the password of.
+    expect(codeFor("INVALID_ORIGIN")).toBe("untrusted_origin")
+    expect(codeFor("MISSING_OR_NULL_ORIGIN")).toBe("untrusted_origin")
+    // And it has to reach a message of its own, or the split buys nothing.
+    expect(messageForErrorCode("untrusted_origin", t, 10)).toBe(
+      t.auth.signIn.untrustedOrigin
+    )
+    expect(messageForErrorCode("untrusted_origin", t, 10)).not.toBe(
+      t.auth.signIn.failed
+    )
+  })
+
   it("still collapses an unknown refusal into the neutral one", () => {
     // SEC-7: a wrong password and an address with no account are the same
     // answer, and anything unrecognised joins them rather than leaking.

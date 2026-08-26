@@ -388,7 +388,9 @@ async function completeSetup(stack: Stack): Promise<void> {
     await page.getByLabel("Password", { exact: true }).fill(ADMIN.password)
     // D54: typed twice, and both names are required.
     await page.getByLabel("Confirm password").fill(ADMIN.password)
-    await page.getByRole("button", { name: "Create the first account" }).click()
+    await page
+      .getByRole("button", { name: "Create first admin account" })
+      .click()
 
     // The wizard signs them in, so the destination is the account page rather
     // than the login form.

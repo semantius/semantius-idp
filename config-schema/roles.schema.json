@@ -31,5 +31,5 @@
     "roles"
   ],
   "additionalProperties": false,
-  "title": "semantius-idp roles.json"
+  "title": "semantius-idp roles.jsonc"
 }

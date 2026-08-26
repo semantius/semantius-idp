@@ -29,7 +29,8 @@ against, not to re-run by hand:
       actually implements.
 - [ ] The README's quick start still matches what the smoke test does.
 - [ ] `config.example/` still validates — CI checks this, but check the
-      comments still describe the current behaviour.
+      comments still describe the current behaviour. `config-schema/` is
+      generated; `config:schemas --check` is the gate that proves it.
 
 ## Social sign-in (TST-7)
 

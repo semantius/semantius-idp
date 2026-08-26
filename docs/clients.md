@@ -1,6 +1,6 @@
 # Registering an application
 
-`oauth_clients.json` is the list of applications allowed to ask this IdP for
+`oauth_clients.jsonc` is the list of applications allowed to ask this IdP for
 tokens. The file is the **source of truth for the clients it names**: start-up
 validates it and reconciles it into the database — inserting what is new,
 updating what changed, and disabling anything that has disappeared. Those rows
@@ -23,7 +23,7 @@ Better Auth's own client CRUD endpoints stay unreachable to every caller.
 
 ```jsonc
 {
-  "$schema": "./oauth_clients.schema.json",
+  "$schema": "../config-schema/oauth_clients.schema.json",
   "clients": [
     { "clientId": "…", "…": "…" }
   ]

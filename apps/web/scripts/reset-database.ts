@@ -27,6 +27,16 @@
  * boot (`database.migrateOnBoot`, on in the shipped config), so the next start
  * rebuilds it empty and serves the first-run setup page — there are no users,
  * so whoever completes it is the first administrator (**D52**).
+ *
+ * **An app that ran through the drop has to be restarted** (**D58**).
+ * `lock_timeout` below was meant to be the guard here and is not: an idle
+ * connection holds no table lock, so the drop succeeds against a live dev
+ * server and leaves it talking to a schema that no longer exists. Worse, the
+ * first-run gate memoises `false` for the life of the process (D52,
+ * `src/server/admin/first-user.ts`), so that server goes on serving the
+ * *sign-in* page — the one page the person who has just reset the database is
+ * certain they should not be seeing. The connection count in the target block
+ * and the closing instruction both exist because that trap was walked into.
  */
 
 import { createInterface } from "node:readline/promises"
@@ -142,11 +152,30 @@ async function main(): Promise<number> {
     `
     const tables = existing?.tables ?? 0
 
+    // Anything else on this database is, in a developer's shell, almost always
+    // the app (D58). Counted and reported rather than refused on: this script's
+    // own pool may open a second backend, and a pooler keeps idle ones around
+    // after the process behind them has gone, so refusing on a non-zero count
+    // would block the reset on a false positive. Saying the number is enough —
+    // it turns "start the app afterwards" into "the thing you have to restart
+    // is running right now".
+    const [busy] = await database.sql<{ backends: number }[]>`
+      select count(*)::int as backends
+      from pg_stat_activity
+      where datname = current_database() and pid <> pg_backend_pid()
+    `
+    const backends = busy?.backends ?? 0
+
     process.stdout.write(
       `Configuration ${dir}\n` +
         `Database      ${maskConnectionString(url)}\n` +
         `Schema        ${schemaName}\n` +
-        `Tables        ${tables === 0 ? "none — the schema is empty or absent" : tables}\n\n`
+        `Tables        ${tables === 0 ? "none — the schema is empty or absent" : tables}\n` +
+        `Connections   ${
+          backends === 0
+            ? "none besides this one"
+            : `${backends} other — restart whatever is using this database afterwards`
+        }\n\n`
     )
 
     if (!options.yes && !(await confirm(schemaName))) {
@@ -189,11 +218,16 @@ async function main(): Promise<number> {
       options.migrate || config.file.database.migrateOnBoot
         ? "\nStart the app (`pnpm dev`, or `pnpm docker:up`) and it serves the first-run\n" +
             "setup page: there are no users, so whoever completes it becomes the first\n" +
-            "administrator (D52).\n"
+            "administrator (D52).\n" +
+            "\nIf it was already running, RESTART it (D58). A process that ran through the\n" +
+            "drop is talking to a schema that is no longer there, and it still believes\n" +
+            "the deployment is set up — so `/` sends you to the sign-in page instead of\n" +
+            "back to the wizard.\n"
         : // With `migrateOnBoot` off, start-up refuses an unmigrated database
           // and the error it prints names `idp migrate`, not this script.
           "\n`database.migrateOnBoot` is false, so the next start will refuse an unmigrated\n" +
-            "database. Run `pnpm --filter web run db:migrate` first, or re-run this with --migrate.\n"
+            "database. Run `pnpm --filter web run db:migrate` first, or re-run this with --migrate.\n" +
+            "\nRestart the app either way, if it ran through the drop (D58).\n"
     )
 
     return 0

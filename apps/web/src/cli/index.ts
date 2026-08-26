@@ -46,7 +46,7 @@ const USAGE = `idp ${version}
 Usage:
   idp config validate     Load and check the configuration, then exit (CFG-5)
   idp migrate             Apply pending database migrations (DM-1, OPS-6)
-  idp reconcile-clients   Sync oauth_clients.json into the database (FR-OIDC-2)
+  idp reconcile-clients   Sync oauth_clients.jsonc into the database (FR-OIDC-2)
   idp rotate-keys         Publish a successor signing key (FR-OIDC-16)
   idp cleanup             Purge what DM-5 retires, now (OPS-8)
   idp version             Print the running version
@@ -95,7 +95,7 @@ async function migrate(): Promise<void> {
 /**
  * `idp reconcile-clients` — the same sync startup runs, on demand (OPS-6).
  *
- * Useful when `oauth_clients.json` changed and restarting the container is
+ * Useful when `oauth_clients.jsonc` changed and restarting the container is
  * more disruptive than running one command. It takes the same advisory lock
  * as startup, so running it *while* a container boots is safe: one waits.
  *
@@ -130,7 +130,7 @@ async function reconcile(): Promise<void> {
     })
     process.stdout.write(
       diff.unchanged
-        ? "No changes: the database already matches oauth_clients.json.\n"
+        ? "No changes: the database already matches oauth_clients.jsonc.\n"
         : `Created ${diff.created.length}, updated ${diff.updated.length}, ` +
             `disabled ${diff.disabled.length}, deleted ${diff.deleted.length}, ` +
             `relinked ${diff.relinked.length}.\n`
@@ -165,7 +165,7 @@ function sslSource(config: IdpConfig): string {
  * `idp config validate` — the whole of CFG-5, and nothing else (OPS-6).
  *
  * It touches no database. That is the point: an operator changing
- * `config.json` wants to know whether the file is wrong *before* restarting
+ * `config.jsonc` wants to know whether the file is wrong *before* restarting
  * anything, and on a host that may not be able to reach Postgres at all. A
  * validation that needed a connection would be useless in exactly the
  * situation it exists for.

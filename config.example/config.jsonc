@@ -1,7 +1,14 @@
 {
   // Editor completion and inline validation. `$schema` is exempt from the
   // unknown-key rule; every other unknown key is a startup error (CFG-1/5).
-  "$schema": "./config.schema.json",
+  //
+  // The path is relative to this file, so it resolves both here and in the
+  // `config/` a checkout makes by copying this folder beside it. A deployment
+  // that mounts its config somewhere else (`/config` in the image) loses the
+  // editor hints and nothing more: nothing reads the schema at runtime — the
+  // loader strips `$schema` — and the only thing that does read these files is
+  // the `--check` gate that regenerates them.
+  "$schema": "../config-schema/config.schema.json",
 
   // ---------------------------------------------------------------------
   // Placeholders (CFG-2). Inside string values only, never in keys:

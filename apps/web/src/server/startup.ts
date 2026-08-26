@@ -251,7 +251,7 @@ async function ensureSigningKey(
 }
 
 /**
- * FR-ROLE-2: a role that is stored on a user but no longer in `roles.json` is
+ * FR-ROLE-2: a role that is stored on a user but no longer in `roles.jsonc` is
  * dropped from their claims. That is a silent behaviour change for whoever
  * holds it, so it is warned about at boot and flagged in the admin UI.
  */
@@ -277,11 +277,11 @@ async function warnAboutUnknownRoles(deps: StartupDeps): Promise<string[]> {
       {
         role: name,
         users: count,
-        hint: "Add it to roles.json, or reassign those users in /admin/users.",
+        hint: "Add it to roles.jsonc, or reassign those users in /admin/users.",
       }
     )
     messages.push(
-      `${count} user${count === 1 ? "" : "s"} hold the role "${name}", which is not in roles.json. ` +
+      `${count} user${count === 1 ? "" : "s"} hold the role "${name}", which is not in roles.jsonc. ` +
         `It is dropped from their claims. Add it to the file, or reassign them in /admin/users.`
     )
   }

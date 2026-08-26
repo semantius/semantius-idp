@@ -1,8 +1,8 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-26 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `40e4564`
+**As of:** 2026-08-26 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `4cce459`
 **Plan:** `~/.claude/plans/make-a-plan-to-tranquil-rabbit.md` (owner review round 2)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D56**
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D59**
 
 **S3, M6–M14 and owner review rounds 1 and 2 are done, up to the release gate.** Every
 gate green: lint, typecheck, unit (510), integration (225 across twenty-four
@@ -60,6 +60,133 @@ Everything buildable is built. What remains cannot be done from here:
   next boot serves the first-run setup page, which is now the only way an
   administrator is ever created. No credential to recover, and no command that
   changes one.
+
+---
+
+## Owner review round 3 — sixteen findings (2026-08-26)
+
+The owner walked the running application and filed sixteen findings: config
+ergonomics (F1, F2, F4), form UX — modals, client-side validation, input lost
+on rejection (F3, F5, F7, F8, F15), small UI defects (F6, F10, F12), a
+confusing invite/reset page (F9), an audit-coverage gap (F11), a mid-session
+reauth that discards a filled form (F14), and two questions (F13, F16). The
+plan is `~/.claude/plans/1-it-s-great-that-linked-bear.md`; per AGENTS.md these
+come before anything in Pending.
+
+**The two questions, answered.**
+
+- **F13 — `/.well-known/change-password` is legitimate**, and no code changed.
+  It is a registered well-known URI (RFC 8615; the behaviour is the W3C
+  "Change Password URL" specification), served by Okta, Google, GitHub and
+  Apple, and used by Safari, Chrome, 1Password and iCloud Keychain to offer
+  one-click "change this password". It is already a redirect to
+  `/change-password` and is listed on `/admin/system` (**D55**).
+- **F16 — the permission-denied page stays a page**, not a 404. Masking with a
+  404 protects resources whose *existence* is confidential; `/admin` is a
+  fixed, documented path (docs/admin-api.md), so a 404 buys nothing and costs
+  a signed-in colleague a dead end. The real defect was the status code: FR-ROLE-3
+  says 403 and the page rendered with 200.
+
+### What landed
+
+- **The config surface (F1, F2), `D60`.** `config.example/*.schema.json` moved
+  to a root `config-schema/`, and the three examples are now `.jsonc`.
+
+---
+
+## Two bugs the owner found in ten minutes of using it (2026-08-26, **D57–D58**)
+
+Both were reported together, and they had been dressing each other up: the first
+made a correct password look wrong, and the second made the recovery from it
+look broken too. Both are fixed and both are reproduced below, because neither
+was visible to any gate in this repository.
+
+### "I created a user, but at login the password was not accepted" (**D57**)
+
+It was not the password. Better Auth's CSRF middleware refuses a post whose
+`Origin` is not in `trustedOrigins` — which defaults to `server.baseUrl` alone —
+**before** it looks at a credential, and `errorCodeFor` had no case for
+`INVALID_ORIGIN`. It fell through the default arm into `invalid_credentials`,
+and the page said the e-mail and password combination was not correct about a
+request in which no password was ever checked.
+
+Reproduced on a throwaway schema (`idp_repro_login`, dropped afterwards), same
+config, same code:
+
+| request | before | after |
+| --- | --- | --- |
+| correct password, matching origin | `/account` | `/account` |
+| wrong password, matching origin | `error=invalid_credentials` | `error=invalid_credentials` |
+| **correct password, `Origin: 127.0.0.1`** | **`error=invalid_credentials`** | `error=untrusted_origin` |
+
+The server log said `Invalid origin: http://127.0.0.1:3211` on the line above
+while the page said the password was wrong, so the log and the screen actively
+contradicted each other. The default `baseUrl` is `http://localhost:3000`, so
+`127.0.0.1:3000` is all it takes — and the same refusal takes out the first-run
+wizard's automatic sign-in, which is why it strands the *first* account a
+deployment ever creates: it silently becomes `/login?notice=account_created`,
+and then that login fails too.
+
+`untrusted_origin` now carries its own catalog string naming what is actually
+wrong. SEC-7 is untouched: the caller chose the origin and already knows it, and
+it is a fact about the configuration rather than about any account.
+
+### "I ran `pnpm drizzle:reset` and the setup page does not come back" (**D58**)
+
+It does not, and `lock_timeout` is why nobody expected that. **D56** set it so a
+running dev server would produce a sentence instead of a hang — but an idle
+connection holds no table lock, so the drop simply succeeds. The server then
+keeps running against a schema that is no longer there, and the first-run gate
+memoises `false` for the life of the process (**D52**, on the reasoning that a
+deployment cannot go back to having no users while it is running, which is the
+exact invariant this script breaks). So `/` and `/login` go on serving the
+sign-in page, and every request underneath throws — which is what the owner's
+`INTERNAL_SERVER_ERROR` on `select … from "idp"."session"` was.
+
+Reproduced exactly, with the server left running through the drop:
+
+```
+Tables        18
+Connections   2 other — restart whatever is using this database afterwards
+Dropped schema "idp_repro_login".
+→ /  307 → /login          (stale process)
+→ /  307 → /setup          (after a restart)
+```
+
+The script now counts other backends on the database next to the table count and
+closes by saying **restart**, not start. Counted rather than refused on: this
+script's own pool can open a second backend and a pooler holds idle ones after
+the process behind them is gone, so a refusal would fail on a false positive.
+The memo is left alone deliberately — a process whose schema was dropped is
+broken in every direction, and restarting is the answer to all of it rather than
+to the wizard alone.
+
+### "…and an error which did not show in the UI ?!?" (**D59**)
+
+Reported as an aside to the two above, and it is the reason the second one was
+so hard to read from the outside. `readSession` ended in `.catch(() => null)`,
+so **a session that could not be read and a session that is not there were the
+same answer**: an anonymous visitor, redirected to the sign-in page. With the
+schema gone, Better Auth logged `Failed query: select … from "idp"."session"`
+and the screen showed an ordinary login form — the log and the UI describing
+different worlds, and the operator left to conclude they had been signed out.
+
+The discriminator is Better Auth's own rather than a guess: `dispatch` converts
+a refusal into an `APIError` and rethrows everything else untouched, so a driver
+or query failure arrives as a plain `Error`. Those, and any `APIError` that is
+itself a 5xx, now propagate to the error boundary; a 4xx — expired, revoked,
+banned — still answers `null`, because that caller does belong on the login
+page. `src/tests/unit/read-session.test.ts` pins all three.
+
+The cost is accepted deliberately: a transient database failure that used to
+look like a sign-out now looks like a failure. That is the honest trade, and the
+old behaviour hid every outage on the one code path whose whole job is to say
+who the caller is.
+
+Two smaller things rode along: the wizard's button says **"Create first admin
+account"** rather than "Create the first account", and the seven server
+functions still calling `createServerFn().inputValidator()` now call
+`.validator()`, so `pnpm dev` no longer opens with seven deprecation warnings.
 
 ---
 

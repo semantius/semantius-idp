@@ -359,7 +359,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
    *
    * Three properties are load-bearing:
    *
-   *  - **The entry is validated by the same zod schema `oauth_clients.json`
+   *  - **The entry is validated by the same zod schema `oauth_clients.jsonc`
    *    is.** A redirect URI that the file would refuse — a wildcard, a
    *    fragment, plain http off loopback — is refused here too, from one
    *    definition rather than two that drift.
@@ -429,7 +429,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
 
       // Scopes a client may ask for are bounded by the deployment's own list
       // (FR-OIDC-3); the file schema cannot check that because it does not see
-      // `config.json`, and the cross-checks that do only run at load.
+      // `config.jsonc`, and the cross-checks that do only run at load.
       const allowed = new Set(deps.config.file.oauth.scopes)
       const stray = (entry.scopes ?? []).filter((scope) => !allowed.has(scope))
       if (stray.length > 0) {
@@ -627,7 +627,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
       throw new APIError("BAD_REQUEST", {
         code: "CLIENT_MANAGED_BY_FILE",
         message:
-          "That client comes from oauth_clients.json. Edit the file and restart.",
+          "That client comes from oauth_clients.jsonc. Edit the file and restart.",
       })
     }
   }

@@ -204,7 +204,7 @@ operation and does none of the above.
 
 ## Reconciling clients
 
-`oauth_clients.json` is applied at start-up, so the ordinary way to change a
+`oauth_clients.jsonc` is applied at start-up, so the ordinary way to change a
 client is to edit the file and restart. To apply it without a restart:
 
 ```bash

@@ -61,11 +61,84 @@ describe("config loader", () => {
     expect(load({ clients: null }).config.clients).toEqual([])
   })
 
-  it("reports a missing config.json rather than crashing", () => {
+  it("reports a missing config file rather than crashing", () => {
     const folder = makeConfigFolder()
     expect(() =>
       loadConfig({ dir: "/elsewhere", env: {}, readFile: folder.readFile })
     ).toThrow(/Required file not found/)
+  })
+
+  /**
+   * D60: `.jsonc` is the canonical spelling and `.json` is still read. Every
+   * other test in this file writes `.json`, so the fallback is covered by all
+   * of them; what needs its own coverage is the preferred spelling, the
+   * refusal when both are there, and the fact that a message names the file
+   * the operator can actually open.
+   */
+  describe("file resolution (D60)", () => {
+    it("reads the .jsonc spelling", () => {
+      const { config } = load({ extension: "jsonc" })
+      expect(config.file.site.name).toBe("Test IdP")
+      expect(config.roles.map((role) => role.name)).toEqual(["admin", "user"])
+    })
+
+    it("refuses a folder holding both spellings of the same file", () => {
+      const jsonc = makeConfigFolder({ extension: "jsonc" })
+      const json = makeConfigFolder()
+      const files = { ...jsonc.files, ...json.files }
+      const issues = (() => {
+        try {
+          loadConfig({
+            dir: "/config",
+            env: {},
+            readFile: (path: string) => {
+              const content = files[path.replace(/\\/g, "/")]
+              if (content === undefined) throw new Error(`ENOENT: ${path}`)
+              return content
+            },
+          })
+        } catch (error) {
+          if (error instanceof ConfigError) return error.issues
+          throw error
+        }
+        throw new Error("expected loadConfig to throw a ConfigError")
+      })()
+      const message = issues.map((issue) => issue.message).join("\n")
+      expect(message).toContain("config.jsonc")
+      expect(message).toContain("config.json")
+      // All three files are ambiguous, and CFG-5 reports them together.
+      expect(issues).toHaveLength(3)
+    })
+
+    it("names the canonical spelling when the required file is absent", () => {
+      const folder = makeConfigFolder()
+      try {
+        loadConfig({ dir: "/elsewhere", env: {}, readFile: folder.readFile })
+      } catch (error) {
+        // The path separator is the platform's, so match on the name alone.
+        expect((error as Error).message).toContain("elsewhere")
+        expect((error as Error).message).toContain("config.jsonc")
+        expect((error as Error).message).toContain("config.json is read too")
+        return
+      }
+      throw new Error("expected loadConfig to throw")
+    })
+
+    it("formats issues against the name the file was read under", () => {
+      const broken = { ...baseConfig(), site: {} }
+      const jsonc = makeConfigFolder({ config: broken, extension: "jsonc" })
+      const json = makeConfigFolder({ config: broken })
+      const message = (folder: typeof jsonc) => {
+        try {
+          loadConfig({ dir: "/config", env: {}, readFile: folder.readFile })
+        } catch (error) {
+          return (error as Error).message
+        }
+        throw new Error("expected loadConfig to throw")
+      }
+      expect(message(jsonc)).toContain("config.jsonc/site/name")
+      expect(message(json)).toContain("config.json/site/name")
+    })
   })
 
   it("reports every problem in one pass (CFG-5)", () => {

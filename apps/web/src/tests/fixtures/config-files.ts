@@ -18,6 +18,13 @@ export interface MakeConfigFolderOptions {
   config?: Record<string, unknown>
   clients?: Record<string, unknown> | null
   roles?: Record<string, unknown> | null
+  /**
+   * Which spelling the folder is written in (**D60**). The default is `json`
+   * on purpose: the fallback is the path a folder written before D60 takes,
+   * and leaving the whole suite on it keeps that path exercised by everything
+   * rather than by one test.
+   */
+  extension?: "json" | "jsonc"
   /** Extra files addressable through `${file:…}` placeholders. */
   extraFiles?: Record<string, string>
 }
@@ -36,22 +43,23 @@ export function makeConfigFolder(
   options: MakeConfigFolderOptions = {}
 ): ConfigFolder {
   const dir = options.dir ?? "/config"
+  const ext = options.extension ?? "json"
   const files: Record<string, string> = { ...options.extraFiles }
 
-  files[`${dir}/config.json`] = JSON.stringify(
+  files[`${dir}/config.${ext}`] = JSON.stringify(
     options.config ?? baseConfig(),
     null,
     2
   )
   if (options.clients !== null) {
-    files[`${dir}/oauth_clients.json`] = JSON.stringify(
+    files[`${dir}/oauth_clients.${ext}`] = JSON.stringify(
       options.clients ?? { clients: [] },
       null,
       2
     )
   }
   if (options.roles !== null) {
-    files[`${dir}/roles.json`] = JSON.stringify(
+    files[`${dir}/roles.${ext}`] = JSON.stringify(
       options.roles ?? {
         roles: [{ name: "admin" }, { name: "user", default: true }],
       },

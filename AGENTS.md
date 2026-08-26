@@ -24,7 +24,7 @@ Four files, in this order. Read them before proposing anything.
 | File | What it is |
 | --- | --- |
 | [status.md](status.md) | The handoff. Done, not-done, and why — the ground truth between sessions. |
-| [spec-v1.md](spec-v1.md) | Signed off, amended through **D52**. Numbered requirements, and §12.1's decision log with the reasoning. |
+| [spec-v1.md](spec-v1.md) | Signed off, amended through **D59**. Numbered requirements, and §12.1's decision log with the reasoning. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | The gates, the style, and how to amend the spec. |
 | [docs/release.md](docs/release.md) | What is left before v1.0.0, and it is the owner's, not yours. |
 
@@ -97,7 +97,7 @@ and all gated in CI:
 | Generated | By | Gate |
 | --- | --- | --- |
 | `apps/web/src/server/db/schema/auth-schema.ts`, `apps/web/drizzle/**` | `db:generate-schema`, `db:generate` | drift gate, byte-for-byte |
-| `config.example/*.schema.json` | `config:schemas` | `--check` |
+| `config-schema/*.schema.json` | `config:schemas` | `--check` |
 | `docs/configuration.md` | `docs:config` | `--check` |
 | `apps/web/src/routeTree.gen.ts` | the TanStack router plugin | rebuilt on build |
 | `packages/ui/src/components/*.tsx` | the shadcn registry | see below |
@@ -139,6 +139,17 @@ ends up in the image — CSS, components, server code — and rebuild before
 `test:e2e`, or you are testing the previous build. `pnpm docker:smoke` rebuilds
 and tags `semantius-idp:local`, which is what the suite defaults to.
 
+**"The password is wrong" is sometimes the origin.** Better Auth refuses a post
+whose `Origin` is not in `trustedOrigins` — which defaults to `server.baseUrl`
+alone — *before* it looks at a credential. Open the default deployment on
+`127.0.0.1:3000` instead of `localhost:3000` and every sign-in fails, including
+the first-run wizard's automatic one, so the very first account a deployment
+creates is the one it strands. Since **D57** that has its own code
+(`untrusted_origin`) and its own message; before it, it arrived as
+`invalid_credentials` and the page contradicted the server log, which was
+already saying `Invalid origin: …` on the line above. When a password that
+should work does not, read the log before you doubt the password.
+
 **The server must not reach the browser.** A route `loader` is isomorphic — it
 runs in the browser on every client-side navigation — so one careless import
 puts Better Auth, Drizzle and the `postgres` driver in the client bundle.
@@ -166,6 +177,13 @@ schema that already has users, drop the schema — `pnpm drizzle:reset`
 (**D56**), which drops `database.schema` and nothing else, after printing the
 target and asking `[y/N]`. `--schema <name>` aims it at a throwaway; that is
 the supported way to clean one up.
+
+**Restart the app after a reset — the `lock_timeout` does not stop you** (**D58**).
+An idle connection holds no table lock, so the drop succeeds against a running
+dev server, which then talks to a schema that is no longer there *and* keeps
+serving the sign-in page: the first-run gate memoises "setup is done" for the
+life of the process (`server/admin/first-user.ts`). The script now counts other
+backends on the database and says to restart; believe it.
 
 ---
 

@@ -45,8 +45,8 @@ contain.
   first one in the browser and signs them in as an administrator. There is no
   bootstrap account, no password in an environment file, and nothing to unset
   afterwards.
-- **File-driven configuration.** `config.json`, `oauth_clients.json` and
-  `roles.json` are the source of truth, parsed as JSONC with `${env:…}` and
+- **File-driven configuration.** `config.jsonc`, `oauth_clients.jsonc` and
+  `roles.jsonc` are the source of truth, parsed as JSONC with `${env:…}` and
   `${file:…}` placeholders, validated in one pass with every error reported
   together, and reconciled into the database at start-up.
 - **A single container**, non-root and read-only, with the operator CLI in the
@@ -260,5 +260,50 @@ were questions, and one was "polish every page".
   sets `lock_timeout` so a still-running dev server gives a sentence instead of
   a hang, and takes `--yes`, `--schema <name>` and `--migrate`. It is a repository script and not an `idp` CLI command on
   purpose: the CLI ships inside the container.
+
+### Fixed after the second owner review (2026-08-26)
+
+- **A sign-in refused for its `Origin` no longer claims the password is wrong**
+  (**D57**). Better Auth turns a post from an untrusted origin away before it
+  looks at a credential; that refusal was unmapped, fell through to
+  `invalid_credentials`, and the page said the e-mail and password combination
+  was not correct — about a request in which no password was checked. It now
+  has its own code and its own message, which names what is actually wrong:
+  the browser is on an address `server.baseUrl` (or `server.trustedOrigins`)
+  does not cover. Opening the default deployment on `127.0.0.1` instead of
+  `localhost` is the whole of it, and it takes out the first-run wizard's
+  automatic sign-in too, so the first account a deployment ever creates is the
+  one it happens to.
+- **The first-run wizard's button says "Create first admin account"** rather
+  than "Create the first account", which named the ordinal and not the thing.
+- **`pnpm drizzle:reset` says to *restart* a running app, and counts the
+  connections that show one is** (**D58**). `lock_timeout` does not stop a
+  reset under a live server — an idle connection holds no table lock — and the
+  first-run gate memoises "setup is done" for the life of the process, so that
+  server kept serving the sign-in page to somebody who had just emptied the
+  database. The target block now reports other backends on the database
+  alongside the table count.
+- **A session that could not be read no longer looks like a session that is not
+  there** (**D59**). `readSession` caught everything and answered "anonymous",
+  so a database failure and a signed-out visitor were the same answer: the log
+  said `Failed query: select … from "idp"."session"` and the screen showed an
+  ordinary sign-in page. A refusal — expired, revoked, banned — still answers
+  `null`; a driver or query failure, and any 5xx, now reach the error page.
+- **`createServerFn().inputValidator()` → `.validator()`** in the seven server
+  functions still on the deprecated alias, which warned on every dev start.
+
+### Changed after the third owner review (2026-08-26)
+
+- **The config files are `.jsonc`, and the generated schemas moved to
+  `config-schema/`** (**D60**). Two halves of one complaint. The files are
+  documented as JSONC and are full of comments, so an editor opening
+  `config.json` marked every one of them as an error before reading a key; and
+  `config.example/` mixed the three files an operator edits with three a
+  generator owns, which matters because that folder is *copied* to make a
+  deployment's `config/` — the copy of a generated file goes stale silently and
+  the `--check` gate never sees it. The loader resolves each name `.jsonc`
+  first and then `.json`, so a folder written before this keeps working; having
+  both spellings of one file is refused, naming both, rather than resolved by a
+  guess. Every message names the file as it is spelled on disk.
 
 [Unreleased]: https://github.com/semantius/semantius-idp/commits/main

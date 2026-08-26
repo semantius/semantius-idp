@@ -32,7 +32,7 @@ not by clicking around a database.
   sign-up with an approval queue, e-mail verification and reset, TOTP
   two-factor, per-user API keys, and an administration area for the people who
   run it.
-- **Configured by files.** `config.json`, `oauth_clients.json` and `roles.json`
+- **Configured by files.** `config.jsonc`, `oauth_clients.jsonc` and `roles.jsonc`
   are the source of truth; the database is the reconciled operative store.
   Restarting applies changes, and the same folder produces the same deployment.
 
@@ -113,7 +113,7 @@ brings this exact stack up against the image that will be published, completes
 the setup wizard, and verifies a token against the JWKS.
 
 > **Changing the port or the hostname?** Set `IDP_BASE_URL` to match, and edit
-> the example first-party client in `config/oauth_clients.json` — its redirect
+> the example first-party client in `config/oauth_clients.jsonc` — its redirect
 > URI is `http://localhost:3000/…`, and a `firstParty` client must be on the
 > issuer's own origin. Start-up refuses and says exactly that rather than
 > issuing tokens to somewhere unexpected.
@@ -157,12 +157,14 @@ promise in the documentation.
 
 | File | Required | What it holds |
 | --- | --- | --- |
-| `config.json` | yes | Everything in [docs/configuration.md](docs/configuration.md) |
-| `oauth_clients.json` | no | The applications that may ask for tokens — [docs/clients.md](docs/clients.md) |
-| `roles.json` | no | The role catalog; absent, you get `admin` and `user` |
+| `config.jsonc` | yes | Everything in [docs/configuration.md](docs/configuration.md) |
+| `oauth_clients.jsonc` | no | The applications that may ask for tokens — [docs/clients.md](docs/clients.md) |
+| `roles.jsonc` | no | The role catalog; absent, you get `admin` and `user` |
 
-They are parsed as JSONC — comments and trailing commas are fine — and any
-string may carry a placeholder:
+They are parsed as JSONC — comments and trailing commas are fine — which is
+what the extension says. A `.json` spelling is still read, so a folder written
+before that was true keeps working; having both of one file is refused rather
+than resolved. Any string may carry a placeholder:
 
 ```jsonc
 {
@@ -177,12 +179,18 @@ once, before validation. `$${` escapes a literal `${`. **Secrets never belong
 in the files themselves** — an unresolved variable stops start-up and names the
 file, the JSON pointer and the variable, never the value.
 
-`config.example/` ships with every key commented and with JSON Schemas beside
-it, so an editor completes and validates as you type:
+`config.example/` ships with every key commented, and the generated JSON
+Schemas sit next to it in `config-schema/`, so an editor completes and
+validates as you type:
 
 ```jsonc
-{ "$schema": "./config.schema.json", … }
+{ "$schema": "../config-schema/config.schema.json", … }
 ```
+
+The path is relative to the file, so it keeps working in the `config/` you copy
+beside it. The schemas are generated from the loader's own zod schemas and are
+never edited by hand.
+
 
 The keys that decide what you can do on day one:
 
@@ -194,7 +202,7 @@ The keys that decide what you can do on day one:
 | `signUp.requireApproval` | `true` | Self-registrations land as `pending` until an administrator approves them. |
 | `email.resend.apiKey` | — | Without it the IdP runs in **degraded mode**: no verification, no reset, no notifications, and `/forgot-password` is 404. Administrators set passwords directly instead. |
 | `auth.defaultRedirect` | `/account` | Where a completed sign-in lands. Point it at your product when the IdP is bundled beside one. |
-| `admin.adminRoles` | `["admin"]` | Which roles from `roles.json` reach `/admin` and the admin API. |
+| `admin.adminRoles` | `["admin"]` | Which roles from `roles.jsonc` reach `/admin` and the admin API. |
 
 If a page you expect is missing, it is almost always one of these two: sign-up
 is off, or e-mail is not configured. That is deliberate — a control that cannot
@@ -206,7 +214,7 @@ drifts.
 
 ## Roles
 
-`roles.json` is a catalog, not a permission system. The IdP evaluates nothing
+`roles.jsonc` is a catalog, not a permission system. The IdP evaluates nothing
 from a role; it puts them in the token and your applications decide.
 
 ```jsonc
@@ -225,7 +233,7 @@ value you set in `jwt.claims`, which is what Neon and PostgREST expect.
 
 ## Clients
 
-An entry in `oauth_clients.json` is an application allowed to ask for tokens.
+An entry in `oauth_clients.jsonc` is an application allowed to ask for tokens.
 The file is the source of truth for the clients it names: start-up validates it
 and reconciles it into the database, disabling anything that has disappeared.
 Those rows are read-only in the admin UI, because a change there is a change the

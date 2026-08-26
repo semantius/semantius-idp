@@ -19,7 +19,12 @@ import { isAbsolute, join } from "node:path"
 import { deriveConfig } from "./derive"
 import type { IdpConfig } from "./derive"
 import { ConfigError } from "./errors"
-import type { ConfigFileName, ConfigIssue, ConfigWarning } from "./errors"
+import type {
+  ConfigFileName,
+  ConfigIssue,
+  ConfigWarning,
+  ResolvedFileNames,
+} from "./errors"
 import { parseJsoncText, stripSchemaKey } from "./jsonc"
 import { substitutePlaceholders } from "./placeholders"
 import { clientsFileSchema } from "./schema/clients-schema"
@@ -56,39 +61,73 @@ export function loadConfig(options: LoadConfigOptions = {}): LoadedConfig {
     options.readFile ?? ((path: string) => readFileSync(path, "utf8"))
 
   const issues: ConfigIssue[] = []
+  // What each logical file turned out to be called on disk, for the messages
+  // (D60). Filled in by `readAndExpand`, read by `ConfigError`.
+  const names: ResolvedFileNames = {}
 
   // -- 1/2: read, parse, expand -------------------------------------------
-  const configRaw = readAndExpand("config.json", join(dir, "config.json"), {
-    required: true,
-  })
-  const clientsRaw = readAndExpand(
-    "oauth_clients.json",
-    join(dir, "oauth_clients.json"),
-    { required: false }
-  )
-  const rolesRaw = readAndExpand("roles.json", join(dir, "roles.json"), {
-    required: false,
-  })
+  const configRaw = readAndExpand("config.json", { required: true })
+  const clientsRaw = readAndExpand("oauth_clients.json", { required: false })
+  const rolesRaw = readAndExpand("roles.json", { required: false })
 
+  /**
+   * Resolves one logical file to the one on disk (**D60**).
+   *
+   * `.jsonc` is the canonical spelling — the files are JSONC and every editor
+   * treats the extension as the signal to allow comments — but `.json` is
+   * still read, because a deployment that predates D60 has a config folder
+   * full of them and an extension rename is not something an upgrade may
+   * demand. Both present is refused rather than resolved: there is no reading
+   * of "which one did they mean" that is not a guess, and a deployment silently
+   * serving the file the operator was not editing is the worse outcome.
+   *
+   * The reader throws for anything it cannot read, so "not found" and
+   * "unreadable" are the same answer here; that was already true before the
+   * probe and the required-file message names the path either way.
+   */
   function readAndExpand(
     file: ConfigFileName,
-    path: string,
     { required }: { required: boolean }
   ): { value: unknown; placeholders: ReadonlySet<string> } | undefined {
-    let text: string
-    try {
-      text = readFile(path)
-    } catch {
+    const base = file.replace(/\.json$/, "")
+    const candidates = [`${base}.jsonc`, `${base}.json`] as const
+    const found = candidates.flatMap((name) => {
+      try {
+        return [{ name, text: readFile(join(dir, name)) }]
+      } catch {
+        return []
+      }
+    })
+
+    if (found.length > 1) {
+      issues.push({
+        file,
+        pointer: "",
+        message: `Both ${candidates[0]} and ${candidates[1]} are present in ${dir}.`,
+        hint: "Keep one. `.jsonc` is the canonical spelling; `.json` is read only when it is the only one there.",
+      })
+      return undefined
+    }
+
+    const hit = found[0]
+    if (!hit) {
+      // Nothing to resolve to, so the messages use the canonical spelling —
+      // "config.json: Required file not found at …/config.jsonc" would name
+      // two files for one problem.
+      names[file] = candidates[0]
       if (required) {
         issues.push({
           file,
           pointer: "",
-          message: `Required file not found at ${path}.`,
-          hint: "Mount the config folder read-only at /config, or point IDP_CONFIG_DIR at it.",
+          message: `Required file not found at ${join(dir, candidates[0])}.`,
+          hint: `Mount the config folder read-only at /config, or point IDP_CONFIG_DIR at it. ${candidates[1]} is read too, when it is the only one present.`,
         })
       }
       return undefined
     }
+
+    names[file] = hit.name
+    const text = hit.text
 
     const parsed = parseJsoncText(file, text)
     issues.push(...parsed.issues)
@@ -145,7 +184,7 @@ export function loadConfig(options: LoadConfigOptions = {}): LoadedConfig {
         message: "Configuration could not be loaded.",
       })
     }
-    throw new ConfigError(issues)
+    throw new ConfigError(issues, names)
   }
 
   const clients: ClientEntry[] = clientsResult?.success
@@ -165,7 +204,7 @@ export function loadConfig(options: LoadConfigOptions = {}): LoadedConfig {
       clients: clientsRaw?.placeholders ?? new Set<string>(),
     },
   })
-  if (crossIssues.length > 0) throw new ConfigError(crossIssues)
+  if (crossIssues.length > 0) throw new ConfigError(crossIssues, names)
 
   // -- 6: derive -----------------------------------------------------------
   return {

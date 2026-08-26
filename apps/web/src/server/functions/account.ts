@@ -119,10 +119,7 @@ export const fetchProfile = createServerFn({ method: "GET" }).handler(
       firstName: current.user.firstName ?? "",
       lastName: current.user.lastName ?? "",
       roles: effectiveRoles(current.user.roles.join(","), runtime.config.roles),
-      isAdmin: isAdmin(
-        current.user.roles.join(","),
-        runtime.config.adminRoles
-      ),
+      isAdmin: isAdmin(current.user.roles.join(","), runtime.config.adminRoles),
       twoFactorEnabled: current.user.twoFactorEnabled,
       impersonated: current.session.impersonatedBy !== undefined,
     }
@@ -243,9 +240,7 @@ export async function apiKeyBelongsTo(
  * rendered on exactly one page load and a reload shows nothing.
  */
 export const claimApiKeySecret = createServerFn({ method: "GET" })
-  .inputValidator((handle: unknown) =>
-    typeof handle === "string" ? handle : ""
-  )
+  .validator((handle: unknown) => (typeof handle === "string" ? handle : ""))
   .handler(async ({ data: handle }): Promise<string | null> => {
     if (handle === "") return null
     const runtime = await getRuntime()
@@ -271,9 +266,7 @@ export const claimApiKeySecret = createServerFn({ method: "GET" })
  * receives is a picture of it.
  */
 export const claimEnrolment = createServerFn({ method: "GET" })
-  .inputValidator((handle: unknown) =>
-    typeof handle === "string" ? handle : ""
-  )
+  .validator((handle: unknown) => (typeof handle === "string" ? handle : ""))
   .handler(async ({ data: handle }): Promise<EnrolmentView | null> => {
     if (handle === "") return null
     const runtime = await getRuntime()

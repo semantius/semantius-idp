@@ -4,13 +4,13 @@
  * DOC-1 asks for a configuration reference **generated from the schemas**,
  * because a hand-written one is wrong the first time a default changes and
  * nobody can tell by reading it. The zod schemas are the single source of
- * truth for the loader, the JSON Schemas in `config.example/` and this table
+ * truth for the loader, the JSON Schemas in `config-schema/` and this table
  * alike; CI runs this with `--check` and fails when the committed output is
  * stale, exactly as it does for the schemas.
  *
  *   bun run scripts/generate-config-reference.ts [--check]
  *
- * Only `config.json` is rendered here. `oauth_clients.json` and `roles.json`
+ * Only `config.jsonc` is rendered here. `oauth_clients.jsonc` and `roles.jsonc`
  * are documented where they are *used* — `docs/clients.md` (DOC-3) and the
  * roles section of the README — because a client entry is read as a whole and
  * a flat table of its twenty fields teaches nobody how to write one.
@@ -87,7 +87,7 @@ function typeOf(schema: JsonSchema): string {
 }
 
 /**
- * The smallest `config.json` the schema accepts.
+ * The smallest `config.jsonc` the schema accepts.
  *
  * Parsed once so the defaults in the table are the values the loader actually
  * produces, rather than whatever survived into the JSON Schema. Most of them
@@ -218,7 +218,7 @@ function render(rows: Row[]): string {
     "",
     "# Configuration reference",
     "",
-    "Every key of `config.json`, generated from the schemas the loader itself",
+    "Every key of `config.jsonc`, generated from the schemas the loader itself",
     "validates against (CFG-4). A key marked **required** has no default and",
     "start-up fails without it.",
     "",
@@ -252,7 +252,7 @@ function render(rows: Row[]): string {
     "",
     "| Variable | Default | What it does |",
     "| --- | --- | --- |",
-    "| `IDP_CONFIG_DIR` | `/config` | The folder holding `config.json` and its companions. |",
+    "| `IDP_CONFIG_DIR` | `/config` | The folder holding `config.jsonc` and its companions. |",
     "| `HOST` / `PORT` | `0.0.0.0` / `3000` | Where the process listens, when the file leaves `server.host`/`server.port` out. |",
     "| `LOG_LEVEL` / `LOG_FORMAT` | `info` / `json` | As `logging.level` / `logging.format`. |",
     "| `IDP_MIGRATE_ON_BOOT` | `true` | As `database.migrateOnBoot`. |",

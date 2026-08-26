@@ -9,7 +9,12 @@
  * `auth.api.getSession` is deliberate rather than reading the cookie: it
  * honours the cookie cache, the ban/approval state and the impersonation
  * fields, so a session that Better Auth considers dead is not resurrected here.
+ *
+ * **"No session" and "the database is unreachable" are not the same answer**
+ * (**D59**). See {@link readSession}.
  */
+
+import { APIError } from "better-auth/api"
 
 import type { Runtime } from "../runtime"
 import { splitRoles } from "../role-utils"
@@ -58,7 +63,24 @@ export interface ReadSessionOptions {
   authoritative?: boolean
 }
 
-/** The caller's session, or `null` when there is none. */
+/**
+ * The caller's session, or `null` when there is none.
+ *
+ * **A failure to read is not an absence** (**D59**). Better Auth answers `null`
+ * for an anonymous caller and *throws* for a refusal — a dead or banned
+ * session, which is still "no session" and still belongs on the login page.
+ * A query that could not run throws too, and it is a different thing entirely.
+ * `.catch(() => null)` treated both alike, so on 2026-08-26 a schema dropped
+ * under a running server produced `Failed query: select … from "idp"."session"`
+ * in the log and an entirely ordinary sign-in page on the screen. The two never
+ * met, and the operator was left to conclude they had been signed out.
+ *
+ * The discriminator is Better Auth's own: `dispatch` converts a refusal into an
+ * `APIError` and rethrows anything else untouched, so a driver or query failure
+ * arrives here as a plain `Error`. That, and any `APIError` that is itself a
+ * 5xx, propagate to the error boundary — which is what the branded error page
+ * is for. Everything else is a signed-out visitor.
+ */
 export async function readSession(
   runtime: Runtime,
   request: Request,
@@ -69,7 +91,10 @@ export async function readSession(
       headers: request.headers,
       ...(authoritative ? { query: { disableCookieCache: true } } : {}),
     })
-    .catch(() => null)
+    .catch((error: unknown) => {
+      if (error instanceof APIError && error.statusCode < 500) return null
+      throw error
+    })
   // The typed shape says `session` is always there when `user` is; the
   // check is on `user` alone so the narrowing is honest.
   if (!result?.user) return null

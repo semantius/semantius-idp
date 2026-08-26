@@ -21,7 +21,7 @@
 #      otherwise working perfectly.
 #
 # Set `server.baseUrl` to `https://{$IDP_DOMAIN}{$IDP_BASE_PATH}` and
-# `server.trustProxy` to true in config.json, and mount this file instead of
+# `server.trustProxy` to true in config.jsonc, and mount this file instead of
 # `Caddyfile` in docker-compose.yml.
 
 {$IDP_DOMAIN:localhost} {

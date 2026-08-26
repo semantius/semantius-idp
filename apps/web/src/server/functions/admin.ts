@@ -328,7 +328,7 @@ export interface UserQuery {
 }
 
 export const fetchUsers = createServerFn({ method: "GET" })
-  .inputValidator((input: UserQuery) => input)
+  .validator((input: UserQuery) => input)
   .handler(async ({ data }): Promise<AdminUserPage | null> => {
     const context = await admin()
     if (!context) return null
@@ -384,7 +384,7 @@ export const fetchUsers = createServerFn({ method: "GET" })
   })
 
 export const fetchUserDetail = createServerFn({ method: "GET" })
-  .inputValidator((userId: string) => userId)
+  .validator((userId: string) => userId)
   .handler(async ({ data: userId }): Promise<AdminUserDetail | null> => {
     const context = await admin()
     if (!context) return null
@@ -477,7 +477,7 @@ export interface AuditQuery {
 }
 
 export const fetchAuditPage = createServerFn({ method: "GET" })
-  .inputValidator((input: AuditQuery) => input)
+  .validator((input: AuditQuery) => input)
   .handler(
     async ({
       data,
@@ -643,9 +643,7 @@ async function resolveUserNames(
  * endpoint whatever page calls it.
  */
 export const claimAdminSecret = createServerFn({ method: "GET" })
-  .inputValidator((handle: unknown) =>
-    typeof handle === "string" ? handle : ""
-  )
+  .validator((handle: unknown) => (typeof handle === "string" ? handle : ""))
   .handler(async ({ data: handle }): Promise<string | null> => {
     if (handle === "") return null
     const context = await admin()

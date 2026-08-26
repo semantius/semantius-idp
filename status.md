@@ -118,6 +118,11 @@ come before anything in Pending.
   It reads first now and stashes the draft on the stale branch only, with a
   1800 s TTL because the detour may include a second factor. `reauth_draft` is
   its own notice code so the sentence is only shown where it is true.
+- **create-user is a dialog, default role ticked (F7 + F8), `D64`.**
+  `/admin/users/new` is deleted, with no redirect — only the users page linked
+  to it. The POST handler moved to the list route, reads the body before the
+  freshness gate, and keeps a draft on refusal. e2e: `admin.spec.ts` drives the
+  dialog; the a11y route list lost the page.
 
 ---
 

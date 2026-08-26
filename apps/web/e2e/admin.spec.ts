@@ -136,13 +136,19 @@ test.describe("the admin area", () => {
     await signInAsAdmin(page, app)
     const email = uniqueEmail("created")
 
-    await app.goto("/admin/users/new")
+    await app.goto("/admin/users")
+    // D64: the form is a dialog on the list, not a page of its own — both
+    // outcomes of the action now live where the account does.
+    const form = await openDialog(page, "Create a user")
     // FR-SIGNUP-5 / D49: two parts, never a free-text display name.
-    await page.getByLabel("First name").fill("Created")
-    await page.getByLabel("Last name").fill("Person")
-    await page.getByLabel("E-mail address").fill(email)
-    await page.getByRole("checkbox", { name: "user" }).click()
-    await submit(page, "Create")
+    await form.getByLabel("First name").fill("Created")
+    await form.getByLabel("Last name").fill("Person")
+    await form.getByLabel("E-mail address").fill(email)
+    // D64: the default role arrives ticked, because an unticked form got it
+    // anyway — the server falls back to `defaultRole`. Asserted rather than
+    // clicked: clicking it now *un*-ticks it.
+    await expect(form.getByRole("checkbox", { name: "user" })).toBeChecked()
+    await submitDialog(page, form, "Create")
 
     // Item 10: both outcomes land on the list the account was created for.
     await expect(page).toHaveURL(new RegExp(`${app.basePath}/admin/users`))

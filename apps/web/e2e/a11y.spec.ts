@@ -63,8 +63,10 @@ const ACCOUNT_PAGES = [
 
 const ADMIN_PAGES = [
   "/admin",
+  // `/admin/users/new` is gone (D64) — creating a user is a dialog on
+  // `/admin/users`, and the dialog's contents are scanned with that page once
+  // it is open, not as a route of their own.
   "/admin/users",
-  "/admin/users/new",
   "/admin/clients",
   "/admin/roles",
   "/admin/audit",

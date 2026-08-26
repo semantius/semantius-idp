@@ -53,7 +53,6 @@ import { Route as DotwellKnownJwksDotjsonRouteImport } from './routes/[.]well-kn
 import { Route as DotwellKnownChangePasswordRouteImport } from './routes/[.]well-known.change-password'
 import { Route as AdminUsersIndexRouteImport } from './routes/admin/users/index'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
-import { Route as AdminUsersNewRouteImport } from './routes/admin/users/new'
 import { Route as AdminUsersUserIdRouteImport } from './routes/admin/users/$userId'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
@@ -280,11 +279,6 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminUsersNewRoute = AdminUsersNewRouteImport.update({
-  id: '/users/new',
-  path: '/users/new',
-  getParentRoute: () => AdminRoute,
-} as any)
 const AdminUsersUserIdRoute = AdminUsersUserIdRouteImport.update({
   id: '/users/$userId',
   path: '/users/$userId',
@@ -335,7 +329,6 @@ export interface FileRoutesByFullPath {
   '/account/': typeof AccountIndexRoute
   '/admin/': typeof AdminIndexRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
-  '/admin/users/new': typeof AdminUsersNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin/users/': typeof AdminUsersIndexRoute
 }
@@ -381,7 +374,6 @@ export interface FileRoutesByTo {
   '/account': typeof AccountIndexRoute
   '/admin': typeof AdminIndexRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
-  '/admin/users/new': typeof AdminUsersNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin/users': typeof AdminUsersIndexRoute
 }
@@ -430,7 +422,6 @@ export interface FileRoutesById {
   '/account/': typeof AccountIndexRoute
   '/admin/': typeof AdminIndexRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
-  '/admin/users/new': typeof AdminUsersNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/admin/users/': typeof AdminUsersIndexRoute
 }
@@ -480,7 +471,6 @@ export interface FileRouteTypes {
     | '/account/'
     | '/admin/'
     | '/admin/users/$userId'
-    | '/admin/users/new'
     | '/api/auth/$'
     | '/admin/users/'
   fileRoutesByTo: FileRoutesByTo
@@ -526,7 +516,6 @@ export interface FileRouteTypes {
     | '/account'
     | '/admin'
     | '/admin/users/$userId'
-    | '/admin/users/new'
     | '/api/auth/$'
     | '/admin/users'
   id:
@@ -574,7 +563,6 @@ export interface FileRouteTypes {
     | '/account/'
     | '/admin/'
     | '/admin/users/$userId'
-    | '/admin/users/new'
     | '/api/auth/$'
     | '/admin/users/'
   fileRoutesById: FileRoutesById
@@ -925,13 +913,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/users/new': {
-      id: '/admin/users/new'
-      path: '/users/new'
-      fullPath: '/admin/users/new'
-      preLoaderRoute: typeof AdminUsersNewRouteImport
-      parentRoute: typeof AdminRoute
-    }
     '/admin/users/$userId': {
       id: '/admin/users/$userId'
       path: '/users/$userId'
@@ -968,7 +949,6 @@ interface AdminRouteChildren {
   AdminSystemRoute: typeof AdminSystemRoute
   AdminIndexRoute: typeof AdminIndexRoute
   AdminUsersUserIdRoute: typeof AdminUsersUserIdRoute
-  AdminUsersNewRoute: typeof AdminUsersNewRoute
   AdminUsersIndexRoute: typeof AdminUsersIndexRoute
 }
 
@@ -979,7 +959,6 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminSystemRoute: AdminSystemRoute,
   AdminIndexRoute: AdminIndexRoute,
   AdminUsersUserIdRoute: AdminUsersUserIdRoute,
-  AdminUsersNewRoute: AdminUsersNewRoute,
   AdminUsersIndexRoute: AdminUsersIndexRoute,
 }
 

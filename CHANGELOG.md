@@ -340,5 +340,12 @@ were questions, and one was "polish every page".
   window is unchanged; a stale session is still prompted. Nothing is stashed
   for a caller with no session at all, and password-bearing actions keep no
   draft.
+- **Creating a user is a dialog on `/admin/users`, and the default role starts
+  ticked** (**D64**). `/admin/users/new` was a page whose only outcome was to
+  come back to the list — where the other outcome of the same action, the
+  one-time set-password link, already opened as a dialog. Both live on the list
+  now, and the URL is gone rather than redirected: only that page linked to it.
+  The pre-ticked default role changes no server behaviour; an untouched form
+  always got `defaultRole`, and now it says so.
 
 [Unreleased]: https://github.com/semantius/semantius-idp/commits/main

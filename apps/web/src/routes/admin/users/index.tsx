@@ -23,15 +23,30 @@ import {
 import { AdminShell } from "@/components/admin/admin-shell"
 import { SecretDialog } from "@/components/common/dialogs"
 import { UserBadges } from "@/components/admin/user-badges"
+import { UserCreateDialog } from "@/components/admin/user-create-dialog"
 import { FormAlert } from "@/components/auth/form-parts"
-import { messageForNoticeCode } from "@/lib/auth-errors"
+import { messageForErrorCode, messageForNoticeCode } from "@/lib/auth-errors"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
 import {
+  claimAdminDraft,
   claimAdminSecret,
   fetchRoles,
   fetchUsers,
 } from "@/server/functions/admin"
+import {
+  callAuth,
+  errorCodeFor,
+  readFormMulti,
+  redirectWithCookies,
+  withError,
+} from "@/server/http/auth-proxy"
+import { stashDraft, withDraft } from "@/server/http/draft"
+import { requireFreshSession } from "@/server/http/fresh-session"
+import { stash } from "@/server/http/one-shot"
+import { createResetLink } from "@/server/auth/reset-link"
+import { displayName } from "@/server/display-name"
+import { getRuntime } from "@/server/runtime"
 import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 import { LocalTime } from "@/components/common/local-time"
 
@@ -44,10 +59,17 @@ import { LocalTime } from "@/components/common/local-time"
  * in the app — "the pending accounts" is a link an administrator sends to a
  * colleague.
  *
- * It is also where a creation lands (item 10). With e-mail on that is a
- * notice; with e-mail off the one-time set-password link opens in a dialog,
- * claimed from a server-side stash rather than read out of the query string —
- * a link that grants a password reset does not belong in browser history.
+ * It is also where a creation happens and where it lands (**D64**, item 10).
+ * The form was `/admin/users/new`, a page whose only outcome was to come back
+ * here — while the *other* outcome of the same action, the one-time
+ * set-password link when e-mail is off, already opened as a dialog on this
+ * page. One action, two outcomes, two surfaces. Both are here now, and the
+ * POST handler came with the form.
+ *
+ * With e-mail on a creation is a notice; with e-mail off the one-time
+ * set-password link opens in a dialog, claimed from a server-side stash rather
+ * than read out of the query string — a link that grants a password reset does
+ * not belong in browser history.
  */
 export const Route = createFileRoute("/admin/users/")({
   /**
@@ -80,20 +102,130 @@ export const Route = createFileRoute("/admin/users/")({
       page: await fetchUsers({ data: query }),
       roles: (await fetchRoles()) ?? [],
       notice: searchString(search.notice),
+      error: searchString(search.error),
       // Claimed, and therefore consumed: this render is the only one that can
       // show it, which is what "it works once" has to mean on this side too.
       inviteLink: await claimAdminSecret({
         data: searchString(search.created) ?? "",
       }),
+      // A refused creation, so the dialog reopens with what was typed (D62).
+      draft:
+        (await claimAdminDraft({ data: searchString(search.draft) ?? "" })) ??
+        undefined,
     }
   },
   component: UsersPage,
+  server: {
+    handlers: {
+      /**
+       * Create an account on someone's behalf (FR-ADMIN-2, **D64**).
+       *
+       * Created **approved and confirmed**: an administrator typing the
+       * address is the vouching that the approval queue and the verification
+       * e-mail exist to obtain, and making them then approve their own
+       * creation would be a step that teaches people to click through steps.
+       *
+       * The password is never chosen here. With e-mail on they get a
+       * `setPassword` link; with e-mail off (FR-MAIL-2) the same one-time link
+       * is handed over on screen *once*, because a server that cannot send
+       * mail still has to be able to onboard somebody — and an administrator
+       * typing a password into a form is a password that exists in two heads
+       * and a browser history. The link is stashed server-side and the
+       * redirect carries a handle: a one-time password-setting URL in a query
+       * string is one in browser history and in every proxy log on the way.
+       */
+      POST: async ({ request }) => {
+        const runtime = await getRuntime()
+        const list = `${runtime.config.base.basePath}${HERE}`
+
+        // Roles are checkboxes, so the field repeats; `readForm` keeps only
+        // the last value of a repeated key, which would silently drop every
+        // role but one. Read before the gate (D63), so a session that went
+        // stale while the dialog was open does not cost the form.
+        const { fields: form, list: valuesOf } = await readFormMulti(request)
+        const email = (form.email ?? "").trim()
+        const firstName = form.firstName ?? ""
+        const lastName = form.lastName ?? ""
+        const roles = valuesOf("roles")
+        const submitted = {
+          email: form.email,
+          firstName: form.firstName,
+          lastName: form.lastName,
+          roles,
+        }
+
+        const fresh = await requireFreshSession(runtime, request, HERE, {
+          draft: submitted,
+        })
+        if (!fresh.ok) return fresh.response
+
+        const created = await callAuth(
+          runtime,
+          "/admin/create-user",
+          {
+            email,
+            // D49: derived from the parts, never typed. FR-SIGNUP-5 asks for
+            // first and last name everywhere an account is made, and this was
+            // the one place still asking for a single free-text `name`.
+            name:
+              displayName(
+                firstName,
+                lastName,
+                runtime.config.file.site.nameFormat
+              ) || email,
+            // A random password nobody will ever use: the account is reached
+            // through the set-password link, and a null password would make it
+            // a social-only account, which is not what was asked for.
+            password: crypto.randomUUID() + crypto.randomUUID(),
+            ...(roles.length ? { role: roles } : {}),
+            data: {
+              status: "active",
+              emailVerified: true,
+              ...(firstName ? { firstName } : {}),
+              ...(lastName ? { lastName } : {}),
+            },
+          },
+          request
+        )
+        if (!created.ok) {
+          const draft = await stashDraft(runtime, submitted)
+          return redirectWithCookies(
+            withError(withDraft(list, draft), errorCodeFor(created))
+          )
+        }
+
+        const user = created.body.user as { id?: string } | undefined
+        await runtime.audit.record({
+          action: "signup.created",
+          outcome: "success",
+          actorType: "session",
+          actorUserId: fresh.session.user.id,
+          target: { type: "user", id: user?.id ?? email },
+          metadata: { by: "admin", roles },
+        })
+
+        const reset = await createResetLink(runtime, user?.id ?? "")
+
+        if (runtime.mailer.enabled) {
+          await runtime.mailer.send("setPassword", email, { url: reset.url })
+          return redirectWithCookies(`${list}?notice=created`)
+        }
+
+        // FR-MAIL-2: nothing can be sent, so the link is handed over on screen
+        // — once, in a dialog on this page, and never in the address bar.
+        const handle = await stash(runtime, reset.url, { ttlSeconds: 600 })
+        return redirectWithCookies(`${list}?created=${handle}`)
+      },
+    },
+  },
 })
+
+const HERE = "/admin/users"
 
 const STATUSES = ["pending", "active", "rejected"] as const
 
 function UsersPage() {
-  const { ui, gate, query, page, roles, notice, inviteLink } =
+  const { ui, gate, query, page, roles, notice, error, inviteLink, draft } =
     Route.useLoaderData()
   const t = getCatalog(ui.locale)
   const impersonated = gate.admin ? gate.impersonated : false
@@ -110,12 +242,18 @@ function UsersPage() {
       title={t.admin.users.title}
       impersonated={impersonated}
       actions={
-        <Link to="/admin/users/new" className={buttonVariants({ size: "lg" })}>
-          {t.admin.users.create}
-        </Link>
+        <UserCreateDialog
+          t={t}
+          roles={roles}
+          draft={draft}
+          reopen={draft !== undefined}
+        />
       }
     >
       <FormAlert variant="default">{messageForNoticeCode(notice, t)}</FormAlert>
+      <FormAlert>
+        {messageForErrorCode(error, t, ui.passwordMinLength)}
+      </FormAlert>
 
       {inviteLink ? (
         <SecretDialog

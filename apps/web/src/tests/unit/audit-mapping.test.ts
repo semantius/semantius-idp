@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest"
 
 import { auditEventFor, isRedirect } from "@/server/auth/options/hooks"
-import { plainAuditFor } from "@/server/admin/guard"
+import {
+  plainAuditFor,
+  rememberEndingImpersonation,
+} from "@/server/admin/guard"
 
 /**
  * SEC-6 — which endpoint produces which audit event.
@@ -216,25 +219,29 @@ describe("plainAuditFor", () => {
   })
 
   it("aims a stopped impersonation at the right two people", () => {
-    // The request carries the *impersonated* session, so the target is the
-    // person being impersonated and the actor is the administrator the
-    // session records as having started it.
+    // The identity comes from the *before* hook, because by the time the
+    // after hook runs the impersonated session row is gone and what the
+    // endpoint returned is the administrator's restored session.
+    const request = ctx() as { context: object }
+    rememberEndingImpersonation(request.context, {
+      impersonated: "victim",
+      by: "admin-1",
+    })
     expect(
-      plainAuditFor(
-        "/admin/stop-impersonating",
-        ctx({
-          session: {
-            user: { id: "victim" },
-            session: { impersonatedBy: "admin-1" },
-          },
-        }),
-        {}
-      )
+      plainAuditFor("/admin/stop-impersonating", request as never, {})
     ).toEqual({
       action: "impersonation.stopped",
       targetId: "victim",
       actorId: "admin-1",
     })
+  })
+
+  it("says nothing when the before hook could not read the session", () => {
+    // Better than a row naming nobody: `/admin/stop-impersonating` declares no
+    // session middleware, so this is a real branch rather than a defensive one.
+    expect(
+      plainAuditFor("/admin/stop-impersonating", ctx(), {})
+    ).toBeUndefined()
   })
 
   it("has no opinion about anything else", () => {

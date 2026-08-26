@@ -44,6 +44,39 @@ import {
 } from "./invariants"
 import type {AdminAction, AdminInvariantUser} from "./invariants";
 
+/**
+ * Who was being impersonated, remembered across the two hooks (**D66**).
+ *
+ * `/admin/stop-impersonating` is the one endpoint whose audit row cannot be
+ * assembled after the fact. It declares no session middleware, so
+ * `ctx.context.session` is not populated for it; by the time the *after* hook
+ * runs the impersonated session row has been deleted, so reading the request's
+ * cookie then finds nothing; and what the endpoint returns is the
+ * administrator's restored session, which does not name the person they were
+ * impersonating. So the before hook reads it and leaves it here.
+ *
+ * Keyed on the per-request context object — `ctx.context` is where Better Auth
+ * puts `returned` and `responseHeaders`, so it is per-request and not the
+ * shared instance — and a `WeakMap`, so a request that never reaches the after
+ * hook leaves nothing behind.
+ */
+const IMPERSONATION_ENDING = new WeakMap<
+  object,
+  { impersonated: string; by?: string }
+>()
+
+/**
+ * The before hook's half of that, exported so the pairing is one named thing
+ * rather than a `WeakMap` two functions happen to share — and so the after
+ * hook's behaviour can be asserted without a running Better Auth.
+ */
+export function rememberEndingImpersonation(
+  context: object,
+  ending: { impersonated: string; by?: string }
+): void {
+  IMPERSONATION_ENDING.set(context, ending)
+}
+
 export interface AdminGuardDeps {
   config: IdpConfig
   /** Absent during schema generation, which performs no writes. */
@@ -148,6 +181,20 @@ export function buildAdminGuard(deps: AdminGuardDeps): AuthMiddleware {
         message: "Impersonation is disabled on this server.",
         code: "IMPERSONATION_DISABLED",
       })
+    }
+
+    if (path === "/admin/stop-impersonating") {
+      const ending = await getAuthoritativeSessionFromCtx(ctx)
+      const impersonated = ending?.user.id
+      const by = (ending?.session as { impersonatedBy?: unknown } | undefined)
+        ?.impersonatedBy
+      if (typeof impersonated === "string") {
+        rememberEndingImpersonation(ctx.context, {
+          impersonated,
+          by: typeof by === "string" ? by : undefined,
+        })
+      }
+      return
     }
 
     const body = (ctx.body ?? {}) as AdminBody
@@ -309,7 +356,7 @@ export interface PlainAudit {
  */
 export function plainAuditFor(
   path: string,
-  ctx: { context: { returned?: unknown; session?: unknown } },
+  ctx: { context: { returned?: unknown } },
   body: AdminBody
 ): PlainAudit | undefined {
   const targetId = typeof body.userId === "string" ? body.userId : undefined
@@ -338,22 +385,16 @@ export function plainAuditFor(
         metadata: { scope: "all" },
       }
     case "/admin/stop-impersonating": {
-      // The request carries the *impersonated* session, so the target is who
-      // was being impersonated and the actor is the administrator the session
-      // records as having started it (FR-ADMIN-5).
-      const session = ctx.context.session as
-        | {
-            user?: { id?: unknown }
-            session?: { impersonatedBy?: unknown }
-          }
-        | undefined
-      const impersonated = session?.user?.id
-      if (typeof impersonated !== "string") return undefined
-      const by = session?.session?.impersonatedBy
+      // Read by the *before* hook and left in `IMPERSONATION_ENDING`, for the
+      // three reasons set out there. The target is the person who was being
+      // impersonated; the actor is the administrator who started it
+      // (FR-ADMIN-5).
+      const ending = IMPERSONATION_ENDING.get(ctx.context)
+      if (!ending) return undefined
       return {
         action: "impersonation.stopped",
-        targetId: impersonated,
-        actorId: typeof by === "string" ? by : undefined,
+        targetId: ending.impersonated,
+        actorId: ending.by,
       }
     }
     default:

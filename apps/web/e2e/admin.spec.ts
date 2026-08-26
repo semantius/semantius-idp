@@ -35,11 +35,14 @@ test.describe("the admin area", () => {
     const user = await createVerifiedUser(page, app, stack, "notadmin")
     await signIn(page, app, user.email, user.password)
 
-    await app.goto("/admin")
+    const response = await app.goto("/admin")
     // Not a redirect back to a form they have already completed: a page.
     await expect(
       page.getByRole("heading", { name: "You do not have access to this" })
     ).toBeVisible()
+    // FR-ROLE-3 says 403, and the page used to render with 200 — asserted at
+    // the layer that sees a real document response, the way the 404 is.
+    expect(response?.status()).toBe(403)
 
     await app.goto("/admin/users")
     await expect(

@@ -387,5 +387,12 @@ were questions, and one was "polish every page".
   the UI path; and `impersonation.stopped` was declared and never written,
   because nothing ever called the endpoint. The impersonation banner now has a
   **Stop impersonating** button, so it does.
+- **The admin refusal is served with 403.** FR-ROLE-3 has always said so and
+  nothing in the route tree ever set a status, so a signed-in user with no
+  admin role got the "you do not have access" page with a **200** — recorded by
+  every proxy, log and probe as a successful page view of the admin area. The
+  page and its wording are unchanged: masking it as a 404 protects nothing,
+  because `/admin` is a fixed, documented path, and costs a signed-in colleague
+  a dead end.
 
 [Unreleased]: https://github.com/semantius/semantius-idp/commits/main

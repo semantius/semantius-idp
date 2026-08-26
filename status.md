@@ -149,6 +149,11 @@ come before anything in Pending.
   written twice, and one declared and never written at all. `guard.ts` owns
   `/admin/*` auditing from here on; that ownership is in D66 because the
   three-way drift is what produced all of it.
+- **403 on the admin refusal (F16).** Spec-compliance with FR-ROLE-3, so no
+  amendment. `setResponseStatus(403)` in `routes/admin.tsx`'s loader behind
+  `import.meta.env.SSR` and a dynamic import — Vite eliminates the branch from
+  the client build — and **not** inside `fetchAdminGate`, which would stamp
+  403 on the RPC response during a client-side navigation.
 
 ### Recorded, not fixed
 

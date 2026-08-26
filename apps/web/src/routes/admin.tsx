@@ -17,7 +17,20 @@ import { fetchAdminGate } from "@/server/functions/admin"
  * *redirected* to `/login`, because signing in might well be the answer.
  * Someone who is signed in and simply has no admin role is shown a page: sending
  * them to a login form they have already completed is the kind of loop that
- * makes people think the server is broken.
+ * makes people think the server is broken. A 404 would be worse still —
+ * masking protects a resource whose *existence* is confidential, and `/admin`
+ * is a fixed, documented path (docs/admin-api.md), so it buys nothing and
+ * costs a signed-in colleague a dead end.
+ *
+ * That page is served with **403**, which FR-ROLE-3 has always said and
+ * nothing in this tree ever set: the refusal rendered with a 200, so every
+ * proxy, log and probe recorded a successful page view of the admin area by
+ * somebody who cannot see it. Set through a dynamic import behind
+ * `import.meta.env.SSR`, for two reasons: `@tanstack/react-start/server` must
+ * not reach the client bundle, and the status belongs on the **document**
+ * response — stamping it inside `fetchAdminGate` would put a 403 on the RPC
+ * response during a client-side navigation, which the client may treat as a
+ * failure rather than as an answer.
  *
  * The gate is **not** the only check. Every server function under
  * `functions/admin.ts` re-checks the role, because a server function is an
@@ -34,7 +47,15 @@ export const Route = createFileRoute("/admin")({
     }
     return { gate }
   },
-  loader: ({ context }) => ({ ui: context.ui, gate: context.gate }),
+  loader: async ({ context }) => {
+    if (!context.gate.admin && import.meta.env.SSR) {
+      // Vite replaces `import.meta.env.SSR` with `false` in the client build,
+      // so this branch and the import inside it are eliminated there.
+      const { setResponseStatus } = await import("@tanstack/react-start/server")
+      setResponseStatus(403)
+    }
+    return { ui: context.ui, gate: context.gate }
+  },
   // The document title follows `site.adminTitle` too (D61). The deepest
   // matched `head()` wins, and this is the first child of the root, so all
   // eight admin routes inherit it while the account and auth pages keep

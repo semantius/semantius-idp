@@ -2,7 +2,7 @@
 
 **As of:** 2026-08-26 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `a3a75c4` (this handoff commit follows it and changes no code)
 **Plan:** `~/.claude/plans/1-it-s-great-that-linked-bear.md` (owner review round 3)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D66**
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D67**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
 gate.** Every gate green: lint, typecheck, unit (564), integration (226 across
@@ -186,15 +186,26 @@ A third was caught by reading Better Auth's source rather than by a test:
 the new "Stop impersonating" control exists to produce would never have been
 written. See D66 and `admin/guard.ts`.
 
-### Recorded, not fixed
+### The follow-up that should not have been one (**D67**)
 
-- **`/admin/revoke-user-sessions` called directly does not revoke OAuth
-  tokens.** The UI path does — `http/admin-actions.ts` calls `revokeAllForUser`
-  after the endpoint — so "sign out everywhere" means two different things
-  depending on how it was asked for. It is the same FR-ADMIN-6 parity argument
-  D66 makes about the audit row, and the fix belongs in the guard's after-hook
-  beside `endsAccess`, but it changes what an endpoint *does* rather than what
-  it records, so it is a separate change.
+D66's handoff recorded a parity gap instead of closing it: called directly,
+`/admin/revoke-user-sessions` did not revoke OAuth tokens, so the sentence in
+`docs/admin-api.md` — "signs them out everywhere" — was false for every caller
+that was not the button. The reasoning for deferring it was that D66's scope
+was what gets *recorded* rather than what an endpoint *does*. That was the
+wrong trade: the promise was false in the meantime, and the change is fifteen
+lines.
+
+Why it was ever split: Better Auth's admin plugin deletes `session` rows and
+has no idea this deployment issues tokens, so the OAuth half has to belong to
+somebody — and it had been written into the **route handler behind the
+button**. A `curl`, a script or an admin API key does not go through a route
+handler. It lives in `buildAdminAfterHook` now, which is a Better Auth `after`
+hook and runs for every caller, exactly as D66 did for the audit row.
+
+The regression test posts to the endpoint with no route handler in the call at
+all. Reverted against the old code it fails with two live refresh tokens, which
+is the bug; with the fix it reports none.
 
 ---
 

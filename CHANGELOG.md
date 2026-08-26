@@ -399,5 +399,13 @@ were questions, and one was "polish every page".
   dialog gave `/account/security` three fields called `password` — so
   `<label for>` named the wrong control. Nothing about what is submitted
   changed.
+- **`/admin/revoke-user-sessions` now revokes OAuth tokens however it is
+  called** (**D67**). It is documented as signing a user out everywhere, and
+  over the API it did not: Better Auth's admin plugin deletes session rows and
+  knows nothing about tokens, and the half that revokes them had been written
+  into the route handler behind the button — which no script, `curl` or admin
+  API key goes through. So a direct call ended the browser session and left the
+  refresh token minting access tokens, against FR-OIDC-12. It moved into the
+  guard's `after` hook, which runs for every caller.
 
 [Unreleased]: https://github.com/semantius/semantius-idp/commits/main

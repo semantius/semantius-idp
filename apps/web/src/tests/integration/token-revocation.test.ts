@@ -13,6 +13,9 @@ import { createHash, randomBytes } from "node:crypto"
 
 import { and, eq, isNull } from "drizzle-orm"
 
+import { createLocalAccountIssuer } from "@better-auth/core/db"
+
+import { createUserWithoutRequest } from "@/server/auth/provisioning"
 import { reconcileClients } from "@/server/oidc/reconcile"
 import type { TestContext } from "./harness"
 import { authRequest, createTestContext, sessionCookie } from "./harness"
@@ -193,6 +196,85 @@ describe("revokeOAuthTokensOnLogout (FR-AUTH-6)", () => {
         scope: "session",
         reason: "logout",
       })
+    } finally {
+      await context.teardown()
+    }
+  })
+})
+
+/**
+ * "Sign them out everywhere" means everywhere, whoever asks (**D67**).
+ *
+ * `docs/admin-api.md` documents `/admin/revoke-user-sessions` as signing a
+ * user out everywhere, and FR-ADMIN-6 makes the admin API a supported
+ * interface — so the promise has to hold for a `curl` and not only for the
+ * button on `/admin/users/:id`.
+ *
+ * It did not. Better Auth's admin plugin deletes `session` rows and knows
+ * nothing about this deployment's tokens, and the OAuth half of the action was
+ * written inside the *route handler* behind the button. A direct call never
+ * went through it: the browser session ended and the refresh token went on
+ * minting access tokens. The revocation moved into the guard's `after` hook,
+ * which runs for every caller, and this is the test that says so.
+ */
+describe("an administrator revoking sessions (FR-OIDC-12, D67)", () => {
+  /** An administrator with a credential, made the way `admin.test.ts` does. */
+  async function makeAdmin(context: TestContext): Promise<string> {
+    const inner = await context.auth.$context
+    const user = await createUserWithoutRequest(
+      inner,
+      {
+        email: "revoker@example.com",
+        name: "Revoker",
+        emailVerified: true,
+        role: "admin",
+        status: "active",
+      },
+      { method: "admin" }
+    )
+    await inner.internalAdapter.createAccount({
+      userId: user.id,
+      providerId: "credential",
+      issuer: createLocalAccountIssuer("credential"),
+      accountId: user.id,
+      password: await inner.password.hash(PASSWORD),
+    })
+    const signedIn = await context.auth.handler(
+      authRequest("/sign-in/email", {
+        json: { email: "revoker@example.com", password: PASSWORD },
+      })
+    )
+    const cookie = sessionCookie(signedIn)
+    expect(cookie, "the administrator must be able to sign in").toBeTruthy()
+    return cookie!
+  }
+
+  it("revokes the user's OAuth tokens, called directly over the API", async () => {
+    const context = await contextWith("admin_revoke_sessions")
+    try {
+      const [laptop, phone] = await twoSessions(context)
+      await grant(context, laptop)
+      await grant(context, phone)
+      expect(await liveRefreshTokens(context)).toBe(2)
+
+      const [target] = await context.database.db
+        .select({ id: context.database.schema.user.id })
+        .from(context.database.schema.user)
+        .where(eq(context.database.schema.user.email, EMAIL))
+      expect(target?.id).toBeTruthy()
+
+      const admin = await makeAdmin(context)
+      const revoked = await context.auth.handler(
+        authRequest("/admin/revoke-user-sessions", {
+          json: { userId: target!.id },
+          headers: { cookie: admin },
+        })
+      )
+      expect(revoked.status).toBe(200)
+
+      // Both of them, and not because a route handler happened to be in the
+      // way: this request never touched one.
+      expect(await liveRefreshTokens(context)).toBe(0)
     } finally {
       await context.teardown()
     }

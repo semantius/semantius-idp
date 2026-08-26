@@ -282,6 +282,7 @@ export function buildAdminAfterHook(deps: AdminGuardDeps): AuthMiddleware {
         target: { type: "user", id: plain.targetId },
         metadata: plain.metadata,
       })
+      if (plain.endsAccess) await revokeTokens(deps, plain.targetId, "revoke")
       return
     }
 
@@ -314,25 +315,45 @@ export function buildAdminAfterHook(deps: AdminGuardDeps): AuthMiddleware {
         action.kind === "set-role" ? { roles: action.roles } : undefined,
     })
 
-    if (!deps.database) return
     if (!endsAccess(action)) return
-
-    try {
-      await revokeAllForUser(
-        { database: deps.database, audit: deps.audit },
-        { userId: targetId, reason: `admin:${action.kind}` }
-      )
-    } catch (error) {
-      deps.logger?.error(
-        "could not revoke OAuth tokens after an admin action",
-        {
-          error: error instanceof Error ? error.message : String(error),
-          userId: targetId,
-          action: action.kind,
-        }
-      )
-    }
+    await revokeTokens(deps, targetId, action.kind)
   })
+}
+
+/**
+ * The OAuth half of an administrative action (FR-OIDC-12).
+ *
+ * Better Auth's admin plugin deletes `session` rows and has no idea this
+ * deployment issues tokens, so every action that ends someone's access has a
+ * second half, and it is this one. It lives here — in the `after` hook — and
+ * **not** in the route handler behind the button, because a hook runs for
+ * every caller: FR-ADMIN-6 makes the admin API a supported interface, and
+ * `docs/admin-api.md` promises `/admin/revoke-user-sessions` "signs them out
+ * everywhere" whoever asks (**D67**).
+ *
+ * Runs after the write, and a failure is logged rather than thrown — the ban
+ * is already real, and turning a partial success into a 500 would invite the
+ * administrator to press the button again instead of telling them what
+ * actually needs fixing.
+ */
+async function revokeTokens(
+  deps: AdminGuardDeps,
+  userId: string,
+  reason: string
+): Promise<void> {
+  if (!deps.database) return
+  try {
+    await revokeAllForUser(
+      { database: deps.database, audit: deps.audit },
+      { userId, reason: `admin:${reason}` }
+    )
+  } catch (error) {
+    deps.logger?.error("could not revoke OAuth tokens after an admin action", {
+      error: error instanceof Error ? error.message : String(error),
+      userId,
+      action: reason,
+    })
+  }
 }
 
 export interface PlainAudit {
@@ -340,6 +361,13 @@ export interface PlainAudit {
   targetId: string
   actorId?: string
   metadata?: Record<string, unknown>
+  /**
+   * The user should hold no live OAuth tokens afterwards (**D67**).
+   *
+   * Same rule as {@link endsAccess} for the invariant-carrying paths; it is a
+   * field here because these endpoints have no `AdminAction` to ask about.
+   */
+  endsAccess?: boolean
 }
 
 /**
@@ -383,6 +411,10 @@ export function plainAuditFor(
         action: "session.revoked",
         targetId,
         metadata: { scope: "all" },
+        // FR-OIDC-12, and **D67**: the admin plugin deletes `session` rows and
+        // knows nothing about OAuth, so without this the user is signed out of
+        // the browser and their refresh token goes on minting access tokens.
+        endsAccess: true,
       }
     case "/admin/stop-impersonating": {
       // Read by the *before* hook and left in `IMPERSONATION_ENDING`, for the

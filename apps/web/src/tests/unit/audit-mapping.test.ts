@@ -208,14 +208,36 @@ describe("plainAuditFor", () => {
     ).toEqual({ action: "password.changed", targetId: "u2" })
   })
 
-  it("records a session revocation as covering all of them", () => {
+  it("records a session revocation as covering all of them, and ends access", () => {
+    // `endsAccess` is the half that was missing (**D67**): the admin plugin
+    // deletes `session` rows and knows nothing about OAuth, so without it a
+    // direct API call signed the browser out and left the refresh token
+    // minting access tokens. It used to be done by the route handler behind
+    // the button, which no API caller goes through.
     expect(
       plainAuditFor("/admin/revoke-user-sessions", ctx(), { userId: "u3" })
     ).toEqual({
       action: "session.revoked",
       targetId: "u3",
       metadata: { scope: "all" },
+      endsAccess: true,
     })
+  })
+
+  it("does not end access for the other two", () => {
+    // Creating an account and setting a password are not "sign them out
+    // everywhere"; revoking tokens there would be a surprise.
+    expect(
+      plainAuditFor("/admin/set-user-password", ctx(), { userId: "u2" })
+        ?.endsAccess
+    ).toBeUndefined()
+    expect(
+      plainAuditFor(
+        "/admin/create-user",
+        ctx({ returned: { user: { id: "u1" } } }),
+        {}
+      )?.endsAccess
+    ).toBeUndefined()
   })
 
   it("aims a stopped impersonation at the right two people", () => {

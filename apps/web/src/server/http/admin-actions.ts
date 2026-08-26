@@ -17,7 +17,6 @@
 import { callAuth, errorCodeFor } from "./auth-proxy"
 import type { AuthCallResult } from "./auth-proxy"
 import { displayName } from "../display-name"
-import { revokeAllForUser } from "../oidc/revoke-user-tokens"
 import type { Runtime } from "../runtime"
 
 export interface AdminActionInput {
@@ -125,17 +124,11 @@ export async function runAdminAction(
         input.request
       )
       if (!result.ok) return failed(result)
-      // FR-OIDC-12: "sign out everywhere" that leaves a refresh token alive is
-      // not signing out everywhere. The admin plugin knows nothing about OAuth,
-      // so this half is ours.
-      await revokeAllForUser(
-        { database: input.runtime.database, audit: input.runtime.audit },
-        { userId: input.userId, reason: "admin:revoke_sessions" }
-      )
-      // The `session.revoked` row is the guard's now (**D66**): it writes one
-      // for `/admin/revoke-user-sessions` however that endpoint is reached, so
-      // a direct API call leaves the same trail this path does. Writing it
-      // here as well is exactly the double-row `impersonation.started` had.
+      // Nothing else here. Both halves of "sign out everywhere" — the audit
+      // row (**D66**) and the OAuth revocation (**D67**) — belong to the
+      // guard's after-hook, which runs for every caller of the endpoint. This
+      // is where the revocation used to live, which is exactly why a direct
+      // API call did not get one.
       return { notice: "sessionsRevoked" }
     }
 

@@ -88,7 +88,11 @@ export function AdminShell({
       <div className="mx-auto w-full max-w-6xl px-4 py-10">
         <header className="mb-8 flex flex-wrap items-baseline justify-between gap-3">
           <div>
-            <p className="text-sm text-muted-foreground">{ui.siteName}</p>
+            {/* `site.adminTitle`, falling back to `site.name` (D61). The
+                fallback lives in `buildUiContext`, so this is the whole of
+                the admin area's branding and there is nothing to keep in
+                step across eight routes. */}
+            <p className="text-sm text-muted-foreground">{ui.adminTitle}</p>
             <h1 className="text-2xl font-semibold tracking-tight">
               {t.admin.title}
             </h1>

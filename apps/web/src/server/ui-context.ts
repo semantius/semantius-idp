@@ -23,6 +23,14 @@ export interface SocialProviderView {
 
 export interface UiContext {
   siteName: string
+  /**
+   * What `/admin/*` calls itself (**D61**). `site.adminTitle` when it is set,
+   * `site.name` otherwise, so nothing has to test for the fallback. It is the
+   * one surface that gets its own name: an operator whose colleagues know the
+   * deployment as "User Manager" says so once, and the sign-in page, the
+   * account area and every e-mail still carry the identity provider's name.
+   */
+  adminTitle: string
   logo?: string
   /**
    * `<link rel="icon">`. Always set, and always mount-path-absolute: without
@@ -138,7 +146,7 @@ function labelFor(providerId: string): string {
  *
  * **Both spellings are accepted**, and they mean the same file. The schema
  * describes the value as a path *under* `branding/` (`logo.svg`), while the
- * shipped `config.example/config.json` has always shown `branding/logo.svg` —
+ * shipped `config.example/config.jsonc` has always shown `branding/logo.svg` —
  * a path relative to the config folder. Whichever an operator copied, the file
  * they mean is `${configDir}/branding/logo.svg`, so the redundant prefix is
  * dropped rather than doubled. The alternative was to serve
@@ -158,6 +166,7 @@ export function buildUiContext(config: IdpConfig, locale: string): UiContext {
 
   return {
     siteName: file.site.name,
+    adminTitle: file.site.adminTitle ?? file.site.name,
     logo: brandingUrl(paths, file.site.logo),
     favicon:
       brandingUrl(paths, file.site.favicon) ?? paths.path("/favicon.ico"),

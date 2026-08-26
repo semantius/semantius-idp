@@ -70,7 +70,12 @@
   },
 
   "site": {
-    "name": "Example IdP",
+    "name": "Semantius",
+    // What /admin/* calls itself, when the people who use it think of it as
+    // something other than the identity provider (D61). Branding only: the
+    // TOTP issuer label, the e-mails and every token claim stay on
+    // `site.name`. Leave it out and the admin area uses `site.name` too.
+    "adminTitle": "User Manager",
     // Files in this folder's `branding/` directory, served at /branding/*.
     // "logo": "logo.svg",
     // "favicon": "favicon.ico",
@@ -90,7 +95,7 @@
   // `auth.requireEmailVerification` is forced to false (FR-MAIL-2).
   "email": {
     "resend": { "apiKey": "${env:RESEND_API_KEY:-}" },
-    "from": "Example IdP <idp@example.com>"
+    "from": "Semantius <idp@example.com>"
     // "replyTo": "support@example.com"
   },
 
@@ -148,7 +153,7 @@
 
   "twoFactor": {
     "enabled": true,
-    // "issuer": "Example IdP",   // defaults to site.name
+    // "issuer": "Semantius",     // defaults to site.name, never adminTitle
     "trustDeviceDays": 30
   },
 

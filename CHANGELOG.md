@@ -305,5 +305,12 @@ were questions, and one was "polish every page".
   first and then `.json`, so a folder written before this keeps working; having
   both spellings of one file is refused, naming both, rather than resolved by a
   guess. Every message names the file as it is spelled on disk.
+- **`site.adminTitle`** — the administration area can be called something
+  other than the deployment (**D61**). `site.name` was one string doing four
+  jobs, and a deployment is often *Semantius* to the people signing in and
+  *User Manager* to the few who administer it. Optional, defaults to
+  `site.name`, and branding only: it never reaches the TOTP issuer label, the
+  e-mails or a token claim. It renders in the admin shell heading and the
+  document title, which is all eight admin routes and nothing else.
 
 [Unreleased]: https://github.com/semantius/semantius-idp/commits/main

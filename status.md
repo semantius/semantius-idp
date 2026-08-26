@@ -91,6 +91,13 @@ come before anything in Pending.
 
 - **The config surface (F1, F2), `D60`.** `config.example/*.schema.json` moved
   to a root `config-schema/`, and the three examples are now `.jsonc`.
+- **`site.adminTitle` (F4), `D61`.** Optional; defaults to `site.name`. Two
+  things to know: **CFG-5 has no hot reload**, so seeing it takes a restart of
+  the running app; and the shipped `config.example/config.jsonc` now says
+  `"name": "Semantius"` with `"adminTitle": "User Manager"` — the owner's
+  instruction taken literally — which costs the example its deliberately
+  neutral "Example IdP" branding. One tracked edit reverses that if it was not
+  wanted; the untracked `config/` copy carries the same change.
 
 ---
 

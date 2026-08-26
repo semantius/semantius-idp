@@ -37,6 +37,7 @@ the process; there is no hot reload and `SIGHUP` is ignored (CFG-5).
 | `database.connectTimeoutSeconds` | integer | `30` | How long a new connection may take before start-up gives up. |
 | `database.migrateOnBoot` | boolean | `true` | Also settable with IDP_MIGRATE_ON_BOOT. |
 | `site.name` | string | — **required** | Branding name; also the default TOTP issuer label. |
+| `site.adminTitle` | string | — | What the administration area calls itself, when that is not `site.name` — a deployment whose users think of it as "User Manager" rather than as the identity provider (D61). Branding only: it never reaches the TOTP issuer label, the e-mails or anything a token carries. Defaults to `site.name`. |
 | `site.logo` | string | — | Path under `branding/` or an absolute URL. |
 | `site.favicon` | string | — | As `site.logo`. Both `icon.png` and `branding/icon.png` name the same file (D44). |
 | `site.supportEmail` | string | — | Shown to someone who cannot get in — on the suspended-account page, and in the rejection e-mail. |

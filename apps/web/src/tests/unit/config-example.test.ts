@@ -39,7 +39,10 @@ describe("config.example/", () => {
       readFile: (path) => readFileSync(path, "utf8"),
     })
 
-    expect(config.file.site.name).toBe("Example IdP")
+    expect(config.file.site.name).toBe("Semantius")
+    // D61: the admin area is branded separately in the shipped example, so
+    // the key is exercised rather than only documented.
+    expect(config.file.site.adminTitle).toBe("User Manager")
     expect(config.isProduction).toBe(true)
     expect(config.emailEnabled).toBe(true)
     expect(config.clients.map((client) => client.clientId)).toEqual([

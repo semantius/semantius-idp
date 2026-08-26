@@ -35,6 +35,12 @@ export const Route = createFileRoute("/admin")({
     return { gate }
   },
   loader: ({ context }) => ({ ui: context.ui, gate: context.gate }),
+  // The document title follows `site.adminTitle` too (D61). The deepest
+  // matched `head()` wins, and this is the first child of the root, so all
+  // eight admin routes inherit it while the account and auth pages keep
+  // `site.name` from `__root`.
+  head: ({ loaderData }) =>
+    loaderData ? { meta: [{ title: loaderData.ui.adminTitle }] } : {},
   component: AdminLayout,
 })
 

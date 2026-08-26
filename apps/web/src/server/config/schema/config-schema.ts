@@ -152,6 +152,13 @@ const siteSchema = z.strictObject({
     .string()
     .min(1)
     .describe("Branding name; also the default TOTP issuer label."),
+  adminTitle: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "What the administration area calls itself, when that is not `site.name` — a deployment whose users think of it as \"User Manager\" rather than as the identity provider (D61). Branding only: it never reaches the TOTP issuer label, the e-mails or anything a token carries. Defaults to `site.name`."
+    ),
   logo: z
     .string()
     .optional()

@@ -45,7 +45,7 @@ test.describe("the account area", () => {
     await expect(page.getByText("Renamed Person")).toBeVisible()
   })
 
-  test("the password changes from the security page and comes back to it", async ({
+  test("the password changes from the security page and stays on it", async ({
     page,
     app,
     stack,
@@ -54,16 +54,17 @@ test.describe("the account area", () => {
     await signIn(page, app, user.email, user.password)
 
     await app.goto("/account/security")
-    await page.getByRole("link", { name: "Change password" }).click()
-    await expect(page).toHaveURL(/change-password/)
+    // A dialog since D62/F5, like every other action on this page. The
+    // standalone `/change-password` page stays — it is the forced-change page
+    // (FR-AUTH-4) and what `/.well-known/change-password` redirects to.
+    const form = await openDialog(page, "Change password")
+    await form.getByLabel("Current password").fill(user.password)
+    await form.getByLabel("New password", { exact: true }).fill(NEW_PASSWORD)
+    await form.getByLabel("Confirm new password").fill(NEW_PASSWORD)
+    await submitDialog(page, form, "Change password")
 
-    await page.getByLabel("Current password").fill(user.password)
-    await page.getByLabel("New password", { exact: true }).fill(NEW_PASSWORD)
-    await page.getByLabel("Confirm new password").fill(NEW_PASSWORD)
-    await submit(page, "Change password")
-
-    // SEC-3's `returnTo` is a same-origin relative path, and it is honoured.
-    await expect(page).toHaveURL(app.url("/account/security"))
+    await expect(page).toHaveURL(/\/account\/security/)
+    await expect(page.getByText("Your password has been changed.")).toBeVisible()
 
     const notice = await waitForMail(stack, user.email, {
       template: "password-changed",

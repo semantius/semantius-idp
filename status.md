@@ -123,6 +123,12 @@ come before anything in Pending.
   to it. The POST handler moved to the list route, reads the body before the
   freshness gate, and keeps a draft on refusal. e2e: `admin.spec.ts` drives the
   dialog; the a11y route list lost the page.
+- **Change password is a dialog (F5).** The standalone page stays — FR-AUTH-4's
+  forced flow and `/.well-known/change-password` both need it — so the fields
+  moved to `components/auth/change-password-fields.tsx` and the rules to
+  `server/auth/change-password.ts`, leaving each caller with only its own
+  destination. e2e: `account.spec.ts` drives the dialog and asserts the notice
+  rather than a navigation.
 
 ---
 

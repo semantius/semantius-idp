@@ -1,4 +1,4 @@
-import { Link, createFileRoute } from "@tanstack/react-router"
+import { createFileRoute } from "@tanstack/react-router"
 
 import {
   AccountSection,
@@ -9,6 +9,9 @@ import {
   PasswordField,
   TextField,
 } from "@/components/auth/form-parts"
+import { ChangePasswordFields } from "@/components/auth/change-password-fields"
+import { usePasswordConfirm } from "@/components/auth/confirmed-password"
+import { ActionDialog } from "@/components/common/dialogs"
 import { messageForErrorCode, messageForNoticeCode } from "@/lib/auth-errors"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
@@ -21,9 +24,9 @@ import {
 } from "@/server/http/auth-proxy"
 import { requireFreshSession } from "@/server/http/fresh-session"
 import { stash } from "@/server/http/one-shot"
+import { changePassword } from "@/server/auth/change-password"
 import { claimEnrolment } from "@/server/functions/account"
 import type { EnrolmentView } from "@/server/functions/account"
-import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
 import type { Runtime } from "@/server/runtime"
 import { PendingForm, SubmitButton } from "@/components/common/pending-form"
@@ -39,9 +42,17 @@ const HERE = "/account/security"
  * into the account, which is exactly what someone who has borrowed an unlocked
  * browser would go for.
  *
- * The password change itself lives on `/change-password`, which already exists
- * and is also the forced-change page (FR-AUTH-4). Duplicating it here would
- * mean two forms to keep in step for no gain, so this links to it.
+ * The password change is a dialog here, like every other action on the page —
+ * it used to be a link away to `/change-password`, which is a page because it
+ * is *also* the forced-change page (FR-AUTH-4) and the target
+ * `/.well-known/change-password` redirects to. Both render the same fields
+ * (`components/auth/change-password-fields.tsx`) and both go through the same
+ * rules (`server/auth/change-password.ts`); only the destination differs, so
+ * there are not two forms to keep in step.
+ *
+ * A refused change reopens the dialog with the message inside it. The
+ * passwords themselves are **not** restored — `PasswordField` has no
+ * `defaultValue` prop, deliberately (**D62**).
  *
  * Enrolment is two steps because Better Auth stores the secret unverified
  * until a code from it is accepted — which is what stops someone locking
@@ -75,6 +86,16 @@ export const Route = createFileRoute("/account/security")({
         const form = await readForm(request)
 
         switch (form.action) {
+          case "change-password": {
+            const result = await changePassword(runtime, request, form)
+            if (!result.ok) {
+              return redirectWithCookies(withError(here, result.code))
+            }
+            return redirectWithCookies(
+              `${here}?notice=password_changed`,
+              result.cookies
+            )
+          }
           case "change-email":
             return changeEmail(runtime, request, form, here)
           case "enable-2fa":
@@ -243,9 +264,23 @@ async function disableTwoFactor(
   return redirectWithCookies(`${here}?notice=twofactor_off`, result.cookies)
 }
 
+/**
+ * Errors this page's own password dialog produces.
+ *
+ * Anything else on the page reports at the top and leaves the dialog shut; one
+ * of these means the change was refused, and the message belongs beside the
+ * fields it is about.
+ */
+const PASSWORD_ERRORS = new Set([
+  "wrong_current_password",
+  "password_mismatch",
+  "password_length",
+])
+
 function SecurityPage() {
   const { ui, profile, enrolment, notice, error } = Route.useLoaderData()
   const t = getCatalog(ui.locale)
+  const confirm = usePasswordConfirm(t)
 
   return (
     <AccountShell
@@ -256,21 +291,47 @@ function SecurityPage() {
       isAdmin={profile.isAdmin}
     >
       <FormAlert variant="default">{messageForNoticeCode(notice, t)}</FormAlert>
+      {/* A password refusal is reported inside the dialog that produced it,
+          where the fields are; repeating it here would say the same thing
+          twice on one screen. */}
       <FormAlert>
-        {messageForErrorCode(error, t, ui.passwordMinLength)}
+        {error !== undefined && PASSWORD_ERRORS.has(error)
+          ? undefined
+          : messageForErrorCode(error, t, ui.passwordMinLength)}
       </FormAlert>
 
       <AccountSection
         title={t.account.security.changePassword.title}
         description={t.account.security.changePassword.description}
       >
-        <Link
-          to={APP_ROUTES.changePassword}
-          search={{ returnTo: HERE }}
-          className="text-sm underline underline-offset-4"
+        <ActionDialog
+          label={t.account.security.changePassword.submit}
+          title={t.account.security.changePassword.title}
+          description={t.account.security.changePassword.description}
+          defaultOpen={error !== undefined && PASSWORD_ERRORS.has(error)}
         >
-          {t.account.security.changePassword.submit}
-        </Link>
+          <PendingForm
+            busy={t.common.loading}
+            method="post"
+            className="grid gap-4"
+            onSubmit={confirm.onSubmit}
+          >
+            <input type="hidden" name="action" value="change-password" />
+            <FormAlert>
+              {error !== undefined && PASSWORD_ERRORS.has(error)
+                ? messageForErrorCode(error, t, ui.passwordMinLength)
+                : undefined}
+            </FormAlert>
+            <ChangePasswordFields
+              t={t}
+              minLength={ui.passwordMinLength}
+              confirmError={confirm.error}
+            />
+            <SubmitButton>
+              {t.account.security.changePassword.submit}
+            </SubmitButton>
+          </PendingForm>
+        </ActionDialog>
       </AccountSection>
 
       {/* FR-MAIL-2: with no transport there is no confirmation to send. */}

@@ -347,5 +347,13 @@ were questions, and one was "polish every page".
   now, and the URL is gone rather than redirected: only that page linked to it.
   The pre-ticked default role changes no server behaviour; an untouched form
   always got `defaultRole`, and now it says so.
+- **Changing a password from the account area is a dialog**, not a link to
+  another page. Every other action on `/account/security` already was one. The
+  standalone `/change-password` page stays, because it is also the
+  forced-change page (FR-AUTH-4) and what `/.well-known/change-password`
+  redirects to — the two share their fields and the rules behind them
+  (`server/auth/change-password.ts`), so there are not two forms to keep in
+  step. A refusal reopens the dialog with the message beside the fields; the
+  passwords themselves are not restored.
 
 [Unreleased]: https://github.com/semantius/semantius-idp/commits/main

@@ -394,5 +394,10 @@ were questions, and one was "polish every page".
   page and its wording are unchanged: masking it as a 404 protects nothing,
   because `/admin` is a fixed, documented path, and costs a signed-in colleague
   a dead end.
+- **A field's DOM id is generated rather than taken from its name.** `name` is
+  unique in a form and not in a document, and moving the password change into a
+  dialog gave `/account/security` three fields called `password` — so
+  `<label for>` named the wrong control. Nothing about what is submitted
+  changed.
 
 [Unreleased]: https://github.com/semantius/semantius-idp/commits/main

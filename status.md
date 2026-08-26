@@ -1,17 +1,17 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-26 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `9d6cdd3`
-**Plan:** `~/.claude/plans/make-a-plan-to-tranquil-rabbit.md` (owner review round 2)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D62**
+**As of:** 2026-08-26 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `a3a75c4` (this handoff commit follows it and changes no code)
+**Plan:** `~/.claude/plans/1-it-s-great-that-linked-bear.md` (owner review round 3)
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D66**
 
-**S3, M6–M14 and owner review rounds 1 and 2 are done, up to the release gate.** Every
-gate green: lint, typecheck, unit (510), integration (225 across twenty-four
-files), coverage thresholds including the 85 % per-module gates, schema-drift,
-config-schema staleness, the configuration-reference and example-config gates,
-dependency pinning, the client-bundle gate, the TST-8 container smoke test —
-run against the moved `docker/` layout and now completing the first-run wizard
-— and the TST-6 end-to-end suite: 74 tests in a real browser against the built
-image, in both deployment shapes.
+**S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
+gate.** Every gate green: lint, typecheck, unit (564), integration (226 across
+twenty-four files), coverage thresholds including the 85 % per-module gates,
+schema-drift, config-schema staleness, the configuration-reference and
+example-config gates, dependency pinning, the client-bundle gate, the TST-8
+container smoke test — run against the moved `docker/` layout and now
+completing the first-run wizard — and the TST-6 end-to-end suite: 74 tests in a
+real browser against the built image, in both deployment shapes.
 
 The `docker/idp-*` lifecycle scripts were exercised end to end as well —
 create → status → cli → stop → start → logs → destroy — against a throwaway
@@ -154,6 +154,37 @@ come before anything in Pending.
   `import.meta.env.SSR` and a dynamic import — Vite eliminates the branch from
   the client build — and **not** inside `fetchAdminGate`, which would stamp
   403 on the RPC response during a client-side navigation.
+
+### What the browser found in this round's own work
+
+Two of the sixteen fixes were themselves broken, and only the TST-6 suite could
+have said so. Both are worth remembering, because the shape of each recurs.
+
+**`setResponseStatus` does not reach a rendered page.** The 403 for FR-ROLE-3
+typechecked, ran, and changed nothing. Start's helper works for a server route
+and for a server function; an SSR document is built by `renderRouterToStream`
+with `status: router.stores.statusCode.get()`, and the router puts only 404 (a
+`notFound()`), 500 (an errored match) or 200 in that store. There is no
+supported way for a loader to ask for a third value, so the status is left on
+the request context this application already owns — `setDocumentStatus`,
+first-writer-wins — and `server-entry.ts` applies it, but only when the render
+came back with the default. Every other gate in this repository would have
+called the first attempt green: it is the one that reads a real document
+response that did not.
+
+**A field's `id` was its `name`.** Unique in a form, and emphatically not in a
+document. Moving the password change into a dialog gave `/account/security`
+three fields called `password` — the new one and the two the second-factor
+forms ask for — so `<label for="password">` resolved to whichever came first
+and named the wrong control. Playwright reported it as "the field is not in the
+dialog"; a screen reader would have reported the same thing, and the a11y scans
+did not catch it because each label *does* point at a real control, just not
+its own. `TextField` and `PasswordField` derive the id with `useId()` now.
+
+A third was caught by reading Better Auth's source rather than by a test:
+`/admin/stop-impersonating` declares no session middleware, so the audit row
+the new "Stop impersonating" control exists to produce would never have been
+written. See D66 and `admin/guard.ts`.
 
 ### Recorded, not fixed
 

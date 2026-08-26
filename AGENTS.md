@@ -150,6 +150,25 @@ creates is the one it strands. Since **D57** that has its own code
 already saying `Invalid origin: …` on the line above. When a password that
 should work does not, read the log before you doubt the password.
 
+**`setResponseStatus` does not reach a rendered page.** It works for server
+routes and server functions and silently does nothing for an SSR document:
+`renderRouterToStream` builds that response with
+`status: router.stores.statusCode.get()`, and the router only ever puts 404
+(a `notFound()`), 500 (an errored match) or 200 in there. A loader that wants
+its own status leaves it on the request context — `setDocumentStatus` in
+`server/http/request-log.ts` — and `server-entry.ts` applies it on the way out.
+The first attempt at FR-ROLE-3's 403 typechecked, ran, and changed nothing;
+only the e2e suite noticed, because it is the only gate that reads a real
+document response.
+
+**A field's `id` is generated, never its `name`.** `name` is unique in a form
+and emphatically not in a document: `/account/security` has three fields called
+`password` — the change-password dialog's and the two the second-factor forms
+ask for — so `<label for>` resolved to whichever came first and named the wrong
+control. `TextField` and `PasswordField` derive the id with `useId()`; `name`
+still decides what is submitted. Anything hand-rolling an input on a page that
+already has one of the same name has the same problem.
+
 **The server must not reach the browser.** A route `loader` is isomorphic — it
 runs in the browser on every client-side navigation — so one careless import
 puts Better Auth, Drizzle and the `postgres` driver in the client bundle.

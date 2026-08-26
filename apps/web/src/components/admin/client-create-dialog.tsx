@@ -297,8 +297,12 @@ function useClientForm(): {
         : ""
     }
     const ticked = (name: string): boolean => {
-      const field = form.elements.namedItem(name)
-      // Base UI renders a `role="checkbox"` span backed by a hidden input.
+      // Queried rather than taken from `form.elements`: the control the user
+      // operates is a Base UI `role="checkbox"` span, and the thing that
+      // actually carries the state is the hidden input behind it. Asking the
+      // named collection can hand back the span instead, and a `false` from
+      // that would silently switch this rule off.
+      const field = form.querySelector(`input[name="${name}"]`)
       return field instanceof HTMLInputElement ? field.checked : false
     }
 

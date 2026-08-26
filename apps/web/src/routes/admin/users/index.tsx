@@ -26,6 +26,7 @@ import { UserBadges } from "@/components/admin/user-badges"
 import { UserCreateDialog } from "@/components/admin/user-create-dialog"
 import { FormAlert } from "@/components/auth/form-parts"
 import { messageForErrorCode, messageForNoticeCode } from "@/lib/auth-errors"
+import { parseInviteLink } from "@/lib/invite-link"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
 import {
@@ -105,9 +106,11 @@ export const Route = createFileRoute("/admin/users/")({
       error: searchString(search.error),
       // Claimed, and therefore consumed: this render is the only one that can
       // show it, which is what "it works once" has to mean on this side too.
-      inviteLink: await claimAdminSecret({
-        data: searchString(search.created) ?? "",
-      }),
+      // `{url, email}` since D65 — an administrator who has just created two
+      // accounts otherwise has two identical-looking links.
+      inviteLink: parseInviteLink(
+        await claimAdminSecret({ data: searchString(search.created) ?? "" })
+      ),
       // A refused creation, so the dialog reopens with what was typed (D62).
       draft:
         (await claimAdminDraft({ data: searchString(search.draft) ?? "" })) ??
@@ -204,7 +207,12 @@ export const Route = createFileRoute("/admin/users/")({
           metadata: { by: "admin", roles },
         })
 
-        const reset = await createResetLink(runtime, user?.id ?? "")
+        // `welcome=1`: the same page, told to say "an administrator created an
+        // account for you" rather than "choose a new password", and to leave
+        // out the promise about other devices (D65).
+        const reset = await createResetLink(runtime, user?.id ?? "", {
+          welcome: true,
+        })
 
         if (runtime.mailer.enabled) {
           await runtime.mailer.send("setPassword", email, { url: reset.url })
@@ -213,7 +221,11 @@ export const Route = createFileRoute("/admin/users/")({
 
         // FR-MAIL-2: nothing can be sent, so the link is handed over on screen
         // — once, in a dialog on this page, and never in the address bar.
-        const handle = await stash(runtime, reset.url, { ttlSeconds: 600 })
+        const handle = await stash(
+          runtime,
+          JSON.stringify({ url: reset.url, email }),
+          { ttlSeconds: 600 }
+        )
         return redirectWithCookies(`${list}?created=${handle}`)
       },
     },
@@ -259,8 +271,12 @@ function UsersPage() {
         <SecretDialog
           t={t}
           title={t.admin.create.linkTitle}
-          description={t.admin.create.linkHelp}
-          value={inviteLink}
+          description={
+            inviteLink.email
+              ? t.admin.create.linkFor(inviteLink.email)
+              : t.admin.create.linkHelp
+          }
+          value={inviteLink.url}
         />
       ) : null}
 

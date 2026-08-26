@@ -106,10 +106,24 @@ export const enUS = {
       submit: "Set new password",
       success: "Your password has been changed. Sign in with it now.",
       expired: "That reset link has expired. Request a new one.",
-      used: "That reset link has already been used. Request a new one.",
-      invalid: "That reset link is not valid. Request a new one.",
+      // A spent token's row is deleted, so "already used" and "never existed"
+      // are the same observation (D65). The wording covers both rather than
+      // claiming a distinction the page cannot make.
+      invalid:
+        "That link is not valid. It may already have been used — if so, your password is set and you can sign in.",
       mismatch: "The two passwords do not match.",
       revokedNotice: "Signing in again will be needed on your other devices.",
+      // D65: the page names the account, and the invitation variant says who
+      // the link is from rather than promising to sign other devices out of
+      // an account nobody has ever signed in to.
+      forAccount: (email: string) => `This link is for ${email}.`,
+      welcomeTitle: "Set your password",
+      welcomeDescription: (siteName: string) =>
+        `An administrator created an account for you at ${siteName}. Choose a password to finish.`,
+      expiredAdmin:
+        "That link has expired. Ask your administrator for a new one.",
+      invalidAdmin:
+        "That link is not valid. It may already have been used — if so, your password is set and you can sign in. Otherwise, ask your administrator for a new one.",
     },
     changePassword: {
       title: "Change your password",
@@ -483,6 +497,10 @@ export const enUS = {
       linkTitle: "Give them this link",
       linkHelp:
         "E-mail is turned off, so this is the only copy. It works once and expires.",
+      // D65: which account, because two creations in a row otherwise produce
+      // two links nobody can tell apart.
+      linkFor: (email: string) =>
+        `For ${email}. E-mail is turned off, so this is the only copy — it works once and expires.`,
     },
     clients: {
       title: "Applications",

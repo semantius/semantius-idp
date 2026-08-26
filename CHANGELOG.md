@@ -366,5 +366,15 @@ were questions, and one was "polish every page".
   it. And the discovery URLs on `/admin/system` open in a new tab — two of them,
   under a sub-path, are served by the reverse proxy above this application, so
   following one in place navigated out of it.
+- **The reset page says whose account it is, and refuses a dead link up front**
+  (**D65**). It used to render the form whatever the token was and report the
+  problem only after a password had been typed twice — so an expired invitation
+  looked exactly like a working one. It now reads the token first, without
+  spending it, the way Better Auth's own link validator does, and names the
+  address. An administrator's link opens the **invitation** variant: it says an
+  administrator created the account, drops the promise about signing other
+  devices out of an account nobody has signed in to, and points a dead link at
+  the administrator rather than at self-service, which may be switched off. The
+  one-time link dialog on `/admin/users` is labelled with the address as well.
 
 [Unreleased]: https://github.com/semantius/semantius-idp/commits/main

@@ -60,8 +60,9 @@ export function messageForErrorCode(
       return t.account.apiKeys.outOfRange
     case "token_expired":
       return t.auth.resetPassword.expired
-    case "token_used":
-      return t.auth.resetPassword.used
+    // No `token_used`: it was mapped and never emitted. Better Auth deletes a
+    // spent token's row, so a used link and a made-up one are the same
+    // refusal — `INVALID_TOKEN` — and `token_invalid` is what arrives (D65).
     case "token_invalid":
       return t.auth.resetPassword.invalid
     case "signup_failed":

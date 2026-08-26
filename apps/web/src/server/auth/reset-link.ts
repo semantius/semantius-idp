@@ -41,7 +41,21 @@ export interface ResetLink {
 export async function createResetLink(
   runtime: Runtime,
   userId: string,
-  { ttlSeconds = DEFAULT_TTL_SECONDS } = {}
+  {
+    ttlSeconds = DEFAULT_TTL_SECONDS,
+    /**
+     * Mark the link as an invitation (**D65**).
+     *
+     * The page is the same page either way, and the flag only changes what it
+     * says: "an administrator created an account for you" rather than "choose
+     * a new password", and no promise about other devices being signed out —
+     * which comes from `revokeSessionsOnPasswordReset` and is meaningless for
+     * an account that has never been signed in to. Forging it changes copy and
+     * nothing else, which is why it is a query flag rather than anything
+     * carried in the token.
+     */
+    welcome = false,
+  }: { ttlSeconds?: number; welcome?: boolean } = {}
 ): Promise<ResetLink> {
   const token = randomBytes(24).toString("base64url")
   const expiresAt = new Date(Date.now() + ttlSeconds * 1000)
@@ -61,7 +75,9 @@ export async function createResetLink(
     // Our own `/reset-password` page, not Better Auth's `/reset-password/:token`
     // redirect: the page is what asks for the new password, and going through
     // the redirect would only add a hop that drops the token into a `Referer`.
-    url: `${base.origin}${base.basePath}/reset-password?token=${encodeURIComponent(token)}`,
+    url:
+      `${base.origin}${base.basePath}/reset-password?token=${encodeURIComponent(token)}` +
+      (welcome ? "&welcome=1" : ""),
     expiresAt,
   }
 }

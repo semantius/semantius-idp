@@ -136,6 +136,13 @@ come before anything in Pending.
   unticked; `skipConsentFromForm` is the single inversion and has a test on it.
   `/admin/system`'s discovery links open in a new tab — the first
   `target="_blank"` in the tree, and the convention for the admin area.
+- **The invite/reset page (F9), `D65`.** The loader's "a lookup would burn the
+  token" was wrong for a *read*: `findVerificationValue` is non-consuming and
+  is what Better Auth's own GET validator uses. The page names the account and
+  decides valid / expired / invalid before rendering a form. "Already used" is
+  not a distinguishable state — the row is deleted — so the copy covers both
+  and the dead `token_used` mapping is gone. `welcome=1` is the invitation
+  variant, set by `createResetLink` at the admin call site.
 
 ---
 

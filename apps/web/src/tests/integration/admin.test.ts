@@ -577,13 +577,44 @@ describe("the administrator's password-reset link", () => {
       userId
     )
 
+    // D65: the page reads the token before rendering, and the read must not
+    // spend it. `findVerificationValue` is what Better Auth's own
+    // `GET /reset-password/:token` validator uses, and the stored value is the
+    // user id — which is what lets the page name the account.
+    const context = await ctx.auth.$context
+    const seen = await context.internalAdapter.findVerificationValue(
+      `reset-password:${link.token}`
+    )
+    expect(seen?.value).toBe(userId)
+    expect(seen!.expiresAt.getTime()).toBeGreaterThan(Date.now())
+
     const response = await post("/reset-password", {
       token: link.token,
       newPassword: NEW_PASSWORD,
     })
+    // Still accepted after the read, which is the half that matters.
     expect(response.status).toBe(200)
 
     // And the new password is the one that works.
     await signIn("newcomer@example.com", NEW_PASSWORD)
+
+    // Spent now: the row is deleted, so "already used" and "never existed"
+    // are the same observation — which is why the page's copy covers both.
+    expect(
+      await context.internalAdapter.findVerificationValue(
+        `reset-password:${link.token}`
+      )
+    ).toBeFalsy()
+  })
+
+  it("marks an administrator's link as an invitation (D65)", async () => {
+    // The flag only changes what the page says; it is not in the token, and
+    // forging it changes copy and nothing else.
+    const invite = await createResetLink(
+      { config: ctx.config, auth: ctx.auth } as never,
+      await makeUser("invited@example.com"),
+      { welcome: true }
+    )
+    expect(invite.url).toContain("welcome=1")
   })
 })

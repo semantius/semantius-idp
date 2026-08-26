@@ -2,6 +2,7 @@ import { Input } from "@workspace/ui/components/input"
 import { Field, FieldLabel } from "@workspace/ui/components/field"
 
 import { ActionDialog } from "@/components/common/dialogs"
+import { FormAlert } from "@/components/auth/form-parts"
 import { RoleCheckboxes } from "@/components/admin/role-checkboxes"
 import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 import type { AdminRoleRow } from "@/server/functions/admin"
@@ -28,12 +29,15 @@ export function UserCreateDialog({
   roles,
   draft,
   reopen,
+  error,
 }: {
   t: Catalog
   roles: AdminRoleRow[]
   /** A refused submission, claimed by the loader (**D62**). */
   draft?: Draft
   reopen?: boolean
+  /** The refusal, inside the dialog: a modal covers the page-level alert. */
+  error?: string
 }) {
   const values: Draft = draft ?? {}
   const restored = Object.keys(values).length > 0
@@ -52,6 +56,7 @@ export function UserCreateDialog({
     >
       <PendingForm busy={t.common.loading} method="post" className="grid gap-4">
         <input type="hidden" name="action" value="create" />
+        <FormAlert>{error}</FormAlert>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field>
             <FieldLabel htmlFor="firstName">{t.common.firstName}</FieldLabel>

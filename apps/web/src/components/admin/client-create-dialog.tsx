@@ -13,7 +13,7 @@ import {
 } from "@workspace/ui/components/field"
 
 import { ActionDialog } from "@/components/common/dialogs"
-import { FieldError } from "@/components/auth/form-parts"
+import { FieldError, FormAlert } from "@/components/auth/form-parts"
 import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 import { CLIENT_ID_PATTERN, validateClientForm } from "@/lib/client-rules"
 import type { ClientFormErrors } from "@/lib/client-rules"
@@ -45,6 +45,7 @@ export function ClientCreateDialog({
   t,
   draft,
   reopen,
+  error,
 }: {
   ui: UiContext
   t: Catalog
@@ -52,6 +53,13 @@ export function ClientCreateDialog({
   draft?: Draft
   /** Open on first paint — a refusal happened and its message is in here. */
   reopen?: boolean
+  /**
+   * The refusal, rendered *inside* the dialog. A modal covers the page, so an
+   * alert left behind it is an alert nobody reads — which is how the reopened
+   * dialog would otherwise come back with the fields restored and no
+   * explanation.
+   */
+  error?: string
 }) {
   const { onSubmit, errors } = useClientForm()
   const values: Draft = draft ?? {}
@@ -82,6 +90,7 @@ export function ClientCreateDialog({
         onSubmit={onSubmit}
       >
         <input type="hidden" name="action" value="create" />
+        <FormAlert>{error}</FormAlert>
         <Field>
           <FieldLabel htmlFor="name">{t.admin.clients.name}</FieldLabel>
           <Input

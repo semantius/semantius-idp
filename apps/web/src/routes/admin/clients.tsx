@@ -231,16 +231,23 @@ function ClientsPage() {
           ui={ui}
           t={t}
           draft={draft}
-          // Reopened only when there is something in it to see: the refusal's
-          // message is the page-level alert, and the fields it is about are
-          // inside the dialog.
+          // Reopened when there is a restored form to come back to, with the
+          // refusal inside it: a modal covers the page-level alert.
           reopen={draft !== undefined}
+          error={
+            draft !== undefined
+              ? messageForErrorCode(error, t, ui.passwordMinLength)
+              : undefined
+          }
         />
       }
     >
       <FormAlert variant="default">{messageForNoticeCode(notice, t)}</FormAlert>
+      {/* Not when the dialog is reopening with it — the modal would cover it. */}
       <FormAlert>
-        {messageForErrorCode(error, t, ui.passwordMinLength)}
+        {draft === undefined
+          ? messageForErrorCode(error, t, ui.passwordMinLength)
+          : undefined}
       </FormAlert>
 
       {created ? (

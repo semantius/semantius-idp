@@ -257,12 +257,20 @@ function UsersPage() {
           roles={roles}
           draft={draft}
           reopen={draft !== undefined}
+          error={
+            draft !== undefined
+              ? messageForErrorCode(error, t, ui.passwordMinLength)
+              : undefined
+          }
         />
       }
     >
       <FormAlert variant="default">{messageForNoticeCode(notice, t)}</FormAlert>
+      {/* Not when the dialog is reopening with it — the modal would cover it. */}
       <FormAlert>
-        {messageForErrorCode(error, t, ui.passwordMinLength)}
+        {draft === undefined
+          ? messageForErrorCode(error, t, ui.passwordMinLength)
+          : undefined}
       </FormAlert>
 
       {inviteLink ? (

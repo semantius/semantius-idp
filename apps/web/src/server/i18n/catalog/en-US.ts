@@ -257,6 +257,10 @@ export const enUS = {
   account: {
     title: "Your account",
     // FR-ADMIN-5: an impersonated session must be obvious on every page.
+    // D66: the banner said what was happening and offered no way out, so an
+    // impersonation ended by expiring or by signing out — which signs the
+    // administrator out too.
+    stopImpersonating: "Stop impersonating",
     impersonationBanner:
       "An administrator is signed in as you. Everything you do here is recorded.",
     nav: {

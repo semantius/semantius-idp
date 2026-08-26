@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as TwoFactorRouteImport } from './routes/two-factor'
+import { Route as StopImpersonatingRouteImport } from './routes/stop-impersonating'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SignOutRouteImport } from './routes/sign-out'
 import { Route as SetupRouteImport } from './routes/setup'
@@ -63,6 +64,11 @@ const VerifyEmailRoute = VerifyEmailRouteImport.update({
 const TwoFactorRoute = TwoFactorRouteImport.update({
   id: '/two-factor',
   path: '/two-factor',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StopImpersonatingRoute = StopImpersonatingRouteImport.update({
+  id: '/stop-impersonating',
+  path: '/stop-impersonating',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignupRoute = SignupRouteImport.update({
@@ -304,6 +310,7 @@ export interface FileRoutesByFullPath {
   '/setup': typeof SetupRoute
   '/sign-out': typeof SignOutRoute
   '/signup': typeof SignupRoute
+  '/stop-impersonating': typeof StopImpersonatingRoute
   '/two-factor': typeof TwoFactorRoute
   '/verify-email': typeof VerifyEmailRoute
   '/.well-known/change-password': typeof DotwellKnownChangePasswordRoute
@@ -349,6 +356,7 @@ export interface FileRoutesByTo {
   '/setup': typeof SetupRoute
   '/sign-out': typeof SignOutRoute
   '/signup': typeof SignupRoute
+  '/stop-impersonating': typeof StopImpersonatingRoute
   '/two-factor': typeof TwoFactorRoute
   '/verify-email': typeof VerifyEmailRoute
   '/.well-known/change-password': typeof DotwellKnownChangePasswordRoute
@@ -397,6 +405,7 @@ export interface FileRoutesById {
   '/setup': typeof SetupRoute
   '/sign-out': typeof SignOutRoute
   '/signup': typeof SignupRoute
+  '/stop-impersonating': typeof StopImpersonatingRoute
   '/two-factor': typeof TwoFactorRoute
   '/verify-email': typeof VerifyEmailRoute
   '/.well-known/change-password': typeof DotwellKnownChangePasswordRoute
@@ -446,6 +455,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/sign-out'
     | '/signup'
+    | '/stop-impersonating'
     | '/two-factor'
     | '/verify-email'
     | '/.well-known/change-password'
@@ -491,6 +501,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/sign-out'
     | '/signup'
+    | '/stop-impersonating'
     | '/two-factor'
     | '/verify-email'
     | '/.well-known/change-password'
@@ -538,6 +549,7 @@ export interface FileRouteTypes {
     | '/setup'
     | '/sign-out'
     | '/signup'
+    | '/stop-impersonating'
     | '/two-factor'
     | '/verify-email'
     | '/.well-known/change-password'
@@ -586,6 +598,7 @@ export interface RootRouteChildren {
   SetupRoute: typeof SetupRoute
   SignOutRoute: typeof SignOutRoute
   SignupRoute: typeof SignupRoute
+  StopImpersonatingRoute: typeof StopImpersonatingRoute
   TwoFactorRoute: typeof TwoFactorRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   DotwellKnownChangePasswordRoute: typeof DotwellKnownChangePasswordRoute
@@ -617,6 +630,13 @@ declare module '@tanstack/react-router' {
       path: '/two-factor'
       fullPath: '/two-factor'
       preLoaderRoute: typeof TwoFactorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/stop-impersonating': {
+      id: '/stop-impersonating'
+      path: '/stop-impersonating'
+      fullPath: '/stop-impersonating'
+      preLoaderRoute: typeof StopImpersonatingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/signup': {
@@ -983,6 +1003,7 @@ const rootRouteChildren: RootRouteChildren = {
   SetupRoute: SetupRoute,
   SignOutRoute: SignOutRoute,
   SignupRoute: SignupRoute,
+  StopImpersonatingRoute: StopImpersonatingRoute,
   TwoFactorRoute: TwoFactorRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   DotwellKnownChangePasswordRoute: DotwellKnownChangePasswordRoute,

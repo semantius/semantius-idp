@@ -376,5 +376,16 @@ were questions, and one was "polish every page".
   devices out of an account nobody has signed in to, and points a dead link at
   the administrator rather than at self-service, which may be switched off. The
   one-time link dialog on `/admin/users` is labelled with the address as well.
+- **The audit trail says what it means, and covers the admin API** (**D66**).
+  An account an administrator created was recorded as `signup.created` with
+  `by: "admin"` — the same action name as a self-service registration and as
+  the first-run wizard, on a page whose filter lists action names. It is
+  `user.created` now, and `signup.created` means self-service. Three admin
+  endpoints — create user, set password, revoke sessions — wrote no row at all
+  when called directly rather than through a button, which FR-ADMIN-6 does not
+  allow of a supported interface; `impersonation.started` was written twice on
+  the UI path; and `impersonation.stopped` was declared and never written,
+  because nothing ever called the endpoint. The impersonation banner now has a
+  **Stop impersonating** button, so it does.
 
 [Unreleased]: https://github.com/semantius/semantius-idp/commits/main

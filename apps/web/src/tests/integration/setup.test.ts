@@ -177,7 +177,9 @@ describe("first-run setup (D52)", () => {
       .from(ctx.database.schema.auditLog)
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({
-      action: "signup.created",
+      // D66: an account made for somebody, not a self-service registration —
+      // and `via: "setup"` below says which of the two ways.
+      action: "user.created",
       outcome: "success",
       // Nobody is signed in yet, so there is no actor to name.
       actorType: "anonymous",

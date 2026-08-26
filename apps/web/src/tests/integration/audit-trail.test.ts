@@ -45,7 +45,10 @@ describe("audit trail (SEC-6)", () => {
 
   it("records a self-registration, which nothing did before", async () => {
     // Only the bootstrap step ever wrote `signup.created`; a user signing
-    // themselves up left no row.
+    // themselves up left no row. Since D66 the name is the user's own:
+    // `signup.created` means self-service and nothing else, and an account
+    // made *for* somebody — by an administrator or by the first-run wizard —
+    // is `user.created`.
     const response = await ctx.auth.handler(
       authRequest("/sign-up/email", {
         json: { email, password, name: "Auto Audited" },

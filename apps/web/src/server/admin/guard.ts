@@ -52,13 +52,34 @@ export interface AdminGuardDeps {
   logger?: Logger
 }
 
-/** The paths this guard has an opinion about. */
+/**
+ * The paths this guard has an opinion about.
+ *
+ * Two kinds, and the second is newer (**D66**). The first five carry an
+ * *invariant* — the last administrator, self-bans, impersonation being off —
+ * and the guard refuses them. The rest carry no invariant at all and are here
+ * for the audit row: FR-ADMIN-6 says the admin API is a supported interface,
+ * and until D66 a `curl` to `/admin/create-user`, `/admin/set-user-password`
+ * or `/admin/revoke-user-sessions` left no trace, because the only writes were
+ * in the route handlers behind the buttons.
+ *
+ * **`guard.ts` owns `/admin/*` auditing** from here on. `hooks.ts`'s
+ * `auditEventFor` stays the choke point for Better Auth's own surface, and a
+ * manual write in a route survives only where no hook can see the event. That
+ * split is the thing D66 records, because the alternative had already
+ * happened: `impersonation.started` was written twice on the UI path, once
+ * here and once in `http/admin-actions.ts`.
+ */
 const GUARDED = new Set([
   "/admin/set-role",
   "/admin/ban-user",
   "/admin/remove-user",
   "/admin/update-user",
   "/admin/impersonate-user",
+  "/admin/create-user",
+  "/admin/set-user-password",
+  "/admin/revoke-user-sessions",
+  "/admin/stop-impersonating",
 ])
 
 export function isGuardedAdminPath(path: string): boolean {
@@ -200,10 +221,25 @@ export function buildAdminAfterHook(deps: AdminGuardDeps): AuthMiddleware {
     if (ctx.context.returned instanceof APIError) return
 
     const body = (ctx.body ?? {}) as AdminBody
+    const actorId = ctx.context.session?.user.id
+
+    // The endpoints that carry no invariant and are guarded purely so that a
+    // direct API call leaves the same trail the UI does (**D66**).
+    const plain = plainAuditFor(path, ctx, body)
+    if (plain) {
+      await deps.audit?.record({
+        action: plain.action,
+        outcome: "success",
+        actorType: "session",
+        actorUserId: plain.actorId ?? actorId,
+        target: { type: "user", id: plain.targetId },
+        metadata: plain.metadata,
+      })
+      return
+    }
+
     const targetId = typeof body.userId === "string" ? body.userId : undefined
     if (!targetId) return
-
-    const actorId = ctx.context.session?.user.id
 
     if (isUnban) {
       // FR-KEY-2: nothing to restore explicitly — the API keys were never
@@ -250,6 +286,79 @@ export function buildAdminAfterHook(deps: AdminGuardDeps): AuthMiddleware {
       )
     }
   })
+}
+
+export interface PlainAudit {
+  action: AuditAction
+  targetId: string
+  actorId?: string
+  metadata?: Record<string, unknown>
+}
+
+/**
+ * The audit row for an endpoint with no invariant behind it (**D66**).
+ *
+ * Two things degrade here on purpose, and saying so is the point of the
+ * comment. `/admin/create-user` has no `body.userId` — the account did not
+ * exist when the request was made — so the target comes out of what the
+ * endpoint returned. And `/admin/set-user-password`'s `temporary: true` is
+ * gone: it was true of the *route*, which follows the password with a second
+ * call setting `mustChangePassword`, and is not derivable from this one
+ * endpoint. Half-deriving it would make the flag mean "probably" in a table
+ * whose whole value is that it does not.
+ */
+export function plainAuditFor(
+  path: string,
+  ctx: { context: { returned?: unknown; session?: unknown } },
+  body: AdminBody
+): PlainAudit | undefined {
+  const targetId = typeof body.userId === "string" ? body.userId : undefined
+
+  switch (path) {
+    case "/admin/create-user": {
+      const returned = ctx.context.returned as
+        | { user?: { id?: unknown } }
+        | undefined
+      const id = returned?.user?.id
+      if (typeof id !== "string") return undefined
+      return {
+        action: "user.created",
+        targetId: id,
+        metadata: { by: "admin", roles: rolesFrom(body.role) },
+      }
+    }
+    case "/admin/set-user-password":
+      if (!targetId) return undefined
+      return { action: "password.changed", targetId }
+    case "/admin/revoke-user-sessions":
+      if (!targetId) return undefined
+      return {
+        action: "session.revoked",
+        targetId,
+        metadata: { scope: "all" },
+      }
+    case "/admin/stop-impersonating": {
+      // The request carries the *impersonated* session, so the target is who
+      // was being impersonated and the actor is the administrator the session
+      // records as having started it (FR-ADMIN-5).
+      const session = ctx.context.session as
+        | {
+            user?: { id?: unknown }
+            session?: { impersonatedBy?: unknown }
+          }
+        | undefined
+      const impersonated = session?.user?.id
+      if (typeof impersonated !== "string") return undefined
+      const by = session?.session?.impersonatedBy
+      return {
+        action: "impersonation.stopped",
+        targetId: impersonated,
+        actorId: typeof by === "string" ? by : undefined,
+      }
+    }
+    default:
+      return undefined
+  }
 }
 
 /** Whether the action means the user should hold no live tokens afterwards. */

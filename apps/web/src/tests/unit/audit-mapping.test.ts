@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { auditEventFor, isRedirect } from "@/server/auth/options/hooks"
+import { plainAuditFor } from "@/server/admin/guard"
 
 /**
  * SEC-6 — which endpoint produces which audit event.
@@ -162,5 +163,82 @@ describe("a redirect is a success, not a failure (SEC-6)", () => {
     expect(isRedirect(redirect(400))).toBe(false)
     expect(isRedirect(redirect(500))).toBe(false)
     expect(isRedirect(new Error("boom"))).toBe(false)
+  })
+})
+
+/**
+ * The `/admin/*` half of the trail (**D66**).
+ *
+ * `guard.ts` owns it. Three endpoints produced no row at all before — so a
+ * `curl` to `/admin/create-user` created an account and left no trace, which
+ * FR-ADMIN-6 does not allow of a supported interface — and a fourth,
+ * `impersonation.stopped`, was declared and never written by anything.
+ *
+ * The two degradations are asserted rather than only commented: the target of
+ * a creation comes out of the response, because the account did not exist when
+ * the request was made, and there is no `temporary` flag on a password change,
+ * because that is a property of the route rather than of the endpoint.
+ */
+describe("plainAuditFor", () => {
+  const ctx = (over: Record<string, unknown> = {}) =>
+    ({ context: { returned: undefined, session: undefined, ...over } }) as never
+
+  it("takes a created user's id from what the endpoint returned", () => {
+    expect(
+      plainAuditFor("/admin/create-user", ctx({ returned: { user: { id: "u1" } } }), {
+        role: ["admin", "user"],
+      })
+    ).toEqual({
+      action: "user.created",
+      targetId: "u1",
+      metadata: { by: "admin", roles: ["admin", "user"] },
+    })
+  })
+
+  it("says nothing when the creation returned no user", () => {
+    expect(plainAuditFor("/admin/create-user", ctx(), {})).toBeUndefined()
+  })
+
+  it("records a password change with no `temporary` flag", () => {
+    expect(
+      plainAuditFor("/admin/set-user-password", ctx(), { userId: "u2" })
+    ).toEqual({ action: "password.changed", targetId: "u2" })
+  })
+
+  it("records a session revocation as covering all of them", () => {
+    expect(
+      plainAuditFor("/admin/revoke-user-sessions", ctx(), { userId: "u3" })
+    ).toEqual({
+      action: "session.revoked",
+      targetId: "u3",
+      metadata: { scope: "all" },
+    })
+  })
+
+  it("aims a stopped impersonation at the right two people", () => {
+    // The request carries the *impersonated* session, so the target is the
+    // person being impersonated and the actor is the administrator the
+    // session records as having started it.
+    expect(
+      plainAuditFor(
+        "/admin/stop-impersonating",
+        ctx({
+          session: {
+            user: { id: "victim" },
+            session: { impersonatedBy: "admin-1" },
+          },
+        }),
+        {}
+      )
+    ).toEqual({
+      action: "impersonation.stopped",
+      targetId: "victim",
+      actorId: "admin-1",
+    })
+  })
+
+  it("has no opinion about anything else", () => {
+    expect(plainAuditFor("/admin/ban-user", ctx(), { userId: "u4" })).toBeUndefined()
+    expect(plainAuditFor("/get-session", ctx(), {})).toBeUndefined()
   })
 })

@@ -132,14 +132,10 @@ export async function runAdminAction(
         { database: input.runtime.database, audit: input.runtime.audit },
         { userId: input.userId, reason: "admin:revoke_sessions" }
       )
-      await input.runtime.audit.record({
-        action: "session.revoked",
-        outcome: "success",
-        actorType: "session",
-        actorUserId: input.actorId,
-        target: { type: "user", id: input.userId },
-        metadata: { scope: "all" },
-      })
+      // The `session.revoked` row is the guard's now (**D66**): it writes one
+      // for `/admin/revoke-user-sessions` however that endpoint is reached, so
+      // a direct API call leaves the same trail this path does. Writing it
+      // here as well is exactly the double-row `impersonation.started` had.
       return { notice: "sessionsRevoked" }
     }
 
@@ -185,14 +181,12 @@ export async function runAdminAction(
         input.request
       )
       if (!flag.ok) return failed(flag)
-      await input.runtime.audit.record({
-        action: "password.changed",
-        outcome: "success",
-        actorType: "session",
-        actorUserId: input.actorId,
-        target: { type: "user", id: input.userId },
-        metadata: { temporary: true },
-      })
+      // `password.changed` comes from the guard's hook on
+      // `/admin/set-user-password` (**D66**). The `temporary: true` metadata
+      // this used to add is gone with it: it was true of *this route*, which
+      // follows the password with a second call setting `mustChangePassword`,
+      // and is not derivable from the endpoint. A flag that means "probably"
+      // is worse than no flag in a table whose value is that it does not.
       return { notice: "temporaryPasswordSet" }
     }
 
@@ -270,13 +264,9 @@ export async function runAdminAction(
         input.request
       )
       if (!result.ok) return failed(result)
-      await input.runtime.audit.record({
-        action: "impersonation.started",
-        outcome: "success",
-        actorType: "session",
-        actorUserId: input.actorId,
-        target: { type: "user", id: input.userId },
-      })
+      // No audit row here: the guard's after-hook already writes
+      // `impersonation.started` for `/admin/impersonate-user`, and this wrote
+      // a second one for the same event on the UI path (**D66**).
       // Into the impersonated user's own account area, which is the only place
       // the session is useful — and which shows the banner on every page.
       return { redirect: "/account", cookies: result.cookies }

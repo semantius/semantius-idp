@@ -198,14 +198,11 @@ export const Route = createFileRoute("/admin/users/")({
         }
 
         const user = created.body.user as { id?: string } | undefined
-        await runtime.audit.record({
-          action: "signup.created",
-          outcome: "success",
-          actorType: "session",
-          actorUserId: fresh.session.user.id,
-          target: { type: "user", id: user?.id ?? email },
-          metadata: { by: "admin", roles },
-        })
+        // The `user.created` row is the guard's, written from its hook on
+        // `/admin/create-user` so that a direct API call leaves the same trail
+        // (**D66**). It used to be written here, as `signup.created` with
+        // `by: "admin"` — three different events under one action name, on a
+        // page whose filter lists action names.
 
         // `welcome=1`: the same page, told to say "an administrator created an
         // account for you" rather than "choose a new password", and to leave

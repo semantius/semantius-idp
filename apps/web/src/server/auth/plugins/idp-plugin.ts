@@ -295,6 +295,10 @@ function buildHooks(options: IdpPluginOptions) {
 export type AuditAction =
   | "signin.success"
   | "signin.failure"
+  // D66: an account somebody made for somebody else — an administrator, or
+  // the first-run wizard. `signup.created` stays what it has always meant:
+  // a self-service registration.
+  | "user.created"
   | "signup.created"
   | "signup.approved"
   | "signup.rejected"

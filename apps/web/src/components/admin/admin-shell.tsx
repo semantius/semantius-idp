@@ -13,6 +13,7 @@ import {
 } from "@workspace/ui/components/card"
 import { cn } from "@workspace/ui/lib/utils"
 
+import { ImpersonationBanner } from "@/components/common/impersonation-banner"
 import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 import type { Catalog } from "@/server/i18n"
@@ -76,14 +77,7 @@ export function AdminShell({
 
   return (
     <div className="min-h-svh bg-muted/30">
-      {impersonated ? (
-        <p
-          role="status"
-          className="text-destructive-foreground bg-destructive px-4 py-2 text-center text-sm font-medium"
-        >
-          {t.account.impersonationBanner}
-        </p>
-      ) : null}
+      {impersonated ? <ImpersonationBanner ui={ui} t={t} /> : null}
 
       <div className="mx-auto w-full max-w-6xl px-4 py-10">
         <header className="mb-8 flex flex-wrap items-baseline justify-between gap-3">

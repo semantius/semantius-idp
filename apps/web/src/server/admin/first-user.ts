@@ -193,8 +193,14 @@ export async function createFirstUser(
       email,
       role,
     })
+    // `user.created`, not `signup.created` (**D66**): this is not a
+    // self-service registration, it is the act of configuring the deployment,
+    // and `via: "setup"` says which of the two ways an account can be made
+    // for somebody. Written here because nothing else can see it — the
+    // wizard does not go through `/admin/create-user`, and the caller is by
+    // definition not an administrator yet.
     await deps.audit.record({
-      action: "signup.created",
+      action: "user.created",
       outcome: "success",
       actorType: "anonymous",
       target: { type: "user", id: result.userId! },

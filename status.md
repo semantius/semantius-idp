@@ -143,6 +143,22 @@ come before anything in Pending.
   not a distinguishable state — the row is deleted — so the copy covers both
   and the dead `token_used` mapping is gone. `welcome=1` is the invitation
   variant, set by `createResetLink` at the admin call site.
+- **Audit vocabulary and coverage (F11), `D66`.** "user.created is missing" was
+  half true: it was recorded as `signup.created` with `by: "admin"`. Looking
+  turned up three endpoints that wrote nothing when called directly, one event
+  written twice, and one declared and never written at all. `guard.ts` owns
+  `/admin/*` auditing from here on; that ownership is in D66 because the
+  three-way drift is what produced all of it.
+
+### Recorded, not fixed
+
+- **`/admin/revoke-user-sessions` called directly does not revoke OAuth
+  tokens.** The UI path does — `http/admin-actions.ts` calls `revokeAllForUser`
+  after the endpoint — so "sign out everywhere" means two different things
+  depending on how it was asked for. It is the same FR-ADMIN-6 parity argument
+  D66 makes about the audit row, and the fix belongs in the guard's after-hook
+  beside `endsAccess`, but it changes what an endpoint *does* rather than what
+  it records, so it is a separate change.
 
 ---
 

@@ -434,7 +434,21 @@ pnpm typecheck
 pnpm lint
 pnpm --filter web run test:integration   # needs a real Postgres
 pnpm --filter web run test:e2e           # needs Docker; drives the built image
+pnpm drizzle:reset  # start over: drop the schema and everything in it
 ```
+
+`pnpm drizzle:reset` is how you get back to a clean database (**D56**).
+Migrations are forward-only and there is no seed step, so the reset is the
+schema going away: it drops `database.schema` — read from the same
+configuration the app loads, on `database.directUrl`, and never `public` or
+anything else in the database — and the next `pnpm dev` or `pnpm docker:up`
+migrates it back empty and serves the first-run setup page again. It prints the
+target — configuration folder, masked connection string, schema, table count —
+and asks `[y/N]` about that schema by name before it does anything, defaulting
+to no; `--yes` skips the prompt, `--schema <name>` aims it somewhere else, and
+`--migrate` leaves the schema rebuilt rather than absent. Stop the dev server or
+the container first — a live connection holds the locks the drop needs, and the
+script says so after ten seconds rather than hanging.
 
 Integration tests run against a real Postgres, each file in its own uniquely
 named schema. They read `IDP_TEST_DATABASE_URL`, else `DATABASE_URL_ADMIN`,

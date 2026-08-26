@@ -56,6 +56,42 @@ is an upgrade nobody scheduled.
 
 ---
 
+## Starting over on a clean database
+
+For a development deployment, and for a staging one nobody minds losing. It
+destroys every account, session, token, key and audit row.
+
+```bash
+pnpm docker:down                 # or stop the dev server; see below
+pnpm drizzle:reset
+```
+
+It drops `database.schema` — the one the configuration names, on
+`database.directUrl` — and nothing else in the database (**D56**). Migrations
+are forward-only and there is no seed step, so the schema going away *is* the
+reset. The next start migrates it back empty and serves the first-run setup
+page, because a database with no users is exactly what that page is for
+(**D52**): whoever completes it is the first administrator.
+
+It prints the target first — configuration folder, masked connection string,
+schema, and how many tables are in it — and then asks `[y/N]` about that schema
+by name, defaulting to no. Read the block: it is what tells you which database
+you are pointed at. `--yes` skips the prompt for a script, `--schema <name>`
+aims it at a throwaway schema instead, and `--migrate` leaves it rebuilt rather
+than absent — the one you want when `database.migrateOnBoot` is false.
+
+**Stop the deployment first.** A live connection holds locks the drop needs;
+the script sets `lock_timeout` and after ten seconds says so by name rather
+than hanging with no output.
+
+The equivalent by hand, for a database this checkout is not configured for:
+
+```bash
+psql "$DATABASE_URL_ADMIN" -c 'drop schema idp cascade'
+```
+
+---
+
 ## Promoting a user when nobody can sign in
 
 The last resort, and the price of removing the environment bootstrap (**D52**).

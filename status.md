@@ -2,7 +2,7 @@
 
 **As of:** 2026-08-26 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `40e4564`
 **Plan:** `~/.claude/plans/make-a-plan-to-tranquil-rabbit.md` (owner review round 2)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D55**
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D56**
 
 **S3, M6–M14 and owner review rounds 1 and 2 are done, up to the release gate.** Every
 gate green: lint, typecheck, unit (510), integration (225 across twenty-four
@@ -60,6 +60,46 @@ Everything buildable is built. What remains cannot be done from here:
   next boot serves the first-run setup page, which is now the only way an
   administrator is ever created. No credential to recover, and no command that
   changes one.
+
+---
+
+## `pnpm drizzle:reset` — the reset that was only ever a sentence in a runbook
+
+Asked for after round 2, and the smallest thing here that removes a whole class
+of incident. Migrations are forward-only (DM-1) and there is no seed step, so
+"give me a clean database" has always meant `drop schema … cascade` — written
+out by hand in the integration harness, the S4 spike, the upgrade-rollback
+runbook, and in AGENTS.md's instruction to drop the schema to get `/setup`
+back, each time against whatever connection string the shell was holding.
+
+[`apps/web/scripts/reset-database.ts`](apps/web/scripts/reset-database.ts) is
+that statement, aimed by the configuration the app itself loads: it drops
+`database.schema` on `database.directUrl`, refuses `public`, and touches
+nothing else in the database (DM-4, Q16). `pnpm drizzle:reset` from the root,
+`--yes` for a script, `--schema <name>` for a throwaway, `--migrate` to leave
+it rebuilt rather than absent. The next `pnpm dev` or `pnpm docker:up` migrates
+it back empty and serves the first-run setup page, so the account that comes
+out of it is the one **D52** intended.
+
+Three deliberate choices, recorded as **D56**:
+
+- **Not an `idp` CLI command** (OPS-6 is unchanged). The CLI ships inside the
+  container; a one-word command there that destroys the deployment is a hazard
+  with no upside, and the person who wants a clean database is in a checkout.
+- **The target is printed, then the question is `[y/N]`.** Configuration
+  folder, masked connection string, schema, table count — then "Drop schema
+  "idp" and everything in it?", defaulting to no. The block is what tells you
+  which database you are pointed at; the prompt stays a yes-or-no question. A
+  non-TTY without `--yes` refuses rather than assuming.
+- **`lock_timeout` is set before the drop.** A running dev server holds the
+  locks `DROP SCHEMA … CASCADE` needs, and the failure mode without it is a
+  command that hangs silently — the same defect as R-7, in a new place.
+
+Verified against a throwaway `idp_reset_check` schema, dropped afterwards
+(P0'.2): the non-TTY refusal, `--yes --migrate` on an absent schema (both
+migrations applied, 18 tables), the drop of the populated schema, and the
+`public` and unknown-argument guards. The persistent `idp` schema was not
+touched. `pnpm lint` and `pnpm typecheck` are green.
 
 ---
 

@@ -247,4 +247,18 @@ were questions, and one was "polish every page".
   warnings: those are already on `/admin` and `/admin/system`, and a third red
   box would have buried the one warning this page can act on.
 
+### Added after the second owner review (2026-08-26)
+
+- **`pnpm drizzle:reset`** — drop this deployment's schema and everything in
+  it, so the next `pnpm dev` or `pnpm docker:up` starts on a fresh database and
+  serves the first-run setup page again (**D56**). Migrations are forward-only
+  and there is no seed step, so removing the schema *is* the reset; the script
+  aims that one statement with the configuration the app itself loads —
+  `database.schema` on `database.directUrl`, never `public`, never anything
+  else in the database. It prints the target — configuration folder, masked connection
+  string, schema, table count — then asks `[y/N]` about that schema by name,
+  sets `lock_timeout` so a still-running dev server gives a sentence instead of
+  a hang, and takes `--yes`, `--schema <name>` and `--migrate`. It is a repository script and not an `idp` CLI command on
+  purpose: the CLI ships inside the container.
+
 [Unreleased]: https://github.com/semantius/semantius-idp/commits/main

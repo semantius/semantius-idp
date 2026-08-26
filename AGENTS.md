@@ -162,7 +162,10 @@ pairs do that for you. Build context is the repository root; the ignore file is
 **There is no bootstrap account.** A database with no users serves the first-run
 setup page (`/setup`, **D52**), and whoever completes it is the first
 administrator. There is no `reset-admin` command. To get the wizard back on a
-schema that already has users, drop the schema.
+schema that already has users, drop the schema — `pnpm drizzle:reset`
+(**D56**), which drops `database.schema` and nothing else, after printing the
+target and asking `[y/N]`. `--schema <name>` aims it at a throwaway; that is
+the supported way to clean one up.
 
 ---
 

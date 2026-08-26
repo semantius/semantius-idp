@@ -30,10 +30,46 @@ function render(overrides: Partial<Parameters<typeof PasswordField>[0]> = {}) {
 describe("PasswordField reveal control", () => {
   it("renders exactly one control bound to the reveal checkbox", () => {
     const html = render()
-    const labels = html.match(/for="password-reveal"/g) ?? []
-    expect(labels).toHaveLength(1)
-    expect(html).toContain('id="password-reveal"')
+    // The id is generated rather than the field name, so the assertion is
+    // that the label and the checkbox agree — not on what the id says. Three
+    // fields on `/account/security` are called `password`, and an id taken
+    // from the name pointed all three labels at the first one.
+    const forAttr = /for="(password-[^"]*-reveal)"/.exec(html)
+    expect(forAttr, "a label bound to the reveal checkbox").toBeTruthy()
+    expect(html.match(/for="password-[^"]*-reveal"/g)).toHaveLength(1)
+    expect(html).toContain(`id="${forAttr![1]}"`)
     expect(html).toContain('type="checkbox"')
+  })
+
+  it("gives two fields of the same name different ids", () => {
+    // The bug this closes: `<label for>` resolves to the first matching id in
+    // the *document*, so the change-password dialog's `password` field and the
+    // second-factor form's `password` field named the same control.
+    //
+    // Rendered as one tree on purpose — `useId` is unique within a render, and
+    // "one page" is one render. Two separate `renderToString` calls would each
+    // start counting again, which is not a case that exists here.
+    const html = renderToString(
+      <>
+        <PasswordField
+          name="password"
+          label="New password"
+          autoComplete="new-password"
+          showLabel="Show password"
+          hideLabel="Hide password"
+        />
+        <PasswordField
+          name="password"
+          label="Current password"
+          autoComplete="current-password"
+          showLabel="Show password"
+          hideLabel="Hide password"
+        />
+      </>
+    )
+    const ids = html.match(/id="password-[^"]*"/g) ?? []
+    expect(ids.length).toBeGreaterThan(1)
+    expect(new Set(ids).size).toBe(ids.length)
   })
 
   it("names the checkbox for both states, so the name changes with it", () => {
@@ -82,9 +118,12 @@ describe("PasswordField reveal control", () => {
 
   it("still wires hint, error and describedby the same way", () => {
     const html = render({ hint: "At least 12 characters", error: "Too short" })
-    expect(html).toContain('id="password-hint"')
-    expect(html).toContain('id="password-error"')
-    expect(html).toContain('aria-describedby="password-hint password-error"')
+    const described = /aria-describedby="(password-[^"]*-hint) (password-[^"]*-error)"/.exec(
+      html
+    )
+    expect(described, "both ids in aria-describedby").toBeTruthy()
+    expect(html).toContain(`id="${described![1]}"`)
+    expect(html).toContain(`id="${described![2]}"`)
     expect(html).toContain('aria-invalid="true"')
   })
 })

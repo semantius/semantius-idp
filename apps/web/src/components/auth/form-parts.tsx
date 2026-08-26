@@ -1,3 +1,4 @@
+import { useId } from "react"
 import type { ReactNode } from "react"
 
 import { Eye, EyeOff } from "lucide-react"
@@ -23,6 +24,15 @@ import { usePendingForm } from "@/components/common/pending-form"
  * the submitted entry list and removed from the accessibility tree, and the
  * form the browser is at that moment submitting still has to contain its own
  * values.
+ *
+ * **The DOM id is generated, not the field name.** It used to be `name`, which
+ * is unique in a *form* and emphatically not in a document: `/account/security`
+ * has three fields called `password` — the new one in the change-password
+ * dialog and the two the second-factor forms ask for — so `<label for>`
+ * resolved to whichever `#password` came first in the DOM and named the wrong
+ * control. The e2e suite caught it as "the field is not in the dialog", which
+ * is exactly what an assistive technology would have reported. `name` still
+ * decides what is submitted; nothing else uses it.
  */
 
 export function FieldError({
@@ -79,16 +89,17 @@ export function TextField({
   autoFocus?: boolean
   inputMode?: "text" | "email" | "numeric"
 }) {
-  const hintId = hint ? `${name}-hint` : undefined
-  const errorId = error ? `${name}-error` : undefined
+  const fieldId = `${name}-${useId()}`
+  const hintId = hint ? `${fieldId}-hint` : undefined
+  const errorId = error ? `${fieldId}-error` : undefined
   const describedBy = [hintId, errorId].filter(Boolean).join(" ") || undefined
   const { pending } = usePendingForm()
 
   return (
     <div className="grid gap-1.5">
-      <Label htmlFor={name}>{label}</Label>
+      <Label htmlFor={fieldId}>{label}</Label>
       <Input
-        id={name}
+        id={fieldId}
         name={name}
         type={type}
         inputMode={inputMode}
@@ -105,7 +116,7 @@ export function TextField({
           {hint}
         </p>
       ) : null}
-      <FieldError id={errorId ?? `${name}-error`}>{error}</FieldError>
+      <FieldError id={errorId ?? `${fieldId}-error`}>{error}</FieldError>
     </div>
   )
 }
@@ -176,18 +187,19 @@ export function PasswordField({
   minLength?: number
   autoFocus?: boolean
 }) {
-  const hintId = hint ? `${name}-hint` : undefined
-  const errorId = error ? `${name}-error` : undefined
+  const fieldId = `${name}-${useId()}`
+  const hintId = hint ? `${fieldId}-hint` : undefined
+  const errorId = error ? `${fieldId}-error` : undefined
   const describedBy = [hintId, errorId].filter(Boolean).join(" ") || undefined
-  const toggleId = `${name}-reveal`
+  const toggleId = `${fieldId}-reveal`
   const { pending } = usePendingForm()
 
   return (
     <div className="grid gap-1.5">
-      <Label htmlFor={name}>{label}</Label>
+      <Label htmlFor={fieldId}>{label}</Label>
       <div className="group relative">
         <Input
-          id={name}
+          id={fieldId}
           name={name}
           type="password"
           autoComplete={autoComplete}
@@ -216,7 +228,7 @@ export function PasswordField({
           onChange={(event) => {
             // The mechanism. Blink and WebKit leave no CSS-only option, and
             // this is also what makes the control instant on Firefox.
-            const field = document.getElementById(name)
+            const field = document.getElementById(fieldId)
             if (field instanceof HTMLInputElement) {
               field.type = event.currentTarget.checked ? "text" : "password"
             }
@@ -248,7 +260,7 @@ export function PasswordField({
           {hint}
         </p>
       ) : null}
-      <FieldError id={errorId ?? `${name}-error`}>{error}</FieldError>
+      <FieldError id={errorId ?? `${fieldId}-error`}>{error}</FieldError>
     </div>
   )
 }

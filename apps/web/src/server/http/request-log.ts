@@ -34,6 +34,24 @@ export interface RequestContext {
   requestId: string
   /** Already anonymised (SEC-5): the last octet or the low 64 bits are gone. */
   ipAddress?: string
+  /**
+   * The HTTP status the rendered **document** should carry, when it is not
+   * 200 (FR-ROLE-3).
+   *
+   * TanStack Start's `setResponseStatus` does not reach an SSR page: the
+   * document response is built by `renderRouterToStream` with
+   * `status: router.stores.statusCode.get()`, which the router sets to 404 for
+   * a `notFound()`, 500 for an errored match, and 200 otherwise. There is no
+   * supported way for a loader to ask for a third value, and the admin
+   * refusal needs one — FR-ROLE-3 says 403 and the page rendered with 200, so
+   * every proxy, log and probe recorded a successful page view of the admin
+   * area by somebody who cannot see it.
+   *
+   * So the loader leaves the status here and `server-entry.ts` applies it to
+   * the response on the way out. Request-scoped because this store is, which
+   * is what keeps two concurrent requests from stamping each other.
+   */
+  documentStatus?: number
 }
 
 const storage = new AsyncLocalStorage<RequestContext>()
@@ -52,6 +70,19 @@ export function currentRequest(): RequestContext | undefined {
 /** The current request id, for an audit row. */
 export function currentRequestId(): string | undefined {
   return storage.getStore()?.requestId
+}
+
+/**
+ * Asks for a non-200 status on the rendered document (**FR-ROLE-3**).
+ *
+ * A no-op outside a request, like everything else here. Only widening is
+ * allowed: the first caller to ask for an error status wins, so a nested
+ * refusal cannot be masked by a later, milder one.
+ */
+export function setDocumentStatus(status: number): void {
+  const context = storage.getStore()
+  if (!context) return
+  if (context.documentStatus === undefined) context.documentStatus = status
 }
 
 /** Runs `fn` with a request context in scope. */

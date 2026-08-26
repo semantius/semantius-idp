@@ -50,6 +50,7 @@ import {
   requestIdFrom,
   withRequestContext,
 } from "./server/http/request-log"
+import type { RequestContext } from "./server/http/request-log"
 import { beginDraining, releaseResources } from "./server/http/lifecycle"
 import {
   withSecurityHeaders,
@@ -169,10 +170,28 @@ const entry: ServerEntry = {
     })
     const startedAt = Date.now()
 
-    const response = await withRequestContext(
-      { requestId, ipAddress: anonymizeIp(ipAddress) },
-      () => handler(unmountServerFnRequest(request), ...rest)
+    // Mutable on purpose: a loader can leave a document status on it, and
+    // this is where that is applied (FR-ROLE-3, see `setDocumentStatus`).
+    const requestContext: RequestContext = {
+      requestId,
+      ipAddress: anonymizeIp(ipAddress),
+    }
+    const rendered = await withRequestContext(requestContext, () =>
+      handler(unmountServerFnRequest(request), ...rest)
     )
+
+    // `renderRouterToStream` stamps the document with the *router's* status —
+    // 404 for a `notFound()`, 500 for an errored match, 200 for everything
+    // else — and Start's `setResponseStatus` does not reach it. Anything that
+    // asked for its own status gets it here, and only when the render came
+    // back with the default: a redirect or a real 404 already means something.
+    const response =
+      requestContext.documentStatus !== undefined && rendered.status === 200
+        ? new Response(rendered.body, {
+            status: requestContext.documentStatus,
+            headers: rendered.headers,
+          })
+        : rendered
 
     const { pathname } = new URL(request.url)
     if (context && !isQuietPath(pathname, base)) {

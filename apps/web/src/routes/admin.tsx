@@ -25,12 +25,18 @@ import { fetchAdminGate } from "@/server/functions/admin"
  * That page is served with **403**, which FR-ROLE-3 has always said and
  * nothing in this tree ever set: the refusal rendered with a 200, so every
  * proxy, log and probe recorded a successful page view of the admin area by
- * somebody who cannot see it. Set through a dynamic import behind
- * `import.meta.env.SSR`, for two reasons: `@tanstack/react-start/server` must
- * not reach the client bundle, and the status belongs on the **document**
- * response — stamping it inside `fetchAdminGate` would put a 403 on the RPC
- * response during a client-side navigation, which the client may treat as a
- * failure rather than as an answer.
+ * somebody who cannot see it.
+ *
+ * Start's own `setResponseStatus` does **not** work here, which the e2e suite
+ * caught: the document response is built by `renderRouterToStream` with
+ * `status: router.stores.statusCode.get()`, and that store only ever holds
+ * 404, 500 or 200. So the status is left on the request context and applied in
+ * `server-entry.ts` (`setDocumentStatus`). Behind a dynamic import guarded by
+ * `import.meta.env.SSR`, because a loader is isomorphic and the client bundle
+ * must not gain a server module — and on the **document** rather than inside
+ * `fetchAdminGate`, which would put a 403 on the RPC response during a
+ * client-side navigation, where the client may treat it as a failure rather
+ * than as an answer.
  *
  * The gate is **not** the only check. Every server function under
  * `functions/admin.ts` re-checks the role, because a server function is an
@@ -51,8 +57,8 @@ export const Route = createFileRoute("/admin")({
     if (!context.gate.admin && import.meta.env.SSR) {
       // Vite replaces `import.meta.env.SSR` with `false` in the client build,
       // so this branch and the import inside it are eliminated there.
-      const { setResponseStatus } = await import("@tanstack/react-start/server")
-      setResponseStatus(403)
+      const { setDocumentStatus } = await import("@/server/http/request-log")
+      setDocumentStatus(403)
     }
     return { ui: context.ui, gate: context.gate }
   },

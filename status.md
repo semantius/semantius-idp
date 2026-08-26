@@ -129,6 +129,13 @@ come before anything in Pending.
   `server/auth/change-password.ts`, leaving each caller with only its own
   destination. e2e: `account.spec.ts` drives the dialog and asserts the notice
   rather than a navigation.
+- **Small UI defects (F6, F10, F12).** `SecretDialog` lost its `wrap` prop and
+  always wraps — all three call sites wanted it, and the copy button takes the
+  value rather than a selection. The clients table column is "Consent required"
+  with one affordance for both answers, and the dialog asks "Require consent",
+  unticked; `skipConsentFromForm` is the single inversion and has a test on it.
+  `/admin/system`'s discovery links open in a new tab — the first
+  `target="_blank"` in the tree, and the convention for the admin area.
 
 ---
 

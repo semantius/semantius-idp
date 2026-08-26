@@ -339,8 +339,10 @@ test.describe("the admin area", () => {
     await expect(row.getByText("Enabled")).toBeVisible()
     // FR-OIDC-3's default, restored: the create handler used to send a defined
     // `false` from a checkbox that did not exist, so every client added here
-    // asked for consent. The column exists so that is visible at all.
-    await expect(row.getByText("Yes")).toBeVisible()
+    // asked for consent. The column exists so that is visible at all — and
+    // since round 3 it is headed "Consent required" and reads the way round
+    // an administrator thinks, so the default now shows as **No**.
+    await expect(row.getByText("No")).toBeVisible()
 
     // A reload cannot show it again: claiming the stash consumed it.
     await app.goto("/admin/clients")

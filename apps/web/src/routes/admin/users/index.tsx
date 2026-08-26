@@ -261,7 +261,6 @@ function UsersPage() {
           title={t.admin.create.linkTitle}
           description={t.admin.create.linkHelp}
           value={inviteLink}
-          wrap
         />
       ) : null}
 

@@ -355,5 +355,16 @@ were questions, and one was "polish every page".
   (`server/auth/change-password.ts`), so there are not two forms to keep in
   step. A refusal reopens the dialog with the message beside the fields; the
   passwords themselves are not restored.
+- **Three small things the owner walked into.** A one-shot value — an API key,
+  a client secret, the set-password link — is always wrapped now rather than
+  sitting in a box that scrolls sideways; the `wrap` prop is gone, because the
+  argument for it assumed the value is selected by hand and it is copied with
+  the button beside it. The applications table's consent column is headed
+  **"Consent required"** and answers Yes or No in one affordance, and the
+  create dialog asks **"Require consent"**, unticked by default; the wire and
+  API field is still `skipConsent`, inverted once in a function with a test on
+  it. And the discovery URLs on `/admin/system` open in a new tab — two of them,
+  under a sub-path, are served by the reverse proxy above this application, so
+  following one in place navigated out of it.
 
 [Unreleased]: https://github.com/semantius/semantius-idp/commits/main

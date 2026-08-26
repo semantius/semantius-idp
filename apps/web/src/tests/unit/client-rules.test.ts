@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
   checkRedirectUri,
   isValidClientId,
+  skipConsentFromForm,
   uriLines,
   validateClientForm,
 } from "@/lib/client-rules"
@@ -123,5 +124,27 @@ describe("validateClientForm", () => {
         values({ type: "service", redirectUris: "com.example.app:/cb" })
       ).redirectUris
     ).toBe("uri:private_scheme:com.example.app:/cb")
+  })
+})
+
+/**
+ * The one inversion in the codebase, pinned (round 3, finding 10).
+ *
+ * The form asks "Require consent" and the wire field is `skipConsent`, which
+ * is a triple negative waiting to happen — so it is one function with a test
+ * on it rather than a `!` somewhere in a handler. Getting it backwards would
+ * make every application registered here ask for consent, or none of them,
+ * and nothing else would notice.
+ */
+describe("skipConsentFromForm", () => {
+  it("ticked means the user is asked", () => {
+    expect(skipConsentFromForm("on")).toBe(false)
+  })
+
+  it("absent means the user is not asked, which is FR-OIDC-3's default", () => {
+    // A checkbox sends nothing at all when it is unticked, so `undefined` is
+    // the ordinary case rather than an edge one.
+    expect(skipConsentFromForm(undefined)).toBe(true)
+    expect(skipConsentFromForm("")).toBe(true)
   })
 })

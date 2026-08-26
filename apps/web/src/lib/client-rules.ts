@@ -85,6 +85,23 @@ export function uriLines(value: string): string[] {
     .filter((line) => line !== "")
 }
 
+/**
+ * The registration form asks "Require consent"; the wire field is
+ * `skipConsent` (FR-OIDC-3, and **D50** for the history).
+ *
+ * The inversion is deliberate and is the owner's call: the column and the
+ * checkbox both read as the thing an administrator is deciding — *does this
+ * application ask the user?* — rather than as the negation stored underneath.
+ * It is a real triple negative in the making, which is exactly why the mapping
+ * is one exported function with a test on it rather than a `!` in a handler.
+ *
+ * An unticked box means "do not ask", which is FR-OIDC-3's documented default
+ * of `skipConsent: true` and what a file-declared client gets.
+ */
+export function skipConsentFromForm(requireConsent: string | undefined): boolean {
+  return requireConsent !== "on"
+}
+
 export interface ClientFormValues {
   clientId: string
   name: string

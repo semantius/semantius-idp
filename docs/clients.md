@@ -216,11 +216,14 @@ own organisation registered is a click that teaches them to click. Set it to
 { "clientId": "third-party-tool", "skipConsent": false, "…": "…" }
 ```
 
-The same applies to clients registered from `/admin/clients`: the create dialog
-has a "Consent skipped" checkbox, checked by default for the same reason, and
-the list shows the setting per client. Until the round-2 review that checkbox
-did not exist while the handler sent `skipConsent: false` regardless — so every
-admin-registered client asked for consent, whatever this section said.
+The same applies to clients registered from `/admin/clients`, where the
+question is asked the other way round: the create dialog has a **"Require
+consent"** checkbox, unticked by default, and the list has a **"Consent
+required"** column. Both name the decision rather than the field, and the field
+on the wire and in the API is `skipConsent` either way. Until the round-2 review
+there was no checkbox at all while the handler sent `skipConsent: false`
+regardless — so every admin-registered client asked for consent, whatever this
+section said.
 
 The consent page shows the client's name, icon, homepage, terms and privacy
 links, and one line per scope. Consent is remembered per client and scope set,

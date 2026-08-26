@@ -131,10 +131,20 @@ function SystemPage() {
         <dl className="divide-y">
           {info.discovery.map((entry) => (
             <DetailRow key={entry.key} label={labelFor(t, entry.key)}>
-              {/* Same-origin by construction, so a plain anchor — and no
-                  `target`, because an operator copying a URL wants to see it,
-                  not to lose the page they were on. */}
-              <a href={entry.url} className="hover:underline">
+              {/* A new tab, which is the first `target="_blank"` in the tree
+                  and sets the convention for the admin area: these open a
+                  JSON document, and two of them — the origin-root spellings
+                  under a sub-path — are served by the *reverse proxy* above
+                  this app's mount, so following one in place navigates out of
+                  the application entirely and the back button is the only way
+                  home. `rel="noreferrer"` because there is no reason to tell
+                  the metadata document where the operator came from. */}
+              <a
+                href={entry.url}
+                target="_blank"
+                rel="noreferrer"
+                className="hover:underline"
+              >
                 <code className="text-xs break-all">{entry.url}</code>
               </a>
             </DetailRow>

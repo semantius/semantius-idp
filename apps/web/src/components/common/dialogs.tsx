@@ -111,14 +111,11 @@ export function SecretDialog({
   title,
   description,
   value,
-  /** A URL wraps; a key should not be broken across lines by accident. */
-  wrap = false,
 }: {
   t: Catalog
   title: string
   description?: ReactNode
   value: string
-  wrap?: boolean
 }) {
   return (
     <Dialog defaultOpen>
@@ -137,13 +134,18 @@ export function SecretDialog({
             popup and carried the copy button off the right-hand edge with it
             (owner review round 2, finding 5). */}
         <div className="flex min-w-0 items-start gap-2">
+          {/* **Always wrapped.** There used to be a `wrap` prop, off by
+              default, on the argument that a key should not be broken across
+              lines by accident — which assumed the value is read or selected
+              by hand. It is not: it is copied with the button beside it, and
+              the copy takes the value rather than a selection. What the
+              default actually bought was a horizontally scrolling box showing
+              the first third of a forty-character API key, with the rest
+              somewhere to the right (owner review round 3, finding 6). All
+              three call sites wanted it wrapped, and two of them said so. */}
           <code
             data-slot="one-shot-value"
-            className={
-              wrap
-                ? "min-w-0 flex-1 rounded-lg bg-muted p-3 font-mono text-xs break-all"
-                : "min-w-0 flex-1 overflow-x-auto rounded-lg bg-muted p-3 font-mono text-xs whitespace-pre"
-            }
+            className="min-w-0 flex-1 rounded-lg bg-muted p-3 font-mono text-xs break-all"
           >
             {value}
           </code>

@@ -207,31 +207,37 @@ export function ClientCreateDialog({
             </Label>
           ))}
         </fieldset>
-        {/* Both of these were sent by the handler with no field to send
-            them from, so a *defined* `false` overrode the schema default
-            every time. `skipConsent` therefore defaulted to true in the
-            file schema (FR-OIDC-3) and to false for everything created
-            here — every admin-registered client wrongly asked for
-            consent. It is checked by default now, which restores the
-            documented semantics. */}
+        {/* Asked the way round an administrator thinks about it (round 3,
+            finding 10): *does this application ask the user?* The wire field
+            is still `skipConsent`, inverted once in `skipConsentFromForm`,
+            which has a test on it — this is a real triple negative in the
+            making and the one place it is allowed to live.
+
+            Unticked by default, which is `skipConsent: true`: FR-OIDC-3's
+            documented default and what a file-declared client gets. The
+            history is worth keeping, because the shape of the bug is easy to
+            recreate: both checkboxes were once sent by the handler with no
+            field to send them from, so a *defined* `false` overrode the
+            schema default every time and every admin-registered client
+            wrongly asked for consent. */}
         <Label className="flex items-start gap-2 text-sm font-normal">
           {/* `aria-describedby`, not just visible text: the control is a
               `role="checkbox"` span, so neither the wrapping label nor the
               help underneath it reaches a screen reader on its own. */}
           <Checkbox
-            name="skipConsent"
+            name="requireConsent"
             value="on"
-            defaultChecked={checked("skipConsent", true)}
-            aria-label={t.admin.clients.skipConsent}
-            aria-describedby="skip-consent-help"
+            defaultChecked={checked("requireConsent", false)}
+            aria-label={t.admin.clients.requireConsentLabel}
+            aria-describedby="require-consent-help"
           />
           <span>
-            {t.admin.clients.skipConsent}
+            {t.admin.clients.requireConsentLabel}
             <span
-              id="skip-consent-help"
+              id="require-consent-help"
               className="block text-xs text-muted-foreground"
             >
-              {t.admin.clients.skipConsentHelp}
+              {t.admin.clients.requireConsentHelp}
             </span>
           </span>
         </Label>

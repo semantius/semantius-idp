@@ -517,9 +517,13 @@ export const enUS = {
       disabled: "Disabled",
       redirectUris: "Redirect URIs",
       scopes: "Scopes",
-      skipConsent: "Consent skipped",
-      skipConsentHelp:
-        "First-party applications do not ask. Turn this off for anything you did not write.",
+      // Round 3, finding 10: the column and the checkbox now both name the
+      // thing being decided — does this application ask the user? — rather
+      // than the `skipConsent` field stored underneath it.
+      requireConsent: "Consent required",
+      requireConsentLabel: "Require consent",
+      requireConsentHelp:
+        "The user is asked to approve the application the first time it asks for their data. Leave it off for applications you wrote yourself.",
       postLogoutRedirectUris: "Post-logout redirect URIs",
       enableEndSession: "Allow RP-initiated logout",
       enableEndSessionHelp:

@@ -21,7 +21,7 @@ import { ClientCreateDialog } from "@/components/admin/client-create-dialog"
 import { ActionDialog, SecretDialog } from "@/components/common/dialogs"
 import { FormAlert } from "@/components/auth/form-parts"
 import { messageForErrorCode, messageForNoticeCode } from "@/lib/auth-errors"
-import { uriLines } from "@/lib/client-rules"
+import { skipConsentFromForm, uriLines } from "@/lib/client-rules"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
 import {
@@ -121,7 +121,7 @@ export const Route = createFileRoute("/admin/clients")({
                   redirectUris: form.redirectUris,
                   postLogoutRedirectUris: form.postLogoutRedirectUris,
                   scopes: valuesOf("scopes"),
-                  skipConsent: form.skipConsent,
+                  requireConsent: form.requireConsent,
                   enableEndSession: form.enableEndSession,
                 },
         })
@@ -172,7 +172,9 @@ export const Route = createFileRoute("/admin/clients")({
               form.postLogoutRedirectUris ?? ""
             ),
             scopes: valuesOf("scopes"),
-            skipConsent: form.skipConsent === "on",
+            // The form asks the question the other way round; the wire field
+            // is unchanged (round 3, finding 10).
+            skipConsent: skipConsentFromForm(form.requireConsent),
             enableEndSession: form.enableEndSession === "on",
           },
           request
@@ -189,7 +191,7 @@ export const Route = createFileRoute("/admin/clients")({
             redirectUris: form.redirectUris,
             postLogoutRedirectUris: form.postLogoutRedirectUris,
             scopes: valuesOf("scopes"),
-            skipConsent: form.skipConsent,
+            requireConsent: form.requireConsent,
             enableEndSession: form.enableEndSession,
           })
           return redirectWithCookies(
@@ -265,7 +267,7 @@ function ClientsPage() {
                 <TableHead>{t.admin.clients.type}</TableHead>
                 <TableHead>{t.admin.clients.redirectUris}</TableHead>
                 <TableHead>{t.admin.clients.scopes}</TableHead>
-                <TableHead>{t.admin.clients.skipConsent}</TableHead>
+                <TableHead>{t.admin.clients.requireConsent}</TableHead>
                 <TableHead>{t.admin.clients.managedBy}</TableHead>
                 <TableHead>{t.admin.clients.status}</TableHead>
               </TableRow>
@@ -297,14 +299,14 @@ function ClientsPage() {
                   <TableCell className="text-xs">
                     {client.scopes.join(" ") || "—"}
                   </TableCell>
+                  {/* One affordance for both answers. It was a Badge for yes
+                      and plain muted text for no, which read as two different
+                      kinds of fact rather than as one column with two values
+                      (round 3, finding 10) — and it named `skipConsent`, so
+                      the "yes" meant the opposite of what the header
+                      suggested. */}
                   <TableCell className="text-xs">
-                    {client.skipConsent ? (
-                      <Badge variant="secondary">{t.common.yes}</Badge>
-                    ) : (
-                      <span className="text-muted-foreground">
-                        {t.common.no}
-                      </span>
-                    )}
+                    {client.skipConsent ? t.common.no : t.common.yes}
                   </TableCell>
                   <TableCell className="text-xs">
                     <Badge variant="outline">

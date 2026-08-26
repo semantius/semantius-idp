@@ -64,6 +64,10 @@ export const enUS = {
       // FR-AUTH-5: not a failure — the session is valid but too old for what
       // was being attempted.
       reauth: "Sign in again to continue. It has been a while.",
+      // D63: the same bounce, from a form. Saying so is the difference
+      // between signing in again and starting the form over from memory.
+      reauthDraft:
+        "Sign in again to continue. It has been a while — what you typed is kept.",
       required: "Sign in to continue.",
     },
     signUp: {

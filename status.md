@@ -110,6 +110,14 @@ come before anything in Pending.
   one-shot stash, and `ActionDialog` gained `defaultOpen` so the dialog
   reopens. Passwords are never stashed, enforced in the helper rather than by
   each caller.
+- **The freshness bounce (F14), `D63`.** Why it happened, for the record:
+  FR-AUTH-5 measures freshness from `session.createdAt` and activity must not
+  refresh it — `updatedAt` moves on every request and would make every session
+  permanently fresh — so fifteen minutes on a twelve-field form is easy to
+  spend. The defect was the *order*: the gate ran before the body was read.
+  It reads first now and stashes the draft on the stale branch only, with a
+  1800 s TTL because the detour may include a second factor. `reauth_draft` is
+  its own notice code so the sentence is only shown where it is true.
 
 ---
 

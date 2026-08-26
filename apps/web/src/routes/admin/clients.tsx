@@ -96,12 +96,36 @@ export const Route = createFileRoute("/admin/clients")({
         const base = runtime.config.base.basePath
         const here = `${base}${HERE}`
 
-        // Registering a client is a credential-minting act, so it sits behind
-        // the same freshness gate as every other admin write (FR-AUTH-5).
-        const fresh = await requireFreshSession(runtime, request, HERE)
-        if (!fresh.ok) return fresh.response
-
+        // **The body is read before the gate** (D63). The order used to be the
+        // other way round, and FR-AUTH-5's fifteen minutes are easy to spend
+        // on a twelve-field form — so a submission that arrived one minute
+        // late was thrown away and retyped after signing in again. Safe to
+        // reorder: `readSession` reads headers only and `callAuth` builds a
+        // fresh Request, so nothing downstream wants the original stream
+        // (`login.tsx` has read the body before responding since M8).
         const { fields: form, list: valuesOf } = await readFormMulti(request)
+
+        // Registering a client is a credential-minting act, so it sits behind
+        // the same freshness gate as every other admin write (FR-AUTH-5). The
+        // draft rides along only for `create`: the two one-field actions have
+        // nothing worth keeping, and a stale POST that is about to be refused
+        // should not write a row for a client id and a hidden input.
+        const fresh = await requireFreshSession(runtime, request, HERE, {
+          draft:
+            form.action === "delete" || form.action === "toggle"
+              ? undefined
+              : {
+                  clientId: form.clientId,
+                  name: form.name,
+                  type: form.type,
+                  redirectUris: form.redirectUris,
+                  postLogoutRedirectUris: form.postLogoutRedirectUris,
+                  scopes: valuesOf("scopes"),
+                  skipConsent: form.skipConsent,
+                  enableEndSession: form.enableEndSession,
+                },
+        })
+        if (!fresh.ok) return fresh.response
 
         if (form.action === "delete") {
           const result = await callAuth(

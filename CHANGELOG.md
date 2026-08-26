@@ -330,5 +330,15 @@ were questions, and one was "polish every page".
   eroding the seam it stands for. What is left for the server to refuse — a
   duplicate id, a file-managed collision, a lost race — comes back with the
   dialog reopened and all twelve fields as they were.
+- **Re-authenticating in the middle of a form no longer throws the form away**
+  (**D63**). Every admin write needs a session fresher than fifteen minutes,
+  measured from when the password was typed and deliberately not refreshed by
+  activity — so a long look at the client-registration dialog could outlive it.
+  The gate ran before the request body was read, so the submission was
+  discarded and had to be retyped after signing in again. It now reads the body
+  first and carries it across the bounce, and the sign-in page says so. The
+  window is unchanged; a stale session is still prompted. Nothing is stashed
+  for a caller with no session at all, and password-bearing actions keep no
+  draft.
 
 [Unreleased]: https://github.com/semantius/semantius-idp/commits/main

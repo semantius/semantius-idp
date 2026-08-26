@@ -51,6 +51,8 @@ import { getRuntime } from "@/server/runtime"
 import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 import { LocalTime } from "@/components/common/local-time"
 
+const HERE = "/admin/users"
+
 /**
  * `/admin/users` — the list (FR-ADMIN-2).
  *
@@ -229,7 +231,6 @@ export const Route = createFileRoute("/admin/users/")({
   },
 })
 
-const HERE = "/admin/users"
 
 const STATUSES = ["pending", "active", "rejected"] as const
 

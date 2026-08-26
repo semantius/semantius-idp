@@ -1,12 +1,15 @@
 import { createFileRoute } from "@tanstack/react-router"
 
-import { Button } from "@workspace/ui/components/button"
-
-import { AdminShell, Field } from "@/components/admin/admin-shell"
+import {
+  AdminCard,
+  AdminShell,
+  DetailRow,
+} from "@/components/admin/admin-shell"
 import { FormAlert } from "@/components/auth/form-parts"
 import { messageForErrorCode } from "@/lib/auth-errors"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
+import type { Catalog } from "@/server/i18n"
 import {
   callAuth,
   errorCodeFor,
@@ -15,6 +18,7 @@ import {
 import { requireFreshSession } from "@/server/http/fresh-session"
 import { fetchSystemInfo } from "@/server/functions/admin"
 import { getRuntime } from "@/server/runtime"
+import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 /**
  * `/admin/system` — what this process is running, and the one button that
@@ -64,6 +68,19 @@ export const Route = createFileRoute("/admin/system")({
   },
 })
 
+/**
+ * The catalog label for a discovery key, falling back to the key itself.
+ *
+ * Widened to `Record<string, string>` on purpose: the keys come from the
+ * server, so a deployment running a newer binary than this bundle could send
+ * one the catalog has never heard of. Showing the raw key is a worse label and
+ * a better outcome than a blank row.
+ */
+function labelFor(t: Catalog, key: string): string {
+  const labels: Record<string, string> = t.admin.system.discoveryUrls
+  return labels[key] ?? key
+}
+
 function SystemPage() {
   const { ui, gate, info, rotated, error } = Route.useLoaderData()
   const t = getCatalog(ui.locale)
@@ -77,61 +94,83 @@ function SystemPage() {
       title={t.admin.system.title}
       impersonated={gate.admin ? gate.impersonated : false}
     >
-      <FormAlert>{messageForErrorCode(error, t)}</FormAlert>
-      {rotated ? (
-        <p role="status" className="mb-4 text-sm">
-          {t.admin.system.rotated(rotated)}
-        </p>
-      ) : null}
+      <FormAlert>
+        {messageForErrorCode(error, t, ui.passwordMinLength)}
+      </FormAlert>
+      <FormAlert variant="default">
+        {rotated ? t.admin.system.rotated(rotated) : undefined}
+      </FormAlert>
 
-      <section className="rounded-lg border bg-card p-4">
+      <AdminCard>
         <dl className="divide-y">
-          <Field label={t.admin.system.version}>{info.version}</Field>
+          <DetailRow label={t.admin.system.version}>{info.version}</DetailRow>
           {info.revision ? (
-            <Field label={t.admin.system.revision}>{info.revision}</Field>
+            <DetailRow label={t.admin.system.revision}>
+              {info.revision}
+            </DetailRow>
           ) : null}
-          <Field label={t.admin.system.issuer}>
+          <DetailRow label={t.admin.system.issuer}>
             <code className="text-xs">{info.issuer}</code>
-          </Field>
-          <Field label={t.admin.system.email}>
+          </DetailRow>
+          <DetailRow label={t.admin.system.email}>
             {info.email.enabled
               ? t.admin.system.emailOn(info.email.transport)
               : t.admin.system.emailOff}
-          </Field>
+          </DetailRow>
         </dl>
-      </section>
+      </AdminCard>
 
-      <section className="mt-8 rounded-lg border bg-card p-4">
-        <h3 className="mb-2 text-sm font-medium">{t.admin.system.keys}</h3>
+      {/* D55: the question the page could not answer — "what do I paste into
+          the other system?". The issuer alone is not enough, because the
+          sub-path forms are not derivable from it by hand. */}
+      <AdminCard
+        className="mt-8"
+        title={t.admin.system.discovery}
+        description={t.admin.system.discoveryHelp}
+      >
         <dl className="divide-y">
-          <Field label={t.admin.system.algorithm}>
+          {info.discovery.map((entry) => (
+            <DetailRow key={entry.key} label={labelFor(t, entry.key)}>
+              {/* Same-origin by construction, so a plain anchor — and no
+                  `target`, because an operator copying a URL wants to see it,
+                  not to lose the page they were on. */}
+              <a href={entry.url} className="hover:underline">
+                <code className="text-xs break-all">{entry.url}</code>
+              </a>
+            </DetailRow>
+          ))}
+        </dl>
+      </AdminCard>
+
+      <AdminCard className="mt-8" title={t.admin.system.keys}>
+        <dl className="divide-y">
+          <DetailRow label={t.admin.system.algorithm}>
             {info.signingKeys.algorithm}
-          </Field>
-          <Field label={t.admin.system.activeKey}>
+          </DetailRow>
+          <DetailRow label={t.admin.system.activeKey}>
             <code className="text-xs">
               {info.signingKeys.activeKeyId ?? "—"}
             </code>
-          </Field>
-          <Field label={t.admin.system.publishedKeys}>
+          </DetailRow>
+          <DetailRow label={t.admin.system.publishedKeys}>
             {info.signingKeys.published}
-          </Field>
+          </DetailRow>
         </dl>
-        <form method="post" className="mt-4 grid gap-2">
+        <PendingForm
+          busy={t.common.loading}
+          method="post"
+          className="mt-4 grid gap-2"
+        >
           <p className="text-xs text-muted-foreground">
             {t.admin.system.rotateHelp}
           </p>
-          <Button
-            type="submit"
-            variant="outline"
-            className="justify-self-start"
-          >
+          <SubmitButton variant="outline" className="justify-self-start">
             {t.admin.system.rotate}
-          </Button>
-        </form>
-      </section>
+          </SubmitButton>
+        </PendingForm>
+      </AdminCard>
 
-      <section className="mt-8 rounded-lg border bg-card p-4">
-        <h3 className="mb-2 text-sm font-medium">{t.admin.system.startup}</h3>
+      <AdminCard className="mt-8" title={t.admin.system.startup}>
         <ul className="grid gap-1 text-sm">
           {info.startup.steps.map((step) => (
             <li key={step.name} className="flex gap-2">
@@ -152,30 +191,30 @@ function SystemPage() {
             </pre>
           </>
         ) : null}
-      </section>
+      </AdminCard>
 
       {info.warnings.length > 0 ? (
-        <section className="mt-8 rounded-lg border border-destructive/40 p-4">
-          <h3 className="mb-2 text-sm font-medium">
-            {t.admin.system.warnings}
-          </h3>
+        <AdminCard
+          className="mt-8 ring-destructive/40"
+          title={t.admin.system.warnings}
+        >
           <ul className="grid gap-1 text-sm">
             {info.warnings.map((warning) => (
               <li key={warning}>{warning}</li>
             ))}
           </ul>
-        </section>
+        </AdminCard>
       ) : null}
 
-      <section className="mt-8">
-        <h3 className="mb-1 text-sm font-medium">{t.admin.system.config}</h3>
-        <p className="mb-2 text-xs text-muted-foreground">
-          {t.admin.system.configHelp}
-        </p>
-        <pre className="overflow-x-auto rounded-lg border bg-card p-4 text-xs">
+      <AdminCard
+        className="mt-8"
+        title={t.admin.system.config}
+        description={t.admin.system.configHelp}
+      >
+        <pre className="overflow-x-auto rounded-lg bg-muted p-3 text-xs">
           {info.config}
         </pre>
-      </section>
+      </AdminCard>
     </AdminShell>
   )
 }

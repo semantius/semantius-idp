@@ -53,7 +53,7 @@ the process; there is no hot reload and `SIGHUP` is ignored (CFG-5).
 | `signUp.allowedEmailDomains` | string[] | `[]` | Empty = no restriction. Admin-created users always bypass it. |
 | `auth.defaultRedirect` | string | `/account` | Where a completed sign-in lands when no OAuth continuation and no validated returnTo apply. Relative path, or an absolute URL when the IdP sits beside the product. |
 | `auth.requireEmailVerification` | boolean | `true` | Gates password sign-in only. Forced false when e-mail is not configured. |
-| `auth.password.minLength` | integer | `12` | Length is the only strength rule here. Composition rules push people towards P@ssw0rd1 and are not worth the support load. |
+| `auth.password.minLength` | integer | `10` | Length is the only strength rule here. Composition rules push people towards P@ssw0rd1 and are not worth the support load. |
 | `auth.password.maxLength` | integer | `128` | An upper bound exists because the hash is computed over the whole value; it is not a strength policy. |
 | `auth.password.breachCheck` | boolean | `false` | Check the password against Have I Been Pwned at sign-up and change. |
 | `auth.passwordReset.tokenTtlMinutes` | integer | `60` | Reset links expire after this; verification links are fixed at 24 h. |

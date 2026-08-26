@@ -1,7 +1,5 @@
 import { createFileRoute, redirect } from "@tanstack/react-router"
 
-import { Button } from "@workspace/ui/components/button"
-
 import { AuthShell } from "@/components/auth/auth-shell"
 import {
   FormAlert,
@@ -12,6 +10,7 @@ import { messageForErrorCode } from "@/lib/auth-errors"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
 import { createFirstUser, isSetupPending } from "@/server/admin/first-user"
+import { validateSetupForm } from "@/server/admin/setup-form"
 import { createDb } from "@/server/db/client"
 import {
   callAuth,
@@ -25,6 +24,7 @@ import { currentRequest } from "@/server/http/request-log"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
 import { fetchSetupPending } from "@/server/functions/setup"
+import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 /**
  * `/setup` — the first-run wizard (FR-ADMIN-1, **D52**).
@@ -87,19 +87,11 @@ export const Route = createFileRoute("/setup")({
         }
 
         const form = await readForm(request)
-        const email = (form.email ?? "").toLowerCase()
-        const password = form.password ?? ""
-        const policy = runtime.config.file.auth.password
-
-        if (!EMAIL_SHAPE.test(email)) {
-          return redirectWithCookies(withError(here, "invalid_email"))
+        const valid = validateSetupForm(form, runtime.config.file.auth.password)
+        if (!valid.ok) {
+          return redirectWithCookies(withError(here, valid.code))
         }
-        if (
-          password.length < policy.minLength ||
-          password.length > policy.maxLength
-        ) {
-          return redirectWithCookies(withError(here, "password_length"))
-        }
+        const { email, firstName, lastName, password } = valid.values
 
         // A direct, non-pooled handle for the advisory lock: a session lock
         // does not hold through a transaction pooler (D27), and the runtime's
@@ -124,8 +116,8 @@ export const Route = createFileRoute("/setup")({
             },
             {
               email,
-              firstName: form.firstName ?? "",
-              lastName: form.lastName ?? "",
+              firstName,
+              lastName,
               password,
             }
           )
@@ -179,13 +171,6 @@ export const Route = createFileRoute("/setup")({
  */
 const SETUP_RULE = { window: 3600, max: 10 } as const
 
-/**
- * Shape only. The address is not verified and does not need to be: the person
- * filling this in is standing at the deployment they just started, and
- * `emailVerified` is set for exactly that reason.
- */
-const EMAIL_SHAPE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-
 function SetupPage() {
   const { ui, error } = Route.useLoaderData()
   const t = getCatalog(ui.locale)
@@ -197,22 +182,22 @@ function SetupPage() {
       description={<p>{t.setup.description}</p>}
       width="md"
     >
-      <FormAlert>{messageForErrorCode(error, t)}</FormAlert>
+      <FormAlert>
+        {messageForErrorCode(error, t, ui.passwordMinLength)}
+      </FormAlert>
 
-      <form method="post" className="grid gap-4">
+      <PendingForm busy={t.common.loading} method="post" className="grid gap-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <TextField
             name="firstName"
             label={t.common.firstName}
             autoComplete="given-name"
-            required={false}
             autoFocus
           />
           <TextField
             name="lastName"
             label={t.common.lastName}
             autoComplete="family-name"
-            required={false}
           />
         </div>
 
@@ -232,11 +217,17 @@ function SetupPage() {
           showLabel={t.common.showPassword}
           hideLabel={t.common.hidePassword}
         />
+        <PasswordField
+          name="confirmPassword"
+          label={t.setup.confirmPassword}
+          autoComplete="new-password"
+          minLength={ui.passwordMinLength}
+          showLabel={t.common.showPassword}
+          hideLabel={t.common.hidePassword}
+        />
 
-        <Button type="submit" className="w-full">
-          {t.setup.submit}
-        </Button>
-      </form>
+        <SubmitButton className="w-full">{t.setup.submit}</SubmitButton>
+      </PendingForm>
 
       <p className="mt-6 text-sm text-muted-foreground">{t.setup.footnote}</p>
     </AuthShell>

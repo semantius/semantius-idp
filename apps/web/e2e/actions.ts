@@ -27,7 +27,7 @@ export function uniqueEmail(prefix: string): string {
   return `${prefix}-${randomUUID().slice(0, 8)}@example.test`
 }
 
-/** Long enough for the default `auth.password.minLength` of 12. */
+/** Long enough for the default `auth.password.minLength` of 10 (D53). */
 export const PASSWORD = "e2e-user-password-01"
 
 /**
@@ -40,7 +40,9 @@ export const PASSWORD = "e2e-user-password-01"
  */
 export async function submit(page: Page, name: string | RegExp): Promise<void> {
   const before = page.url()
-  await page.getByRole("button", { name, exact: typeof name === "string" }).click()
+  await page
+    .getByRole("button", { name, exact: typeof name === "string" })
+    .click()
   await page.waitForURL((url) => url.href !== before)
 }
 
@@ -122,13 +124,20 @@ export async function submitDialog(
 export async function register(
   page: Page,
   app: App,
-  user: { email: string; password?: string; firstName?: string; lastName?: string }
+  user: {
+    email: string
+    password?: string
+    firstName?: string
+    lastName?: string
+  }
 ): Promise<void> {
   await app.goto("/signup")
   if (user.firstName) await page.getByLabel("First name").fill(user.firstName)
   if (user.lastName) await page.getByLabel("Last name").fill(user.lastName)
   await page.getByLabel("E-mail address").fill(user.email)
-  await page.getByLabel("Password", { exact: true }).fill(user.password ?? PASSWORD)
+  await page
+    .getByLabel("Password", { exact: true })
+    .fill(user.password ?? PASSWORD)
   await submit(page, "Create account")
 }
 

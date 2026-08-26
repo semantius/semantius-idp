@@ -26,6 +26,16 @@ export interface AdminContext {
   auth?: Auth
   /** Set once startup finishes; the step list and the FR-OIDC-2 diff. */
   startup?: StartupResult
+  /**
+   * Whether `security.txt` exists in the config folder (**D55**).
+   *
+   * Filled in by `runtime.ts` rather than read here: the answer needs
+   * `node:fs` and the config directory, and an endpoint that reached for
+   * `getRuntime()` to find out would build a whole runtime inside the
+   * integration suite, which builds its instances by hand. Undefined means
+   * "nobody has said", and the discovery list simply omits the entry.
+   */
+  securityTxt?: boolean
 }
 
 /** A fresh, empty context. One per Better Auth instance. */

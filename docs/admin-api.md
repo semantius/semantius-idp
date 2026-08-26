@@ -99,7 +99,7 @@ the sign-in page and they start again from the application.
 | `POST` | `/idp/reset-two-factor` | Turns 2FA off, signs them out, tells them |
 | `GET` | `/idp/admin-stats` | The dashboard counts |
 | `GET` | `/idp/audit` | The audit trail, filterable and cursor-paged |
-| `GET` | `/idp/system` | Version, issuer, e-mail transport, keys, migrations, last reconcile, effective configuration with secrets masked |
+| `GET` | `/idp/system` | Version, issuer, the well-known **discovery URLs** (**D55**), e-mail transport, keys, migrations, last reconcile, effective configuration with secrets masked |
 | `POST` | `/idp/rotate-keys` | Creates a successor signing key |
 | `POST` | `/idp/create-client` | Registers an OAuth client (**D50**) |
 | `POST` | `/idp/set-client-disabled` | Switches one off, or back on |
@@ -107,6 +107,12 @@ the sign-in page and they start again from the application.
 
 The role catalog is **read-only** over HTTP: it comes from `roles.json`, and
 `GET /admin/roles` shows what was reconciled along with any warnings.
+
+`skipConsent` and `enableEndSession` are worth sending explicitly. Both are
+optional, and both default to `true` in the client schema — but the endpoint
+passes through whatever you send, so a *defined* `false` wins over the default.
+`enableEndSession: true` is refused unless the client also has at least one
+`postLogoutRedirectUris` entry.
 
 Clients are **half** read-only (**D50**). The ones in `oauth_clients.json` are
 reconciled at start-up and refused by the three endpoints above with
@@ -122,6 +128,7 @@ curl -X POST https://idp.example.com/api/auth/idp/create-client   -H "x-api-key:
         "type": "web",
         "redirectUris": ["https://reporting.example.com/callback"],
         "scopes": ["openid", "profile", "email"],
+        "skipConsent": true,
         "enableEndSession": false
       }'
 ```

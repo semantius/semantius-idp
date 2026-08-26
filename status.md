@@ -1,11 +1,11 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-25 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `58ee65b`
-**Plan:** `~/.claude/plans/review-the-current-implementation-splendid-dragon.md`
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D52**
+**As of:** 2026-08-26 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `40e4564`
+**Plan:** `~/.claude/plans/make-a-plan-to-tranquil-rabbit.md` (owner review round 2)
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D55**
 
-**S3, M6–M14 and owner review round 1 are done, up to the release gate.** Every
-gate green: lint, typecheck, unit (483), integration (223 across twenty-four
+**S3, M6–M14 and owner review rounds 1 and 2 are done, up to the release gate.** Every
+gate green: lint, typecheck, unit (510), integration (225 across twenty-four
 files), coverage thresholds including the 85 % per-module gates, schema-drift,
 config-schema staleness, the configuration-reference and example-config gates,
 dependency pinning, the client-bundle gate, the TST-8 container smoke test —
@@ -64,6 +64,155 @@ Everything buildable is built. What remains cannot be done from here:
 ---
 
 ## Review results
+
+### Round 2 — owner review, 2026-08-25 (**D53–D55**)
+
+The owner walked the running application — first-run setup, sign-in, the admin
+area — and filed thirteen findings. One secret leak, several functional
+defects, three questions, and "polish every page to shadcn standards". They
+were taken as pre-work, ahead of anything left in Pending, per AGENTS.md.
+
+The three questions, answered:
+
+- **6, the underlined header links.** Deliberate code, and inconsistent:
+  "Your account" was an underlined `<a>` and "Sign out" a bare underlined
+  `<button>`, in the same row as six pill-tab navigation links — three kinds of
+  affordance side by side. Both are now ghost buttons at the nav's size, in
+  both shells.
+- **11, the "Signing key" on the System page.** The page never showed key
+  material and could not: `/idp/system` selects `id`, `createdAt` and
+  `expiresAt` from `jwks`, and nothing anywhere reads `privateKey`. What it
+  showed was the `kid`, which is what FR-ADMIN-2 asks for. Only the label was
+  wrong, and it is now "Active key ID".
+- **12, the one visible password.** Not a false alarm — a real leak, and the
+  first thing fixed. See below.
+
+What changed, in the order it was done:
+
+1. **`database.directUrl` was printed unmasked.** Masking is positional by
+   design — a new secret key has to be added to a list, which is the review
+   prompt the file's own comment describes — and the key added by **D27**/
+   **D48** never was. Worse, the password-only masker for connection strings
+   was reached by a literal `pointer === "/database/url"`, so the omission was
+   invisible twice over. Both pointers now go through a two-member set, and
+   the masker also learnt about a password carried as a query parameter
+   (`?password=`, `?sslpassword=`), which libpq accepts and which no amount of
+   userinfo masking touches. **Blast radius, corrected:** only
+   `/admin/system`. `maskConfig` has exactly one caller; `idp config validate`
+   prints its own fixed seven-line summary whose one connection string is
+   `database.url`, already masked. `mask.ts`'s own header claimed both, and had
+   been wrong about it since before this round — that is fixed too.
+2. **The password minimum is 10** (**D53**), and the two places that ignored
+   `auth.password.minLength` now read it.
+3. **The first-run wizard requires both names and asks for the password twice**
+   (**D54**). Its validation moved into `server/admin/setup-form.ts`, so the
+   rules can be asserted without a runtime.
+4. **Five registry components added** — `spinner`, `field`, `native-select`,
+   `textarea`, `empty` — verbatim, with `@typescript-eslint/no-unnecessary-condition`
+   turned off in `packages/ui` for `field.tsx` rather than patching it. The
+   same `add` run re-fetched `label` and `separator`, which `field` imports,
+   and moved a `"use client"` directive from the first to the second. Registry
+   output, not a hand-edit — recorded so the next `add` does not read as a
+   regression.
+5. **Every form says it is working.** `PendingForm`/`SubmitButton` across all
+   forty-one forms. Two mechanics are load-bearing and are commented as such: the
+   double-submit guard is a **ref**, because a `setState` is not visible until
+   the next render; and the visual state is deferred by one animation frame,
+   because the browser builds the form entry list *after* the submit handler
+   returns — a synchronously-disabled submitter would have dropped
+   `/consent`'s own `decision=allow`.
+6. **Timestamps render in the browser's locale and timezone**, which is what
+   FR-I18N-1 always said. One `<LocalTime>` replaces seven ad-hoc UTC slices in
+   the admin area — three different precisions — and, across three call sites
+   in the account area, two configured-locale `Intl` helpers — the latter under a comment asserting the
+   opposite of the spec. The first paint stays deterministic UTC, labelled,
+   because formatting on both sides of hydration is how a page tears.
+7. **Admin-registered OAuth clients no longer all demanded consent.** The
+   create handler sent `skipConsent: false` from a checkbox that did not exist,
+   and a *defined* `false` beats the schema default of `true`. `enableEndSession`
+   had the same shape — but there the always-false bug was accidentally
+   load-bearing, because the client schema refuses `enableEndSession` with no
+   post-logout URI, so that checkbox defaults **off** while `skipConsent`
+   defaults on.
+8. **The impersonation control is hidden when impersonation is off**, reversing
+   the note that used to sit on `ui.allowImpersonation`.
+9. **The System page lists the discovery URLs** (**D55**). Under a sub-path
+   that is four URLs, not two: each metadata document has an issuer-relative
+   form *and* an origin-root one, and `Caddyfile.subpath` rewrites both of the
+   latter — RFC 8414 §3.1 defines the OAuth spelling and enough clients ask
+   for the OpenID one that the reference proxy serves it too. Listing only the
+   RFC 8414 root form, which is where this landed first, would have sent an
+   operator running a different proxy away with half the rules they need.
+10. **The design sweep.** The `SecretDialog` copy button had been pushed
+    outside the popup by an unbreakable `whitespace-pre` `<code>`: the row was
+    a grid item, and a grid item's default `min-width: auto` refuses to shrink
+    below its content. The Actions sidebar stretched to the main column's
+    height and the grid distributed the surplus *between* the buttons — hence
+    the "odd spacing"; it is `self-start` inside a Card now, grouped by what
+    each entry does. Fourteen hand-rolled card surfaces are gone — some to
+    `AdminCard`, which also subsumes a local `Section` helper, the rest to the
+    kit's `Card` directly; `AuthShell`, `AccountSection` and `Stat` moved onto
+    `Card` too; six hand-rolled selects became `NativeSelect`; eighteen
+    `grid gap-1.5` groups became the kit's `Field`. The admin shell's own
+    `Field` — a `<dt>/<dd>` pair — was renamed `DetailRow`, because two things
+    called `Field` in one file is how a definition row ends up wrapping an
+    `<input>`. The roles page gained FR-ADMIN-2's last-reconcile timestamp and
+    warnings, which had been specified and never rendered. The sweep also
+    surfaced a defect of its own: the registry dialog popup is
+    `fixed top-1/2 -translate-y-1/2` with no max-height and no overflow, so
+    the client-create dialog became unusable the moment it grew the fields it
+    had been missing — its submit button hung below the viewport with nothing
+    to scroll. Capped and made scrollable in `apps/web`'s `ActionDialog`,
+    never in `packages/ui`.
+
+### Round 2, the review of the review
+
+A subagent reviewed the finished change set against AGENTS.md, the plan and
+the spec. It found one gap that mattered and a run of overstated prose; both
+are fixed above and the numbers in this section are now measured rather than
+carried over from the plan.
+
+- **The discovery list was half of what the shipped proxy serves.** It emitted
+  RFC 8414's origin-root form and not the OpenID Discovery one — but
+  `Caddyfile.subpath` rewrites *both*, and D55 exists precisely so an operator
+  on a different proxy can see which rules they need. Listing one of two would
+  have sent them away with half. Fixed, with the unit test that had asserted
+  the *absence* of a second entry inverted to require it, and the sub-path e2e
+  project now checks both.
+- **The leak's blast radius was overstated.** See finding 1 above: it was
+  `/admin/system` only.
+- **The rAF rationale described a mechanism this code does not use.** The
+  comment said a synchronously-disabled submitter would drop its name/value
+  from the entry list — true of a native `disabled`, and `focusableWhenDisabled`
+  means Base UI never emits one. The frame is kept and the comment now says
+  why: the obvious future simplification is to drop `focusableWhenDisabled`,
+  and that is the day `/consent` would start posting no decision at all.
+- **`/admin/roles` was about to show the wrong warnings.** It rendered
+  `runtime.warnings` — configuration-load problems, already on two other pages
+  — while the one warning that is genuinely roles-versus-database drift went
+  only to the log. `runStartup` now returns it and the page shows that
+  instead.
+- **`/setup` did not trim the e-mail** while the amended FR-ADMIN-1 said it
+  did, and `EMAIL_SHAPE` rejects whitespace — so a pasted address with a
+  trailing space was refused as malformed, on the one form that cannot be
+  reached twice.
+- **`maskConnectionString` only ever masked userinfo.** libpq's URI form also
+  accepts `password` and `sslpassword` as query parameters. Now masked by
+  name, for the same reason the pointer list is positional.
+- **`/admin/index.tsx` had been missed by the sweep** — the admin landing page,
+  still carrying the heading-outside pattern `AdminCard` exists to replace.
+
+Two things the plan assumed and the code did not bear out, both recorded here
+because the next reader will assume the same:
+
+- **`impersonateDisabled` is not a dead string.** The endpoint still refuses a
+  POST that arrives while impersonation is off, and that refusal maps to it.
+  It stayed, with a comment saying so.
+- **The setup-form rules could not become integration tests.** The validation
+  lives in a route `server.handlers` POST, which the integration harness — a
+  Better Auth instance, not an HTTP server — cannot reach. Extracting it to
+  `setup-form.ts` and asserting it as a unit is the same coverage at a lower
+  cost, and it is why that file exists.
 
 ### Round 1 — owner review, 2026-08-25 (**D48–D52**)
 

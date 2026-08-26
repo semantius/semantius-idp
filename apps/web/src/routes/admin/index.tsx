@@ -2,7 +2,7 @@ import { Link, createFileRoute } from "@tanstack/react-router"
 
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
 
-import { AdminShell, Stat } from "@/components/admin/admin-shell"
+import { AdminCard, AdminShell, Stat } from "@/components/admin/admin-shell"
 import { getCatalog } from "@/server/i18n"
 import { fetchAdminStats } from "@/server/functions/admin"
 
@@ -80,10 +80,7 @@ function Dashboard() {
       </div>
 
       {stats.warnings.length > 0 ? (
-        <section className="mt-8">
-          <h3 className="mb-2 text-sm font-medium">
-            {t.admin.dashboard.warningsTitle}
-          </h3>
+        <AdminCard className="mt-8" title={t.admin.dashboard.warningsTitle}>
           <ul className="grid gap-2">
             {stats.warnings.map((warning) => (
               <li key={warning}>
@@ -93,7 +90,7 @@ function Dashboard() {
               </li>
             ))}
           </ul>
-        </section>
+        </AdminCard>
       ) : null}
     </AdminShell>
   )

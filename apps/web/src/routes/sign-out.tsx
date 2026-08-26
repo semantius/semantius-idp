@@ -1,11 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router"
 
-import { Button, buttonVariants } from "@workspace/ui/components/button"
+import { buttonVariants } from "@workspace/ui/components/button"
 
 import { AuthShell } from "@/components/auth/auth-shell"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
 import { APP_ROUTES, AUTH_BASE_PATH } from "@/server/oidc/base-path"
+import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 /**
  * The confirmation an RP-initiated logout needs when it cannot prove itself
@@ -63,15 +64,14 @@ function SignOutPage() {
         >
           {t.endSession.cancel}
         </a>
-        <form
+        <PendingForm
+          busy={t.common.loading}
           method="post"
           action={`${ui.basePath}${AUTH_BASE_PATH}/oauth2/end-session/confirm`}
         >
           <input type="hidden" name="action" value="confirm" />
-          <Button type="submit" className="w-full">
-            {t.endSession.confirm}
-          </Button>
-        </form>
+          <SubmitButton className="w-full">{t.endSession.confirm}</SubmitButton>
+        </PendingForm>
       </div>
     </AuthShell>
   )

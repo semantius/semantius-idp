@@ -54,7 +54,7 @@ function AdminLayout() {
           </p>
           <a
             href={`${ui.basePath}${APP_ROUTES.account}`}
-            className={`${buttonVariants()} mt-6 h-9 px-4`}
+            className={buttonVariants({ size: "lg", className: "mt-6" })}
           >
             {t.admin.forbidden.back}
           </a>

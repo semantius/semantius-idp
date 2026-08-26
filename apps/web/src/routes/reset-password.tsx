@@ -1,7 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
 
-import { Button } from "@workspace/ui/components/button"
-
 import { AuthShell } from "@/components/auth/auth-shell"
 import { FormAlert, PasswordField } from "@/components/auth/form-parts"
 import { messageForErrorCode } from "@/lib/auth-errors"
@@ -16,6 +14,7 @@ import {
 } from "@/server/http/auth-proxy"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
+import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 /**
  * `/reset-password` (FR-AUTH-3).
@@ -105,9 +104,11 @@ function ResetPasswordPage() {
       title={t.auth.resetPassword.title}
       description={t.auth.resetPassword.revokedNotice}
     >
-      <FormAlert>{messageForErrorCode(error, t)}</FormAlert>
+      <FormAlert>
+        {messageForErrorCode(error, t, ui.passwordMinLength)}
+      </FormAlert>
 
-      <form method="post" className="grid gap-4">
+      <PendingForm busy={t.common.loading} method="post" className="grid gap-4">
         <input type="hidden" name="token" value={token} />
         <PasswordField
           name="password"
@@ -127,10 +128,10 @@ function ResetPasswordPage() {
           showLabel={t.common.showPassword}
           hideLabel={t.common.hidePassword}
         />
-        <Button type="submit" className="w-full">
+        <SubmitButton className="w-full">
           {t.auth.resetPassword.submit}
-        </Button>
-      </form>
+        </SubmitButton>
+      </PendingForm>
     </AuthShell>
   )
 }

@@ -1,7 +1,5 @@
 import { createFileRoute, notFound } from "@tanstack/react-router"
 
-import { Button } from "@workspace/ui/components/button"
-
 import {
   AccountSection,
   AccountShell,
@@ -26,6 +24,8 @@ import {
   fetchApiKeys,
 } from "@/server/functions/account"
 import { getRuntime } from "@/server/runtime"
+import { PendingForm, SubmitButton } from "@/components/common/pending-form"
+import { LocalTime } from "@/components/common/local-time"
 
 const HERE = "/account/api-keys"
 
@@ -177,7 +177,9 @@ function ApiKeysPage() {
       isAdmin={profile.isAdmin}
     >
       <FormAlert variant="default">{messageForNoticeCode(notice, t)}</FormAlert>
-      <FormAlert>{messageForErrorCode(error, t)}</FormAlert>
+      <FormAlert>
+        {messageForErrorCode(error, t, ui.passwordMinLength)}
+      </FormAlert>
 
       {/* Opened on arrival, and this is the only render that has the value:
           the loader claimed it, which consumed it. */}
@@ -199,7 +201,11 @@ function ApiKeysPage() {
           >
             {/* A plain form post, exactly as it was inline: the dialog decides
                 what is on screen, never how the submission travels. */}
-            <form method="post" className="grid gap-4">
+            <PendingForm
+              busy={t.common.loading}
+              method="post"
+              className="grid gap-4"
+            >
               <input type="hidden" name="action" value="create" />
               <TextField name="name" label={t.account.apiKeys.keyName} />
               <TextField
@@ -210,9 +216,9 @@ function ApiKeysPage() {
                 hint={t.account.apiKeys.expiryHint(maxDays)}
               />
               <div>
-                <Button type="submit">{t.account.apiKeys.create}</Button>
+                <SubmitButton>{t.account.apiKeys.create}</SubmitButton>
               </div>
-            </form>
+            </PendingForm>
           </ActionDialog>
         </div>
 
@@ -238,31 +244,27 @@ function ApiKeysPage() {
                   </p>
                   <p className="text-muted-foreground">
                     {t.account.apiKeys.created}{" "}
-                    {formatDate(key.createdAt, ui.locale)} ·{" "}
+                    <LocalTime iso={key.createdAt} variant="date" /> ·{" "}
                     {t.account.apiKeys.expires}{" "}
-                    {key.expiresAt
-                      ? formatDate(key.expiresAt, ui.locale)
-                      : t.account.apiKeys.never}
+                    {key.expiresAt ? (
+                      <LocalTime iso={key.expiresAt} variant="date" />
+                    ) : (
+                      t.account.apiKeys.never
+                    )}
                   </p>
                 </div>
-                <form method="post">
+                <PendingForm busy={t.common.loading} method="post">
                   <input type="hidden" name="action" value="revoke" />
                   <input type="hidden" name="keyId" value={key.id} />
-                  <Button type="submit" variant="outline" size="sm">
+                  <SubmitButton variant="outline" size="sm">
                     {t.account.apiKeys.revoke}
-                  </Button>
-                </form>
+                  </SubmitButton>
+                </PendingForm>
               </li>
             ))}
           </ul>
         )}
       </AccountSection>
     </AccountShell>
-  )
-}
-
-function formatDate(value: string, locale: string): string {
-  return new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(
-    new Date(value)
   )
 }

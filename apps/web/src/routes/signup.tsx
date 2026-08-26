@@ -1,7 +1,5 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router"
 
-import { Button } from "@workspace/ui/components/button"
-
 import { AuthShell } from "@/components/auth/auth-shell"
 import {
   FormAlert,
@@ -21,6 +19,7 @@ import {
 import { displayName } from "@/server/display-name"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
+import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 /**
  * `/signup` — self-registration (FR-SIGNUP-1..5).
@@ -74,7 +73,8 @@ export const Route = createFileRoute("/signup")({
                 firstName,
                 lastName,
                 runtime.config.file.site.nameFormat
-              ) || (form.email ?? ""),
+              ) ||
+              (form.email ?? ""),
             ...(firstName ? { firstName } : {}),
             ...(lastName ? { lastName } : {}),
           },
@@ -120,9 +120,11 @@ function SignUpPage() {
         </>
       }
     >
-      <FormAlert>{messageForErrorCode(error, t)}</FormAlert>
+      <FormAlert>
+        {messageForErrorCode(error, t, ui.passwordMinLength)}
+      </FormAlert>
 
-      <form method="post" className="grid gap-4">
+      <PendingForm busy={t.common.loading} method="post" className="grid gap-4">
         <div className="grid gap-4 sm:grid-cols-2">
           <TextField
             name="firstName"
@@ -155,10 +157,8 @@ function SignUpPage() {
           hideLabel={t.common.hidePassword}
         />
 
-        <Button type="submit" className="w-full">
-          {t.auth.signUp.submit}
-        </Button>
-      </form>
+        <SubmitButton className="w-full">{t.auth.signUp.submit}</SubmitButton>
+      </PendingForm>
 
       <p className="mt-6 text-sm text-muted-foreground">
         {t.auth.signUp.haveAccount}{" "}

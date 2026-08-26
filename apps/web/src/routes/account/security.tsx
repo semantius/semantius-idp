@@ -1,7 +1,5 @@
 import { Link, createFileRoute } from "@tanstack/react-router"
 
-import { Button } from "@workspace/ui/components/button"
-
 import {
   AccountSection,
   AccountShell,
@@ -28,6 +26,7 @@ import type { EnrolmentView } from "@/server/functions/account"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
 import type { Runtime } from "@/server/runtime"
+import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 const HERE = "/account/security"
 
@@ -257,7 +256,9 @@ function SecurityPage() {
       isAdmin={profile.isAdmin}
     >
       <FormAlert variant="default">{messageForNoticeCode(notice, t)}</FormAlert>
-      <FormAlert>{messageForErrorCode(error, t)}</FormAlert>
+      <FormAlert>
+        {messageForErrorCode(error, t, ui.passwordMinLength)}
+      </FormAlert>
 
       <AccountSection
         title={t.account.security.changePassword.title}
@@ -278,7 +279,11 @@ function SecurityPage() {
           title={t.account.changeEmail.title}
           description={t.account.changeEmail.description}
         >
-          <form method="post" className="grid gap-4">
+          <PendingForm
+            busy={t.common.loading}
+            method="post"
+            className="grid gap-4"
+          >
             <input type="hidden" name="action" value="change-email" />
             <TextField
               name="newEmail"
@@ -288,9 +293,9 @@ function SecurityPage() {
               autoComplete="email"
             />
             <div>
-              <Button type="submit">{t.account.changeEmail.submit}</Button>
+              <SubmitButton>{t.account.changeEmail.submit}</SubmitButton>
             </div>
-          </form>
+          </PendingForm>
         </AccountSection>
       ) : null}
 
@@ -303,7 +308,11 @@ function SecurityPage() {
           {enrolment ? (
             <TwoFactorEnrolment enrolment={enrolment} t={t} />
           ) : profile.twoFactorEnabled ? (
-            <form method="post" className="grid gap-4">
+            <PendingForm
+              busy={t.common.loading}
+              method="post"
+              className="grid gap-4"
+            >
               <input type="hidden" name="action" value="disable-2fa" />
               <p className="text-sm">{t.account.twoFactor.enabled}</p>
               <PasswordField
@@ -314,13 +323,17 @@ function SecurityPage() {
                 hideLabel={t.common.hidePassword}
               />
               <div>
-                <Button type="submit" variant="outline">
+                <SubmitButton variant="outline">
                   {t.account.twoFactor.disable}
-                </Button>
+                </SubmitButton>
               </div>
-            </form>
+            </PendingForm>
           ) : (
-            <form method="post" className="grid gap-4">
+            <PendingForm
+              busy={t.common.loading}
+              method="post"
+              className="grid gap-4"
+            >
               <input type="hidden" name="action" value="enable-2fa" />
               <p className="text-sm">{t.account.twoFactor.disabled}</p>
               <PasswordField
@@ -331,9 +344,9 @@ function SecurityPage() {
                 hideLabel={t.common.hidePassword}
               />
               <div>
-                <Button type="submit">{t.account.twoFactor.enable}</Button>
+                <SubmitButton>{t.account.twoFactor.enable}</SubmitButton>
               </div>
-            </form>
+            </PendingForm>
           )}
         </AccountSection>
       ) : null}
@@ -379,7 +392,7 @@ function TwoFactorEnrolment({
         </ul>
       </div>
 
-      <form method="post" className="grid gap-4">
+      <PendingForm busy={t.common.loading} method="post" className="grid gap-4">
         <input type="hidden" name="action" value="confirm-2fa" />
         <TextField
           name="code"
@@ -388,9 +401,9 @@ function TwoFactorEnrolment({
           autoComplete="one-time-code"
         />
         <div>
-          <Button type="submit">{t.account.twoFactor.confirmSubmit}</Button>
+          <SubmitButton>{t.account.twoFactor.confirmSubmit}</SubmitButton>
         </div>
-      </form>
+      </PendingForm>
     </div>
   )
 }

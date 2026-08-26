@@ -1,7 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router"
 
-import { Button } from "@workspace/ui/components/button"
-
 import { AuthShell } from "@/components/auth/auth-shell"
 import { FormAlert } from "@/components/auth/form-parts"
 import { messageForErrorCode } from "@/lib/auth-errors"
@@ -18,6 +16,7 @@ import { OAUTH_QUERY_FIELD } from "@/server/oidc/continuation"
 import { APP_ROUTES, createBasePaths } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
 import { fetchConsentRequest } from "@/server/functions/consent"
+import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 /**
  * `/consent` — what an application is asking for, and the decision (FR-OIDC-9,
@@ -142,7 +141,9 @@ function ConsentPage() {
       title={t.consent.title(request.clientName)}
       description={t.consent.description}
     >
-      <FormAlert>{messageForErrorCode(error, t)}</FormAlert>
+      <FormAlert>
+        {messageForErrorCode(error, t, ui.passwordMinLength)}
+      </FormAlert>
 
       {request.clientUri || request.tos || request.policy ? (
         <p className="mb-4 flex flex-wrap gap-3 text-sm text-muted-foreground">
@@ -178,20 +179,24 @@ function ConsentPage() {
 
       {/* Two submit buttons in one form, so the decision travels with the
           request rather than depending on which URL was posted to. */}
-      <form method="post" className="grid gap-3 sm:grid-cols-2">
+      <PendingForm
+        busy={t.common.loading}
+        method="post"
+        className="grid gap-3 sm:grid-cols-2"
+      >
         <input
           type="hidden"
           name={OAUTH_QUERY_FIELD}
           value={request.oauthQuery}
         />
         <input type="hidden" name="clientId" value={request.clientId} />
-        <Button type="submit" name="decision" value="deny" variant="outline">
+        <SubmitButton name="decision" value="deny" variant="outline">
           {t.consent.deny}
-        </Button>
-        <Button type="submit" name="decision" value="allow">
+        </SubmitButton>
+        <SubmitButton name="decision" value="allow">
           {t.consent.allow}
-        </Button>
-      </form>
+        </SubmitButton>
+      </PendingForm>
     </AuthShell>
   )
 }

@@ -1,7 +1,5 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router"
 
-import { Button } from "@workspace/ui/components/button"
-
 import { AuthShell } from "@/components/auth/auth-shell"
 import { FormAlert, TextField } from "@/components/auth/form-parts"
 import { messageForNoticeCode } from "@/lib/auth-errors"
@@ -14,6 +12,7 @@ import {
 } from "@/server/http/auth-proxy"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
+import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 /**
  * `/forgot-password` (FR-AUTH-3, SEC-7).
@@ -75,7 +74,7 @@ function ForgotPasswordPage() {
     >
       <FormAlert variant="default">{messageForNoticeCode(notice, t)}</FormAlert>
 
-      <form method="post" className="grid gap-4">
+      <PendingForm busy={t.common.loading} method="post" className="grid gap-4">
         <TextField
           name="email"
           type="email"
@@ -84,10 +83,10 @@ function ForgotPasswordPage() {
           autoComplete="username"
           autoFocus
         />
-        <Button type="submit" className="w-full">
+        <SubmitButton className="w-full">
           {t.auth.forgotPassword.submit}
-        </Button>
-      </form>
+        </SubmitButton>
+      </PendingForm>
 
       <p className="mt-6 text-sm text-muted-foreground">
         <Link to={APP_ROUTES.login} className="underline underline-offset-4">

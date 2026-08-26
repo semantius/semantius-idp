@@ -1,7 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router"
 
-import { Button } from "@workspace/ui/components/button"
-
 import { AuthShell } from "@/components/auth/auth-shell"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
@@ -12,6 +10,7 @@ import {
 } from "@/server/http/auth-proxy"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
+import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 /**
  * `/logout` (FR-AUTH-6).
@@ -66,12 +65,10 @@ function LogoutPage() {
   // more thing that had to be kept working for no reader.
   return (
     <AuthShell ui={ui} title={t.common.signOut}>
-      <form method="post" className="grid gap-4">
+      <PendingForm busy={t.common.loading} method="post" className="grid gap-4">
         <input type="hidden" name="returnTo" value={returnTo} />
-        <Button type="submit" className="w-full">
-          {t.common.signOut}
-        </Button>
-      </form>
+        <SubmitButton className="w-full">{t.common.signOut}</SubmitButton>
+      </PendingForm>
     </AuthShell>
   )
 }

@@ -7,6 +7,8 @@ import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { cn } from "@workspace/ui/lib/utils"
 
+import { usePendingForm } from "@/components/common/pending-form"
+
 /**
  * Form pieces shared by the public pages (FR-ACCT-2, WCAG 2.1 AA).
  *
@@ -15,6 +17,12 @@ import { cn } from "@workspace/ui/lib/utils"
  * `aria-describedby`. The password field's visibility toggle is a plain
  * checkbox, so the control is already correct on the first paint, before
  * hydration. It does not have to survive scripting being off (D31).
+ *
+ * Inside a `PendingForm` both fields go `readOnly` while the post is in
+ * flight. `readOnly` rather than `disabled`: a disabled field is dropped from
+ * the submitted entry list and removed from the accessibility tree, and the
+ * form the browser is at that moment submitting still has to contain its own
+ * values.
  */
 
 export function FieldError({
@@ -74,6 +82,7 @@ export function TextField({
   const hintId = hint ? `${name}-hint` : undefined
   const errorId = error ? `${name}-error` : undefined
   const describedBy = [hintId, errorId].filter(Boolean).join(" ") || undefined
+  const { pending } = usePendingForm()
 
   return (
     <div className="grid gap-1.5">
@@ -87,6 +96,7 @@ export function TextField({
         defaultValue={defaultValue}
         required={required}
         autoFocus={autoFocus}
+        readOnly={pending || undefined}
         aria-describedby={describedBy}
         aria-invalid={error ? true : undefined}
       />
@@ -170,6 +180,7 @@ export function PasswordField({
   const errorId = error ? `${name}-error` : undefined
   const describedBy = [hintId, errorId].filter(Boolean).join(" ") || undefined
   const toggleId = `${name}-reveal`
+  const { pending } = usePendingForm()
 
   return (
     <div className="grid gap-1.5">
@@ -183,6 +194,7 @@ export function PasswordField({
           required
           minLength={minLength}
           autoFocus={autoFocus}
+          readOnly={pending || undefined}
           aria-describedby={describedBy}
           aria-invalid={error ? true : undefined}
           // Room for the control, plus Firefox's before-hydration fallback.

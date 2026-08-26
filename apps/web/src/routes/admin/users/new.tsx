@@ -1,8 +1,8 @@
 import { Link, createFileRoute } from "@tanstack/react-router"
 
-import { Button, buttonVariants } from "@workspace/ui/components/button"
+import { buttonVariants } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
-import { Label } from "@workspace/ui/components/label"
+import { Field, FieldLabel } from "@workspace/ui/components/field"
 
 import { AdminShell } from "@/components/admin/admin-shell"
 import { RoleCheckboxes } from "@/components/admin/role-checkboxes"
@@ -22,6 +22,7 @@ import { createResetLink } from "@/server/auth/reset-link"
 import { displayName } from "@/server/display-name"
 import { fetchRoles } from "@/server/functions/admin"
 import { getRuntime } from "@/server/runtime"
+import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 /**
  * `/admin/users/new` — create an account on someone's behalf (FR-ADMIN-2).
@@ -159,26 +160,32 @@ function CreateUserPage() {
         </Link>
       }
     >
-      <FormAlert>{messageForErrorCode(error, t)}</FormAlert>
+      <FormAlert>
+        {messageForErrorCode(error, t, ui.passwordMinLength)}
+      </FormAlert>
 
-      <form method="post" className="grid max-w-md gap-4">
+      <PendingForm
+        busy={t.common.loading}
+        method="post"
+        className="grid max-w-md gap-4"
+      >
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="grid gap-1.5">
-            <Label htmlFor="firstName">{t.common.firstName}</Label>
+          <Field>
+            <FieldLabel htmlFor="firstName">{t.common.firstName}</FieldLabel>
             <Input id="firstName" name="firstName" autoComplete="off" />
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="lastName">{t.common.lastName}</Label>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="lastName">{t.common.lastName}</FieldLabel>
             <Input id="lastName" name="lastName" autoComplete="off" />
-          </div>
+          </Field>
         </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor="email">{t.admin.create.email}</Label>
+        <Field>
+          <FieldLabel htmlFor="email">{t.admin.create.email}</FieldLabel>
           <Input id="email" name="email" type="email" required />
-        </div>
+        </Field>
         <RoleCheckboxes roles={roles} legend={t.admin.create.roles} />
-        <Button type="submit">{t.admin.create.submit}</Button>
-      </form>
+        <SubmitButton>{t.admin.create.submit}</SubmitButton>
+      </PendingForm>
     </AdminShell>
   )
 }

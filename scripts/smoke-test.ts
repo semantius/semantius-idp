@@ -246,7 +246,16 @@ async function main(): Promise<void> {
   const compose = (...args: string[]) =>
     run(
       "docker",
-      ["compose", "-f", COMPOSE_FILE, "--env-file", envFile, "-p", PROJECT, ...args],
+      [
+        "compose",
+        "-f",
+        COMPOSE_FILE,
+        "--env-file",
+        envFile,
+        "-p",
+        PROJECT,
+        ...args,
+      ],
       { env }
     )
 
@@ -272,7 +281,14 @@ async function main(): Promise<void> {
     // ---- 1. up ----------------------------------------------------------
     compose("down", "-v", "--remove-orphans")
     process.stdout.write("starting the stack…\n")
-    const up = compose("up", "-d", "--wait", "--wait-timeout", "180", "--quiet-pull")
+    const up = compose(
+      "up",
+      "-d",
+      "--wait",
+      "--wait-timeout",
+      "180",
+      "--quiet-pull"
+    )
     check("compose up", up.code === 0)
     if (up.code !== 0) return
 
@@ -340,6 +356,7 @@ async function main(): Promise<void> {
         firstName: ADMIN.firstName,
         lastName: ADMIN.lastName,
         password: ADMIN.password,
+        confirmPassword: ADMIN.password,
       }).toString(),
     })
     check("the wizard creates the first administrator", wizard.status === 303)
@@ -440,7 +457,9 @@ async function main(): Promise<void> {
     check(
       "exits 0 on SIGTERM (OPS-4)",
       exitCode === 0,
-      exitCode === 137 ? "137 — SIGKILL: the signal never reached it" : exit.stdout.trim()
+      exitCode === 137
+        ? "137 — SIGKILL: the signal never reached it"
+        : exit.stdout.trim()
     )
   } finally {
     // **The logs, whenever anything failed.** Without this the failure reads

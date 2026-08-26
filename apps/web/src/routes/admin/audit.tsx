@@ -1,7 +1,14 @@
 import { Link, createFileRoute } from "@tanstack/react-router"
 
-import { Button, buttonVariants } from "@workspace/ui/components/button"
-import { Label } from "@workspace/ui/components/label"
+import { buttonVariants } from "@workspace/ui/components/button"
+import { Card } from "@workspace/ui/components/card"
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+} from "@workspace/ui/components/empty"
+import { Field, FieldLabel } from "@workspace/ui/components/field"
+import { NativeSelect } from "@workspace/ui/components/native-select"
 import {
   Table,
   TableBody,
@@ -17,6 +24,8 @@ import { getCatalog } from "@/server/i18n"
 import type { Catalog } from "@/server/i18n"
 import { fetchAuditPage } from "@/server/functions/admin"
 import type { AdminAuditRow } from "@/server/functions/admin"
+import { PendingForm, SubmitButton } from "@/components/common/pending-form"
+import { LocalTime } from "@/components/common/local-time"
 
 /**
  * `/admin/audit` — the trail (SEC-6).
@@ -88,17 +97,18 @@ function AuditPage() {
       description={t.admin.audit.description}
       impersonated={gate.admin ? gate.impersonated : false}
     >
-      <form
+      <PendingForm
+        busy={t.common.loading}
         method="get"
         className="mb-6 grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
       >
-        <div className="grid gap-1.5">
-          <Label htmlFor="action">{t.admin.audit.filterAction}</Label>
-          <select
+        <Field>
+          <FieldLabel htmlFor="action">{t.admin.audit.filterAction}</FieldLabel>
+          <NativeSelect
             id="action"
             name="action"
             defaultValue={query.action ?? ""}
-            className="h-9 rounded-md border bg-transparent px-3 text-sm"
+            className="w-full"
           >
             <option value="">{t.admin.users.any}</option>
             {page.actions.map((action) => (
@@ -106,15 +116,17 @@ function AuditPage() {
                 {action}
               </option>
             ))}
-          </select>
-        </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor="outcome">{t.admin.audit.filterOutcome}</Label>
-          <select
+          </NativeSelect>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="outcome">
+            {t.admin.audit.filterOutcome}
+          </FieldLabel>
+          <NativeSelect
             id="outcome"
             name="outcome"
             defaultValue={query.outcome ?? ""}
-            className="h-9 rounded-md border bg-transparent px-3 text-sm"
+            className="w-full"
           >
             <option value="">{t.admin.users.any}</option>
             {OUTCOMES.map((outcome) => (
@@ -122,17 +134,19 @@ function AuditPage() {
                 {outcome}
               </option>
             ))}
-          </select>
-        </div>
-        <Button type="submit" variant="outline">
-          {t.admin.audit.apply}
-        </Button>
-      </form>
+          </NativeSelect>
+        </Field>
+        <SubmitButton variant="outline">{t.admin.audit.apply}</SubmitButton>
+      </PendingForm>
 
       {page.events.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t.admin.audit.empty}</p>
+        <Empty>
+          <EmptyHeader>
+            <EmptyDescription>{t.admin.audit.empty}</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
-        <div className="rounded-lg border bg-card">
+        <Card className="overflow-x-auto py-0">
           <Table>
             <TableHeader>
               <TableRow>
@@ -148,7 +162,7 @@ function AuditPage() {
               {page.events.map((event) => (
                 <TableRow key={event.id}>
                   <TableCell className="text-xs tabular-nums">
-                    {event.createdAt.slice(0, 19).replace("T", " ")}
+                    <LocalTime iso={event.createdAt} />
                   </TableCell>
                   <TableCell className="text-xs font-medium">
                     {event.action}
@@ -175,7 +189,7 @@ function AuditPage() {
               ))}
             </TableBody>
           </Table>
-        </div>
+        </Card>
       )}
 
       {page.nextBefore ? (

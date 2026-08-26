@@ -1,8 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router"
 import { and, eq } from "drizzle-orm"
 
-import { Button } from "@workspace/ui/components/button"
-
 import {
   AccountSection,
   AccountShell,
@@ -21,6 +19,7 @@ import { fetchConsents } from "@/server/functions/account"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { revokeForClient } from "@/server/oidc/revoke-user-tokens"
 import { getRuntime } from "@/server/runtime"
+import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 const HERE = "/account/consents"
 
@@ -118,7 +117,9 @@ function ConsentsPage() {
       isAdmin={profile.isAdmin}
     >
       <FormAlert variant="default">{messageForNoticeCode(notice, t)}</FormAlert>
-      <FormAlert>{messageForErrorCode(error, t)}</FormAlert>
+      <FormAlert>
+        {messageForErrorCode(error, t, ui.passwordMinLength)}
+      </FormAlert>
 
       <AccountSection
         title={t.account.consents.title}
@@ -144,16 +145,16 @@ function ConsentsPage() {
                       .join(", ")}
                   </p>
                 </div>
-                <form method="post">
+                <PendingForm busy={t.common.loading} method="post">
                   <input
                     type="hidden"
                     name="clientId"
                     value={consent.clientId}
                   />
-                  <Button type="submit" variant="outline" size="sm">
+                  <SubmitButton variant="outline" size="sm">
                     {t.account.consents.revoke}
-                  </Button>
-                </form>
+                  </SubmitButton>
+                </PendingForm>
               </li>
             ))}
           </ul>

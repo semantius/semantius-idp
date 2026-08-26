@@ -1,9 +1,12 @@
 /**
  * Masking of the effective configuration (CFG-5, SEC-5).
  *
- * `idp config validate` and `/admin/system` both print the configuration the
- * process actually runs with. Anything secret is replaced before it can reach a
- * log line, a terminal or a browser.
+ * `/admin/system` prints the configuration the process actually runs with, in
+ * full, to a browser. Anything secret is replaced before it gets there.
+ *
+ * (`idp config validate` prints its own fixed summary and does not go through
+ * this — it names `database.url` and passes it through `maskConnectionString`
+ * directly. This file's only caller is the admin endpoint.)
  *
  * The rule is positional, not heuristic: a fixed list of pointers plus a
  * pattern for the per-provider and per-client secrets. A new secret-bearing key
@@ -16,11 +19,23 @@ const MASK = "***"
 const SECRET_POINTERS: readonly RegExp[] = [
   /^\/secret$/,
   /^\/database\/url$/,
+  /^\/database\/directUrl$/,
   /^\/database\/sslCa$/,
   /^\/email\/resend\/apiKey$/,
   /^\/social\/[^/]+\/clientSecret$/,
   /^\/clients\/\d+\/clientSecret$/,
 ]
+
+/**
+ * Secrets that are connection strings, masked password-only. Kept as a set
+ * rather than a literal comparison because `directUrl` (D27) was added to the
+ * config without being added here, and the single-pointer `===` check made that
+ * omission invisible — the value fell through unmasked.
+ */
+const CONNECTION_STRING_POINTERS: ReadonlySet<string> = new Set([
+  "/database/url",
+  "/database/directUrl",
+])
 
 export function isSecretPointer(pointer: string): boolean {
   return SECRET_POINTERS.some((pattern) => pattern.test(pointer))
@@ -50,15 +65,32 @@ function maskValue(value: unknown, pointer: string): unknown {
   }
   if (typeof value !== "string") return value
   if (!isSecretPointer(pointer)) return value
-  if (pointer === "/database/url") return maskConnectionString(value)
+  if (CONNECTION_STRING_POINTERS.has(pointer))
+    return maskConnectionString(value)
   return value === "" ? "" : MASK
 }
 
-/** `postgres://user:pw@host/db` → `postgres://user:***@host/db`. */
+/**
+ * `postgres://user:pw@host/db` → `postgres://user:***@host/db`.
+ *
+ * Userinfo is the usual place, and not the only one: libpq's URI form also
+ * accepts `password` and `sslpassword` as query parameters, so a connection
+ * string with no `:pw@` in it can still carry one. Both are masked, by name,
+ * for the same reason the pointer list is positional — a parameter nobody
+ * added here is a parameter nobody thought about.
+ *
+ * Anything `URL` cannot parse is replaced wholesale rather than returned: a
+ * string this cannot read is a string it cannot promise to have cleaned.
+ */
+const SECRET_QUERY_PARAMS = ["password", "sslpassword"] as const
+
 export function maskConnectionString(value: string): string {
   try {
     const url = new URL(value)
     if (url.password !== "") url.password = MASK
+    for (const name of SECRET_QUERY_PARAMS) {
+      if (url.searchParams.has(name)) url.searchParams.set(name, MASK)
+    }
     return url.toString()
   } catch {
     return MASK

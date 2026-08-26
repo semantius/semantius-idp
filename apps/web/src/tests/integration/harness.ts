@@ -119,17 +119,27 @@ export async function createTestContext(
     60
   )
 
+  // `database` is merged key-by-key rather than replaced: the per-test schema
+  // is what isolates one file from the next, and a caller overriding anything
+  // under `database` used to take the whole object — and the schema with it.
+  const { database: databaseOverrides, ...configOverrides } =
+    options.config ?? {}
+
   const file = configFileSchema.parse({
     server: { baseUrl: "http://localhost:3000" },
     secret: "integration-test-secret-0123456789abcdef",
-    database: { url: testDatabaseUrl(), schema: schemaName },
     site: { name: "Test IdP" },
     jwt: { audience: "http://localhost:3000" },
     // A test file makes many attempts from one "IP"; the SEC-2 limits are real
     // and would throttle it. The rate limiter has its own suite, which turns
     // this back on and asserts the 429s.
     rateLimit: { enabled: false },
-    ...options.config,
+    ...configOverrides,
+    database: {
+      url: testDatabaseUrl(),
+      schema: schemaName,
+      ...((databaseOverrides as Record<string, unknown> | undefined) ?? {}),
+    },
   })
 
   const clients: ClientEntry[] = (options.clients ?? []).map((client) =>

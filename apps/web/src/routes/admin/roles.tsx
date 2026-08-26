@@ -1,6 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router"
 
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+} from "@workspace/ui/components/alert"
 import { Badge } from "@workspace/ui/components/badge"
+import { Card } from "@workspace/ui/components/card"
 import {
   Table,
   TableBody,
@@ -11,8 +17,9 @@ import {
 } from "@workspace/ui/components/table"
 
 import { AdminShell } from "@/components/admin/admin-shell"
+import { LocalTime } from "@/components/common/local-time"
 import { getCatalog } from "@/server/i18n"
-import { fetchRoles } from "@/server/functions/admin"
+import { fetchRoles, fetchRolesStatus } from "@/server/functions/admin"
 
 /**
  * `/admin/roles` — the catalog, and who holds what (FR-ROLE-2).
@@ -27,12 +34,15 @@ export const Route = createFileRoute("/admin/roles")({
     ui: context.ui,
     gate: context.gate,
     roles: (await fetchRoles()) ?? [],
+    // FR-ADMIN-2 asks this page for the last reconcile and the warnings; both
+    // were specified and neither was ever rendered.
+    status: await fetchRolesStatus(),
   }),
   component: RolesPage,
 })
 
 function RolesPage() {
-  const { ui, gate, roles } = Route.useLoaderData()
+  const { ui, gate, roles, status } = Route.useLoaderData()
   const t = getCatalog(ui.locale)
 
   return (
@@ -43,7 +53,26 @@ function RolesPage() {
       description={t.admin.roles.description}
       impersonated={gate.admin ? gate.impersonated : false}
     >
-      <div className="rounded-lg border bg-card">
+      {status ? (
+        <p className="mb-4 text-sm text-muted-foreground">
+          {t.admin.roles.lastReconcile} <LocalTime iso={status.reconciledAt} />
+        </p>
+      ) : null}
+
+      {status && status.warnings.length > 0 ? (
+        <Alert variant="destructive" className="mb-4">
+          <AlertTitle>{t.admin.roles.warnings}</AlertTitle>
+          <AlertDescription>
+            <ul className="grid gap-1">
+              {status.warnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      <Card className="overflow-x-auto py-0">
         <Table>
           <TableHeader>
             <TableRow>
@@ -76,7 +105,7 @@ function RolesPage() {
             ))}
           </TableBody>
         </Table>
-      </div>
+      </Card>
     </AdminShell>
   )
 }

@@ -41,6 +41,8 @@ export const enUS = {
     hidePassword: "Hide password",
     loading: "Working…",
     required: "Required",
+    yes: "Yes",
+    no: "No",
   },
 
   auth: {
@@ -162,6 +164,10 @@ export const enUS = {
     footnote:
       "This page is only here while the server has no users. It disappears as soon as this account exists.",
     invalidEmail: "Enter an e-mail address.",
+    missingName: "Enter a first and last name.",
+    // Not `common.confirmPassword` ("Confirm new password"): on the first-run
+    // wizard there is no old one for it to be new against.
+    confirmPassword: "Confirm password",
     alreadyDone: "This server is already set up. Sign in instead.",
   },
 
@@ -450,9 +456,10 @@ export const enUS = {
       impersonate: "Sign in as this user",
       impersonateHelp:
         "Everything you do will be recorded against your own account.",
+      // Still reachable: the endpoint refuses a POST that arrives while
+      // impersonation is off, even though the control is no longer rendered.
       impersonateDisabled: "Impersonation is turned off on this server.",
       revokeKey: "Revoke",
-      createKey: "Create an API key for this user",
       keyName: "Key name",
     },
     create: {
@@ -501,9 +508,13 @@ export const enUS = {
       disabled: "Disabled",
       redirectUris: "Redirect URIs",
       scopes: "Scopes",
-      audience: "Audience",
       skipConsent: "Consent skipped",
-      lastReconcile: "Last reconciled at start-up",
+      skipConsentHelp:
+        "First-party applications do not ask. Turn this off for anything you did not write.",
+      postLogoutRedirectUris: "Post-logout redirect URIs",
+      enableEndSession: "Allow RP-initiated logout",
+      enableEndSessionHelp:
+        "Lets the application end the session here. Needs at least one post-logout redirect URI.",
     },
     roles: {
       title: "Roles",
@@ -513,6 +524,10 @@ export const enUS = {
       users: "Users",
       isDefault: "Given at sign-up",
       isAdmin: "Administrator",
+      // FR-ADMIN-2 asks for it on *this* page. It sat under `clients` and
+      // nothing rendered it.
+      lastReconcile: "Last reconciled at start-up",
+      warnings: "Roles held by users but missing from the catalog",
     },
     audit: {
       title: "Audit",
@@ -543,7 +558,10 @@ export const enUS = {
       emailOff: "Off — the server runs in degraded mode (FR-MAIL-2)",
       keys: "Signing keys",
       algorithm: "Algorithm",
-      activeKey: "Signing key",
+      // "Signing key" over a `kid` read as though the key itself were on the
+      // page (owner review round 2, finding 11). It never was: `/idp/system`
+      // selects id, createdAt and expiresAt, and nothing reads `privateKey`.
+      activeKey: "Active key ID",
       publishedKeys: "Published",
       rotate: "Rotate the signing key now",
       rotateHelp:
@@ -554,6 +572,26 @@ export const enUS = {
       config: "Effective configuration",
       configHelp: "Secrets are masked.",
       warnings: "Warnings",
+      discovery: "Discovery",
+      discoveryHelp:
+        "The URLs to give another system. All are served by this deployment unless noted.",
+      discoveryUrls: {
+        openidConfiguration: "OpenID Provider configuration",
+        oauthAuthorizationServer: "OAuth authorization server metadata",
+        // The two origin-root forms for an issuer with a path: RFC 8414 §3.1
+        // defines the first, and enough clients ask for the second that
+        // `Caddyfile.subpath` rewrites it too. Both sit above this app's mount
+        // point, so the reverse proxy is what serves them.
+        oauthAuthorizationServerRoot:
+          "OAuth authorization server metadata (RFC 8414 root form — served by the reverse proxy)",
+        openidConfigurationRoot:
+          "OpenID Provider configuration (root form — served by the reverse proxy)",
+        jwks: "JSON Web Key Set",
+        // The URL is registered under RFC 8615; the behaviour is a W3C
+        // change-password specification, which is what an operator recognises.
+        changePassword: "Change-password well-known URL",
+        securityTxt: "security.txt (RFC 9116)",
+      },
     },
     refusals: {
       ownRoles: "You cannot change your own roles. Ask another administrator.",

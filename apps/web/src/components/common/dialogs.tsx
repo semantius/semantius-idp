@@ -64,7 +64,14 @@ export function ActionDialog({
       >
         {label}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      {/* The registry popup is `fixed top-1/2 -translate-y-1/2` with no
+          max-height and no overflow, so a form taller than the viewport hangs
+          off both ends of it with nothing to scroll — and its submit button
+          becomes unclickable, which is how the client-create dialog broke the
+          moment it grew two checkboxes and a second textarea. Capped and made
+          scrollable here rather than in `packages/ui`, which is registry
+          output and would lose the change on the next `shadcn add`. */}
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{title ?? label}</DialogTitle>
           {description ? (
@@ -107,7 +114,7 @@ export function SecretDialog({
 }) {
   return (
     <Dialog defaultOpen>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description ? (
@@ -115,7 +122,13 @@ export function SecretDialog({
           ) : null}
         </DialogHeader>
 
-        <div className="flex items-start gap-2">
+        {/* `min-w-0` on the row, not only on the `<code>` inside it. The row
+            is a grid item of the dialog body, and a grid item's default
+            `min-width: auto` refuses to shrink below its content — so an
+            unbreakable `whitespace-pre` secret pushed the row wider than the
+            popup and carried the copy button off the right-hand edge with it
+            (owner review round 2, finding 5). */}
+        <div className="flex min-w-0 items-start gap-2">
           <code
             data-slot="one-shot-value"
             className={

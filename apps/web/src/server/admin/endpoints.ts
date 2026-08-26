@@ -25,10 +25,11 @@ import type { IdpConfig } from "../config/derive"
 import { maskConfig } from "../config/mask"
 import { clientSchema } from "../config/schema/clients-schema"
 import { withAdvisoryLock } from "../db/advisory-lock"
-import { createDb  } from "../db/client"
-import type {DbHandle} from "../db/client";
+import { createDb } from "../db/client"
+import type { DbHandle } from "../db/client"
 import type { Logger } from "../logger"
 import type { Mailer } from "../email/mailer"
+import { createBasePaths, discoveryUrls } from "../oidc/base-path"
 import { refreshDatabaseClientOrigins } from "../oidc/client-origins"
 import { isPublic, resourceLinksFor, toClientRow } from "../oidc/client-mapping"
 import { revokeTokensFor, syncResourceLinks } from "../oidc/reconcile"
@@ -271,6 +272,12 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
         version,
         revision: revision ?? null,
         issuer: deps.config.base.origin + deps.config.base.basePath,
+        // D55: the URLs an operator actually has to paste into the other
+        // system. Absolute, and built here rather than in the browser, because
+        // the sub-path forms are not derivable from the issuer by hand.
+        discovery: discoveryUrls(createBasePaths(deps.config.base), {
+          securityTxt: deps.context?.securityTxt ?? false,
+        }),
         // SEC-5: masked, positionally, by the same function `idp config
         // validate` prints through.
         config: maskConfig(deps.config.file),
@@ -390,7 +397,8 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
 
       // Public clients keep no secret; the schema refuses one outright, so it
       // is generated only where it belongs.
-      const secret = ctx.body.type === "web" ? generateClientSecret() : undefined
+      const secret =
+        ctx.body.type === "web" ? generateClientSecret() : undefined
 
       const parsed = clientSchema.safeParse({
         clientId: ctx.body.clientId,
@@ -414,9 +422,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
           code: "INVALID_CLIENT_DEFINITION",
           // The zod message, which already names the offending URI and says
           // why. Re-wording it here would only make it vaguer.
-          message: parsed.error.issues
-            .map((issue) => issue.message)
-            .join(" "),
+          message: parsed.error.issues.map((issue) => issue.message).join(" "),
         })
       }
       const entry = parsed.data
@@ -525,7 +531,10 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
             await tx
               .delete(handle.schema.oauthClientResource)
               .where(
-                eq(handle.schema.oauthClientResource.clientId, ctx.body.clientId)
+                eq(
+                  handle.schema.oauthClientResource.clientId,
+                  ctx.body.clientId
+                )
               )
             await tx
               .delete(handle.schema.oauthClient)

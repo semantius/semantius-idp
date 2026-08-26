@@ -2,7 +2,18 @@ import type { ReactNode } from "react"
 
 import { Link } from "@tanstack/react-router"
 
+import { buttonVariants } from "@workspace/ui/components/button"
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@workspace/ui/components/card"
 import { cn } from "@workspace/ui/lib/utils"
+
+import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 import type { Catalog } from "@/server/i18n"
 import type { UiContext } from "@/server/ui-context"
@@ -105,23 +116,28 @@ export function AdminShell({
               ))}
             </nav>
 
-            <div className="flex items-baseline gap-4">
+            {/* Three affordances in one row read as three different kinds of
+                control. The nav entries are pill tabs, so the two escapes
+                beside them are ghost buttons at the same size rather than
+                underlined links (owner review round 2, finding 6). */}
+            <div className="flex items-center gap-1">
               {/* A plain anchor rather than a `<Link>`: `/account` is outside
                   this route's subtree, and the two shells are separate trees. */}
               <a
                 href={`${ui.basePath}/account`}
-                className="text-sm text-muted-foreground underline underline-offset-4"
+                className={buttonVariants({ variant: "ghost", size: "sm" })}
               >
                 {t.account.title}
               </a>
-              <form method="post" action={`${ui.basePath}/logout`}>
-                <button
-                  type="submit"
-                  className="text-sm text-muted-foreground underline underline-offset-4"
-                >
+              <PendingForm
+                method="post"
+                action={`${ui.basePath}/logout`}
+                busy={t.common.loading}
+              >
+                <SubmitButton variant="ghost" size="sm">
                   {t.common.signOut}
-                </button>
-              </form>
+                </SubmitButton>
+              </PendingForm>
             </div>
           </div>
         </header>
@@ -145,6 +161,52 @@ export function AdminShell({
   )
 }
 
+/**
+ * A titled panel — the one card shape every admin page uses.
+ *
+ * Replaces both a local `Section` helper on the detail page and eleven
+ * hand-rolled `rounded-lg border bg-card p-4` divs, which had drifted apart in
+ * padding and in whether the heading sat inside the panel or above it. The
+ * heading is a real `<h3>`: the axe pass and several e2e selectors go through
+ * heading roles, so the element cannot become a styled `<div>`.
+ */
+export function AdminCard({
+  title,
+  description,
+  action,
+  className,
+  children,
+}: {
+  title?: ReactNode
+  description?: ReactNode
+  /** Rendered top-right, in the header's own grid column. */
+  action?: ReactNode
+  className?: string
+  children: ReactNode
+}) {
+  return (
+    <Card className={className}>
+      {title ? (
+        <CardHeader>
+          {/* A real `<h3>` inside `CardTitle`, not instead of it: `CardTitle`
+              is a plain registry `<div>` with no `render` prop, and Tailwind's
+              preflight makes headings inherit size and weight, so nesting
+              costs nothing visually and keeps the heading role that axe and
+              several e2e selectors rely on. */}
+          <CardTitle>
+            <h3>{title}</h3>
+          </CardTitle>
+          {description ? (
+            <CardDescription>{description}</CardDescription>
+          ) : null}
+          {action ? <CardAction>{action}</CardAction> : null}
+        </CardHeader>
+      ) : null}
+      <CardContent>{children}</CardContent>
+    </Card>
+  )
+}
+
 /** A labelled number, for the dashboard. */
 export function Stat({
   label,
@@ -156,22 +218,30 @@ export function Stat({
   tone?: "default" | "warning"
 }) {
   return (
-    <div className="rounded-lg border bg-card p-4">
-      <p className="text-sm text-muted-foreground">{label}</p>
-      <p
-        className={cn(
-          "mt-1 text-2xl font-semibold tabular-nums",
-          tone === "warning" && value !== 0 ? "text-destructive" : undefined
-        )}
-      >
-        {value}
-      </p>
-    </div>
+    <Card size="sm">
+      <CardContent>
+        <p className="text-sm text-muted-foreground">{label}</p>
+        <p
+          className={cn(
+            "mt-1 text-2xl font-semibold tabular-nums",
+            tone === "warning" && value !== 0 ? "text-destructive" : undefined
+          )}
+        >
+          {value}
+        </p>
+      </CardContent>
+    </Card>
   )
 }
 
-/** A definition row, used by the detail and system pages. */
-export function Field({
+/**
+ * A definition row, used by the detail and system pages.
+ *
+ * Named `DetailRow` and not `Field`, which is what it used to be called: the
+ * kit has a `Field` of its own for form groups, and two things with that name
+ * in one file is how a `<dt>/<dd>` pair ends up wrapping an `<input>`.
+ */
+export function DetailRow({
   label,
   children,
 }: {

@@ -2,7 +2,17 @@ import type { ReactNode } from "react"
 
 import { Link } from "@tanstack/react-router"
 
+import { buttonVariants } from "@workspace/ui/components/button"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@workspace/ui/components/card"
 import { cn } from "@workspace/ui/lib/utils"
+
+import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 import type { Catalog } from "@/server/i18n"
 import type { UiContext } from "@/server/ui-context"
@@ -84,26 +94,29 @@ export function AccountShell({
               {t.account.title}
             </h1>
           </div>
-          <div className="flex items-baseline gap-4">
+          {/* Ghost buttons, not underlined links: the same row of affordances
+              as `AdminShell`, and the nav below is pill tabs (finding 6). */}
+          <div className="flex items-center gap-1">
             {isAdmin ? (
               // A plain anchor, not a `<Link>`: `/admin` sits outside this
               // route's subtree, so a client-side navigation would have to
               // load the whole admin bundle to find out it is allowed in.
               <a
                 href={`${ui.basePath}/admin`}
-                className="text-sm text-muted-foreground underline underline-offset-4"
+                className={buttonVariants({ variant: "ghost", size: "sm" })}
               >
                 {t.admin.title}
               </a>
             ) : null}
-            <form method="post" action={`${ui.basePath}/logout`}>
-              <button
-                type="submit"
-                className="text-sm text-muted-foreground underline underline-offset-4"
-              >
+            <PendingForm
+              method="post"
+              action={`${ui.basePath}/logout`}
+              busy={t.common.loading}
+            >
+              <SubmitButton variant="ghost" size="sm">
                 {t.common.signOut}
-              </button>
-            </form>
+              </SubmitButton>
+            </PendingForm>
           </div>
         </header>
 
@@ -167,12 +180,16 @@ export function AccountSection({
   children: ReactNode
 }) {
   return (
-    <section className="rounded-xl border bg-card p-6 shadow-sm">
-      <h3 className="font-medium">{title}</h3>
-      {description ? (
-        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-      ) : null}
-      <div className="mt-4">{children}</div>
-    </section>
+    // Same substitution as `AuthShell`: the kit's Card, with the real `<h3>`
+    // kept inside `CardTitle` so the heading role survives.
+    <Card>
+      <CardHeader>
+        <CardTitle>
+          <h3>{title}</h3>
+        </CardTitle>
+        {description ? <CardDescription>{description}</CardDescription> : null}
+      </CardHeader>
+      <CardContent>{children}</CardContent>
+    </Card>
   )
 }

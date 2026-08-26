@@ -1,8 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router"
 import { and, eq } from "drizzle-orm"
 
-import { Button } from "@workspace/ui/components/button"
-
 import {
   AccountSection,
   AccountShell,
@@ -24,6 +22,8 @@ import { fetchSessions } from "@/server/functions/account"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
 import type { Runtime } from "@/server/runtime"
+import { PendingForm, SubmitButton } from "@/components/common/pending-form"
+import { LocalTime } from "@/components/common/local-time"
 
 const HERE = "/account/sessions"
 
@@ -124,7 +124,9 @@ function SessionsPage() {
       isAdmin={profile.isAdmin}
     >
       <FormAlert variant="default">{messageForNoticeCode(notice, t)}</FormAlert>
-      <FormAlert>{messageForErrorCode(error, t)}</FormAlert>
+      <FormAlert>
+        {messageForErrorCode(error, t, ui.passwordMinLength)}
+      </FormAlert>
 
       <AccountSection title={t.account.sessions.title}>
         {sessions.length === 0 ? (
@@ -153,20 +155,18 @@ function SessionsPage() {
                   </p>
                   <p className="text-muted-foreground">
                     {t.account.sessions.signedIn}{" "}
-                    <time dateTime={session.createdAt}>
-                      {formatDate(session.createdAt, ui.locale)}
-                    </time>
+                    <LocalTime iso={session.createdAt} />
                     {session.ipAddress ? ` · ${session.ipAddress}` : ""}
                   </p>
                 </div>
                 {session.current ? null : (
-                  <form method="post">
+                  <PendingForm busy={t.common.loading} method="post">
                     <input type="hidden" name="scope" value="one" />
                     <input type="hidden" name="sessionId" value={session.id} />
-                    <Button type="submit" variant="outline" size="sm">
+                    <SubmitButton variant="outline" size="sm">
                       {t.account.sessions.revoke}
-                    </Button>
-                  </form>
+                    </SubmitButton>
+                  </PendingForm>
                 )}
               </li>
             ))}
@@ -176,12 +176,12 @@ function SessionsPage() {
 
       {others.length > 0 ? (
         <AccountSection title={t.account.sessions.revokeAll}>
-          <form method="post">
+          <PendingForm busy={t.common.loading} method="post">
             <input type="hidden" name="scope" value="others" />
-            <Button type="submit" variant="outline">
+            <SubmitButton variant="outline">
               {t.account.sessions.revokeAll}
-            </Button>
-          </form>
+            </SubmitButton>
+          </PendingForm>
         </AccountSection>
       ) : null}
     </AccountShell>
@@ -210,12 +210,4 @@ async function tokenForOwnSession(
     .where(and(eq(session.id, sessionId), eq(session.userId, current.user.id)))
     .limit(1)
   return row?.token
-}
-
-/** Dates are shown in the configured locale, never the browser's (FR-I18N-1). */
-function formatDate(value: string, locale: string): string {
-  return new Intl.DateTimeFormat(locale, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value))
 }

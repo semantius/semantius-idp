@@ -72,7 +72,7 @@ describe("notice codes", () => {
 
 describe("error codes", () => {
   it("collapses a wrong password and an unknown address (SEC-7)", () => {
-    expect(messageForErrorCode("invalid_credentials", t)).toBe(
+    expect(messageForErrorCode("invalid_credentials", t, 10)).toBe(
       t.auth.signIn.failed
     )
   })
@@ -80,19 +80,30 @@ describe("error codes", () => {
   it("never confirms that an address is already registered (SEC-7)", () => {
     // `signup_failed` covers "already exists" too, and resolves to the same
     // neutral confirmation a successful sign-up shows.
-    expect(messageForErrorCode("signup_failed", t)).toBe(t.auth.signUp.done)
+    expect(messageForErrorCode("signup_failed", t, 10)).toBe(t.auth.signUp.done)
   })
 
   it("falls back to a generic failure rather than nothing", () => {
     // The opposite rule to notices: an error the page cannot name still has
     // to say *something*, or a failed action looks like a successful one.
-    expect(messageForErrorCode("something_new", t)).toBe(
+    expect(messageForErrorCode("something_new", t, 10)).toBe(
       t.errors.serverError.description
     )
   })
 
   it("says nothing when there is no error at all", () => {
-    expect(messageForErrorCode(undefined, t)).toBeUndefined()
+    expect(messageForErrorCode(undefined, t, 10)).toBeUndefined()
+  })
+
+  it("quotes the configured minimum, not the one it was written against", () => {
+    // The hint hard-coded 12 while `auth.password.minLength` was configurable,
+    // so a deployment that lowered it told people the wrong number.
+    expect(messageForErrorCode("password_length", t, 10)).toBe(
+      t.auth.signUp.passwordHint(10)
+    )
+    expect(messageForErrorCode("password_length", t, 16)).toBe(
+      t.auth.signUp.passwordHint(16)
+    )
   })
 })
 

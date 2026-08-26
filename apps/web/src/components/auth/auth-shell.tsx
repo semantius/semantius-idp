@@ -1,5 +1,12 @@
 import type { ReactNode } from "react"
 
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@workspace/ui/components/card"
 import { cn } from "@workspace/ui/lib/utils"
 
 import type { UiContext } from "@/server/ui-context"
@@ -44,15 +51,21 @@ export function AuthShell({
           </p>
         </header>
 
-        <section className="rounded-xl border bg-card p-6 shadow-sm">
-          <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
-          {description ? (
-            <div className="mt-2 text-sm text-muted-foreground">
-              {description}
-            </div>
-          ) : null}
-          <div className="mt-6">{children}</div>
-        </section>
+        {/* The kit's Card, not a hand-rolled panel: the preset restyle moved
+            the radius, the ring and the shadow, and this was the one surface
+            still wearing the old ones. `h1` and the real heading level stay —
+            e2e selectors and the axe pass both go through heading roles. */}
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              <h1>{title}</h1>
+            </CardTitle>
+            {description ? (
+              <CardDescription>{description}</CardDescription>
+            ) : null}
+          </CardHeader>
+          <CardContent>{children}</CardContent>
+        </Card>
 
         {footer ? (
           <footer className="mt-4 text-center text-sm text-muted-foreground">

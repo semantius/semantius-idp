@@ -24,7 +24,13 @@
  */
 
 import { spawnSync } from "node:child_process"
-import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs"
+import {
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
 import { join } from "node:path"
 
 import { chromium } from "@playwright/test"
@@ -192,9 +198,7 @@ function merge(
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return (
-    typeof value === "object" && value !== null && !Array.isArray(value)
-  )
+  return typeof value === "object" && value !== null && !Array.isArray(value)
 }
 
 /**
@@ -228,41 +232,47 @@ function writeConfig(
   writeFileSync(
     join(configDir, "config.json"),
     JSON.stringify(
-      merge({
-        server: {
-          baseUrl: stack.baseURL,
-          host: "0.0.0.0",
-          port: 3000,
-          allowInsecureHttp: true,
-          shutdownTimeoutSeconds: 10,
-          // Behind Caddy the client address arrives in a header, and without
-          // this every caller shares one rate-limit bucket (D38).
-          trustProxy: stack.basePath !== "",
+      merge(
+        {
+          server: {
+            baseUrl: stack.baseURL,
+            host: "0.0.0.0",
+            port: 3000,
+            allowInsecureHttp: true,
+            shutdownTimeoutSeconds: 10,
+            // Behind Caddy the client address arrives in a header, and without
+            // this every caller shares one rate-limit bucket (D38).
+            trustProxy: stack.basePath !== "",
+          },
+          secret: SECRET,
+          database: {
+            url: "${env:DATABASE_URL}",
+            schema: "idp",
+            migrateOnBoot: true,
+          },
+          site: { name: "E2E IdP", theme: "light" },
+          // A key the capture transport never calls: D30 only replaces the
+          // transport when e-mail would otherwise work, so this is what takes
+          // the deployment out of degraded mode (FR-MAIL-2).
+          email: {
+            resend: { apiKey: "re_e2e_never_used" },
+            from: "E2E <idp@example.test>",
+          },
+          signUp: { enabled: true, requireApproval: false },
+          auth: { requireEmailVerification: true },
+          twoFactor: { enabled: true },
+          apiKeys: { enabled: true },
+          jwt: { audience: stack.baseURL },
+          // No `admin.bootstrap`: it no longer exists (D52). The first
+          // administrator is created by `completeSetup` below, at the page.
+          //
+          // The suite signs in far more often than a person does; the SEC-2
+          // limits have their own integration suite.
+          rateLimit: { enabled: false },
+          logging: { level: "info", format: "json" },
         },
-        secret: SECRET,
-        database: {
-          url: "${env:DATABASE_URL}",
-          schema: "idp",
-          migrateOnBoot: true,
-        },
-        site: { name: "E2E IdP", theme: "light" },
-        // A key the capture transport never calls: D30 only replaces the
-        // transport when e-mail would otherwise work, so this is what takes
-        // the deployment out of degraded mode (FR-MAIL-2).
-        email: { resend: { apiKey: "re_e2e_never_used" }, from: "E2E <idp@example.test>" },
-        signUp: { enabled: true, requireApproval: false },
-        auth: { requireEmailVerification: true },
-        twoFactor: { enabled: true },
-        apiKeys: { enabled: true },
-        jwt: { audience: stack.baseURL },
-        // No `admin.bootstrap`: it no longer exists (D52). The first
-        // administrator is created by `completeSetup` below, at the page.
-        //
-        // The suite signs in far more often than a person does; the SEC-2
-        // limits have their own integration suite.
-        rateLimit: { enabled: false },
-        logging: { level: "info", format: "json" },
-      }, overrides),
+        overrides
+      ),
       null,
       2
     )
@@ -376,6 +386,8 @@ async function completeSetup(stack: Stack): Promise<void> {
     await page.getByLabel("Last name").fill(ADMIN.lastName)
     await page.getByLabel("E-mail address").fill(ADMIN.email)
     await page.getByLabel("Password", { exact: true }).fill(ADMIN.password)
+    // D54: typed twice, and both names are required.
+    await page.getByLabel("Confirm password").fill(ADMIN.password)
     await page.getByRole("button", { name: "Create the first account" }).click()
 
     // The wizard signs them in, so the destination is the account page rather
@@ -506,7 +518,9 @@ export function readMail(stack: Stack): CapturedMail[] {
   return names.sort().flatMap((name) => {
     try {
       return [
-        JSON.parse(readFileSync(join(stack.mailDir, name), "utf8")) as CapturedMail,
+        JSON.parse(
+          readFileSync(join(stack.mailDir, name), "utf8")
+        ) as CapturedMail,
       ]
     } catch {
       // A file caught mid-write on the next poll.

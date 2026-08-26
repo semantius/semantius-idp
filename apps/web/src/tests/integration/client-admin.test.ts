@@ -113,6 +113,45 @@ async function rowFor(clientId: string) {
 }
 
 describe("registering a client (D50)", () => {
+  it("stores the form's field set as the form now sends it (round 2, finding 10)", async () => {
+    const cookie = await adminCookie()
+
+    // Exactly what the create dialog posts once it grew the two checkboxes and
+    // the post-logout textarea it had always been read for. Before that the
+    // handler sent `skipConsent: false` with no field to send it from — a
+    // *defined* false, which overrides the schema's default of true, so every
+    // client registered here wrongly asked for consent (FR-OIDC-3/10).
+    const response = await create(cookie, {
+      clientId: "form-shaped-app",
+      type: "spa",
+      redirectUris: ["https://spa.example.com/callback"],
+      postLogoutRedirectUris: ["https://spa.example.com/after-logout"],
+      skipConsent: true,
+      enableEndSession: true,
+    })
+    expect(response.status, await response.text()).toBe(200)
+
+    const row = await rowFor("form-shaped-app")
+    expect(row!.skipConsent).toBe(true)
+    expect(row!.enableEndSession).toBe(true)
+    expect(row!.postLogoutRedirectUris).toEqual([
+      "https://spa.example.com/after-logout",
+    ])
+    // An SPA is a public client: no secret at rest, PKCE mandatory. This is
+    // the shape the dialog now defaults to.
+    expect(row!.clientSecret).toBeNull()
+    expect(row!.requirePKCE).toBe(true)
+  })
+
+  it("still refuses end-session with no post-logout URI, which is why it defaults off", async () => {
+    const cookie = await adminCookie()
+    const response = await create(cookie, {
+      clientId: "no-logout-uri-app",
+      enableEndSession: true,
+    })
+    expect(response.status).toBeGreaterThanOrEqual(400)
+  })
+
   it("stores it with the creating administrator as its owner, and returns the secret once", async () => {
     const cookie = await adminCookie()
 

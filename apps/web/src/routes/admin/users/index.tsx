@@ -1,9 +1,16 @@
 import { Link, createFileRoute } from "@tanstack/react-router"
 
 import { Badge } from "@workspace/ui/components/badge"
-import { Button, buttonVariants } from "@workspace/ui/components/button"
+import { Card } from "@workspace/ui/components/card"
+import { buttonVariants } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
-import { Label } from "@workspace/ui/components/label"
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+} from "@workspace/ui/components/empty"
+import { Field, FieldLabel } from "@workspace/ui/components/field"
+import { NativeSelect } from "@workspace/ui/components/native-select"
 import {
   Table,
   TableBody,
@@ -25,6 +32,8 @@ import {
   fetchRoles,
   fetchUsers,
 } from "@/server/functions/admin"
+import { PendingForm, SubmitButton } from "@/components/common/pending-form"
+import { LocalTime } from "@/components/common/local-time"
 
 /**
  * `/admin/users` — the list (FR-ADMIN-2).
@@ -101,7 +110,7 @@ function UsersPage() {
       title={t.admin.users.title}
       impersonated={impersonated}
       actions={
-        <Link to="/admin/users/new" className={`${buttonVariants()} h-9 px-4`}>
+        <Link to="/admin/users/new" className={buttonVariants({ size: "lg" })}>
           {t.admin.users.create}
         </Link>
       }
@@ -119,21 +128,22 @@ function UsersPage() {
       ) : null}
 
       {/* GET, so the filters land in the URL rather than in component state. */}
-      <form
+      <PendingForm
+        busy={t.common.loading}
         method="get"
         className="mb-6 grid gap-3 sm:grid-cols-[1fr_10rem_10rem_auto] sm:items-end"
       >
-        <div className="grid gap-1.5">
-          <Label htmlFor="q">{t.admin.users.search}</Label>
+        <Field>
+          <FieldLabel htmlFor="q">{t.admin.users.search}</FieldLabel>
           <Input id="q" name="q" defaultValue={query.q ?? ""} />
-        </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor="status">{t.admin.users.filterStatus}</Label>
-          <select
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="status">{t.admin.users.filterStatus}</FieldLabel>
+          <NativeSelect
             id="status"
             name="status"
             defaultValue={query.status ?? ""}
-            className="h-9 rounded-md border bg-transparent px-3 text-sm"
+            className="w-full"
           >
             <option value="">{t.admin.users.any}</option>
             {STATUSES.map((status) => (
@@ -141,15 +151,15 @@ function UsersPage() {
                 {t.admin.status[status]}
               </option>
             ))}
-          </select>
-        </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor="role">{t.admin.users.filterRole}</Label>
-          <select
+          </NativeSelect>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="role">{t.admin.users.filterRole}</FieldLabel>
+          <NativeSelect
             id="role"
             name="role"
             defaultValue={query.role ?? ""}
-            className="h-9 rounded-md border bg-transparent px-3 text-sm"
+            className="w-full"
           >
             <option value="">{t.admin.users.any}</option>
             {roles.map((role) => (
@@ -157,17 +167,21 @@ function UsersPage() {
                 {role.name}
               </option>
             ))}
-          </select>
-        </div>
-        <Button type="submit" variant="outline">
+          </NativeSelect>
+        </Field>
+        <SubmitButton variant="outline">
           {t.admin.users.searchAction}
-        </Button>
-      </form>
+        </SubmitButton>
+      </PendingForm>
 
       {page.users.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t.admin.users.empty}</p>
+        <Empty>
+          <EmptyHeader>
+            <EmptyDescription>{t.admin.users.empty}</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
-        <div className="rounded-lg border bg-card">
+        <Card className="overflow-x-auto py-0">
           <Table>
             <TableHeader>
               <TableRow>
@@ -209,13 +223,13 @@ function UsersPage() {
                     )}
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
-                    {user.createdAt.slice(0, 10)}
+                    <LocalTime iso={user.createdAt} variant="date" />
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
-        </div>
+        </Card>
       )}
 
       <nav

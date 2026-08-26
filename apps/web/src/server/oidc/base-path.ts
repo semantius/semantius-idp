@@ -122,4 +122,85 @@ export const PROTOCOL_ROUTES = {
   oauthAuthorizationServer: "/.well-known/oauth-authorization-server",
   jwksWellKnown: "/.well-known/jwks.json",
   changePassword: "/.well-known/change-password",
+  /**
+   * Served only when the config folder has one; the route 404s otherwise. Here
+   * rather than as a literal in `discoveryUrls`, because this object exists so
+   * that a rename cannot half-happen.
+   */
+  securityTxt: "/.well-known/security.txt",
 } as const
+
+/** One labelled absolute URL on the admin system page (FR-ADMIN-2, **D55**). */
+export interface DiscoveryUrl {
+  /** A stable key the catalog translates; never shown raw. */
+  key: string
+  url: string
+}
+
+/**
+ * Every well-known URL this deployment answers on, absolute (**D55**).
+ *
+ * The operator's actual question — "what do I paste into the other system?" —
+ * had no answer on any page: the issuer was shown, and every discovery URL had
+ * to be assembled by hand from it. Under a sub-path that is exactly where it
+ * goes wrong, because **two** URLs are correct and they are not the same one:
+ * RFC 8414 §3.1 says an authorization server whose issuer has a path component
+ * publishes its metadata at `{origin}/.well-known/oauth-authorization-server{path}`
+ * — the well-known segment *before* the path. OpenID Discovery defines no such
+ * form, but enough clients ask for it anyway that `Caddyfile.subpath` rewrites
+ * **both** origin-root spellings, so both are listed: an operator whose proxy
+ * is not the shipped one has to see the URLs to know which rules they are
+ * missing, and listing only the RFC 8414 one would have them add half of what
+ * the reference deployment does.
+ *
+ * The two origin-root entries are labelled as the reverse proxy's, because
+ * they sit *above* this app's mount point and therefore cannot be routes here.
+ *
+ * `securityTxt` is included only when the file exists, because the route 404s
+ * when it does not and a listed link that 404s is worse than no link.
+ */
+export function discoveryUrls(
+  base: BasePaths,
+  options: { securityTxt: boolean } = { securityTxt: false }
+): DiscoveryUrl[] {
+  const urls: DiscoveryUrl[] = [
+    {
+      key: "openidConfiguration",
+      url: `${base.issuer}${PROTOCOL_ROUTES.openidConfiguration}`,
+    },
+    {
+      key: "oauthAuthorizationServer",
+      url: `${base.issuer}${PROTOCOL_ROUTES.oauthAuthorizationServer}`,
+    },
+  ]
+
+  if (base.basePath !== "") {
+    urls.push(
+      {
+        key: "oauthAuthorizationServerRoot",
+        url: `${base.origin}${PROTOCOL_ROUTES.oauthAuthorizationServer}${base.basePath}`,
+      },
+      {
+        key: "openidConfigurationRoot",
+        url: `${base.origin}${PROTOCOL_ROUTES.openidConfiguration}${base.basePath}`,
+      }
+    )
+  }
+
+  urls.push(
+    { key: "jwks", url: `${base.issuer}${PROTOCOL_ROUTES.jwksWellKnown}` },
+    {
+      key: "changePassword",
+      url: `${base.issuer}${PROTOCOL_ROUTES.changePassword}`,
+    }
+  )
+
+  if (options.securityTxt) {
+    urls.push({
+      key: "securityTxt",
+      url: `${base.issuer}${PROTOCOL_ROUTES.securityTxt}`,
+    })
+  }
+
+  return urls
+}

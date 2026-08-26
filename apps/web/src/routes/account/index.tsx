@@ -1,7 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router"
 
-import { Button } from "@workspace/ui/components/button"
-
 import {
   AccountSection,
   AccountShell,
@@ -21,6 +19,7 @@ import { readSession } from "@/server/http/session"
 import { displayName } from "@/server/display-name"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
+import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 /**
  * `/account` — name and address (FR-ACCT-1).
@@ -112,10 +111,16 @@ function ProfilePage() {
       isAdmin={profile.isAdmin}
     >
       <FormAlert variant="default">{messageForNoticeCode(notice, t)}</FormAlert>
-      <FormAlert>{messageForErrorCode(error, t)}</FormAlert>
+      <FormAlert>
+        {messageForErrorCode(error, t, ui.passwordMinLength)}
+      </FormAlert>
 
       <AccountSection title={t.account.profile.title}>
-        <form method="post" className="grid gap-4">
+        <PendingForm
+          busy={t.common.loading}
+          method="post"
+          className="grid gap-4"
+        >
           <div className="grid gap-4 sm:grid-cols-2">
             <TextField
               name="firstName"
@@ -144,9 +149,9 @@ function ProfilePage() {
             </p>
           </div>
           <div>
-            <Button type="submit">{t.account.profile.submit}</Button>
+            <SubmitButton>{t.account.profile.submit}</SubmitButton>
           </div>
-        </form>
+        </PendingForm>
       </AccountSection>
 
       <AccountSection title={t.common.email}>

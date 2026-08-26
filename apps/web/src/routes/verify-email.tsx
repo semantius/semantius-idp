@@ -1,7 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
 
-import { Button } from "@workspace/ui/components/button"
-
 import { AuthShell } from "@/components/auth/auth-shell"
 import { FormAlert, TextField } from "@/components/auth/form-parts"
 import { searchFlag, searchString } from "@/lib/search-params"
@@ -13,6 +11,7 @@ import {
 } from "@/server/http/auth-proxy"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
+import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 /**
  * `/verify-email` (FR-AUTH-2, FR-ACCT-2).
@@ -134,7 +133,11 @@ function VerifyEmailPage() {
           </Link>
         </p>
       ) : (
-        <form method="post" className="grid gap-4">
+        <PendingForm
+          busy={t.common.loading}
+          method="post"
+          className="grid gap-4"
+        >
           <TextField
             name="email"
             type="email"
@@ -143,10 +146,10 @@ function VerifyEmailPage() {
             autoComplete="username"
             defaultValue={email}
           />
-          <Button type="submit" className="w-full">
+          <SubmitButton className="w-full">
             {t.auth.verifyEmail.resend}
-          </Button>
-        </form>
+          </SubmitButton>
+        </PendingForm>
       )}
     </AuthShell>
   )

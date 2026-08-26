@@ -188,7 +188,7 @@ const siteSchema = z.strictObject({
     .enum(["first-last", "last-first"])
     .default("first-last")
     .describe(
-      "How a display name is composed from the first and last name that were captured (D49). `first-last` gives \"Jane Smith\"; `last-first` gives \"Smith, Jane\". The name itself is never an input field."
+      'How a display name is composed from the first and last name that were captured (D49). `first-last` gives "Jane Smith"; `last-first` gives "Smith, Jane". The name itself is never an input field.'
     ),
 })
 
@@ -242,7 +242,8 @@ const signUpSchema = z.strictObject({
  */
 function postSignInDestination() {
   return z.string().superRefine((value, ctx) => {
-    const reject = (message: string) => ctx.addIssue({ code: "custom", message })
+    const reject = (message: string) =>
+      ctx.addIssue({ code: "custom", message })
 
     if (value.startsWith("/")) {
       // The same three shapes `safeReturnTo` refuses: both are read by a
@@ -284,7 +285,7 @@ const authSchema = z.strictObject({
   password: z
     .strictObject({
       minLength: flexInt({ min: 8, max: 128 })
-        .default(12)
+        .default(10)
         .describe(
           "Length is the only strength rule here. Composition rules push people towards P@ssw0rd1 and are not worth the support load."
         ),
@@ -337,8 +338,7 @@ const sessionSchema = z.strictObject({
  * provider verbatim (FR-SOC-1).
  */
 const socialProviderSchema = z.looseObject({
-  enabled: flexBoolean()
-    .default(true),
+  enabled: flexBoolean().default(true),
   clientId: z.string().min(1).describe("From the provider's own console."),
   clientSecret: z
     .string()

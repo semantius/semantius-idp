@@ -49,6 +49,26 @@ export interface StartupResult {
   steps: { name: string; skipped?: string }[]
   /** What the FR-OIDC-2 sync did, for `/admin/system` (M10). */
   reconcile?: ReconcileDiff
+  /**
+   * Roles stored on users that the catalog does not contain (FR-ROLE-2).
+   *
+   * Rendered on `/admin/roles`, which is the page that can do something about
+   * them, and which FR-ADMIN-2 asks for "warnings" on. Deliberately *not*
+   * `runtime.warnings`: those are configuration-load problems and are already
+   * on `/admin` and `/admin/system`, so putting them here too would show the
+   * same red box three times while the one warning that is actually about
+   * roles went nowhere but the log.
+   */
+  roleWarnings: string[]
+  /**
+   * When the sequence finished, ISO-8601 UTC.
+   *
+   * FR-ADMIN-2 asks the roles page for a "last reconcile" timestamp, and
+   * reconciliation happens exactly once, here — the process has been up since
+   * this instant, so this *is* the answer. There is no per-step time because
+   * there is no case where one step's time and another's differ usefully.
+   */
+  completedAt: string
 }
 
 export type StartupStep = StartupResult["steps"][number]
@@ -139,8 +159,9 @@ export async function runStartup(
   })
 
   // -- roles vs. the database (FR-ROLE-2) ----------------------------------
+  let roleWarnings: string[] = []
   await step(steps, "validate roles", async () => {
-    await warnAboutUnknownRoles(deps)
+    roleWarnings = await warnAboutUnknownRoles(deps)
   })
 
   // -- first-run check (FR-ADMIN-1, D52) -----------------------------------
@@ -158,7 +179,12 @@ export async function runStartup(
     ),
     issuer: config.base.origin + config.base.basePath,
   })
-  return { steps, ...(lastReconcile ? { reconcile: lastReconcile } : {}) }
+  return {
+    steps,
+    roleWarnings,
+    completedAt: new Date().toISOString(),
+    ...(lastReconcile ? { reconcile: lastReconcile } : {}),
+  }
 }
 
 async function step(
@@ -229,7 +255,8 @@ async function ensureSigningKey(
  * dropped from their claims. That is a silent behaviour change for whoever
  * holds it, so it is warned about at boot and flagged in the admin UI.
  */
-async function warnAboutUnknownRoles(deps: StartupDeps): Promise<void> {
+/** Returns what it logged, so `/admin/roles` can show the same thing. */
+async function warnAboutUnknownRoles(deps: StartupDeps): Promise<string[]> {
   const catalog = new Set(deps.config.roles.map((role) => role.name))
   const rows = await deps.database.db
     .select({ role: deps.database.schema.user.role })
@@ -243,6 +270,7 @@ async function warnAboutUnknownRoles(deps: StartupDeps): Promise<void> {
     }
   }
 
+  const messages: string[] = []
   for (const [name, count] of unknown) {
     deps.logger.warn(
       "stored role is not in the catalog and will be dropped from claims",
@@ -252,7 +280,12 @@ async function warnAboutUnknownRoles(deps: StartupDeps): Promise<void> {
         hint: "Add it to roles.json, or reassign those users in /admin/users.",
       }
     )
+    messages.push(
+      `${count} user${count === 1 ? "" : "s"} hold the role "${name}", which is not in roles.json. ` +
+        `It is dropped from their claims. Add it to the file, or reassign them in /admin/users.`
+    )
   }
+  return messages
 }
 
 /**

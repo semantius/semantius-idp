@@ -1,8 +1,21 @@
 import { createFileRoute } from "@tanstack/react-router"
 
 import { Badge } from "@workspace/ui/components/badge"
-import { Button } from "@workspace/ui/components/button"
+import { Card } from "@workspace/ui/components/card"
+import { Checkbox } from "@workspace/ui/components/checkbox"
+import { NativeSelect } from "@workspace/ui/components/native-select"
+import { Textarea } from "@workspace/ui/components/textarea"
 import { Input } from "@workspace/ui/components/input"
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+} from "@workspace/ui/components/empty"
+import {
+  Field,
+  FieldDescription,
+  FieldLabel,
+} from "@workspace/ui/components/field"
 import { Label } from "@workspace/ui/components/label"
 import {
   Table,
@@ -30,6 +43,7 @@ import {
 import { requireFreshSession } from "@/server/http/fresh-session"
 import { stash } from "@/server/http/one-shot"
 import { getRuntime } from "@/server/runtime"
+import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 const HERE = "/admin/clients"
 
@@ -125,7 +139,7 @@ export const Route = createFileRoute("/admin/clients")({
           {
             clientId: form.clientId ?? "",
             name: form.name ?? "",
-            type: form.type ?? "web",
+            type: form.type ?? "spa",
             redirectUris: lines(form.redirectUris ?? ""),
             postLogoutRedirectUris: lines(form.postLogoutRedirectUris ?? ""),
             scopes: valuesOf("scopes"),
@@ -179,14 +193,20 @@ function ClientsPage() {
           variant="default"
           size="default"
         >
-          <form method="post" className="grid gap-4">
+          <PendingForm
+            busy={t.common.loading}
+            method="post"
+            className="grid gap-4"
+          >
             <input type="hidden" name="action" value="create" />
-            <div className="grid gap-1.5">
-              <Label htmlFor="name">{t.admin.clients.name}</Label>
+            <Field>
+              <FieldLabel htmlFor="name">{t.admin.clients.name}</FieldLabel>
               <Input id="name" name="name" required />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="clientId">{t.admin.clients.clientId}</Label>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="clientId">
+                {t.admin.clients.clientId}
+              </FieldLabel>
               <Input
                 id="clientId"
                 name="clientId"
@@ -194,36 +214,57 @@ function ClientsPage() {
                 autoComplete="off"
                 pattern="[A-Za-z0-9._~\-]+"
               />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="type">{t.admin.clients.type}</Label>
-              <select
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="type">{t.admin.clients.type}</FieldLabel>
+              {/* SPA first and by default: a browser application is what an
+                  operator adds here, and PKCE is mandatory in this provider
+                  either way (FR-OIDC-1), so "web" only buys a secret that a
+                  single-page app cannot keep. */}
+              <NativeSelect
                 id="type"
                 name="type"
-                defaultValue="web"
-                className="h-9 rounded-md border bg-transparent px-3 text-sm"
+                defaultValue="spa"
+                className="w-full"
               >
-                <option value="web">{t.admin.clients.typeWeb}</option>
                 <option value="spa">{t.admin.clients.typeSpa}</option>
+                <option value="web">{t.admin.clients.typeWeb}</option>
                 <option value="native">{t.admin.clients.typeNative}</option>
-              </select>
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="redirectUris">
+              </NativeSelect>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="redirectUris">
                 {t.admin.clients.redirectUris}
-              </Label>
-              <textarea
+              </FieldLabel>
+              <Textarea
                 id="redirectUris"
                 name="redirectUris"
                 required
                 rows={3}
-                className="rounded-md border bg-transparent p-2 font-mono text-xs"
+                className="font-mono text-xs"
                 aria-describedby="redirect-help"
               />
-              <p id="redirect-help" className="text-xs text-muted-foreground">
+              <FieldDescription id="redirect-help">
                 {t.admin.clients.onePerLine}
-              </p>
-            </div>
+              </FieldDescription>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="postLogoutRedirectUris">
+                {t.admin.clients.postLogoutRedirectUris}
+              </FieldLabel>
+              {/* Read by the handler since D50 and never rendered, so every
+                  client created here got an empty list. */}
+              <Textarea
+                id="postLogoutRedirectUris"
+                name="postLogoutRedirectUris"
+                rows={2}
+                className="font-mono text-xs"
+                aria-describedby="post-logout-help"
+              />
+              <FieldDescription id="post-logout-help">
+                {t.admin.clients.onePerLine}
+              </FieldDescription>
+            </Field>
             <fieldset className="grid gap-2">
               <legend className="mb-1 text-sm font-medium">
                 {t.admin.clients.scopes}
@@ -233,24 +274,80 @@ function ClientsPage() {
                   key={scope}
                   className="flex items-center gap-2 text-sm font-normal"
                 >
-                  <input
-                    type="checkbox"
+                  {/* The wrapping label is Base UI's documented pattern and
+                      is what makes the text a click target; `aria-label` is
+                      belt-and-braces, because the control the user operates is
+                      a `role="checkbox"` span rather than a labelable element,
+                      and only labelable elements are named by a wrapping
+                      `<label>` per HTML-AAM. */}
+                  <Checkbox
                     name="scopes"
                     value={scope}
                     defaultChecked
-                    className="size-4"
+                    aria-label={scope}
                   />
                   {scope}
                 </Label>
               ))}
             </fieldset>
-            <Button type="submit">{t.admin.clients.add}</Button>
-          </form>
+            {/* Both of these were sent by the handler with no field to send
+                them from, so a *defined* `false` overrode the schema default
+                every time. `skipConsent` therefore defaulted to true in the
+                file schema (FR-OIDC-3) and to false for everything created
+                here — every admin-registered client wrongly asked for
+                consent. It is checked by default now, which restores the
+                documented semantics. */}
+            <Label className="flex items-start gap-2 text-sm font-normal">
+              {/* `aria-describedby`, not just visible text: the control is a
+                  `role="checkbox"` span, so neither the wrapping label nor the
+                  help underneath it reaches a screen reader on its own. */}
+              <Checkbox
+                name="skipConsent"
+                value="on"
+                defaultChecked
+                aria-label={t.admin.clients.skipConsent}
+                aria-describedby="skip-consent-help"
+              />
+              <span>
+                {t.admin.clients.skipConsent}
+                <span
+                  id="skip-consent-help"
+                  className="block text-xs text-muted-foreground"
+                >
+                  {t.admin.clients.skipConsentHelp}
+                </span>
+              </span>
+            </Label>
+            {/* Unchecked, unlike `skipConsent`: `clients-schema.ts` refuses
+                `enableEndSession: true` with no post-logout URI, so defaulting
+                it on would fail every plain create. The old always-false bug
+                was accidentally load-bearing. */}
+            <Label className="flex items-start gap-2 text-sm font-normal">
+              <Checkbox
+                name="enableEndSession"
+                value="on"
+                aria-label={t.admin.clients.enableEndSession}
+                aria-describedby="end-session-help"
+              />
+              <span>
+                {t.admin.clients.enableEndSession}
+                <span
+                  id="end-session-help"
+                  className="block text-xs text-muted-foreground"
+                >
+                  {t.admin.clients.enableEndSessionHelp}
+                </span>
+              </span>
+            </Label>
+            <SubmitButton>{t.admin.clients.add}</SubmitButton>
+          </PendingForm>
         </ActionDialog>
       }
     >
       <FormAlert variant="default">{messageForNoticeCode(notice, t)}</FormAlert>
-      <FormAlert>{messageForErrorCode(error, t)}</FormAlert>
+      <FormAlert>
+        {messageForErrorCode(error, t, ui.passwordMinLength)}
+      </FormAlert>
 
       {created ? (
         <SecretDialog
@@ -262,9 +359,13 @@ function ClientsPage() {
       ) : null}
 
       {clients.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t.admin.clients.empty}</p>
+        <Empty>
+          <EmptyHeader>
+            <EmptyDescription>{t.admin.clients.empty}</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
-        <div className="rounded-lg border bg-card">
+        <Card className="overflow-x-auto py-0">
           <Table>
             <TableHeader>
               <TableRow>
@@ -272,6 +373,7 @@ function ClientsPage() {
                 <TableHead>{t.admin.clients.type}</TableHead>
                 <TableHead>{t.admin.clients.redirectUris}</TableHead>
                 <TableHead>{t.admin.clients.scopes}</TableHead>
+                <TableHead>{t.admin.clients.skipConsent}</TableHead>
                 <TableHead>{t.admin.clients.managedBy}</TableHead>
                 <TableHead>{t.admin.clients.status}</TableHead>
               </TableRow>
@@ -304,6 +406,15 @@ function ClientsPage() {
                     {client.scopes.join(" ") || "—"}
                   </TableCell>
                   <TableCell className="text-xs">
+                    {client.skipConsent ? (
+                      <Badge variant="secondary">{t.common.yes}</Badge>
+                    ) : (
+                      <span className="text-muted-foreground">
+                        {t.common.no}
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-xs">
                     <Badge variant="outline">
                       {client.managedBy === "file"
                         ? t.admin.clients.managedFile
@@ -322,7 +433,7 @@ function ClientsPage() {
                     )}
                     {client.managedBy === "database" ? (
                       <div className="mt-2 flex flex-wrap gap-2">
-                        <form method="post">
+                        <PendingForm busy={t.common.loading} method="post">
                           <input type="hidden" name="action" value="toggle" />
                           <input
                             type="hidden"
@@ -332,28 +443,32 @@ function ClientsPage() {
                           {client.disabled ? null : (
                             <input type="hidden" name="disabled" value="on" />
                           )}
-                          <Button type="submit" variant="outline" size="sm">
+                          <SubmitButton variant="outline" size="sm">
                             {client.disabled
                               ? t.admin.clients.enable
                               : t.admin.clients.disable}
-                          </Button>
-                        </form>
+                          </SubmitButton>
+                        </PendingForm>
                         <ActionDialog
                           label={t.admin.clients.remove}
                           description={t.admin.clients.removeConfirm}
                           variant="destructive"
                         >
-                          <form method="post" className="grid gap-4">
+                          <PendingForm
+                            busy={t.common.loading}
+                            method="post"
+                            className="grid gap-4"
+                          >
                             <input type="hidden" name="action" value="delete" />
                             <input
                               type="hidden"
                               name="clientId"
                               value={client.clientId}
                             />
-                            <Button type="submit" variant="destructive">
+                            <SubmitButton variant="destructive">
                               {t.admin.clients.remove}
-                            </Button>
-                          </form>
+                            </SubmitButton>
+                          </PendingForm>
                         </ActionDialog>
                       </div>
                     ) : null}
@@ -362,7 +477,7 @@ function ClientsPage() {
               ))}
             </TableBody>
           </Table>
-        </div>
+        </Card>
       )}
     </AdminShell>
   )

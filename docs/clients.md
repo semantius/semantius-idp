@@ -216,6 +216,12 @@ own organisation registered is a click that teaches them to click. Set it to
 { "clientId": "third-party-tool", "skipConsent": false, "…": "…" }
 ```
 
+The same applies to clients registered from `/admin/clients`: the create dialog
+has a "Consent skipped" checkbox, checked by default for the same reason, and
+the list shows the setting per client. Until the round-2 review that checkbox
+did not exist while the handler sent `skipConsent: false` regardless — so every
+admin-registered client asked for consent, whatever this section said.
+
 The consent page shows the client's name, icon, homepage, terms and privacy
 links, and one line per scope. Consent is remembered per client and scope set,
 re-asked on escalation, and revocable by the user at `/account/consents` —

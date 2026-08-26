@@ -36,6 +36,7 @@ import {
 import type { SQL } from "drizzle-orm"
 
 import { claim } from "../http/one-shot"
+import type { DiscoveryUrl } from "../oidc/base-path"
 import { readSession } from "../http/session"
 import type { RouteSession } from "../http/session"
 import { isAdmin, splitRoles } from "../role-utils"
@@ -177,6 +178,8 @@ export interface AdminSystemInfo {
   version: string
   revision: string | null
   issuer: string
+  /** The well-known URLs this deployment answers on (**D55**). */
+  discovery: DiscoveryUrl[]
   email: { enabled: boolean; transport: string }
   signingKeys: {
     algorithm: string
@@ -567,7 +570,8 @@ export const fetchClients = createServerFn({ method: "GET" }).handler(
       audience: links
         .filter(
           (link) =>
-            link.clientId === row.clientId && knownResources.has(link.resourceId)
+            link.clientId === row.clientId &&
+            knownResources.has(link.resourceId)
         )
         .map((link) => link.resourceId),
       skipConsent: row.skipConsent === true,
@@ -693,6 +697,7 @@ export const fetchSystemInfo = createServerFn({ method: "GET" }).handler(
       version: String(body.version ?? ""),
       revision: (body.revision as string | null) ?? null,
       issuer: String(body.issuer ?? ""),
+      discovery: (body.discovery ?? []) as DiscoveryUrl[],
       email: body.email as AdminSystemInfo["email"],
       signingKeys: body.signingKeys as AdminSystemInfo["signingKeys"],
       startup: {
@@ -703,6 +708,45 @@ export const fetchSystemInfo = createServerFn({ method: "GET" }).handler(
         : null,
       config: JSON.stringify(body.config, null, 2),
       warnings: runtime.warnings.map((warning) => warning.message),
+    }
+  }
+)
+
+export interface AdminRolesStatus {
+  /**
+   * When start-up last reconciled, ISO-8601 UTC.
+   *
+   * Never absent: a runtime only exists once the sequence has finished, so a
+   * page that got this far has a timestamp. "Start-up never got there" is the
+   * whole function returning `null`.
+   */
+  reconciledAt: string
+  /**
+   * Roles held by users that `roles.json` does not define (FR-ROLE-2).
+   *
+   * Not `runtime.warnings`: those are configuration-load problems, they are
+   * already on `/admin` and `/admin/system`, and a third copy in red on a
+   * read-only page is noise. What belongs here is the drift this page is the
+   * one place to act on — and it used to reach nothing but the log.
+   */
+  warnings: string[]
+}
+
+/**
+ * The two things FR-ADMIN-2 wants beside the roles table.
+ *
+ * A separate, tiny function rather than `fetchSystemInfo`: that one round-trips
+ * through `/idp/system` and carries the whole masked configuration with it,
+ * which is a great deal of work — and a great deal of secret-adjacent data —
+ * for a timestamp and a list of strings on a read-only page.
+ */
+export const fetchRolesStatus = createServerFn({ method: "GET" }).handler(
+  async (): Promise<AdminRolesStatus | null> => {
+    const context = await admin()
+    if (!context) return null
+    return {
+      reconciledAt: context.runtime.startup.completedAt,
+      warnings: context.runtime.startup.roleWarnings,
     }
   }
 )

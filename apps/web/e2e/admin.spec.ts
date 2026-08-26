@@ -244,9 +244,7 @@ test.describe("the admin area", () => {
     ).toBeVisible()
     // FR-ADMIN-4: told, not stonewalled — otherwise the answer to a password
     // that is perfectly correct is to keep retrying it.
-    await expect(
-      page.getByText("Reason: Testing the suspension")
-    ).toBeVisible()
+    await expect(page.getByText("Reason: Testing the suspension")).toBeVisible()
 
     // Lifting it puts them back.
     await signInAsAdmin(page, app)
@@ -254,7 +252,9 @@ test.describe("the admin area", () => {
     await page.getByRole("link", { name: user.email }).click()
     const unban = await openDialog(page, "Lift the suspension")
     await submitDialog(page, unban, "Lift the suspension")
-    await expect(page.getByText("The suspension has been lifted.")).toBeVisible()
+    await expect(
+      page.getByText("The suspension has been lifted.")
+    ).toBeVisible()
 
     await signOut(page, app)
     await signIn(page, app, user.email, user.password)
@@ -299,15 +299,23 @@ test.describe("the admin area", () => {
     const fileRow = page.locator("tbody tr").filter({ hasText: "e2e-app" })
     await expect(fileRow.getByText("From the file")).toBeVisible()
     await expect(fileRow.getByRole("button", { name: "Remove" })).toHaveCount(0)
-    await expect(fileRow.getByRole("button", { name: "Disable" })).toHaveCount(0)
+    await expect(fileRow.getByRole("button", { name: "Disable" })).toHaveCount(
+      0
+    )
 
     // Registering one: the secret is generated here and shown once, in a
     // dialog, and never in the address bar.
     const form = await openDialog(page, "Add an application")
     await form.getByLabel("Name").fill("Registered Here")
     await form.getByLabel("Client ID").fill("e2e-registered")
+    // Explicitly confidential: the dialog defaults to a single-page app now
+    // (round 2, finding 10), and a public client has no secret to show — which
+    // is the whole subject of the next twenty lines.
+    await form.getByLabel("Type").selectOption("web")
+    // `exact`: "Post-logout redirect URIs" contains this label as a substring,
+    // and Playwright's `getByLabel` is a substring match by default.
     await form
-      .getByLabel("Redirect URIs")
+      .getByLabel("Redirect URIs", { exact: true })
       .fill("http://127.0.0.1:4599/callback")
     await submitDialog(page, form, "Add an application")
 
@@ -323,18 +331,26 @@ test.describe("the admin area", () => {
     const row = page.locator("tbody tr").filter({ hasText: "e2e-registered" })
     await expect(row.getByText("Added here")).toBeVisible()
     await expect(row.getByText("Enabled")).toBeVisible()
+    // FR-OIDC-3's default, restored: the create handler used to send a defined
+    // `false` from a checkbox that did not exist, so every client added here
+    // asked for consent. The column exists so that is visible at all.
+    await expect(row.getByText("Yes")).toBeVisible()
 
     // A reload cannot show it again: claiming the stash consumed it.
     await app.goto("/admin/clients")
     expect(await page.content()).not.toContain(secret)
 
     await row.getByRole("button", { name: "Disable" }).click()
-    await expect(page.getByText("The application has been disabled.")).toBeVisible()
+    await expect(
+      page.getByText("The application has been disabled.")
+    ).toBeVisible()
     await expect(row.getByText("Disabled")).toBeVisible()
 
     const confirm = await openDialog(page, "Remove")
     await submitDialog(page, confirm, "Remove")
-    await expect(page.getByText("The application has been removed.")).toBeVisible()
+    await expect(
+      page.getByText("The application has been removed.")
+    ).toBeVisible()
     await expect(
       page.locator("tbody tr").filter({ hasText: "e2e-registered" })
     ).toHaveCount(0)
@@ -356,6 +372,37 @@ test.describe("the admin area", () => {
     // `.first()`: the algorithm is also inside the masked effective
     // configuration further down the page (FR-ADMIN-2).
     await expect(page.getByText("ES256").first()).toBeVisible()
+
+    // D55: the discovery URLs, absolute. This assertion is why the test runs
+    // in both deployment shapes — under a sub-path *two* metadata URLs are
+    // correct and they are not the same one, and only one of them is
+    // derivable from the issuer by appending to it.
+    // The link's accessible name is the URL itself, which is the point: it is
+    // there to be read and copied.
+    await expect(
+      page.getByRole("link", {
+        name: `${stack.baseURL}/.well-known/openid-configuration`,
+      })
+    ).toBeVisible()
+
+    const { origin, pathname } = new URL(stack.baseURL)
+    const subPath = pathname.replace(/\/$/, "")
+    if (subPath !== "") {
+      // Both origin-root spellings, because `Caddyfile.subpath` rewrites both.
+      // The well-known segment goes *in front of* the path, so neither of
+      // these is the URL above with a suffix — they are a different shape, and
+      // the reverse proxy is what serves them.
+      for (const wellKnown of [
+        "oauth-authorization-server",
+        "openid-configuration",
+      ]) {
+        await expect(
+          page.getByRole("link", {
+            name: `${origin}/.well-known/${wellKnown}${subPath}`,
+          })
+        ).toBeVisible()
+      }
+    }
 
     await app.goto("/admin/audit")
     // SEC-6: sign-ins are on the record, and this run has made plenty.
@@ -379,9 +426,7 @@ test.describe("the admin area", () => {
     const temporary = await openDialog(page, "Set a temporary password")
     await temporary.getByLabel("Set a temporary password").fill(PASSWORD)
     await submitDialog(page, temporary, "Save")
-    await expect(
-      page.getByText("A temporary password is set.")
-    ).toBeVisible()
+    await expect(page.getByText("A temporary password is set.")).toBeVisible()
 
     await signOut(page, app)
     await signIn(page, app, user.email, PASSWORD)

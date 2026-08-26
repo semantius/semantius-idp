@@ -10,7 +10,14 @@ import type { Catalog } from "@/server/i18n"
  */
 export function messageForErrorCode(
   code: string | undefined,
-  t: Catalog
+  t: Catalog,
+  /**
+   * `ui.passwordMinLength`. Required rather than defaulted: the hint used to
+   * hard-code 12, which stopped being the minimum the moment `auth.password.
+   * minLength` was configurable, and a default here would have hidden that
+   * again. Every caller has `ui` in scope.
+   */
+  passwordMinLength: number
 ): string | undefined {
   if (!code) return undefined
 
@@ -25,9 +32,11 @@ export function messageForErrorCode(
     case "domain_not_allowed":
       return t.auth.signUp.domainNotAllowed
     case "password_length":
-      return t.auth.signUp.passwordHint(12)
+      return t.auth.signUp.passwordHint(passwordMinLength)
     case "invalid_email":
       return t.setup.invalidEmail
+    case "missing_name":
+      return t.setup.missingName
     case "password_mismatch":
       return t.auth.resetPassword.mismatch
     case "wrong_current_password":

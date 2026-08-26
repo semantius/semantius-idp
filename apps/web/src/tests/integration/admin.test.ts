@@ -28,6 +28,9 @@ import type { TestContext } from "./harness"
 import { authRequest, createTestContext, sessionCookie } from "./harness"
 
 const PASSWORD = "correct-horse-battery-staple"
+/** Distinct from every other literal here, so a leak is unambiguous. */
+const DIRECT_URL_PASSWORD = "direct-url-password-must-not-leak"
+const DIRECT_URL = `postgres://idp:${DIRECT_URL_PASSWORD}@direct.example.com:5432/idp?sslmode=require`
 const NEW_PASSWORD = "a-different-passphrase-entirely"
 
 let ctx: TestContext
@@ -39,6 +42,10 @@ beforeEach(async () => {
       auth: { requireEmailVerification: false },
       apiKeys: { enabled: true },
       email: { resend: { apiKey: "re_test" }, from: "IdP <idp@example.com>" },
+      // Only `/idp/system`'s masking reads this. Nothing in this file reaches
+      // an endpoint that opens the direct connection (rotate-keys is called
+      // here only to be refused, before it builds one).
+      database: { directUrl: DIRECT_URL },
     },
   })
 })
@@ -516,9 +523,28 @@ describe("the endpoints this app adds", () => {
     expect(JSON.stringify(config)).not.toContain(
       "integration-test-secret-0123456789abcdef"
     )
+    // Round 2, finding 12: `database.directUrl` (D27) reached the browser with
+    // its password intact, because masking is positional and nobody added the
+    // pointer. Both connection strings keep their shape and lose the password.
+    const database = config.database as Record<string, string>
+    expect(database.directUrl).toBe(
+      "postgres://idp:***@direct.example.com:5432/idp?sslmode=require"
+    )
+    expect(JSON.stringify(config)).not.toContain(DIRECT_URL_PASSWORD)
     expect(
       (body.signingKeys as { published: number }).published
     ).toBeGreaterThan(0)
+
+    // D55: absolute, and every entry a URL this deployment answers on. At the
+    // host root there is no RFC 8414 origin-root form, because there is no
+    // path for the well-known segment to sit in front of.
+    const discovery = body.discovery as { key: string; url: string }[]
+    expect(discovery.map((entry) => entry.url)).toEqual([
+      "http://localhost:3000/.well-known/openid-configuration",
+      "http://localhost:3000/.well-known/oauth-authorization-server",
+      "http://localhost:3000/.well-known/jwks.json",
+      "http://localhost:3000/.well-known/change-password",
+    ])
   })
 
   it("pages the audit trail newest-first, with a usable cursor", async () => {

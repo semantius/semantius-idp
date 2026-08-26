@@ -1,6 +1,7 @@
 import { createFileRoute, notFound } from "@tanstack/react-router"
 
-import { Button } from "@workspace/ui/components/button"
+import { Checkbox } from "@workspace/ui/components/checkbox"
+import { Label } from "@workspace/ui/components/label"
 
 import { AuthShell } from "@/components/auth/auth-shell"
 import { FormAlert, TextField } from "@/components/auth/form-parts"
@@ -22,6 +23,7 @@ import {
 } from "@/server/oidc/continuation"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
+import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 /**
  * `/two-factor` — the second-factor challenge (FR-2FA-1, TST-3).
@@ -161,9 +163,11 @@ function TwoFactorPage() {
           : t.auth.twoFactor.description
       }
     >
-      <FormAlert>{messageForErrorCode(error, t)}</FormAlert>
+      <FormAlert>
+        {messageForErrorCode(error, t, ui.passwordMinLength)}
+      </FormAlert>
 
-      <form method="post" className="grid gap-4">
+      <PendingForm busy={t.common.loading} method="post" className="grid gap-4">
         {returnTo ? (
           <input type="hidden" name="returnTo" value={returnTo} />
         ) : null}
@@ -189,21 +193,22 @@ function TwoFactorPage() {
         )}
 
         {trustDays > 0 ? (
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
+          <Label className="flex items-center gap-2 text-sm font-normal">
+            {/* `value="1"`, not the native "on": the handler compares the
+                string (`form.trustDevice === "1"`). */}
+            <Checkbox
               name="trustDevice"
               value="1"
-              className="size-4 rounded border-input"
+              aria-label={t.auth.twoFactor.trustDevice(trustDays)}
             />
             {t.auth.twoFactor.trustDevice(trustDays)}
-          </label>
+          </Label>
         ) : null}
 
-        <Button type="submit" className="w-full">
+        <SubmitButton className="w-full">
           {t.auth.twoFactor.submit}
-        </Button>
-      </form>
+        </SubmitButton>
+      </PendingForm>
 
       <p className="mt-4 text-sm">
         {/* A plain anchor, not a `<Link>`: the challenge cookie is what makes

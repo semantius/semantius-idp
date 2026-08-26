@@ -50,7 +50,9 @@ function ErrorPage() {
       title={rateLimited ? t.errors.rateLimited.title : t.errors.oauth.title}
       description={rateLimited ? undefined : t.errors.oauth.description}
     >
-      <p className="text-sm text-muted-foreground">{explain(error, t)}</p>
+      <p className="text-sm text-muted-foreground">
+        {explain(error, t, ui.passwordMinLength)}
+      </p>
       {rateLimited && retryAfter ? (
         <p className="mt-2 text-sm text-muted-foreground">
           {t.errors.rateLimited.retryAfter(Number(retryAfter))}
@@ -68,7 +70,8 @@ function ErrorPage() {
  */
 function explain(
   error: string | undefined,
-  t: ReturnType<typeof getCatalog>
+  t: ReturnType<typeof getCatalog>,
+  passwordMinLength: number
 ): string {
   switch (error) {
     case "invalid_client":
@@ -81,6 +84,9 @@ function explain(
     case "expired":
       return t.errors.oauth.expired
     default:
-      return messageForErrorCode(error, t) ?? t.errors.rateLimited.description
+      return (
+        messageForErrorCode(error, t, passwordMinLength) ??
+        t.errors.rateLimited.description
+      )
   }
 }

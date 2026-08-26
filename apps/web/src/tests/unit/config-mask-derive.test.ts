@@ -38,12 +38,42 @@ describe("mask.ts (CFG-5, SEC-5)", () => {
     expect(maskConnectionString("not a url")).toBe("***")
   })
 
+  it("also removes a password that travels in the query string", () => {
+    // libpq's URI form accepts `password` and `sslpassword` as parameters, so
+    // a connection string with no `:pw@` in it can still carry one.
+    const masked = maskConnectionString(
+      "postgres://idp@db.example.com/idp?sslmode=verify-full&password=hunter2&sslpassword=hunter3"
+    )
+    expect(masked).not.toContain("hunter2")
+    expect(masked).not.toContain("hunter3")
+    // …and the operationally useful parts survive.
+    expect(masked).toContain("db.example.com")
+    expect(masked).toContain("sslmode=verify-full")
+  })
+
   it("masks database.url in place", () => {
     const masked = maskConfig({
       database: { url: "postgres://u:p@h/db", schema: "idp" },
     })
     expect(masked.database.url).toBe("postgres://u:***@h/db")
     expect(masked.database.schema).toBe("idp")
+  })
+
+  // directUrl (D27) shipped unmasked: it was in neither the pointer list nor
+  // the connection-string branch, which was a literal `=== "/database/url"`.
+  it("masks database.directUrl the same way as database.url", () => {
+    const masked = maskConfig({
+      database: {
+        url: "postgres://u:p@pooler.example.com/db",
+        directUrl:
+          "postgres://u:hunter2@direct.example.com:5432/db?sslmode=require",
+        schema: "idp",
+      },
+    })
+    expect(masked.database.directUrl).toBe(
+      "postgres://u:***@direct.example.com:5432/db?sslmode=require"
+    )
+    expect(JSON.stringify(masked)).not.toContain("hunter2")
   })
 })
 
@@ -186,9 +216,9 @@ describe("derive.ts", () => {
       // failure is `Client network socket disconnected before secure TLS
       // connection was established`, which names nothing an operator can act
       // on — and the URL had said `sslmode=disable` all along.
-      expect(
-        sslFor("postgres://idp:p@postgres:5432/idp?sslmode=disable")
-      ).toBe("disable")
+      expect(sslFor("postgres://idp:p@postgres:5432/idp?sslmode=disable")).toBe(
+        "disable"
+      )
       expect(
         sslFor("postgres://idp:p@localhost:5432/idp?sslmode=require")
       ).toBe("require")
@@ -200,9 +230,9 @@ describe("derive.ts", () => {
     it("maps verify-ca onto verify-full", () => {
       // libpq separates them by whether the hostname is checked. Skipping that
       // check is not worth a spelling of its own.
-      expect(sslFor("postgres://u:p@db.example.com/idp?sslmode=verify-ca")).toBe(
-        "verify-full"
-      )
+      expect(
+        sslFor("postgres://u:p@db.example.com/idp?sslmode=verify-ca")
+      ).toBe("verify-full")
     })
 
     it("ignores the ambiguous modes and falls back to the host", () => {

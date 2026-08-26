@@ -46,7 +46,7 @@ describe("CFG-4 defaults", () => {
       auth: {
         defaultRedirect: "/account",
         requireEmailVerification: true,
-        password: { minLength: 12, maxLength: 128, breachCheck: false },
+        password: { minLength: 10, maxLength: 128, breachCheck: false },
         passwordReset: { tokenTtlMinutes: 60 },
       },
       session: {

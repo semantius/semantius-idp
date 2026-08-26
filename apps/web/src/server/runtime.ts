@@ -18,6 +18,9 @@
  * an operator fixing a config typo expects.
  */
 
+import { existsSync } from "node:fs"
+import { join } from "node:path"
+
 import { createAuth } from "./auth/instance"
 import type { Auth } from "./auth/instance"
 import { createAudit } from "./audit"
@@ -131,6 +134,10 @@ export async function buildRuntime(): Promise<Runtime> {
       adminContext,
     })
     adminContext.auth = auth
+    // D55: the discovery list on the system page names `security.txt` only
+    // when there is one, because the route 404s otherwise. Read here, where
+    // the config folder is already in hand.
+    adminContext.securityTxt = existsSync(join(dir, "security.txt"))
 
     const startup = await runStartup(
       { config, database, locking, auth, logger },

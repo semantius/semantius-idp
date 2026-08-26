@@ -1,6 +1,5 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router"
 
-import { Button } from "@workspace/ui/components/button"
 import { Separator } from "@workspace/ui/components/separator"
 
 import { AuthShell } from "@/components/auth/auth-shell"
@@ -31,6 +30,7 @@ import { APP_ROUTES } from "@/server/oidc/base-path"
 import { banNoticeFor } from "@/server/auth/ban-notice"
 import { getRuntime } from "@/server/runtime"
 import type { UiContext } from "@/server/ui-context"
+import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 /**
  * `/login` — password sign-in plus whichever social providers are configured
@@ -197,9 +197,11 @@ function LoginPage() {
   return (
     <AuthShell ui={ui} title={t.auth.signIn.title}>
       <FormAlert variant="default">{messageForNoticeCode(notice, t)}</FormAlert>
-      <FormAlert>{messageForErrorCode(error, t)}</FormAlert>
+      <FormAlert>
+        {messageForErrorCode(error, t, ui.passwordMinLength)}
+      </FormAlert>
 
-      <form method="post" className="grid gap-4">
+      <PendingForm busy={t.common.loading} method="post" className="grid gap-4">
         {returnTo ? (
           <input type="hidden" name="returnTo" value={returnTo} />
         ) : null}
@@ -223,10 +225,8 @@ function LoginPage() {
           hideLabel={t.common.hidePassword}
         />
 
-        <Button type="submit" className="w-full">
-          {t.auth.signIn.submit}
-        </Button>
-      </form>
+        <SubmitButton className="w-full">{t.auth.signIn.submit}</SubmitButton>
+      </PendingForm>
 
       {/* FR-MAIL-2: with no transport there is nothing "forgot password" could do. */}
       {ui.emailEnabled ? (
@@ -244,6 +244,7 @@ function LoginPage() {
         ui={ui}
         label={t.auth.signIn.socialDivider}
         withProvider={t.auth.signIn.withProvider}
+        busy={t.common.loading}
       />
 
       {/* FR-SIGNUP-1: with sign-up off the link does not exist, and neither does the page. */}
@@ -263,10 +264,12 @@ function SocialButtons({
   ui,
   label,
   withProvider,
+  busy,
 }: {
   ui: UiContext
   label: string
   withProvider: (provider: string) => string
+  busy: string
 }) {
   if (ui.socialProviders.length === 0) return null
 
@@ -279,18 +282,20 @@ function SocialButtons({
       </div>
       <div className="grid gap-2">
         {ui.socialProviders.map((provider) => (
-          // A GET form rather than a link: the callback URL is fixed by the
-          // server, and the provider id is the only thing the browser chooses.
-          <form
+          // A form rather than a link: this is a state-changing POST, the
+          // callback URL is fixed by the server, and the provider id is the
+          // only thing the browser gets to choose.
+          <PendingForm
+            busy={busy}
             key={provider.id}
             method="post"
             action={`${ui.basePath}/api/auth/sign-in/social`}
           >
             <input type="hidden" name="provider" value={provider.id} />
-            <Button type="submit" variant="outline" className="w-full">
+            <SubmitButton variant="outline" className="w-full">
               {withProvider(provider.label)}
-            </Button>
-          </form>
+            </SubmitButton>
+          </PendingForm>
         ))}
       </div>
     </>

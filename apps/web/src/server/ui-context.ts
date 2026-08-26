@@ -63,9 +63,14 @@ export interface UiContext {
   /** Minimum password length, shown as an inline policy hint (FR-ACCT-2). */
   passwordMinLength: number
   /**
-   * FR-ADMIN-5: with impersonation off the admin page still shows the control,
-   * disabled and explained — a button that vanishes reads as a missing feature,
-   * and the operator who turned it off is not usually the one clicking.
+   * FR-ADMIN-5. With impersonation off the control is **not rendered**.
+   *
+   * This reverses an earlier deliberate choice — a disabled, explained button,
+   * on the argument that a vanishing control reads as a missing feature. The
+   * owner, walking the running application on 2026-08-25, read it the other
+   * way: a permanently dead button beside eight live ones is clutter, and the
+   * operator who turned the option off already knows why it is gone.
+   * FR-ADMIN-5 never required the control to be visible.
    */
   allowImpersonation: boolean
   /**
@@ -142,9 +147,7 @@ function labelFor(providerId: string): string {
 function brandingUrl(paths: BasePaths, value?: string): string | undefined {
   if (!value) return undefined
   if (/^https?:\/\//i.test(value)) return value
-  const withinBranding = value
-    .replace(/^\/+/, "")
-    .replace(/^branding\//, "")
+  const withinBranding = value.replace(/^\/+/, "").replace(/^branding\//, "")
   if (withinBranding === "") return undefined
   return paths.path(`/branding/${withinBranding}`)
 }

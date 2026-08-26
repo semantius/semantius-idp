@@ -104,7 +104,7 @@
     // An OAuth continuation and a validated `returnTo` both take precedence.
     "defaultRedirect": "/account",
     "requireEmailVerification": true,
-    "password": { "minLength": 12, "maxLength": 128, "breachCheck": false },
+    "password": { "minLength": 10, "maxLength": 128, "breachCheck": false },
     "passwordReset": { "tokenTtlMinutes": 60 }
   },
 

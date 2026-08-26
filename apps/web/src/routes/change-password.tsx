@@ -1,7 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router"
 
-import { Button } from "@workspace/ui/components/button"
-
 import { AuthShell } from "@/components/auth/auth-shell"
 import { FormAlert, PasswordField } from "@/components/auth/form-parts"
 import { messageForErrorCode } from "@/lib/auth-errors"
@@ -24,6 +22,7 @@ import {
 } from "@/server/oidc/continuation"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
+import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 /**
  * `/change-password` — including the forced variant (FR-AUTH-4).
@@ -144,9 +143,11 @@ function ChangePasswordPage() {
       }
       description={forced ? t.auth.changePassword.forcedDescription : undefined}
     >
-      <FormAlert>{messageForErrorCode(error, t)}</FormAlert>
+      <FormAlert>
+        {messageForErrorCode(error, t, ui.passwordMinLength)}
+      </FormAlert>
 
-      <form method="post" className="grid gap-4">
+      <PendingForm busy={t.common.loading} method="post" className="grid gap-4">
         {returnTo ? (
           <input type="hidden" name="returnTo" value={returnTo} />
         ) : null}
@@ -181,10 +182,10 @@ function ChangePasswordPage() {
           hideLabel={t.common.hidePassword}
         />
 
-        <Button type="submit" className="w-full">
+        <SubmitButton className="w-full">
           {t.auth.changePassword.submit}
-        </Button>
-      </form>
+        </SubmitButton>
+      </PendingForm>
     </AuthShell>
   )
 }

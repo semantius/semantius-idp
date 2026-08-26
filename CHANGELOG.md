@@ -319,5 +319,16 @@ were questions, and one was "polish every page".
   the top as if the server had refused something. The check now happens on
   submit and shows inline under the confirm field, with focus moved to it. The
   server's identical check is untouched and still authoritative.
+- **Registering an application validates in the browser, and a refusal no
+  longer empties the form** (**D62**). The dialog now applies the same redirect
+  URI rules `oauth_clients.jsonc` is validated against — absolute, no wildcard,
+  no fragment, https unless loopback, private-use schemes for native apps only
+  — inline against the field that is wrong, and refuses `enableEndSession`
+  with no post-logout URI rather than posting a certain rejection. The rules
+  live in `lib/client-rules.ts` and are shared with the zod schema; importing
+  the schema into the browser would have passed the client-bundle gate while
+  eroding the seam it stands for. What is left for the server to refuse — a
+  duplicate id, a file-managed collision, a lost race — comes back with the
+  dialog reopened and all twelve fields as they were.
 
 [Unreleased]: https://github.com/semantius/semantius-idp/commits/main

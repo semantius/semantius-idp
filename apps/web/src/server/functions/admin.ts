@@ -35,6 +35,8 @@ import {
 
 import type { SQL } from "drizzle-orm"
 
+import { claimDraft } from "../http/draft"
+import type { Draft } from "../http/draft"
 import { claim } from "../http/one-shot"
 import type { DiscoveryUrl } from "../oidc/base-path"
 import { readSession } from "../http/session"
@@ -649,6 +651,23 @@ export const claimAdminSecret = createServerFn({ method: "GET" })
     const context = await admin()
     if (!context) return null
     return (await claim(context.runtime, handle)) ?? null
+  })
+
+/**
+ * Claims the form a refused admin POST stashed (**D62**).
+ *
+ * Same store and the same single-use claim as {@link claimAdminSecret}; the
+ * difference is only what is in it — the fields the administrator filled in,
+ * so the dialog can reopen with them rather than empty. Passwords are never
+ * in there (`server/http/draft.ts`).
+ */
+export const claimAdminDraft = createServerFn({ method: "GET" })
+  .validator((handle: unknown) => (typeof handle === "string" ? handle : ""))
+  .handler(async ({ data: handle }): Promise<Draft | null> => {
+    if (handle === "") return null
+    const context = await admin()
+    if (!context) return null
+    return (await claimDraft(context.runtime, handle)) ?? null
   })
 
 export const fetchRoles = createServerFn({ method: "GET" }).handler(

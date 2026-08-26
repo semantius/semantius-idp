@@ -10,12 +10,15 @@
 import { z } from "zod"
 
 import { absoluteUrl, flexArray, flexBoolean } from "../zod-helpers"
+import { CLIENT_TYPES, PUBLIC_CLIENT_TYPES, checkRedirectUri } from "@/lib/client-rules"
+import type { ClientType } from "@/lib/client-rules"
 
-export const CLIENT_TYPES = ["web", "spa", "native"] as const
-export type ClientType = (typeof CLIENT_TYPES)[number]
-
-/** Public client types cannot keep a secret, so they must use PKCE (FR-OIDC-3). */
-export const PUBLIC_CLIENT_TYPES: readonly ClientType[] = ["spa", "native"]
+// The rules themselves live in `lib/client-rules.ts`, because `/admin/clients`
+// applies the same ones in the browser and importing this module there would
+// put zod in the client bundle (**D62**). Re-exported so every existing caller
+// of `server/config` is unchanged.
+export { CLIENT_TYPES, PUBLIC_CLIENT_TYPES }
+export type { ClientType }
 
 export const SUPPORTED_GRANT_TYPES = [
   "authorization_code",
@@ -69,49 +72,42 @@ const grantTypeSchema = z.string().superRefine((value, ctx) => {
 })
 
 /**
- * A redirect URI must be absolute and exactly matched at authorize time
- * (FR-OIDC-3/4). Wildcards and fragments are rejected outright; plain http is
- * only allowed on loopback, and private-use schemes only for native clients.
+ * The operator-facing wording for what {@link checkRedirectUri} decided.
+ *
+ * The decision is shared with the browser; only the sentence is here, because
+ * this one goes into a startup failure an operator reads in a log and the
+ * other goes through the message catalog (FR-I18N-1).
  */
 function validateRedirectUri(
   value: string,
   type: ClientType,
   fail: (message: string) => void
 ): void {
-  if (value.includes("*")) {
-    fail(
-      `\`${value}\` must not contain a wildcard; redirect URIs are matched exactly.`
-    )
-    return
-  }
-  let url: URL
-  try {
-    url = new URL(value)
-  } catch {
-    fail(`\`${value}\` is not an absolute URI.`)
-    return
-  }
-  if (url.hash !== "" || value.includes("#")) {
-    fail(`\`${value}\` must not contain a fragment.`)
-    return
-  }
-  if (url.protocol === "https:") return
-  if (url.protocol === "http:") {
-    const isLoopback =
-      url.hostname === "127.0.0.1" ||
-      url.hostname === "localhost" ||
-      url.hostname === "[::1]"
-    if (!isLoopback) {
+  const problem = checkRedirectUri(value, type)
+  if (!problem) return
+  switch (problem) {
+    case "wildcard":
+      fail(
+        `\`${value}\` must not contain a wildcard; redirect URIs are matched exactly.`
+      )
+      return
+    case "not_absolute":
+      fail(`\`${value}\` is not an absolute URI.`)
+      return
+    case "fragment":
+      fail(`\`${value}\` must not contain a fragment.`)
+      return
+    case "http_not_loopback":
       fail(
         `\`${value}\` must use https; plain http is only allowed on loopback (http://127.0.0.1, http://localhost).`
       )
-    }
-    return
+      return
+    case "private_scheme":
+      fail(
+        `\`${value}\` uses a private-use scheme, which is only allowed for \`type: "native"\` clients.`
+      )
+      return
   }
-  if (type === "native") return // private-use scheme, e.g. com.example.app:/callback
-  fail(
-    `\`${value}\` uses a private-use scheme, which is only allowed for \`type: "native"\` clients.`
-  )
 }
 
 const baseClientSchema = z.strictObject({

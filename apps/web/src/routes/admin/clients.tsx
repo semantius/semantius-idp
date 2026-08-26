@@ -2,21 +2,11 @@ import { createFileRoute } from "@tanstack/react-router"
 
 import { Badge } from "@workspace/ui/components/badge"
 import { Card } from "@workspace/ui/components/card"
-import { Checkbox } from "@workspace/ui/components/checkbox"
-import { NativeSelect } from "@workspace/ui/components/native-select"
-import { Textarea } from "@workspace/ui/components/textarea"
-import { Input } from "@workspace/ui/components/input"
 import {
   Empty,
   EmptyDescription,
   EmptyHeader,
 } from "@workspace/ui/components/empty"
-import {
-  Field,
-  FieldDescription,
-  FieldLabel,
-} from "@workspace/ui/components/field"
-import { Label } from "@workspace/ui/components/label"
 import {
   Table,
   TableBody,
@@ -27,12 +17,18 @@ import {
 } from "@workspace/ui/components/table"
 
 import { AdminShell } from "@/components/admin/admin-shell"
+import { ClientCreateDialog } from "@/components/admin/client-create-dialog"
 import { ActionDialog, SecretDialog } from "@/components/common/dialogs"
 import { FormAlert } from "@/components/auth/form-parts"
 import { messageForErrorCode, messageForNoticeCode } from "@/lib/auth-errors"
+import { uriLines } from "@/lib/client-rules"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
-import { claimAdminSecret, fetchClients } from "@/server/functions/admin"
+import {
+  claimAdminDraft,
+  claimAdminSecret,
+  fetchClients,
+} from "@/server/functions/admin"
 import {
   callAuth,
   errorCodeFor,
@@ -40,6 +36,7 @@ import {
   redirectWithCookies,
   withError,
 } from "@/server/http/auth-proxy"
+import { stashDraft, withDraft } from "@/server/http/draft"
 import { requireFreshSession } from "@/server/http/fresh-session"
 import { stash } from "@/server/http/one-shot"
 import { getRuntime } from "@/server/runtime"
@@ -83,6 +80,12 @@ export const Route = createFileRoute("/admin/clients")({
       created: await claimAdminSecret({
         data: searchString(search.created) ?? "",
       }),
+      // The refused registration, so the dialog can reopen with what was
+      // typed rather than empty (D62). Claimed, so a reload shows the form
+      // the administrator is already looking at rather than an older one.
+      draft:
+        (await claimAdminDraft({ data: searchString(search.draft) ?? "" })) ??
+        undefined,
     }
   },
   component: ClientsPage,
@@ -140,8 +143,10 @@ export const Route = createFileRoute("/admin/clients")({
             clientId: form.clientId ?? "",
             name: form.name ?? "",
             type: form.type ?? "spa",
-            redirectUris: lines(form.redirectUris ?? ""),
-            postLogoutRedirectUris: lines(form.postLogoutRedirectUris ?? ""),
+            redirectUris: uriLines(form.redirectUris ?? ""),
+            postLogoutRedirectUris: uriLines(
+              form.postLogoutRedirectUris ?? ""
+            ),
             scopes: valuesOf("scopes"),
             skipConsent: form.skipConsent === "on",
             enableEndSession: form.enableEndSession === "on",
@@ -149,7 +154,23 @@ export const Route = createFileRoute("/admin/clients")({
           request
         )
         if (!result.ok) {
-          return redirectWithCookies(withError(here, errorCodeFor(result)))
+          // What is left for the server to refuse is a duplicate id, a
+          // file-managed collision or a lost race — none of which the form
+          // could have known (D62). The twelve fields come back rather than
+          // being retyped; nothing password-shaped is in there.
+          const draft = await stashDraft(runtime, {
+            clientId: form.clientId,
+            name: form.name,
+            type: form.type,
+            redirectUris: form.redirectUris,
+            postLogoutRedirectUris: form.postLogoutRedirectUris,
+            scopes: valuesOf("scopes"),
+            skipConsent: form.skipConsent,
+            enableEndSession: form.enableEndSession,
+          })
+          return redirectWithCookies(
+            withError(withDraft(here, draft), errorCodeFor(result))
+          )
         }
 
         const secret =
@@ -167,16 +188,9 @@ export const Route = createFileRoute("/admin/clients")({
   },
 })
 
-/** A textarea of URIs, one per line, blank lines dropped. */
-function lines(value: string): string[] {
-  return value
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line !== "")
-}
-
 function ClientsPage() {
-  const { ui, gate, clients, notice, error, created } = Route.useLoaderData()
+  const { ui, gate, clients, notice, error, created, draft } =
+    Route.useLoaderData()
   const t = getCatalog(ui.locale)
 
   return (
@@ -187,161 +201,15 @@ function ClientsPage() {
       description={t.admin.clients.description}
       impersonated={gate.admin ? gate.impersonated : false}
       actions={
-        <ActionDialog
-          label={t.admin.clients.add}
-          description={t.admin.clients.addHelp}
-          variant="default"
-          size="default"
-        >
-          <PendingForm
-            busy={t.common.loading}
-            method="post"
-            className="grid gap-4"
-          >
-            <input type="hidden" name="action" value="create" />
-            <Field>
-              <FieldLabel htmlFor="name">{t.admin.clients.name}</FieldLabel>
-              <Input id="name" name="name" required />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="clientId">
-                {t.admin.clients.clientId}
-              </FieldLabel>
-              <Input
-                id="clientId"
-                name="clientId"
-                required
-                autoComplete="off"
-                pattern="[A-Za-z0-9._~\-]+"
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="type">{t.admin.clients.type}</FieldLabel>
-              {/* SPA first and by default: a browser application is what an
-                  operator adds here, and PKCE is mandatory in this provider
-                  either way (FR-OIDC-1), so "web" only buys a secret that a
-                  single-page app cannot keep. */}
-              <NativeSelect
-                id="type"
-                name="type"
-                defaultValue="spa"
-                className="w-full"
-              >
-                <option value="spa">{t.admin.clients.typeSpa}</option>
-                <option value="web">{t.admin.clients.typeWeb}</option>
-                <option value="native">{t.admin.clients.typeNative}</option>
-              </NativeSelect>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="redirectUris">
-                {t.admin.clients.redirectUris}
-              </FieldLabel>
-              <Textarea
-                id="redirectUris"
-                name="redirectUris"
-                required
-                rows={3}
-                className="font-mono text-xs"
-                aria-describedby="redirect-help"
-              />
-              <FieldDescription id="redirect-help">
-                {t.admin.clients.onePerLine}
-              </FieldDescription>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="postLogoutRedirectUris">
-                {t.admin.clients.postLogoutRedirectUris}
-              </FieldLabel>
-              {/* Read by the handler since D50 and never rendered, so every
-                  client created here got an empty list. */}
-              <Textarea
-                id="postLogoutRedirectUris"
-                name="postLogoutRedirectUris"
-                rows={2}
-                className="font-mono text-xs"
-                aria-describedby="post-logout-help"
-              />
-              <FieldDescription id="post-logout-help">
-                {t.admin.clients.onePerLine}
-              </FieldDescription>
-            </Field>
-            <fieldset className="grid gap-2">
-              <legend className="mb-1 text-sm font-medium">
-                {t.admin.clients.scopes}
-              </legend>
-              {ui.oauthScopes.map((scope) => (
-                <Label
-                  key={scope}
-                  className="flex items-center gap-2 text-sm font-normal"
-                >
-                  {/* The wrapping label is Base UI's documented pattern and
-                      is what makes the text a click target; `aria-label` is
-                      belt-and-braces, because the control the user operates is
-                      a `role="checkbox"` span rather than a labelable element,
-                      and only labelable elements are named by a wrapping
-                      `<label>` per HTML-AAM. */}
-                  <Checkbox
-                    name="scopes"
-                    value={scope}
-                    defaultChecked
-                    aria-label={scope}
-                  />
-                  {scope}
-                </Label>
-              ))}
-            </fieldset>
-            {/* Both of these were sent by the handler with no field to send
-                them from, so a *defined* `false` overrode the schema default
-                every time. `skipConsent` therefore defaulted to true in the
-                file schema (FR-OIDC-3) and to false for everything created
-                here — every admin-registered client wrongly asked for
-                consent. It is checked by default now, which restores the
-                documented semantics. */}
-            <Label className="flex items-start gap-2 text-sm font-normal">
-              {/* `aria-describedby`, not just visible text: the control is a
-                  `role="checkbox"` span, so neither the wrapping label nor the
-                  help underneath it reaches a screen reader on its own. */}
-              <Checkbox
-                name="skipConsent"
-                value="on"
-                defaultChecked
-                aria-label={t.admin.clients.skipConsent}
-                aria-describedby="skip-consent-help"
-              />
-              <span>
-                {t.admin.clients.skipConsent}
-                <span
-                  id="skip-consent-help"
-                  className="block text-xs text-muted-foreground"
-                >
-                  {t.admin.clients.skipConsentHelp}
-                </span>
-              </span>
-            </Label>
-            {/* Unchecked, unlike `skipConsent`: `clients-schema.ts` refuses
-                `enableEndSession: true` with no post-logout URI, so defaulting
-                it on would fail every plain create. The old always-false bug
-                was accidentally load-bearing. */}
-            <Label className="flex items-start gap-2 text-sm font-normal">
-              <Checkbox
-                name="enableEndSession"
-                value="on"
-                aria-label={t.admin.clients.enableEndSession}
-                aria-describedby="end-session-help"
-              />
-              <span>
-                {t.admin.clients.enableEndSession}
-                <span
-                  id="end-session-help"
-                  className="block text-xs text-muted-foreground"
-                >
-                  {t.admin.clients.enableEndSessionHelp}
-                </span>
-              </span>
-            </Label>
-            <SubmitButton>{t.admin.clients.add}</SubmitButton>
-          </PendingForm>
-        </ActionDialog>
+        <ClientCreateDialog
+          ui={ui}
+          t={t}
+          draft={draft}
+          // Reopened only when there is something in it to see: the refusal's
+          // message is the page-level alert, and the fields it is about are
+          // inside the dialog.
+          reopen={draft !== undefined}
+        />
       }
     >
       <FormAlert variant="default">{messageForNoticeCode(notice, t)}</FormAlert>

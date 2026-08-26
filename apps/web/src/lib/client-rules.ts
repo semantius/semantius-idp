@@ -1,0 +1,153 @@
+/**
+ * The OAuth-client rules both sides need (FR-OIDC-3, **D62**).
+ *
+ * `/admin/clients`'s registration form and `oauth_clients.jsonc`'s zod schema
+ * apply the same constraints, and until now only the schema knew them: the
+ * form posted whatever was typed and the server answered
+ * `invalid_client_definition` — one code for a wildcard, a missing scheme, a
+ * fragment and a plain-http host alike, with the dialog closed and the fields
+ * emptied on the way back.
+ *
+ * **This module is deliberately not in `server/`.** The obvious shortcut was to
+ * import `server/config/schema/clients-schema.ts` into the dialog, and it would
+ * have passed `check-client-bundle.ts` — that gate greps for six marker strings
+ * and a size ceiling, and zod carries none of them — while quietly eroding the
+ * seam those markers stand for. So the rules live here, as pure functions with
+ * no zod and no imports, and both sides call them.
+ *
+ * The answers are **codes, not sentences**. The schema turns them into the
+ * operator-facing messages a startup failure has always printed; the dialog
+ * turns them into catalog strings (FR-I18N-1). Neither wording travels.
+ */
+
+export const CLIENT_TYPES = ["web", "spa", "native"] as const
+export type ClientType = (typeof CLIENT_TYPES)[number]
+
+/** Public client types cannot keep a secret, so they must use PKCE (FR-OIDC-3). */
+export const PUBLIC_CLIENT_TYPES: readonly ClientType[] = ["spa", "native"]
+
+export type RedirectUriProblem =
+  | "wildcard"
+  | "not_absolute"
+  | "fragment"
+  | "http_not_loopback"
+  | "private_scheme"
+
+/**
+ * A redirect URI must be absolute and exactly matched at authorize time
+ * (FR-OIDC-3/4). Wildcards and fragments are rejected outright; plain http is
+ * only allowed on loopback, and private-use schemes only for native clients.
+ *
+ * `undefined` means the URI is acceptable for a client of that type.
+ */
+export function checkRedirectUri(
+  value: string,
+  type: ClientType
+): RedirectUriProblem | undefined {
+  if (value.includes("*")) return "wildcard"
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    return "not_absolute"
+  }
+  // Both halves matter: `URL` drops an empty trailing `#`, which is still a
+  // fragment as far as an exact match is concerned.
+  if (url.hash !== "" || value.includes("#")) return "fragment"
+  if (url.protocol === "https:") return undefined
+  if (url.protocol === "http:") {
+    const isLoopback =
+      url.hostname === "127.0.0.1" ||
+      url.hostname === "localhost" ||
+      url.hostname === "[::1]"
+    return isLoopback ? undefined : "http_not_loopback"
+  }
+  // A private-use scheme, e.g. `com.example.app:/callback`.
+  return type === "native" ? undefined : "private_scheme"
+}
+
+/** `clientId` may only contain letters, digits and `. _ ~ -` (FR-OIDC-3). */
+export const CLIENT_ID_PATTERN = "[A-Za-z0-9._~\\-]+"
+
+export function isValidClientId(value: string): boolean {
+  return (
+    value.length > 0 &&
+    value.length <= 128 &&
+    new RegExp(`^${CLIENT_ID_PATTERN}$`).test(value)
+  )
+}
+
+/** A textarea of URIs, one per line, blank lines dropped. */
+export function uriLines(value: string): string[] {
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line !== "")
+}
+
+export interface ClientFormValues {
+  clientId: string
+  name: string
+  type: string
+  /** Raw textarea contents, one URI per line. */
+  redirectUris: string
+  postLogoutRedirectUris: string
+  enableEndSession: boolean
+}
+
+/**
+ * Everything the registration form can decide for itself.
+ *
+ * Keyed by field name so the caller can hang each message under its own input.
+ * A `uri:<problem>` value carries the offending URI after a second colon, so
+ * the dialog can name it: `uri:wildcard:https://app/*`.
+ *
+ * Scopes are deliberately absent: they are checkboxes generated from
+ * `ui.oauthScopes`, so `scope_not_allowed` is not reachable from this form.
+ */
+export type ClientFormErrors = Partial<Record<keyof ClientFormValues, string>>
+
+export function validateClientForm(values: ClientFormValues): ClientFormErrors {
+  const errors: ClientFormErrors = {}
+  const type = (
+    (CLIENT_TYPES as readonly string[]).includes(values.type)
+      ? values.type
+      : "spa"
+  ) as ClientType
+
+  if (!isValidClientId(values.clientId)) errors.clientId = "invalid"
+  if (values.name.trim() === "") errors.name = "required"
+
+  const redirects = uriLines(values.redirectUris)
+  if (redirects.length === 0) {
+    errors.redirectUris = "required"
+  } else {
+    for (const uri of redirects) {
+      const problem = checkRedirectUri(uri, type)
+      if (problem) {
+        errors.redirectUris = `uri:${problem}:${uri}`
+        break
+      }
+    }
+  }
+
+  const postLogout = uriLines(values.postLogoutRedirectUris)
+  for (const uri of postLogout) {
+    const problem = checkRedirectUri(uri, type)
+    if (problem) {
+      errors.postLogoutRedirectUris = `uri:${problem}:${uri}`
+      break
+    }
+  }
+  // The schema refuses `enableEndSession` with no post-logout URI, so the form
+  // has to as well — otherwise ticking the box is a guaranteed rejection.
+  if (
+    values.enableEndSession &&
+    postLogout.length === 0 &&
+    errors.postLogoutRedirectUris === undefined
+  ) {
+    errors.postLogoutRedirectUris = "endSessionNeedsUri"
+  }
+
+  return errors
+}

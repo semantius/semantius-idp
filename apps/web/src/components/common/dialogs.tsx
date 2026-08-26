@@ -46,6 +46,7 @@ export function ActionDialog({
   variant = "outline",
   size = "sm",
   className,
+  defaultOpen,
   children,
 }: {
   /** The trigger's text, and the dialog's accessible name when no title is given. */
@@ -55,10 +56,17 @@ export function ActionDialog({
   variant?: "default" | "outline" | "ghost" | "destructive" | "secondary"
   size?: "default" | "sm" | "lg"
   className?: string
+  /**
+   * Open on first paint. What a rejected submission needs (**D62**): the
+   * refusal and the restored fields are both inside the dialog, so a page that
+   * came back with an error and a draft has to reopen it or neither is
+   * visible. Uncontrolled, so closing it works exactly as it always did.
+   */
+  defaultOpen?: boolean
   children: ReactNode
 }) {
   return (
-    <Dialog>
+    <Dialog defaultOpen={defaultOpen}>
       <DialogTrigger
         render={<Button variant={variant} size={size} className={className} />}
       >

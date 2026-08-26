@@ -520,6 +520,25 @@ export const enUS = {
       enableEndSession: "Allow RP-initiated logout",
       enableEndSessionHelp:
         "Lets the application end the session here. Needs at least one post-logout redirect URI.",
+      // What the form can decide for itself, before posting (D62). The same
+      // rules the file schema applies, worded for the person typing rather
+      // than for the operator reading a startup failure.
+      invalidClientId:
+        "Use letters, digits and `. _ ~ -` only — this is what the application sends at the token endpoint.",
+      nameRequired: "Give the application a name; it is what users are asked to trust.",
+      redirectRequired:
+        "At least one redirect URI is required — every application here uses the authorization-code flow.",
+      uriWildcard: (uri: string) =>
+        `${uri} contains a wildcard. Redirect URIs are matched exactly, character for character.`,
+      uriNotAbsolute: (uri: string) =>
+        `${uri} is not an absolute URI. Include the scheme, as in https://app.example.com/callback.`,
+      uriFragment: (uri: string) => `${uri} contains a "#" fragment, which is not allowed.`,
+      uriHttp: (uri: string) =>
+        `${uri} must use https. Plain http is only allowed on loopback — http://localhost or http://127.0.0.1.`,
+      uriPrivateScheme: (uri: string) =>
+        `${uri} uses a private-use scheme, which only a mobile or desktop application may do.`,
+      endSessionNeedsUri:
+        "RP-initiated logout needs at least one post-logout redirect URI. Add one, or turn the option off.",
     },
     roles: {
       title: "Roles",

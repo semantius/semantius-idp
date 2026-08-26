@@ -1,8 +1,8 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-26 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `4cce459`
+**As of:** 2026-08-26 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `9d6cdd3`
 **Plan:** `~/.claude/plans/make-a-plan-to-tranquil-rabbit.md` (owner review round 2)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D59**
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D62**
 
 **S3, M6–M14 and owner review rounds 1 and 2 are done, up to the release gate.** Every
 gate green: lint, typecheck, unit (510), integration (225 across twenty-four
@@ -101,6 +101,15 @@ come before anything in Pending.
 - **Client-side validation, the seam (F3), `D62`.** `usePasswordConfirm` +
   `ConfirmedPasswordFields` in `components/auth/confirmed-password.tsx`, on all
   three password-and-confirmation forms. The server checks are untouched.
+- **The client-registration form (F15), and drafts (`D62`).** The rules moved
+  to `lib/client-rules.ts`, shared with the zod schema — *not* by importing
+  `server/config/schema/clients-schema.ts` into the browser, which would have
+  passed `check-client-bundle.ts` (six marker strings and a size ceiling; zod
+  carries none of them) while eroding the seam those markers stand for. The
+  carrier for a rejected form is `server/http/draft.ts` over the existing
+  one-shot stash, and `ActionDialog` gained `defaultOpen` so the dialog
+  reopens. Passwords are never stashed, enforced in the helper rather than by
+  each caller.
 
 ---
 

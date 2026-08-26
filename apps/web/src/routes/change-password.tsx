@@ -2,6 +2,10 @@ import { createFileRoute } from "@tanstack/react-router"
 
 import { AuthShell } from "@/components/auth/auth-shell"
 import { FormAlert, PasswordField } from "@/components/auth/form-parts"
+import {
+  ConfirmedPasswordFields,
+  usePasswordConfirm,
+} from "@/components/auth/confirmed-password"
 import { messageForErrorCode } from "@/lib/auth-errors"
 import { searchFlag, searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
@@ -134,6 +138,7 @@ export const Route = createFileRoute("/change-password")({
 function ChangePasswordPage() {
   const { ui, forced, returnTo, oauthQuery, error } = Route.useLoaderData()
   const t = getCatalog(ui.locale)
+  const confirm = usePasswordConfirm(t)
 
   return (
     <AuthShell
@@ -147,7 +152,12 @@ function ChangePasswordPage() {
         {messageForErrorCode(error, t, ui.passwordMinLength)}
       </FormAlert>
 
-      <PendingForm busy={t.common.loading} method="post" className="grid gap-4">
+      <PendingForm
+        busy={t.common.loading}
+        method="post"
+        className="grid gap-4"
+        onSubmit={confirm.onSubmit}
+      >
         {returnTo ? (
           <input type="hidden" name="returnTo" value={returnTo} />
         ) : null}
@@ -164,22 +174,10 @@ function ChangePasswordPage() {
           hideLabel={t.common.hidePassword}
           autoFocus
         />
-        <PasswordField
-          name="password"
-          label={t.common.newPassword}
-          autoComplete="new-password"
+        <ConfirmedPasswordFields
+          t={t}
           minLength={ui.passwordMinLength}
-          hint={t.auth.signUp.passwordHint(ui.passwordMinLength)}
-          showLabel={t.common.showPassword}
-          hideLabel={t.common.hidePassword}
-        />
-        <PasswordField
-          name="confirmPassword"
-          label={t.common.confirmPassword}
-          autoComplete="new-password"
-          minLength={ui.passwordMinLength}
-          showLabel={t.common.showPassword}
-          hideLabel={t.common.hidePassword}
+          error={confirm.error}
         />
 
         <SubmitButton className="w-full">

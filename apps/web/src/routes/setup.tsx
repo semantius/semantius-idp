@@ -1,11 +1,11 @@
 import { createFileRoute, redirect } from "@tanstack/react-router"
 
 import { AuthShell } from "@/components/auth/auth-shell"
+import { FormAlert, TextField } from "@/components/auth/form-parts"
 import {
-  FormAlert,
-  PasswordField,
-  TextField,
-} from "@/components/auth/form-parts"
+  ConfirmedPasswordFields,
+  usePasswordConfirm,
+} from "@/components/auth/confirmed-password"
 import { messageForErrorCode } from "@/lib/auth-errors"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
@@ -174,6 +174,7 @@ const SETUP_RULE = { window: 3600, max: 10 } as const
 function SetupPage() {
   const { ui, error } = Route.useLoaderData()
   const t = getCatalog(ui.locale)
+  const confirm = usePasswordConfirm(t)
 
   return (
     <AuthShell
@@ -186,7 +187,12 @@ function SetupPage() {
         {messageForErrorCode(error, t, ui.passwordMinLength)}
       </FormAlert>
 
-      <PendingForm busy={t.common.loading} method="post" className="grid gap-4">
+      <PendingForm
+        busy={t.common.loading}
+        method="post"
+        className="grid gap-4"
+        onSubmit={confirm.onSubmit}
+      >
         <div className="grid gap-4 sm:grid-cols-2">
           <TextField
             name="firstName"
@@ -208,22 +214,12 @@ function SetupPage() {
           label={t.common.email}
           autoComplete="username"
         />
-        <PasswordField
-          name="password"
-          label={t.common.password}
-          autoComplete="new-password"
+        <ConfirmedPasswordFields
+          t={t}
           minLength={ui.passwordMinLength}
-          hint={t.auth.signUp.passwordHint(ui.passwordMinLength)}
-          showLabel={t.common.showPassword}
-          hideLabel={t.common.hidePassword}
-        />
-        <PasswordField
-          name="confirmPassword"
-          label={t.setup.confirmPassword}
-          autoComplete="new-password"
-          minLength={ui.passwordMinLength}
-          showLabel={t.common.showPassword}
-          hideLabel={t.common.hidePassword}
+          error={confirm.error}
+          newLabel={t.common.password}
+          confirmLabel={t.setup.confirmPassword}
         />
 
         <SubmitButton className="w-full">{t.setup.submit}</SubmitButton>

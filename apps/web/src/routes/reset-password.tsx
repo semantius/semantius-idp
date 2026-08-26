@@ -1,7 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router"
 
 import { AuthShell } from "@/components/auth/auth-shell"
-import { FormAlert, PasswordField } from "@/components/auth/form-parts"
+import { FormAlert } from "@/components/auth/form-parts"
+import {
+  ConfirmedPasswordFields,
+  usePasswordConfirm,
+} from "@/components/auth/confirmed-password"
 import { messageForErrorCode } from "@/lib/auth-errors"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
@@ -81,6 +85,7 @@ export const Route = createFileRoute("/reset-password")({
 function ResetPasswordPage() {
   const { ui, token, error } = Route.useLoaderData()
   const t = getCatalog(ui.locale)
+  const confirm = usePasswordConfirm(t)
 
   if (!token) {
     return (
@@ -108,25 +113,18 @@ function ResetPasswordPage() {
         {messageForErrorCode(error, t, ui.passwordMinLength)}
       </FormAlert>
 
-      <PendingForm busy={t.common.loading} method="post" className="grid gap-4">
+      <PendingForm
+        busy={t.common.loading}
+        method="post"
+        className="grid gap-4"
+        onSubmit={confirm.onSubmit}
+      >
         <input type="hidden" name="token" value={token} />
-        <PasswordField
-          name="password"
-          label={t.common.newPassword}
-          autoComplete="new-password"
+        <ConfirmedPasswordFields
+          t={t}
           minLength={ui.passwordMinLength}
-          hint={t.auth.signUp.passwordHint(ui.passwordMinLength)}
-          showLabel={t.common.showPassword}
-          hideLabel={t.common.hidePassword}
+          error={confirm.error}
           autoFocus
-        />
-        <PasswordField
-          name="confirmPassword"
-          label={t.common.confirmPassword}
-          autoComplete="new-password"
-          minLength={ui.passwordMinLength}
-          showLabel={t.common.showPassword}
-          hideLabel={t.common.hidePassword}
         />
         <SubmitButton className="w-full">
           {t.auth.resetPassword.submit}

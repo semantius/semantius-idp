@@ -98,6 +98,9 @@ come before anything in Pending.
   instruction taken literally — which costs the example its deliberately
   neutral "Example IdP" branding. One tracked edit reverses that if it was not
   wanted; the untracked `config/` copy carries the same change.
+- **Client-side validation, the seam (F3), `D62`.** `usePasswordConfirm` +
+  `ConfirmedPasswordFields` in `components/auth/confirmed-password.tsx`, on all
+  three password-and-confirmation forms. The server checks are untouched.
 
 ---
 

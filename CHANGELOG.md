@@ -312,5 +312,12 @@ were questions, and one was "polish every page".
   `site.name`, and branding only: it never reaches the TOTP issuer label, the
   e-mails or a token claim. It renders in the admin shell heading and the
   document title, which is all eight admin routes and nothing else.
+- **Forms check what the browser can check, before posting** (**D62**). The
+  three password-and-confirmation forms — `/setup`, `/reset-password`,
+  `/change-password` — reported a mistyped confirmation the long way round: a
+  POST, a 303 and a page that came back empty with the mismatch announced at
+  the top as if the server had refused something. The check now happens on
+  submit and shows inline under the confirm field, with focus moved to it. The
+  server's identical check is untouched and still authoritative.
 
 [Unreleased]: https://github.com/semantius/semantius-idp/commits/main

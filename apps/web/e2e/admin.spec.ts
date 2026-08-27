@@ -342,6 +342,12 @@ test.describe("the admin area", () => {
     await expect(fileRow.getByRole("button", { name: "Disable" })).toHaveCount(
       0
     )
+    // D72 adds two more, and the file row must not have grown either of them:
+    // an edit here is exactly as undoable by the next restart as a removal.
+    await expect(fileRow.getByRole("button", { name: "Edit" })).toHaveCount(0)
+    await expect(
+      fileRow.getByRole("button", { name: "Rotate secret" })
+    ).toHaveCount(0)
 
     // Registering one: the secret is generated here and shown once, in a
     // dialog, and never in the address bar.
@@ -395,6 +401,80 @@ test.describe("the admin area", () => {
     ).toBeVisible()
     await expect(
       page.locator("tbody tr").filter({ hasText: "e2e-registered" })
+    ).toHaveCount(0)
+  })
+
+  test("a registered application can be edited and its secret rotated (D72)", async ({
+    page,
+    app,
+  }) => {
+    await signInAsAdmin(page, app)
+    await app.goto("/admin/clients")
+
+    const form = await openDialog(page, "Add an application")
+    await form.getByLabel("Name").fill("Editable App")
+    await form.getByLabel("Client ID").fill("e2e-editable")
+    await form.getByLabel("Type").selectOption("web")
+    await form
+      .getByLabel("Redirect URIs", { exact: true })
+      .fill("http://127.0.0.1:4601/callback")
+    await submitDialog(page, form, "Add an application")
+
+    const created = (
+      await page
+        .getByRole("dialog")
+        .locator('[data-slot="one-shot-value"]')
+        .innerText()
+    ).trim()
+    await page.keyboard.press("Escape")
+
+    const row = page.locator("tbody tr").filter({ hasText: "e2e-editable" })
+
+    // The edit dialog arrives **prefilled**, which is the half a unit test
+    // cannot see and the half that matters: `/idp/update-client` is a full
+    // replace, so a field that came back blank would be a field that saving
+    // clears.
+    const edit = await openDialog(page, "Edit", row)
+    await expect(edit.getByLabel("Name")).toHaveValue("Editable App")
+    await expect(
+      edit.getByLabel("Redirect URIs", { exact: true })
+    ).toHaveValue("http://127.0.0.1:4601/callback")
+    // Shown and not editable: the id is the natural key four other tables
+    // reference, so changing it is removing this application and adding a
+    // different one.
+    await expect(edit.getByText("e2e-editable")).toBeVisible()
+
+    await edit.getByLabel("Name").fill("Edited App")
+    await edit
+      .getByLabel("Redirect URIs", { exact: true })
+      .fill("http://127.0.0.1:4601/moved")
+    await submitDialog(page, edit, "Save")
+
+    await expect(page.getByText("The application has been updated.")).toBeVisible()
+    await expect(row.getByText("Edited App")).toBeVisible()
+    await expect(row.getByText("http://127.0.0.1:4601/moved")).toBeVisible()
+
+    // Rotation: a new secret, shown once, in a dialog and never in the URL.
+    const rotate = await openDialog(page, "Rotate secret", row)
+    await submitDialog(page, rotate, "Rotate secret")
+
+    const secretDialog = page.getByRole("dialog")
+    await expect(secretDialog).toBeVisible()
+    const rotated = (
+      await secretDialog.locator('[data-slot="one-shot-value"]').innerText()
+    ).trim()
+    expect(rotated.length, "a generated client secret").toBeGreaterThan(31)
+    expect(rotated, "a new secret, not the one from the create").not.toBe(
+      created
+    )
+    expect(page.url(), "the secret is not in the URL").not.toContain(rotated)
+    await page.keyboard.press("Escape")
+
+    // Cleaned up, so the next run of this spec starts from the same table.
+    const confirm = await openDialog(page, "Remove", row)
+    await submitDialog(page, confirm, "Remove")
+    await expect(
+      page.locator("tbody tr").filter({ hasText: "e2e-editable" })
     ).toHaveCount(0)
   })
 

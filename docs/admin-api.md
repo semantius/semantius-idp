@@ -102,6 +102,8 @@ the sign-in page and they start again from the application.
 | `GET` | `/idp/system` | Version, issuer, the well-known **discovery URLs** (**D55**), e-mail transport, keys, migrations, last reconcile, effective configuration with secrets masked |
 | `POST` | `/idp/rotate-keys` | Creates a successor signing key |
 | `POST` | `/idp/create-client` | Registers an OAuth client (**D50**) |
+| `POST` | `/idp/update-client` | Replaces one's fields, except its id (**D72**) |
+| `POST` | `/idp/rotate-client-secret` | Issues a new secret and returns it once (**D72**) |
 | `POST` | `/idp/set-client-disabled` | Switches one off, or back on |
 | `POST` | `/idp/delete-client` | Removes one, with its tokens and consents |
 
@@ -115,11 +117,12 @@ passes through whatever you send, so a *defined* `false` wins over the default.
 `postLogoutRedirectUris` entry.
 
 Clients are **half** read-only (**D50**). The ones in `oauth_clients.jsonc` are
-reconciled at start-up and refused by the three endpoints above with
+reconciled at start-up and refused by the five endpoints above with
 `CLIENT_MANAGED_BY_FILE`, because a change here is a change the next restart
 would silently undo. Clients registered *through* the API are stored with the
 calling administrator as their owner — which is the marker reconciliation's
-sweep skips — so they survive restarts and can be disabled and removed.
+sweep skips — so they survive restarts and can be edited, rotated, disabled
+and removed.
 
 ```bash
 curl -X POST https://idp.example.com/api/auth/idp/create-client   -H "x-api-key: $IDP_API_KEY"   -H "content-type: application/json"   -d '{
@@ -143,6 +146,51 @@ get none. `enableEndSession` defaults to true and then requires at least one
 A created client works immediately: nothing needs a restart, and the CORS and
 `form-action` origin sets are refreshed before the call returns.
 
+### Editing one (**D72**)
+
+`/idp/update-client` takes the **same body as `create`** and is a **full
+replace**: whatever you send is what the client becomes, so read the row first
+and send it back with your changes rather than sending only the field you want
+to change. Five things it does not take from the body:
+
+- **the client id**, which is the natural key `token`, `oauth_consent`,
+  `oauth_client_resource` and the audit trail all reference — changing it is
+  removing this client and adding a different one;
+- **the owner**, which is preserved from the existing row, because a null owner
+  is the file marker and the next reconcile would disable the client;
+- **`disabled`**, likewise preserved — an edit must not switch a suspended
+  client back on;
+- **`createdAt`**, untouched;
+- **the secret**, whose disposition follows the type. Staying confidential
+  keeps the existing secret working, byte for byte. `spa`/`native` → `web`
+  mints one and returns it **once**, in `clientSecret`, exactly as a creation
+  does. `web` → `spa`/`native` discards it.
+
+The whole merged entry is re-validated against the `oauth_clients.jsonc`
+schema, so a type change re-checks the stored redirect URIs — a private-use
+scheme is legal for `native` and refused for `web`. Tokens and consents are
+revoked **only when the public/confidential flip happens**: a renamed client or
+an edited redirect URI revokes nothing, matching what reconciliation does for
+an edited file entry. The origin sets are refreshed before the call returns.
+
+### Rotating a secret (**D72**)
+
+```bash
+curl -X POST https://idp.example.com/api/auth/idp/rotate-client-secret \
+     -H "x-api-key: $IDP_API_KEY" \
+     -H "content-type: application/json" \
+     -d '{"clientId": "reporting"}'
+```
+
+The new secret is in the response and nowhere else. **There is no grace
+window**: the previous secret stops authenticating the moment this returns, so
+deploy the new one to the application before rotating, or expect a gap.
+Rotation is hygiene — it revokes **nothing**, because the client is still the
+same client. If you believe a secret is compromised, disable or remove the
+client instead; both of those do revoke. A public client (`spa`, `native`) has
+no secret and is refused with `CLIENT_HAS_NO_SECRET` rather than quietly given
+one — that is an edit, and `/idp/update-client` is where an edit belongs.
+
 ## The refusals
 
 Some things are refused however you ask, because they are the ones that lock a
@@ -160,6 +208,7 @@ deployment out of itself:
 | `CLIENT_ALREADY_EXISTS` | A client with that id is already registered. |
 | `INVALID_CLIENT_DEFINITION` | The entry does not satisfy the `oauth_clients.jsonc` schema; the message names what. |
 | `SCOPE_NOT_ALLOWED` | A scope outside `oauth.scopes`. |
+| `CLIENT_HAS_NO_SECRET` | A public client has nothing to rotate. Change its type first. |
 
 The last-administrator rule is checked **before** the self-action rules. When
 both fit, "give another account an admin role first" is the useful answer:

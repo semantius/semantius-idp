@@ -524,6 +524,17 @@ export const enUS = {
       add: "Add an application",
       addHelp:
         "The client secret is generated here and shown once. Redirect URIs are matched exactly.",
+      // D72: every field except the id, which is the natural key four other
+      // tables reference.
+      edit: "Edit",
+      editTitle: "Edit the application",
+      editHelp:
+        "Everything except the client ID can be changed. The existing secret is kept unless the type changes.",
+      clientIdFixed:
+        "The client ID cannot be changed — tokens, consents and audit rows all reference it. Remove the application and add it again to use a different one.",
+      rotateSecret: "Rotate secret",
+      rotateConfirm:
+        "A new client secret is generated and shown once. The current one stops working immediately, so the application has to be updated before it can sign anyone in again.",
       clientId: "Client ID",
       name: "Name",
       type: "Type",
@@ -662,6 +673,8 @@ export const enUS = {
         "That application comes from oauth_clients.jsonc. Edit the file and restart the server.",
       clientInvalid:
         "The application could not be registered. Check the redirect URIs and the scopes.",
+      clientNoSecret:
+        "That application is a public client and has no secret to rotate. Change its type to a web application first.",
       // D70: an administrator can list every account, so naming the duplicate
       // is not the disclosure SEC-7 guards against on `/signup` — and the
       // sentence it replaced was about a password the dialog never asked for.
@@ -683,6 +696,7 @@ export const enUS = {
       profileSaved: "Profile updated.",
       clientCreated: "The application has been registered.",
       clientDeleted: "The application has been removed.",
+      clientUpdated: "The application has been updated.",
       clientDisabled: "The application has been disabled.",
       clientEnabled: "The application has been enabled.",
       created: "The account has been created.",

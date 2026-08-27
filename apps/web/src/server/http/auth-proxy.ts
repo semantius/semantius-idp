@@ -135,6 +135,7 @@ export function errorCodeFor(result: AuthCallResult): string {
     // names something the administrator can change.
     case "CLIENT_ALREADY_EXISTS":
     case "CLIENT_MANAGED_BY_FILE":
+    case "CLIENT_HAS_NO_SECRET":
     case "CLIENT_NOT_FOUND":
     case "INVALID_CLIENT_DEFINITION":
     case "SCOPE_NOT_ALLOWED":

@@ -100,10 +100,20 @@ export async function signInAsAdmin(page: Page, app: App): Promise<void> {
  * therefore scoped to the returned dialog, which is the only way those two
  * assertions can be told apart.
  */
-export async function openDialog(page: Page, name: string): Promise<Locator> {
+export async function openDialog(
+  page: Page,
+  name: string,
+  /**
+   * Where to look for the trigger. `/admin/clients` grew a per-row Edit and a
+   * per-row Rotate secret (**D72**), so "the first button called Edit" stopped
+   * being a useful answer — it is whichever application happens to sort first.
+   * Absent means the page, which is what every caller before this wanted.
+   */
+  within?: Locator
+): Promise<Locator> {
   // Before the click the dialog is not in the DOM at all (Base UI portals on
   // open), so the trigger is the only thing this can match.
-  await page.getByRole("button", { name, exact: true }).first().click()
+  await (within ?? page).getByRole("button", { name, exact: true }).first().click()
   const dialog = page.getByRole("dialog")
   await expect(dialog).toBeVisible()
   return dialog

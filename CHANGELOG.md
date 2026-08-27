@@ -475,4 +475,33 @@ were questions, and one was "polish every page".
   banners, because there the message *is* the page; and a one-time client
   secret or API key still gets its dialog. The component is the shadcn
   registry's Base UI `toast`, used verbatim — including its placement.
+- **An application registered from `/admin/clients` can be edited, and its
+  secret rotated** (**D72**). Before this the page offered create, disable and
+  remove — so a typo in a name, a redirect URI that had moved, or a scope that
+  should not have been granted meant removing the application and adding it
+  again, which revokes every token and consent it held and hands its operator a
+  secret they did not ask for. Every field except the client id is now
+  editable, from a dialog on the list, prefilled from the row. The id stays
+  fixed because the tokens, the consents and the audit trail all reference it.
+  An edit is a full replace of what the dialog shows, and it preserves the
+  three things the form does not own: the owning administrator (a null owner is
+  what the next restart's orphan sweep disables), whether the client is
+  disabled, and when it was created. A confidential application keeps the
+  secret its operator already deployed, byte for byte; turning a single-page or
+  native application into a web one issues a secret and shows it once; going
+  the other way discards it — and only that change of kind revokes anything.
+  Rotation is a per-row action: a new secret, shown once, with no grace window,
+  and no revocation, because the client is still the same client — Disable and
+  Remove are the ones for a compromise. File-managed applications gained
+  neither control, for the reason they have none of the others. Both endpoints
+  are on the admin API (`/idp/update-client`, `/idp/rotate-client-secret`) and
+  both are audited.
+- **A test that claimed to verify client authentication was verifying
+  nothing.** It posted a junk authorization code to `/oauth2/token` and
+  asserted the answer was not `invalid_client` — which it never could be, since
+  the code is checked before the credential, so any secret at all produced
+  `invalid_grant`. Found because the new rotation test asserts the *old* secret
+  stops working and was told it had not. Both now use `/oauth2/introspect`,
+  which authenticates the client before it answers, and assert both directions.
+
 [Unreleased]: https://github.com/semantius/semantius-idp/commits/main

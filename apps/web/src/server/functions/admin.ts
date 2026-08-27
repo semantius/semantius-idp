@@ -161,6 +161,13 @@ export interface AdminClientRow {
   audience: string[]
   skipConsent: boolean
   /**
+   * Carried for the edit dialog (**D72**). `/idp/update-client` is a full
+   * replace, so a field the form cannot prefill is a field every edit silently
+   * resets — and this one has no column on the table, which is why it was not
+   * here before.
+   */
+  enableEndSession: boolean
+  /**
    * File-managed clients cannot be edited here (FR-OIDC-2, D50): the next
    * restart would undo it. Database ones can.
    */
@@ -577,6 +584,7 @@ export const fetchClients = createServerFn({ method: "GET" }).handler(
         )
         .map((link) => link.resourceId),
       skipConsent: row.skipConsent === true,
+      enableEndSession: row.enableEndSession === true,
       // D50: the file marker is `userId === null`, and it is what decides
       // whether this row may be edited here at all — not merely how it is
       // labelled. A row whose id also appears in the file is shown as

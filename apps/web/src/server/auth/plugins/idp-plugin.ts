@@ -326,6 +326,12 @@ export type AuditAction =
   | "token.revoked"
   | "client.reconciled"
   | "client.created"
+  // D72: an admin-registered client is editable, and rotating its secret is
+  // its own event — the trail has to distinguish "the URIs changed" from "the
+  // credential changed", because only one of those explains a client that
+  // stopped working this morning.
+  | "client.updated"
+  | "client.secret_rotated"
   | "client.deleted"
   | "client.disabled"
   | "keys.rotated"

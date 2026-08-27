@@ -100,6 +100,8 @@ export function messageForErrorCode(
       return t.admin.refusals.clientFromFile
     case "client_not_found":
       return t.errors.notFound.description
+    case "client_has_no_secret":
+      return t.admin.refusals.clientNoSecret
     case "invalid_client_definition":
     case "scope_not_allowed":
       return t.admin.refusals.clientInvalid

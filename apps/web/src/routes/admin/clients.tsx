@@ -18,6 +18,7 @@ import {
 
 import { AdminShell } from "@/components/admin/admin-shell"
 import { ClientCreateDialog } from "@/components/admin/client-create-dialog"
+import { ClientEditDialog } from "@/components/admin/client-edit-dialog"
 import { ActionDialog, SecretDialog } from "@/components/common/dialogs"
 import { FormAlert } from "@/components/auth/form-parts"
 import { NoticeToast } from "@/components/common/notice-toast"
@@ -38,6 +39,7 @@ import {
   withError,
 } from "@/server/http/auth-proxy"
 import { stashDraft, withDraft } from "@/server/http/draft"
+import type { Draft } from "@/server/http/draft"
 import { requireFreshSession } from "@/server/http/fresh-session"
 import { stash } from "@/server/http/one-shot"
 import { getRuntime } from "@/server/runtime"
@@ -108,14 +110,21 @@ export const Route = createFileRoute("/admin/clients")({
 
         // Registering a client is a credential-minting act, so it sits behind
         // the same freshness gate as every other admin write (FR-AUTH-5). The
-        // draft rides along only for `create`: the two one-field actions have
-        // nothing worth keeping, and a stale POST that is about to be refused
-        // should not write a row for a client id and a hidden input.
+        // draft rides along only for `create` and `update`: the three
+        // one-field actions have nothing worth keeping, and a stale POST that
+        // is about to be refused should not write a row for a client id and a
+        // hidden input.
         const fresh = await requireFreshSession(runtime, request, HERE, {
           draft:
-            form.action === "delete" || form.action === "toggle"
+            form.action === "delete" ||
+            form.action === "toggle" ||
+            form.action === "rotate-secret"
               ? undefined
               : {
+                  // **D72**: which dialog to reopen, and — for an edit — which
+                  // row's. Absent means create, so a draft stashed before this
+                  // existed still restores the dialog it came from.
+                  action: form.action,
                   clientId: form.clientId,
                   name: form.name,
                   type: form.type,
@@ -159,11 +168,38 @@ export const Route = createFileRoute("/admin/clients")({
           )
         }
 
-        // Create. One URI per line is what an operator actually has in front of
-        // them; the schema wants an array.
+        if (form.action === "rotate-secret") {
+          const result = await callAuth(
+            runtime,
+            "/idp/rotate-client-secret",
+            { clientId: form.clientId ?? "" },
+            request
+          )
+          if (!result.ok) {
+            return redirectWithCookies(
+              withError(here, adminErrorCodeFor(result))
+            )
+          }
+          // The same one-shot stash a creation uses, and the same dialog on
+          // the way back: a secret that travels in a query string is a secret
+          // in the history, in `Referer` and in every proxy log in between.
+          const rotated =
+            typeof result.body.clientSecret === "string"
+              ? result.body.clientSecret
+              : ""
+          const rotatedHandle = await stash(runtime, rotated, {
+            ttlSeconds: 600,
+          })
+          return redirectWithCookies(`${here}?created=${rotatedHandle}`)
+        }
+
+        // Create and update marshal identically — `/idp/update-client` takes
+        // create's body, because a full replace *is* a create against a row
+        // that already exists (D72).
+        const updating = form.action === "update"
         const result = await callAuth(
           runtime,
-          "/idp/create-client",
+          updating ? "/idp/update-client" : "/idp/create-client",
           {
             clientId: form.clientId ?? "",
             name: form.name ?? "",
@@ -186,6 +222,10 @@ export const Route = createFileRoute("/admin/clients")({
           // could have known (D62). The twelve fields come back rather than
           // being retyped; nothing password-shaped is in there.
           const draft = await stashDraft(runtime, {
+            // Which dialog reopens. An edit dialog exists per row, so the id
+            // is what tells them apart — without it, every row's dialog would
+            // reopen carrying one row's rejected values (D72).
+            action: form.action,
             clientId: form.clientId,
             name: form.name,
             type: form.type,
@@ -205,8 +245,12 @@ export const Route = createFileRoute("/admin/clients")({
             ? result.body.clientSecret
             : ""
         if (secret === "") {
-          // A public client has none, so there is nothing to hand over.
-          return redirectWithCookies(`${here}?notice=clientCreated`)
+          // Nothing to hand over: a public client has no secret, and an update
+          // that kept the existing one deliberately does not re-show it — the
+          // row holds a hash, so there is nothing to re-show.
+          return redirectWithCookies(
+            `${here}?notice=${updating ? "clientUpdated" : "clientCreated"}`
+          )
         }
         const handle = await stash(runtime, secret, { ttlSeconds: 600 })
         return redirectWithCookies(`${here}?created=${handle}`)
@@ -219,6 +263,14 @@ function ClientsPage() {
   const { ui, gate, clients, notice, error, created, draft } =
     Route.useLoaderData()
   const t = getCatalog(ui.locale)
+  // One draft handle, several dialogs that could claim it (**D72**).
+  // `action` says which; absent means create, so a draft stashed before edit
+  // existed still lands where it came from.
+  const createDraft = draft?.action === "update" ? undefined : draft
+  const editDraftFor = (clientId: string): Draft | undefined =>
+    draft?.action === "update" && draft.clientId === clientId
+      ? draft
+      : undefined
 
   return (
     <AdminShell
@@ -231,12 +283,12 @@ function ClientsPage() {
         <ClientCreateDialog
           ui={ui}
           t={t}
-          draft={draft}
+          draft={createDraft}
           // Reopened when there is a restored form to come back to, with the
           // refusal inside it: a modal covers the page-level alert.
-          reopen={draft !== undefined}
+          reopen={createDraft !== undefined}
           error={
-            draft !== undefined
+            createDraft !== undefined
               ? messageForErrorCode(error, t, ui.passwordMinLength)
               : undefined
           }
@@ -351,6 +403,54 @@ function ClientsPage() {
                               : t.admin.clients.disable}
                           </SubmitButton>
                         </PendingForm>
+                        <ClientEditDialog
+                          ui={ui}
+                          t={t}
+                          client={client}
+                          draft={editDraftFor(client.clientId)}
+                          reopen={
+                            editDraftFor(client.clientId) !== undefined
+                          }
+                          error={
+                            editDraftFor(client.clientId) !== undefined
+                              ? messageForErrorCode(
+                                  error,
+                                  t,
+                                  ui.passwordMinLength
+                                )
+                              : undefined
+                          }
+                        />
+                        {/* Only where there is a secret to replace. A public
+                            client authenticates with PKCE, and the endpoint
+                            refuses it rather than quietly minting one. */}
+                        {client.isPublic ? null : (
+                          <ActionDialog
+                            label={t.admin.clients.rotateSecret}
+                            description={t.admin.clients.rotateConfirm}
+                            variant="outline"
+                          >
+                            <PendingForm
+                              busy={t.common.loading}
+                              method="post"
+                              className="grid gap-4"
+                            >
+                              <input
+                                type="hidden"
+                                name="action"
+                                value="rotate-secret"
+                              />
+                              <input
+                                type="hidden"
+                                name="clientId"
+                                value={client.clientId}
+                              />
+                              <SubmitButton>
+                                {t.admin.clients.rotateSecret}
+                              </SubmitButton>
+                            </PendingForm>
+                          </ActionDialog>
+                        )}
                         <ActionDialog
                           label={t.admin.clients.remove}
                           description={t.admin.clients.removeConfirm}

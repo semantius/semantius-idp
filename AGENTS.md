@@ -188,6 +188,20 @@ retry was a duplicate, and the duplicate is what produced the sentence above.
 The pattern is: wrap the tail, log it, and land on the list with a notice that
 names the recovery.
 
+**`/oauth2/token` is not an oracle for "does this client secret work".** It
+validates the authorization code *before* the client credential, so a junk code
+answers `invalid_grant` whatever secret is presented — including one that was
+never right. A D50 test built on that assertion passed for four months and
+proved nothing; D72's rotation case is what exposed it. Use
+`/oauth2/introspect`, which authenticates the client and then answers about the
+token: wrong secret is `401 invalid_client`, right secret is
+`200 {"active": false}`.
+
+**The integration suite runs against a remote Neon database and is slow.** A
+schema create plus full migration per *file*, over the internet: `setup.test.ts`
+alone is ~2.5 minutes, `admin.test.ts` ~10. Run it in the background and write
+to a file — piping through `tail` buffers everything and looks like a hang.
+
 **A field's `id` is generated, never its `name`.** `name` is unique in a form
 and emphatically not in a document: `/account/security` has three fields called
 `password` — the change-password dialog's and the two the second-factor forms

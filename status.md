@@ -1,8 +1,8 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-26 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** `a3a75c4` (this handoff commit follows it and changes no code)
-**Plan:** `~/.claude/plans/1-it-s-great-that-linked-bear.md` (owner review round 3)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D67**
+**As of:** 2026-08-27 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** the D69–D72 commits below
+**Plan:** `~/.claude/plans/1-should-all-users-jolly-lake.md` (owner review round 4)
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D72**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
 gate.** Every gate green: lint, typecheck, unit (564), integration (226 across
@@ -60,6 +60,114 @@ Everything buildable is built. What remains cannot be done from here:
   next boot serves the first-run setup page, which is now the only way an
   administrator is ever created. No credential to recover, and no command that
   changes one.
+
+---
+
+## Owner review round 4 — four findings (2026-08-27, **D69–D72**)
+
+Four things the owner found using the admin area. One commit each, code plus
+spec row plus CHANGELOG, per AGENTS.md.
+
+### 1. The first administrator was the only account without the default role (**D69**)
+
+`/setup` stored `adminRoles[0]` and nothing else, while self-registration, the
+admin create form and the admin API's own fallback all also assign the role
+marked `default: true`. FR-ROLE-1 makes roles downstream labels the IdP
+evaluates nothing from, which is precisely why this bit where the IdP could not
+see it: an application gating on `user` excluded the person who set the
+deployment up. Now the join of both, deduplicated — a catalog whose admin role
+*is* the default stores `admin`, not `admin,admin`. **No migration**: an
+already-bootstrapped administrator is one checkbox away on `/admin/users/:id`.
+
+### 2. "That e-mail address and password combination is not correct" — in a dialog with no password field (**D70**)
+
+Two bugs feeding each other, from one field report.
+
+`errorCodeFor` ends in `invalid_credentials` because it was written for the
+public pages, where SEC-7 requires a wrong password and an unknown address to
+be indistinguishable — and **every admin form was using it**. Better Auth
+spells the duplicate-address refusal differently on `/admin/create-user`
+(`USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL`) than on `/sign-up/email`, only the
+latter was mapped, and the catch-all owned the rest. That is D57's bug class
+again, which is why the fix is a second mapping — `adminErrorCodeFor` — and not
+one more `case`. Behind `/admin/*` the collapse buys nothing (the administrator
+is looking at a searchable list of every account) and costs the truth.
+
+The compounding half: the set-password link was minted **after** the account
+existed, unguarded, so a failure there produced a 500 — and the natural
+response to an error page is to submit the same form again, which is a
+duplicate, which is what produced the sentence. That tail is wrapped now, an
+`ok` answer with no user id is refused rather than minting a link for `""`, and
+both land on the list with a notice naming the two recoveries.
+
+The integration tests **pin Better Auth's own identifiers**, so a dependency
+bump that renames one fails a test rather than a dialog.
+
+### 3. Success banners outlived what they were about (**D71**)
+
+A confirmation travelled as `?notice=<code>` and **nothing ever removed the
+parameter**, so the URL went on asserting that the save had just happened: a
+reload re-announced it, Back re-announced it, and a bookmarked
+`/admin/users?notice=deleted` announced last week's deletion as news. The eight
+admin and account pages show the sentence as a toast and strip the parameter as
+they do — `history.replaceState` with `history.state` passed through, not
+`router.navigate`, which would re-run the loaders and re-claim the one-shot
+handles that `?created=` and `?draft=` siblings have already spent.
+
+Errors stay inline, beside the form and the draft they came back with. The
+public auth pages keep their banners, because there the message *is* the page.
+
+Two things to know about the component. It is the shadcn registry's Base UI
+`toast`, used verbatim — **including its placement**, which is bottom-right
+above `sm` rather than the top-right the finding asked for: the generated file
+encodes the anchor in its stacking offsets and in eight enter/exit transforms,
+and re-anchoring it is a fork of a file the next `shadcn add` overwrites. And
+it cost ~25 kB of client bundle, which brought the 600 kB
+`check-client-bundle.ts` ceiling to within 1.2 kB — that ceiling was set
+against a ~330 kB bundle and the comment saying so had gone stale, so it is
+raised to 750 kB with the measured figure written down. The markers in that
+script are what actually catch a server leak; the byte cap is the backstop for
+the megabyte incident it was written from.
+
+### 4. An application added here could only be disabled or removed (**D72**)
+
+So a typo in a name, a redirect URI that had moved, or a scope that should not
+have been granted meant removing it and adding it again — which revokes every
+token and consent it held and hands its operator a secret they did not ask for.
+Two house endpoints beside the three that exist, `/idp/update-client` and
+`/idp/rotate-client-secret`; Better Auth's own `/oauth2/update-client` stays
+unreachable for D50's reasons.
+
+The update is a **full replace**, and four columns are not the body's to write:
+`user_id` (a null owner is the file marker, and the next reconcile's orphan
+sweep would disable the row — the application would keep working right up until
+the restart), `disabled` (whose schema default would switch a suspended client
+back on), `created_at`, and the **client id**, which is the natural key four
+tables reference. The secret follows the type: staying confidential passes the
+stored hash through untouched, so the secret already deployed goes on working;
+public → confidential mints one and shows it once; the other way discards it.
+Only that flip revokes anything — a rename revokes nothing, matching what
+reconciliation does for an edited file entry.
+
+Rotation is deliberately smaller: one column, no lock, no origin refresh, and
+**no revocation** — hygiene, not incident response. No grace window in v1, and
+the dialog says so before it is confirmed.
+
+#### And it found a test that asserted nothing
+
+D50's "authenticates at the live token endpoint with the secret it handed
+back" posted a junk authorization code to `/oauth2/token` and asserted the
+answer was not `invalid_client`. **It never could be**: the code is validated
+*before* the client credential, so `invalid_grant` comes back for any secret at
+all — including one that was never right. The test passed for four months and
+proved nothing about R4.
+
+Found because D72's rotation case asserts the *old* secret stops working, and
+was told it had not. The oracle is `/oauth2/introspect`, which authenticates
+the client and then answers about the token: a wrong secret is `401
+invalid_client`, a right one is `200 {"active": false}`. Both halves are
+asserted now — the good secret opens the door and a made-up one does not — so
+the test cannot go quiet again.
 
 ---
 

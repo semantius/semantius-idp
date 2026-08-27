@@ -23,7 +23,10 @@ import { z } from "zod"
 import type { Audit } from "../audit"
 import type { IdpConfig } from "../config/derive"
 import { maskConfig } from "../config/mask"
-import { clientSchema } from "../config/schema/clients-schema"
+import {
+  PUBLIC_CLIENT_TYPES,
+  clientSchema,
+} from "../config/schema/clients-schema"
 import { withAdvisoryLock } from "../db/advisory-lock"
 import { createDb } from "../db/client"
 import type { DbHandle } from "../db/client"
@@ -503,6 +506,289 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
   )
 
   /**
+   * Editing an admin-registered client (**D72**, FR-OIDC-2/4, FR-ADMIN-2).
+   *
+   * **Full replace, not a patch.** The body carries the same fields the create
+   * form does, and that field set *is* the writable surface: a partial update
+   * would need a way to say "unset `postLogoutRedirectUris`" that is different
+   * from "did not mention it", and every caller — the dialog included — has
+   * the whole row in front of it anyway.
+   *
+   * Better Auth ships `/oauth2/update-client` and it stays unreachable, for
+   * the reasons D50 gave for not using its registration endpoint either: it is
+   * scoped to the client's creator rather than to an administrator, it does
+   * not know half these fields, and it validates against nothing this
+   * deployment recognises — no `clientSchema`, no `oauth.scopes` bound, no
+   * reconcile lock, no audit row.
+   *
+   * Five things are load-bearing, and each of them is a way to quietly break a
+   * working client:
+   *
+   *  - **`userId` is written back explicitly.** `toClientRow` defaults it to
+   *    `null`, which is the file marker — so an update that forgot it would
+   *    hand the row to reconciliation's orphan sweep, and the next restart
+   *    would disable a client nobody touched.
+   *  - **`disabled` comes from the existing row**, not from the schema's
+   *    `false` default: an edit to a disabled client's name must not turn it
+   *    back on.
+   *  - **The stored hash is passed through, never re-hashed.** A confidential
+   *    client that stays confidential goes on working with the secret its
+   *    operator already deployed. The hash is also what the schema sees as
+   *    `clientSecret` — 64 hex characters clears its 32-character floor —
+   *    because the plaintext is gone and the field is mandatory for `web`.
+   *  - **The whole merged entry is re-validated**, so a type change re-checks
+   *    the stored URIs: a private-scheme redirect is legal for `native` and
+   *    not for `web`, and this is the only moment that can be caught.
+   *  - **Tokens are revoked only when the credential model flips.** Public and
+   *    confidential are different ways of authenticating, so a token issued
+   *    under one is not evidence under the other; a renamed client or an added
+   *    redirect URI revokes nothing, which is what the file path's own update
+   *    does at reconcile time.
+   */
+  const updateClient = createAuthEndpoint(
+    "/idp/update-client",
+    {
+      method: "POST",
+      body: z.object({
+        clientId: z.string().min(1),
+        name: z.string().min(1),
+        type: z.string().min(1),
+        redirectUris: z.array(z.string()).min(1),
+        postLogoutRedirectUris: z.array(z.string()).optional(),
+        scopes: z.array(z.string()).optional(),
+        skipConsent: z.boolean().optional(),
+        enableEndSession: z.boolean().optional(),
+      }),
+      requireHeaders: true,
+      use: [gate],
+    },
+    async (ctx) => {
+      const handle = db(deps)
+      const actor = ctx.context.session.user
+      await assertMutableClient(handle, ctx.body.clientId)
+
+      let freshSecret: string | undefined
+      let publicAfter = false
+
+      const locking = createDb(deps.config, { direct: true, max: 1 })
+      try {
+        await withAdvisoryLock(locking.sql, "reconcileClients", async () => {
+          await handle.db.transaction(async (tx) => {
+            // Re-read inside the lock. `assertMutableClient` answered before it
+            // was taken, and what the lock serialises against is a reconcile
+            // that could have turned this row into a file client, or removed
+            // it, in between.
+            const [existing] = await tx
+              .select()
+              .from(handle.schema.oauthClient)
+              .where(eq(handle.schema.oauthClient.clientId, ctx.body.clientId))
+              .limit(1)
+            if (!existing) {
+              throw new APIError("NOT_FOUND", {
+                code: "CLIENT_NOT_FOUND",
+                message: "No such client.",
+              })
+            }
+            if (existing.userId === null) {
+              throw new APIError("BAD_REQUEST", {
+                code: "CLIENT_MANAGED_BY_FILE",
+                message:
+                  "That client comes from oauth_clients.jsonc. Edit the file and restart.",
+              })
+            }
+
+            const wasPublic = existing.clientSecret === null
+            const targetPublic = (
+              PUBLIC_CLIENT_TYPES as readonly string[]
+            ).includes(ctx.body.type)
+
+            // Three dispositions, one per transition. Confidential → the same
+            // secret; public → confidential mints one; anything → public keeps
+            // none, and `toClientRow` nulls the column either way.
+            const carriedSecret = targetPublic
+              ? undefined
+              : (existing.clientSecret ?? undefined)
+            freshSecret =
+              targetPublic || carriedSecret ? undefined : generateClientSecret()
+            const hashedSecret = targetPublic
+              ? undefined
+              : (carriedSecret ?? hashClientSecret(freshSecret!))
+
+            const parsed = clientSchema.safeParse({
+              clientId: ctx.body.clientId,
+              name: ctx.body.name,
+              type: ctx.body.type,
+              redirectUris: ctx.body.redirectUris,
+              ...(ctx.body.postLogoutRedirectUris?.length
+                ? { postLogoutRedirectUris: ctx.body.postLogoutRedirectUris }
+                : {}),
+              ...(ctx.body.scopes?.length ? { scopes: ctx.body.scopes } : {}),
+              ...(ctx.body.skipConsent === undefined
+                ? {}
+                : { skipConsent: ctx.body.skipConsent }),
+              ...(ctx.body.enableEndSession === undefined
+                ? {}
+                : { enableEndSession: ctx.body.enableEndSession }),
+              // The stored hash stands in for the secret the schema demands of
+              // a `web` client. Never the plaintext — there is none to have.
+              ...(hashedSecret ? { clientSecret: hashedSecret } : {}),
+              // Not the schema default: an edit must not un-disable a client.
+              disabled: existing.disabled,
+            })
+            if (!parsed.success) {
+              throw new APIError("BAD_REQUEST", {
+                code: "INVALID_CLIENT_DEFINITION",
+                message: parsed.error.issues
+                  .map((issue) => issue.message)
+                  .join(" "),
+              })
+            }
+            const entry = parsed.data
+
+            const allowed = new Set(deps.config.file.oauth.scopes)
+            const stray = (entry.scopes ?? []).filter(
+              (scope) => !allowed.has(scope)
+            )
+            if (stray.length > 0) {
+              throw new APIError("BAD_REQUEST", {
+                code: "SCOPE_NOT_ALLOWED",
+                message: `Not in \`oauth.scopes\`: ${stray.join(", ")}.`,
+              })
+            }
+
+            publicAfter = isPublic(entry)
+
+            await tx
+              .update(handle.schema.oauthClient)
+              .set({
+                ...toClientRow(entry, {
+                  ...(hashedSecret ? { hashedSecret } : {}),
+                  // Non-negotiable: the default is `null`, and a nulled owner
+                  // is what the next reconcile's orphan sweep disables.
+                  userId: existing.userId,
+                }),
+                updatedAt: new Date(),
+              })
+              .where(eq(handle.schema.oauthClient.clientId, ctx.body.clientId))
+
+            // The credential model changed, so what was issued under the old
+            // one is no longer evidence of anything. A name or URI edit falls
+            // straight through here, matching the file path's own update.
+            if (wasPublic !== publicAfter) {
+              await revokeTokensFor(tx, handle.schema, ctx.body.clientId)
+            }
+
+            await syncResourceLinks(
+              tx,
+              handle.schema,
+              entry.clientId,
+              resourceLinksFor(entry, deps.config)
+            )
+          })
+        })
+      } finally {
+        await locking.close().catch(() => undefined)
+      }
+
+      // The redirect URIs feed CORS and the `form-action` CSP directive, so an
+      // edited URI that is not in the cache is a client that cannot be
+      // redirected to, with nothing in the log naming why (D50).
+      await refreshDatabaseClientOrigins(handle, deps.logger)
+      await deps.audit?.record({
+        action: "client.updated",
+        outcome: "success",
+        actorType: "session",
+        actorUserId: actor.id,
+        target: { type: "client", id: ctx.body.clientId },
+        // Counts and flags only, never secret material (SEC-6, SEC-10).
+        metadata: {
+          type: ctx.body.type,
+          redirectUris: ctx.body.redirectUris.length,
+          isPublic: publicAfter,
+          secretIssued: freshSecret !== undefined,
+        },
+      })
+
+      // Create's shape, so the route reuses its stash-and-show logic verbatim.
+      return ctx.json({
+        clientId: ctx.body.clientId,
+        clientSecret: freshSecret ?? null,
+        isPublic: publicAfter,
+      })
+    }
+  )
+
+  /**
+   * Replacing an admin-registered client's secret (**D72**).
+   *
+   * Deliberately smaller than it looks. Rotation is **hygiene, not incident
+   * response**: it writes one column and revokes nothing, because a live
+   * refresh token was issued to the client that still is that client, and an
+   * administrator who believes a secret is compromised has Disable and Remove,
+   * both of which do revoke. There is no dual-secret grace window in v1 — the
+   * old secret stops working the moment this returns, which is what the dialog
+   * says before it is confirmed.
+   *
+   * No advisory lock, on `set-client-disabled`'s precedent: a single-column
+   * write to one row races nothing a reconcile does, and the lock is there to
+   * serialise the sweep that decides which rows are orphans. No origin refresh
+   * either — a secret is not a redirect URI.
+   */
+  const rotateClientSecret = createAuthEndpoint(
+    "/idp/rotate-client-secret",
+    {
+      method: "POST",
+      body: z.object({ clientId: z.string().min(1) }),
+      requireHeaders: true,
+      use: [gate],
+    },
+    async (ctx) => {
+      const handle = db(deps)
+      const actor = ctx.context.session.user
+      await assertMutableClient(handle, ctx.body.clientId)
+
+      const [existing] = await handle.db
+        .select({ clientSecret: handle.schema.oauthClient.clientSecret })
+        .from(handle.schema.oauthClient)
+        .where(eq(handle.schema.oauthClient.clientId, ctx.body.clientId))
+        .limit(1)
+      if (!existing) {
+        throw new APIError("NOT_FOUND", {
+          code: "CLIENT_NOT_FOUND",
+          message: "No such client.",
+        })
+      }
+      if (existing.clientSecret === null) {
+        // A public client authenticates with PKCE and nothing else. Minting a
+        // secret here would silently change what it is; that is an edit, and
+        // `/idp/update-client` is where an edit belongs.
+        throw new APIError("BAD_REQUEST", {
+          code: "CLIENT_HAS_NO_SECRET",
+          message:
+            "That application is a public client and has no secret to rotate.",
+        })
+      }
+
+      const secret = generateClientSecret()
+      await handle.db
+        .update(handle.schema.oauthClient)
+        .set({ clientSecret: hashClientSecret(secret), updatedAt: new Date() })
+        .where(eq(handle.schema.oauthClient.clientId, ctx.body.clientId))
+
+      await deps.audit?.record({
+        action: "client.secret_rotated",
+        outcome: "success",
+        actorType: "session",
+        actorUserId: actor.id,
+        target: { type: "client", id: ctx.body.clientId },
+      })
+
+      // The only time the new secret is readable; the row holds a hash.
+      return ctx.json({ clientId: ctx.body.clientId, clientSecret: secret })
+    }
+  )
+
+  /**
    * Removing an admin-registered client (**D50**).
    *
    * Tokens and consents go with it, for the same reason reconciliation revokes
@@ -639,6 +925,8 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
     systemInfo,
     rotateKeys: rotateKeysEndpoint,
     createClient,
+    updateClient,
+    rotateClientSecret,
     deleteClient,
     setClientDisabled,
   }

@@ -625,6 +625,25 @@ were questions, and one was "polish every page".
   cannot be retagged out from under a build. Nothing local catches this class
   of fault; the reference had sat in `ci.yml` from the start, unresolved,
   because no workflow in this repository had ever run.
+- **The container smoke test exited 0 while printing FAIL** (**D75**). Its
+  summary and `process.exit` sat at the end of `main`, after the `try`/`finally`
+  - and three failure paths `return` early, so every one of them skipped both.
+  A missing image, or a stack that never came up, was reported to CI as a pass.
+  TST-8 is the only gate that tests the artefact a tag publishes, and it could
+  not fail. Both now live at the call site, where a `return` cannot reach them.
+- **The smoke test could test the wrong image entirely** (**D75**).
+  `docker-compose.yml`'s `idp` service carries both `image:` and `build:`, so
+  `compose up` silently builds from source when the tag is absent - right for
+  `idp-create.sh`, wrong for a gate whose whole purpose is to exercise the
+  artefact CI is about to publish. A mistyped `IDP_IMAGE` would have it pass
+  while proving nothing. It now refuses to start unless the image is already in
+  the daemon. Found by pointing it at `nonexistent-image:v0`, which built one.
+- **A failed check is a GitHub Actions annotation** (**D75**). A `run:` step
+  that exits non-zero produces no annotation, and job logs are 403 without
+  admin rights - so a CI failure here was unreadable while the cause sat in
+  stdout nobody could fetch. Every failed check, and the `docker compose logs`
+  tail the script already dumped, now go out as `::error::` lines, which land
+  in `check-runs/{job_id}/annotations` - the channel that is readable.
 - **Bun's version is pinned in five files and nothing compared them.**
   `.bun-version`, `package.json`'s `engines.bun`, the Dockerfile's
   `ARG BUN_VERSION`, and now both workflows. Bun is not a build tool in this

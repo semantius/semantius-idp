@@ -69,11 +69,40 @@ const ADMIN = {
 
 let failures = 0
 
+/**
+ * A failed check is also a **GitHub Actions annotation** (**D75**).
+ *
+ * A `run:` step that exits non-zero produces no annotation of its own, and
+ * `actions/jobs/{id}/logs` is 403 without admin rights on the repository - so
+ * when this failed in CI the only readable channel said "Process completed
+ * with exit code 1" while the cause sat in stdout nobody could fetch.
+ * `check-runs/{job_id}/annotations` *is* readable, and an `::error::` line is
+ * how a step puts something there. Diagnosing a container that no longer
+ * exists, from a log you cannot read, is the loop this closes.
+ */
+const IN_ACTIONS = process.env.GITHUB_ACTIONS === "true"
+
+/** `::error::` takes one line, so real newlines are percent-encoded. */
+function annotate(title: string, body: string): void {
+  if (!IN_ACTIONS) return
+  const encoded = body
+    .replaceAll("%", "%25")
+    .replaceAll("\r", "%0D")
+    .replaceAll("\n", "%0A")
+    // Annotations are capped. Keep the front: a start-up failure says why
+    // in its first lines, and the tail is usually the same error repeating.
+    .slice(0, 4000)
+  process.stdout.write(`::error title=${title}::${encoded}\n`)
+}
+
 function check(label: string, ok: boolean, detail = ""): void {
   process.stdout.write(
     `${ok ? "  ok  " : "FAIL  "}${label}${detail ? ` — ${detail}` : ""}\n`
   )
-  if (!ok) failures += 1
+  if (!ok) {
+    failures += 1
+    annotate("smoke", `${label}${detail ? ` - ${detail}` : ""}`)
+  }
 }
 
 function run(
@@ -278,6 +307,27 @@ async function main(): Promise<void> {
       }
     }
 
+    // ---- 0. the image is the one we were told to test ------------------
+    //
+    // `docker-compose.yml`'s `idp` service carries both `image:` and
+    // `build:`, so `compose up` **silently builds from source** when the tag
+    // is not present locally. That is right for `idp-create.sh`, where an
+    // operator has no image yet, and wrong here: TST-8 exists to test the
+    // artefact CI is about to publish, and a mistyped `IDP_IMAGE` would have
+    // it quietly test a fresh build of the working tree instead — passing,
+    // while proving nothing about the thing being released. Verified by
+    // running this against `nonexistent-image:v0`, which built and passed.
+    const present = run("docker", ["image", "inspect", IMAGE], { quiet: true })
+    check(`the image under test exists — ${IMAGE}`, present.code === 0)
+    if (present.code !== 0) {
+      annotate(
+        "smoke",
+        `${IMAGE} is not in the local daemon. Build or load it first; ` +
+          `compose would otherwise build one from source and test that.`
+      )
+      return
+    }
+
     // ---- 1. up ----------------------------------------------------------
     compose("down", "-v", "--remove-orphans")
     process.stdout.write("starting the stack…\n")
@@ -470,15 +520,12 @@ async function main(): Promise<void> {
     if (failures > 0) {
       const logs = compose("logs", "--no-color", "--tail", "80", "idp")
       process.stderr.write(`\n--- idp container logs ---\n${logs.stdout}\n`)
+      // The same thing again, where CI can actually read it.
+      annotate("smoke: idp container logs", logs.stdout || "(no output)")
     }
     compose("down", "-v", "--remove-orphans")
     rmSync(workDir, { recursive: true, force: true })
   }
-
-  process.stdout.write(
-    failures === 0 ? "\nsmoke test passed\n" : `\n${failures} check(s) failed\n`
-  )
-  process.exit(failures === 0 ? 0 : 1)
 }
 
 /**
@@ -532,3 +579,14 @@ function parseBytes(value: string): number | undefined {
 }
 
 await main()
+
+// **Outside `main`, deliberately.** This block used to sit at the end of
+// that function, after its `try`/`finally` - and three failure paths
+// `return` early, so every one of them skipped it and the process exited
+// **0 while printing FAIL**. A missing image or a stack that never came up
+// was reported to CI as a pass, which is a gate that does not gate. Found
+// by running the script against a tag that does not exist (**D75**).
+process.stdout.write(
+  failures === 0 ? "\nsmoke test passed\n" : `\n${failures} check(s) failed\n`
+)
+process.exit(failures === 0 ? 0 : 1)

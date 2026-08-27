@@ -8,7 +8,7 @@ import {
   LOCK_NAMESPACE,
   withAdvisoryLock,
 } from "@/server/db/advisory-lock"
-import { testDatabaseUrl } from "./harness"
+import { testDatabaseSsl, testDatabaseUrl } from "./harness"
 
 /**
  * D27 / OPS-2 — the locks every mutating startup step depends on.
@@ -32,7 +32,7 @@ describe("advisory locks (D27)", () => {
 
   beforeAll(() => {
     const url = testDatabaseUrl()
-    const ssl = url.includes("localhost") ? undefined : ("require" as const)
+    const ssl = testDatabaseSsl(url)
     holder = postgres(url, { max: 1, ssl })
     waiter = postgres(url, { max: 2, ssl })
   })

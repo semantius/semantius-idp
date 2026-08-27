@@ -19,7 +19,7 @@ import { createAdminContext } from "@/server/admin/context"
 import type { AdminContext } from "@/server/admin/context"
 import { resetSetupGate } from "@/server/admin/first-user"
 import { createAuth } from "@/server/auth/instance"
-import { deriveConfig } from "@/server/config/derive"
+import { deriveConfig, isLocalhostUrl } from "@/server/config/derive"
 import type { IdpConfig } from "@/server/config/derive"
 import { configFileSchema } from "@/server/config/schema/config-schema"
 import { clientSchema } from "@/server/config/schema/clients-schema"
@@ -96,6 +96,33 @@ export interface TestContext {
   schemaName: string
   /** Drops the schema and closes the pool. */
   teardown: () => Promise<void>
+}
+
+/**
+ * How to connect, TLS-wise, for a test that builds its own `postgres()` handle.
+ *
+ * The rule used to be `url.includes("localhost")`, which is the
+ * `127.0.0.1`-versus-`localhost` trap that **D57** and **D68** each cost a day
+ * to: a local Postgres reached on its IP address was given `ssl: "require"`,
+ * answered by dropping the socket, and reported it as "Client network socket
+ * disconnected before secure TLS connection was established" — which looks
+ * like a network fault and is a configuration mistake.
+ *
+ * Same precedence as `deriveConfig`: an explicit `sslmode` in the URL wins,
+ * then loopback in any spelling means off, then require.
+ */
+export function testDatabaseSsl(
+  url: string = testDatabaseUrl()
+): "require" | undefined {
+  let mode: string | null = null
+  try {
+    mode = new URL(url).searchParams.get("sslmode")
+  } catch {
+    mode = null
+  }
+  if (mode === "disable") return undefined
+  if (mode) return "require"
+  return isLocalhostUrl(url) ? undefined : "require"
 }
 
 let schemaCounter = 0

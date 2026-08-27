@@ -194,6 +194,38 @@ and Playwright's strict mode fails the test rather than the application. The
 helpers export `modal(page)` — `[data-slot="dialog-content"]`, which
 `DialogContent` stamps and the toast does not.
 
+### The suite was spending fifty-one of its fifty-four minutes waiting
+
+Asked after the round-4 work: why does a fairly simple server take an hour to
+test? It does not. The **test database was the deployment's own Neon instance
+in `us-east-2`** — measured at **102 ms per round trip** from here — and the
+harness builds a fresh schema per context: `drop schema`, then 77 migration
+statements, each its own round trip. That is ~8 s of latency per context before
+a single assertion, more than a hundred contexts, all serialised by
+`fileParallelism: false`. `admin.test.ts` alone was ten minutes for 33 tests.
+
+Against a Postgres container on loopback the identical suite is **183 s** —
+840 tests, same coverage numbers, an 18× difference with no test changed.
+`apps/web/scripts/test-database.ts` starts one and reuses it;
+`IDP_TEST_DATABASE_URL` still wins, which is how CI keeps the service container
+it already had. It is also the safer default: a throwaway container cannot
+reach the persistent `idp` schema, and a test schema on the deployment's
+database is one typo away from it.
+
+Six advisory-lock tests failed on the first local run, for a reason worth
+recording: the test built its own `postgres()` handle and chose TLS with
+`url.includes("localhost")`, so a database on `127.0.0.1` was given
+`ssl: "require"` and dropped the socket. That is **D57**'s and **D68**'s
+`127.0.0.1`-versus-`localhost` trap for the third time, and here it reports as
+"Client network socket disconnected", which looks like a network fault.
+`testDatabaseSsl()` in the harness now applies the same precedence the
+application does.
+
+What was *not* changed: `fileParallelism: false`. The advisory locks are
+per-database, so files running concurrently would contend on `bootstrapAdmin`
+and `reconcileClients` and the contention tests would stop meaning anything.
+With the latency gone it is worth about a minute, and it is not worth that.
+
 ---
 
 ## "The login page says this address is not recognised" (2026-08-27, **D68**)

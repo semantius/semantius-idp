@@ -40,7 +40,7 @@ after:
 pnpm lint
 pnpm typecheck
 pnpm test                                   # unit
-pnpm --filter web run test:integration      # needs a real Postgres
+pnpm --filter web run test:integration      # starts a local Postgres if it must
 pnpm --filter web run test:e2e              # needs Docker; drives the built image
 bun run scripts/check-pinned-deps.ts
 pnpm --filter web run config:schemas -- --check

@@ -24,7 +24,7 @@ Four files, in this order. Read them before proposing anything.
 | File | What it is |
 | --- | --- |
 | [status.md](status.md) | The handoff. Done, not-done, and why — the ground truth between sessions. |
-| [spec-v1.md](spec-v1.md) | Signed off, amended through **D68**. Numbered requirements, and §12.1's decision log with the reasoning. |
+| [spec-v1.md](spec-v1.md) | Signed off, amended through **D72**. Numbered requirements, and §12.1's decision log with the reasoning. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | The gates, the style, and how to amend the spec. |
 | [docs/release.md](docs/release.md) | What is left before v1.0.0, and it is the owner's, not yours. |
 
@@ -115,7 +115,7 @@ All of these must be green. CI runs them; run them before you claim anything.
 pnpm lint
 pnpm typecheck
 pnpm test                                   # unit
-pnpm --filter web run test:integration      # needs a real Postgres
+pnpm --filter web run test:integration      # starts a local Postgres if it must
 pnpm --filter web run test:coverage         # thresholds, both projects
 pnpm --filter web run test:e2e              # needs Docker; drives the built image
 bun run scripts/check-pinned-deps.ts
@@ -212,10 +212,26 @@ page with a destructive dialog trigger. Both themes are darkened, with the
 measurements in `globals.css` beside the token. **Re-applying a preset resets
 it**, so re-measure after any `shadcn apply`.
 
-**The integration suite runs against a remote Neon database and is slow.** A
-schema create plus full migration per *file*, over the internet: `setup.test.ts`
-alone is ~2.5 minutes, `admin.test.ts` ~10. Run it in the background and write
-to a file — piping through `tail` buffers everything and looks like a hang.
+**The integration suite runs against a local Postgres, and must.** It used to
+default to the deployment's own Neon instance in `us-east-2` — **~102 ms per
+round trip** from here — and every context it builds drops a schema and applies
+77 migration statements one at a time, so each was about eight seconds of pure
+latency before a single assertion. Times a hundred-odd contexts, serialised by
+`fileParallelism: false`: **fifty-four minutes**. Against a container on
+loopback the identical suite is **three minutes**.
+`apps/web/scripts/test-database.ts` starts and reuses one (`idp-test-db`, port
+55432, fsync off) unless `IDP_TEST_DATABASE_URL` is set, which is how CI hands
+it the service container it already had. Do not point it back at a hosted
+database to be "production-like": it is a hundred milliseconds a query, and a
+test schema on *that* database is one typo away from the persistent `idp`
+schema this file says never to touch.
+
+Two things when running it by hand: write to a **file**, never pipe through
+`tail`, which buffers everything and looks exactly like a hang; and a test that
+builds its own `postgres()` handle takes its TLS setting from
+`testDatabaseSsl()`, never from `url.includes("localhost")` — that spelling is
+the `127.0.0.1` trap D57 and D68 each cost a day to, and here it surfaces as
+"Client network socket disconnected", which reads like a network fault.
 
 **A field's `id` is generated, never its `name`.** `name` is unique in a form
 and emphatically not in a document: `/account/security` has three fields called

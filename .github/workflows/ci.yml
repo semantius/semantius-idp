@@ -124,6 +124,12 @@ jobs:
 
     env:
       DATABASE_URL: postgres://idp:idp@localhost:5432/idp
+      # Explicit, so `scripts/test-database.ts` hands straight over to the
+      # service container above instead of starting one of its own. Locally
+      # the variable is unset and the script starts a throwaway Postgres,
+      # because the alternative — the deployment's hosted database, ~102 ms
+      # away — is what made this suite take fifty-four minutes.
+      IDP_TEST_DATABASE_URL: postgres://idp:idp@localhost:5432/idp
 
     steps:
       - uses: actions/checkout@v4

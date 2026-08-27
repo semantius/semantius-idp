@@ -517,5 +517,23 @@ were questions, and one was "polish every page".
   means a bare `getByRole("dialog")` matches two things once a confirmation is
   on screen, and Playwright's strict mode fails the test rather than the app.
   The end-to-end helpers select the modal by `data-slot="dialog-content"` now.
+- **The integration suite takes three minutes instead of fifty-four.** Almost
+  none of that hour was the application. The suite defaulted to the
+  deployment's own hosted database, which is **~102 ms away per round trip**,
+  and every test context it builds drops a schema and applies 77 migration
+  statements one at a time — about eight seconds of pure latency each, before a
+  single assertion, times more than a hundred contexts, serialised.
+  `test:integration` and `test:coverage` now start and reuse a local Postgres
+  container (`idp-test-db`, fsync off) unless `IDP_TEST_DATABASE_URL` says
+  otherwise, which is how CI keeps using the service container it already had.
+  Identical 840 tests, identical coverage. It is also the safer default: a test
+  schema on the deployment's database is one typo away from the persistent one.
+- **A test that built its own connection forced TLS unless the URL said
+  `localhost`.** The same `127.0.0.1` trap as **D57** and **D68**, and against
+  a local Postgres it surfaced as "Client network socket disconnected before
+  secure TLS connection was established" — which reads like a network fault and
+  is a configuration mistake. `testDatabaseSsl()` applies the precedence the
+  application itself uses: an explicit `sslmode` wins, then loopback in any
+  spelling means off.
 
 [Unreleased]: https://github.com/semantius/semantius-idp/commits/main

@@ -122,6 +122,36 @@ RUN cd apps/web \
 # and the migrations the entrypoint applies (OPS-5).
 RUN pnpm --filter web deploy --legacy --prod /prod/web
 
+# **`--prod` above does nothing, and `--legacy` is not optional** (**D76**).
+#
+# pnpm 10 refuses a non-injected workspace deploy without `--legacy`
+# (`ERR_PNPM_DEPLOY_NONINJECTED_WORKSPACE`), and the legacy path copies the
+# whole virtual store regardless of `--prod` — verified directly: `drizzle-kit`,
+# `prettier`, `vitest` and three `esbuild` binaries all survive it, and so do
+# they with `--prod` before the command, with injection forced on, and with
+# `pnpm prune --prod` afterwards (which deletes the tree outright).
+#
+# So the build tooling is removed by name. Every entry is a compiler, a
+# formatter, a test runner or a types package; none is reachable from what
+# actually runs, because Vite and `bun build` have already produced it. The
+# TST-8 smoke test is what proves that claim on every build — it starts the
+# image, migrates, signs somebody in and mints a token, and a module this
+# deleted would fail it.
+#
+# `set -e` with an explicit count, so a rename upstream fails the build here
+# rather than silently reverting the saving.
+RUN set -eu; cd /prod/web/node_modules/.pnpm; \
+    before=$(du -sm . | cut -f1); \
+    rm -rf esbuild@* @esbuild+* @rolldown+binding-* rolldown@* \
+           drizzle-kit@* prettier@* vitest@* @vitest+* vite@* \
+           lightningcss@* lightningcss-* caniuse-lite@* bun-types@* \
+           typescript@* @types+* playwright@* @playwright+*; \
+    after=$(du -sm . | cut -f1); \
+    echo "pruned build tooling: ${before} MB -> ${after} MB"; \
+    if [ "$before" -le "$after" ]; then \
+      echo "nothing was pruned — have these packages been renamed?" >&2; exit 1; \
+    fi
+
 # ------------------------------------------------------------- runtime --
 FROM oven/bun:${BUN_VERSION}-slim AS runtime
 

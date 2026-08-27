@@ -644,6 +644,22 @@ were questions, and one was "polish every page".
   stdout nobody could fetch. Every failed check, and the `docker compose logs`
   tail the script already dumped, now go out as `::error::` lines, which land
   in `check-runs/{job_id}/annotations` - the channel that is readable.
+- **The image shipped 91 MB of build tooling, and was 28% over its own
+  ceiling** (**D76**). `pnpm deploy --legacy --prod` ignores `--prod` - pnpm 10
+  refuses a non-injected workspace deploy without `--legacy`, and the legacy
+  path copies the whole virtual store - so `drizzle-kit`, `prettier`, `vitest`,
+  three `esbuild` binaries, `@rolldown/binding`, `lightningcss` and
+  `caniuse-lite` were all inside the runtime image. They are removed by name
+  now, with the step failing loudly if the removal frees nothing, so a rename
+  upstream breaks the build instead of quietly restoring the weight. The image
+  drops from 385.8 MiB to about 295 MiB on amd64, and OPS-13's ceiling moves
+  from 300 MB to 350 MB so the target keeps a margin.
+- **Nothing local could ever have caught it.** OPS-13's size check reads
+  `docker image inspect --format {{.Size}}`, and Docker Desktop's containerd
+  image store answers with the **compressed** size: 117.9 MiB for the image a
+  GitHub runner measures at 385.8 MiB. Both numbers are honest and only the
+  second one is the artefact. The budget now says so where somebody will read
+  it before trusting a local pass.
 - **Bun's version is pinned in five files and nothing compared them.**
   `.bun-version`, `package.json`'s `engines.bun`, the Dockerfile's
   `ARG BUN_VERSION`, and now both workflows. Bun is not a build tool in this

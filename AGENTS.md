@@ -286,6 +286,21 @@ Verify a Dockerfile change with **both** platforms —
 `docker buildx build --platform linux/amd64,linux/arm64 -f docker/Dockerfile
 --output type=cacheonly .` — because none of the gates do.
 
+**An action reference is resolved at "Set up job", and a wrong one fails
+before any step runs.** `aquasecurity/trivy-action@0.28.0` sat in `ci.yml`
+from the beginning and is not a thing: that repository tags `v0.28.0`. Nothing
+caught it because nothing had ever run — `origin/main` held only the initial
+scaffold until 2026-08-27, so the first CI run and the first release run were
+the same afternoon, and both died at `Set up job` with a message that names no
+step. Verify every ref before trusting a workflow, which needs no token:
+
+```bash
+grep -rhoE "uses: [^@]+@[A-Za-z0-9_.-]+" .github/workflows/ | sed 's/uses: //' | sort -u |
+  while read -r r; do repo="${r%@*}"; ver="${r#*@}"; o="${repo%%/*}"; n="$(echo "$repo" | cut -d/ -f2)"
+    [ -n "$(git ls-remote --tags --heads "https://github.com/$o/$n" "$ver")" ] &&
+      echo "OK $r" || echo "MISSING $r"; done
+```
+
 **A tag never reaches `ci.yml`, and `release.yml` is what publishes** (**D73**).
 `ci.yml` triggers on `push: branches: [main]`; a tag push does not match a
 branch filter. The whole of OPS-1's publish path used to live there behind

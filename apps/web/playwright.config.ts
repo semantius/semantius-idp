@@ -51,8 +51,15 @@ export default defineConfig({
   workers: 1,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
+  // `github` is there so a failure is **readable without admin rights**
+  // (**D75**). The HTML report is uploaded as an artifact and downloading one
+  // needs a token; job logs need admin. A Playwright failure otherwise reaches
+  // an outside reader as `Process completed with exit code 1` and nothing
+  // else, which is exactly the wall the container smoke test hit. The `github`
+  // reporter writes `::error` lines, and those land in
+  // `check-runs/{job_id}/annotations`, which anyone can read.
   reporter: process.env.CI
-    ? [["list"], ["html", { open: "never" }]]
+    ? [["list"], ["github"], ["html", { open: "never" }]]
     : [["list"]],
   globalSetup: "./e2e/global-setup.ts",
   globalTeardown: "./e2e/global-teardown.ts",

@@ -660,6 +660,13 @@ were questions, and one was "polish every page".
   GitHub runner measures at 385.8 MiB. Both numbers are honest and only the
   second one is the artefact. The budget now says so where somebody will read
   it before trusting a local pass.
+- **Playwright reports failures where they can be read** (**D75**). The suite
+  uploads an HTML report, and downloading a workflow artifact needs a token
+  just as job logs need admin rights - so a browser failure reached an outside
+  reader as `Process completed with exit code 1` and nothing else. The `github`
+  reporter is added in CI, which writes `::error` lines into
+  `check-runs/{job_id}/annotations`. Same wall the container smoke test hit,
+  same way through it.
 - **Bun's version is pinned in five files and nothing compared them.**
   `.bun-version`, `package.json`'s `engines.bun`, the Dockerfile's
   `ARG BUN_VERSION`, and now both workflows. Bun is not a build tool in this

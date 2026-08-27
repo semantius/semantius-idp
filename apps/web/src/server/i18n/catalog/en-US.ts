@@ -662,6 +662,10 @@ export const enUS = {
         "That application comes from oauth_clients.jsonc. Edit the file and restart the server.",
       clientInvalid:
         "The application could not be registered. Check the redirect URIs and the scopes.",
+      // D70: an administrator can list every account, so naming the duplicate
+      // is not the disclosure SEC-7 guards against on `/signup` — and the
+      // sentence it replaced was about a password the dialog never asked for.
+      emailExists: "An account with that e-mail address already exists.",
     },
     notices: {
       approved: "Approved.",
@@ -682,6 +686,11 @@ export const enUS = {
       clientDisabled: "The application has been disabled.",
       clientEnabled: "The application has been enabled.",
       created: "The account has been created.",
+      // D70: the account exists and the one-time link does not. Says which
+      // half succeeded and names both ways back, because the alternative was
+      // a 500 page that primed a duplicate refusal on the retry.
+      createdLinkFailed:
+        "The account was created, but its set-password link could not be created. Open the account to send a password reset or set a temporary password.",
     },
   },
 

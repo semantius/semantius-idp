@@ -30,8 +30,8 @@ import {
   fetchClients,
 } from "@/server/functions/admin"
 import {
+  adminErrorCodeFor,
   callAuth,
-  errorCodeFor,
   readFormMulti,
   redirectWithCookies,
   withError,
@@ -135,7 +135,7 @@ export const Route = createFileRoute("/admin/clients")({
             request
           )
           if (!result.ok) {
-            return redirectWithCookies(withError(here, errorCodeFor(result)))
+            return redirectWithCookies(withError(here, adminErrorCodeFor(result)))
           }
           return redirectWithCookies(`${here}?notice=clientDeleted`)
         }
@@ -151,7 +151,7 @@ export const Route = createFileRoute("/admin/clients")({
             request
           )
           if (!result.ok) {
-            return redirectWithCookies(withError(here, errorCodeFor(result)))
+            return redirectWithCookies(withError(here, adminErrorCodeFor(result)))
           }
           return redirectWithCookies(
             `${here}?notice=${form.disabled === "on" ? "clientDisabled" : "clientEnabled"}`
@@ -195,7 +195,7 @@ export const Route = createFileRoute("/admin/clients")({
             enableEndSession: form.enableEndSession,
           })
           return redirectWithCookies(
-            withError(withDraft(here, draft), errorCodeFor(result))
+            withError(withDraft(here, draft), adminErrorCodeFor(result))
           )
         }
 

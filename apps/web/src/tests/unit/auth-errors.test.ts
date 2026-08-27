@@ -7,7 +7,7 @@ import {
   messageForErrorCode,
   messageForNoticeCode,
 } from "@/lib/auth-errors"
-import { errorCodeFor } from "@/server/http/auth-proxy"
+import { adminErrorCodeFor, errorCodeFor } from "@/server/http/auth-proxy"
 import { getCatalog } from "@/server/i18n"
 
 /**
@@ -146,6 +146,79 @@ describe("errorCodeFor (FR-ADMIN-4, SEC-7)", () => {
     // SEC-7: a wrong password and an address with no account are the same
     // answer, and anything unrecognised joins them rather than leaking.
     expect(codeFor("SOMETHING_NEW")).toBe("invalid_credentials")
+    expect(codeFor("ANYTHING", 429)).toBe("rate_limited")
+    expect(codeFor("ANYTHING", 500)).toBe("server_error")
+  })
+
+  it("hides both spellings of a taken address behind one sign-up answer (D70)", () => {
+    // The public half of D70. `/sign-up/email` and `/admin/create-user` refuse
+    // a duplicate with different codes; only the first was mapped, so the
+    // second fell through the collapse below. On a public page both must land
+    // on the same neutral sentence — SEC-7 is unchanged here.
+    expect(codeFor("USER_ALREADY_EXISTS")).toBe("signup_failed")
+    expect(codeFor("USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL")).toBe(
+      "signup_failed"
+    )
+  })
+
+  it("names a malformed address rather than calling it a bad credential (D70)", () => {
+    // `invalid_email` has had a message since the setup wizard and nothing
+    // emitted it; Better Auth's own validator is what produces the refusal.
+    expect(codeFor("INVALID_EMAIL")).toBe("invalid_email")
+    expect(messageForErrorCode("invalid_email", t, 10)).toBe(
+      t.setup.invalidEmail
+    )
+  })
+})
+
+describe("adminErrorCodeFor (D70)", () => {
+  function codeFor(code: string, status = 403): string {
+    return adminErrorCodeFor({ ok: false, status, body: { code }, cookies: [] })
+  }
+
+  it("names a duplicate address, in either of Better Auth's spellings", () => {
+    // The field report: a valid "Create a user" form answered "that e-mail
+    // address and password combination is not correct" — in a dialog with no
+    // password field — because the admin endpoint's spelling was unmapped and
+    // the SEC-7 catch-all owned it.
+    expect(codeFor("USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL")).toBe(
+      "email_exists"
+    )
+    expect(codeFor("USER_ALREADY_EXISTS")).toBe("email_exists")
+    expect(messageForErrorCode("email_exists", t, 10)).toBe(
+      t.admin.refusals.emailExists
+    )
+  })
+
+  it("never answers an administrator with a credential message", () => {
+    // Everything that used to fall through: a bare 401, a validation refusal,
+    // an unrecognised code. None of them is about a password here.
+    for (const code of [
+      "SOMETHING_NEW",
+      "VALIDATION_ERROR",
+      "YOU_ARE_NOT_ALLOWED_TO_CREATE_USERS",
+    ]) {
+      expect(codeFor(code)).toBe("request_failed")
+      expect(codeFor(code)).not.toBe("invalid_credentials")
+    }
+    expect(
+      adminErrorCodeFor({ ok: false, status: 401, body: {}, cookies: [] })
+    ).toBe("request_failed")
+    expect(messageForErrorCode("request_failed", t, 10)).toBe(
+      t.errors.serverError.description
+    )
+    expect(messageForErrorCode("request_failed", t, 10)).not.toBe(
+      t.auth.signIn.failed
+    )
+  })
+
+  it("passes every mapped refusal through unchanged", () => {
+    // The point of delegating rather than re-implementing: the admin
+    // invariants and the client refusals each name something the
+    // administrator can do next, and shadowing one would undo D50 and D66.
+    expect(codeFor("LAST_ADMIN_PROTECTED")).toBe("last_admin_protected")
+    expect(codeFor("CLIENT_MANAGED_BY_FILE")).toBe("client_managed_by_file")
+    expect(codeFor("INVALID_EMAIL")).toBe("invalid_email")
     expect(codeFor("ANYTHING", 429)).toBe("rate_limited")
     expect(codeFor("ANYTHING", 500)).toBe("server_error")
   })

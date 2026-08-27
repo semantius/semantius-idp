@@ -14,7 +14,7 @@
  * last administrator that the API refuses.
  */
 
-import { callAuth, errorCodeFor } from "./auth-proxy"
+import { adminErrorCodeFor, callAuth } from "./auth-proxy"
 import type { AuthCallResult } from "./auth-proxy"
 import { displayName } from "../display-name"
 import type { Runtime } from "../runtime"
@@ -306,7 +306,10 @@ async function simple(
 
 function failed(result: AuthCallResult): AdminActionOutcome {
   // The invariants answer with their own code (`LAST_ADMIN_PROTECTED`), which
-  // `errorCodeFor` lowercases into something the catalog can look up — so a
-  // refusal explains itself instead of saying "something went wrong".
-  return { error: errorCodeFor(result) }
+  // `adminErrorCodeFor` lowercases into something the catalog can look up — so
+  // a refusal explains itself instead of saying "something went wrong". The
+  // admin variant because everything routed through here is an authenticated
+  // administrator's action: an unrecognised refusal is a failed request, not a
+  // wrong password (**D70**).
+  return { error: adminErrorCodeFor(result) }
 }

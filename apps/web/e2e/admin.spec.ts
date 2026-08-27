@@ -175,6 +175,37 @@ test.describe("the admin area", () => {
     expect(invite.text).toContain(stack.baseURL)
   })
 
+  test("a duplicate address is named, not blamed on a password (D70)", async ({
+    page,
+    app,
+    stack,
+  }) => {
+    // The field report, driven end to end: the dialog has no password field,
+    // and it used to answer that the e-mail and password combination was
+    // wrong. Only a browser can assert that, because the whole defect is what
+    // the reopened dialog says.
+    const user = await createVerifiedUser(page, app, stack, "duplicate")
+    await signInAsAdmin(page, app)
+
+    await app.goto("/admin/users")
+    const form = await openDialog(page, "Create a user")
+    await form.getByLabel("First name").fill("Second")
+    await form.getByLabel("Last name").fill("Attempt")
+    await form.getByLabel("E-mail address").fill(user.email)
+    await submitDialog(page, form, "Create")
+
+    // D62: the dialog comes back open with what was typed still in it.
+    const reopened = page.getByRole("dialog")
+    await expect(reopened).toBeVisible()
+    await expect(reopened.getByLabel("E-mail address")).toHaveValue(user.email)
+    await expect(
+      page.getByText("An account with that e-mail address already exists.")
+    ).toBeVisible()
+    await expect(
+      page.getByText(/e-mail address and password combination/i)
+    ).toHaveCount(0)
+  })
+
   test("an administrator can correct a profile (FR-ADMIN-2, D49)", async ({
     page,
     app,

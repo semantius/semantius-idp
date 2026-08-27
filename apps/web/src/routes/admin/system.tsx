@@ -11,8 +11,8 @@ import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
 import type { Catalog } from "@/server/i18n"
 import {
+  adminErrorCodeFor,
   callAuth,
-  errorCodeFor,
   redirectWithCookies,
 } from "@/server/http/auth-proxy"
 import { requireFreshSession } from "@/server/http/fresh-session"
@@ -60,7 +60,7 @@ export const Route = createFileRoute("/admin/system")({
         const query = new URLSearchParams(
           result.ok
             ? { rotated: String(result.body.successorKeyId ?? "") }
-            : { error: errorCodeFor(result) }
+            : { error: adminErrorCodeFor(result) }
         )
         return redirectWithCookies(`${here}?${query.toString()}`)
       },

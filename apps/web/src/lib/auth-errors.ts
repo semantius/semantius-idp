@@ -68,6 +68,16 @@ export function messageForErrorCode(
     case "signup_failed":
       // SEC-7: never confirms whether the address was already taken.
       return t.auth.signUp.done
+    case "email_exists":
+      // The opposite trade, and only behind `/admin/*`: `adminErrorCodeFor`
+      // is the only thing that emits this, and an administrator is already
+      // looking at the list that would answer the question (**D70**).
+      return t.admin.refusals.emailExists
+    case "request_failed":
+      // `invalid_credentials` for a form with no credential in it. Same
+      // wording as `server_error`, without the sentence about a password
+      // nobody typed (**D70**).
+      return t.errors.serverError.description
     case "admin_cannot_change_own_roles":
       return t.admin.refusals.ownRoles
     case "admin_cannot_ban_self":

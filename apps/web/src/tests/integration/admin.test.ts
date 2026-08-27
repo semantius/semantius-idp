@@ -25,6 +25,7 @@ import { createResetLink } from "@/server/auth/reset-link"
 import { createUserWithoutRequest } from "@/server/auth/provisioning"
 import { createLocalAccountIssuer } from "@better-auth/core/db"
 import type { TestContext } from "./harness"
+import { adminErrorCodeFor } from "@/server/http/auth-proxy"
 import { authRequest, createTestContext, sessionCookie } from "./harness"
 
 const PASSWORD = "correct-horse-battery-staple"
@@ -350,6 +351,60 @@ describe("who may call what", () => {
     expect(response.status).toBe(200)
     const stats = (await bodyOf(response)).users as { admins: number }
     expect(stats.admins).toBeGreaterThanOrEqual(1)
+  })
+})
+
+describe("what /admin/create-user refuses, and how it says so (D70)", () => {
+  /**
+   * These two assert **Better Auth's own identifiers**, which is unusual here
+   * and deliberate. `adminErrorCodeFor` translates a code it does not own, so
+   * a dependency bump that renames one silently reopens the field report: a
+   * valid create form answering "that e-mail address and password combination
+   * is not correct" in a dialog with no password field. Pinning the string
+   * makes the bump fail a test instead of a dialog.
+   */
+  async function createUser(
+    body: Record<string, unknown>
+  ): Promise<{ status: number; code: unknown; mapped: string }> {
+    await makeUser("creator@example.com", { role: "admin" })
+    const cookie = await signIn("creator@example.com")
+    const response = await post("/admin/create-user", body, cookie)
+    const parsed = await bodyOf(response)
+    return {
+      status: response.status,
+      code: parsed.code,
+      mapped: adminErrorCodeFor({
+        ok: response.ok,
+        status: response.status,
+        body: parsed,
+        cookies: [],
+      }),
+    }
+  }
+
+  it("names a duplicate address instead of doubting a password", async () => {
+    await makeUser("taken@example.com")
+    const { status, code, mapped } = await createUser({
+      email: "taken@example.com",
+      password: "a-password-nobody-will-use-here",
+      name: "Taken",
+    })
+
+    expect(status).toBe(400)
+    expect(code).toBe("USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL")
+    expect(mapped).toBe("email_exists")
+    expect(mapped).not.toBe("invalid_credentials")
+  })
+
+  it("names a malformed address as one", async () => {
+    const { code, mapped } = await createUser({
+      email: "not-an-email",
+      password: "a-password-nobody-will-use-here",
+      name: "Nobody",
+    })
+
+    expect(code).toBe("INVALID_EMAIL")
+    expect(mapped).toBe("invalid_email")
   })
 })
 

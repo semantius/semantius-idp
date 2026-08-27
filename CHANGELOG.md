@@ -444,4 +444,22 @@ were questions, and one was "polish every page".
   default stores `admin`, not `admin,admin`. Existing deployments are not
   migrated: the checkbox on `/admin/users/:id` is the fix for an account that
   already exists.
+- **An admin form no longer blames a password nobody typed** (**D70**). A
+  valid "Create a user" submission could answer *"That e-mail address and
+  password combination is not correct"* — in a dialog with no password field.
+  Better Auth spells the duplicate-address refusal differently on
+  `/admin/create-user` than on `/sign-up/email`, only one spelling was mapped,
+  and the SEC-7 catch-all — which exists so a public page cannot tell a wrong
+  password from an unknown address — owned everything else. Behind `/admin/*`
+  that collapse buys nothing (the administrator is looking at a list of every
+  account) and costs the truth, so admin forms now map through
+  `adminErrorCodeFor`: a duplicate address is named, and anything unrecognised
+  is a failed request. The public pages are byte-for-byte unchanged.
+- **Creating a user cannot 500 after the account exists** (**D70**). The
+  set-password link was minted after the create returned, unguarded — so a
+  failure there produced an error page, the natural retry was a duplicate, and
+  the duplicate is what produced the sentence above. The tail is wrapped and an
+  `ok` answer with no user id is refused rather than minting a link for `""`;
+  both land back on the list saying the account was created but its link was
+  not, and naming the two ways to give it a password.
 [Unreleased]: https://github.com/semantius/semantius-idp/commits/main

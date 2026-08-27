@@ -139,9 +139,20 @@ export function errorCodeFor(result: AuthCallResult): string {
     case "INVALID_CLIENT_DEFINITION":
     case "SCOPE_NOT_ALLOWED":
       return code.toLowerCase()
+    // Better Auth spells the duplicate refusal differently depending on which
+    // endpoint refuses: `/sign-up/email` says the first, `/admin/create-user`
+    // the second. Only the first was mapped, so an admin create landed in the
+    // catch-all below and told an administrator, in a dialog with no password
+    // field, that the e-mail and password combination was wrong (**D70**).
     case "USER_ALREADY_EXISTS":
+    case "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL":
       // SEC-7: sign-up must not confirm that an address is taken.
       return "signup_failed"
+    // Mapped in `auth-errors.ts` since the setup wizard existed and produced
+    // by nothing until now: an address Better Auth's own validator refuses is
+    // not a credential failure and must not read as one.
+    case "INVALID_EMAIL":
+      return "invalid_email"
     default:
       break
   }
@@ -149,6 +160,44 @@ export function errorCodeFor(result: AuthCallResult): string {
   if (result.status === 429) return "rate_limited"
   if (result.status >= 500) return "server_error"
   return "invalid_credentials"
+}
+
+/**
+ * The same mapping for an **administrator's** form (**D70**).
+ *
+ * `errorCodeFor` ends in `invalid_credentials` because the pages it was
+ * written for are the public ones, where SEC-7 requires a wrong password and
+ * an unknown address to be indistinguishable. Behind `/admin/*` neither half
+ * of that sentence is true: the administrator is authenticated, has a list of
+ * every account in front of them, and — in a create-user dialog — never typed
+ * a password of their own to be wrong about. The collapse there is not a
+ * privacy measure, it is a lie about what happened, and it is the same bug
+ * class **D57** fixed for the origin check.
+ *
+ * Two differences, both narrow:
+ *
+ *  - a duplicate address, in either of Better Auth's two spellings, is named
+ *    as one rather than hidden behind `signup_failed`;
+ *  - an answer of `invalid_credentials` — which after the switch above means
+ *    "nothing recognised this" — becomes `request_failed`, whose message is
+ *    the ordinary server-error sentence.
+ *
+ * Everything else passes straight through, so the admin refusals, the client
+ * refusals, 429 and ≥500 keep the codes and the wording they already have.
+ */
+export function adminErrorCodeFor(result: AuthCallResult): string {
+  const code =
+    typeof result.body.code === "string" ? result.body.code : undefined
+
+  if (
+    code === "USER_ALREADY_EXISTS" ||
+    code === "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL"
+  ) {
+    return "email_exists"
+  }
+
+  const mapped = errorCodeFor(result)
+  return mapped === "invalid_credentials" ? "request_failed" : mapped
 }
 
 /** Appends `error=<code>` to a path, replacing any existing one. */

@@ -171,6 +171,23 @@ The first attempt at FR-ROLE-3's 403 typechecked, ran, and changed nothing;
 only the e2e suite noticed, because it is the only gate that reads a real
 document response.
 
+**Behind `/admin/*` the error mapping is `adminErrorCodeFor`, not
+`errorCodeFor`** (**D70**). `errorCodeFor` ends in `invalid_credentials`
+because SEC-7 requires a public page to answer a wrong password and an unknown
+address identically. Every admin form was using it, so a duplicate address in
+the create-user dialog — a dialog with no password field — said the e-mail and
+password combination was wrong. The admin variant names the duplicate and turns
+anything unrecognised into `request_failed`. Public pages, `change-password.ts`
+(which genuinely checks a password) and the account routes keep the collapse;
+`/account/security`'s change-email deliberately so, because it is an
+enumeration surface for a non-administrator.
+
+**Anything after a create that has already succeeded must not throw its way to
+an error page** (**D70**). `/admin/users`'s set-password tail did, the natural
+retry was a duplicate, and the duplicate is what produced the sentence above.
+The pattern is: wrap the tail, log it, and land on the list with a notice that
+names the recovery.
+
 **A field's `id` is generated, never its `name`.** `name` is unique in a form
 and emphatically not in a document: `/account/security` has three fields called
 `password` — the change-password dialog's and the two the second-factor forms

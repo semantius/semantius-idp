@@ -36,8 +36,8 @@ import {
   fetchUsers,
 } from "@/server/functions/admin"
 import {
+  adminErrorCodeFor,
   callAuth,
-  errorCodeFor,
   readFormMulti,
   redirectWithCookies,
   withError,
@@ -195,7 +195,7 @@ export const Route = createFileRoute("/admin/users/")({
         if (!created.ok) {
           const draft = await stashDraft(runtime, submitted)
           return redirectWithCookies(
-            withError(withDraft(list, draft), errorCodeFor(created))
+            withError(withDraft(list, draft), adminErrorCodeFor(created))
           )
         }
 
@@ -206,26 +206,55 @@ export const Route = createFileRoute("/admin/users/")({
         // `by: "admin"` — three different events under one action name, on a
         // page whose filter lists action names.
 
-        // `welcome=1`: the same page, told to say "an administrator created an
-        // account for you" rather than "choose a new password", and to leave
-        // out the promise about other devices (D65).
-        const reset = await createResetLink(runtime, user?.id ?? "", {
-          welcome: true,
-        })
-
-        if (runtime.mailer.enabled) {
-          await runtime.mailer.send("setPassword", email, { url: reset.url })
-          return redirectWithCookies(`${list}?notice=created`)
+        // **D70**: everything from here on runs *after the account exists*, so
+        // nothing below may throw its way to an error page. It did: an
+        // unhandled failure in the link tail produced a 500, the
+        // administrator's natural response was to submit the same form again,
+        // and the second attempt met the duplicate refusal — which, unmapped,
+        // said the e-mail and password combination was wrong. One field report,
+        // two bugs, and this is the half that manufactures the retry. The
+        // recovery is named rather than implied: both ways to give this account
+        // a password live on its own page.
+        if (typeof user?.id !== "string" || user.id === "") {
+          // Better Auth answered `ok` without a user id. Nothing sensible can
+          // be minted from `""` — the old code did, and produced a link that
+          // resolved to no account at all.
+          runtime.logger.error("create-user succeeded without a user id", {
+            email,
+          })
+          return redirectWithCookies(`${list}?notice=createdLinkFailed`)
         }
 
-        // FR-MAIL-2: nothing can be sent, so the link is handed over on screen
-        // — once, in a dialog on this page, and never in the address bar.
-        const handle = await stash(
-          runtime,
-          JSON.stringify({ url: reset.url, email }),
-          { ttlSeconds: 600 }
-        )
-        return redirectWithCookies(`${list}?created=${handle}`)
+        try {
+          // `welcome=1`: the same page, told to say "an administrator created
+          // an account for you" rather than "choose a new password", and to
+          // leave out the promise about other devices (D65).
+          const reset = await createResetLink(runtime, user.id, {
+            welcome: true,
+          })
+
+          if (runtime.mailer.enabled) {
+            await runtime.mailer.send("setPassword", email, { url: reset.url })
+            return redirectWithCookies(`${list}?notice=created`)
+          }
+
+          // FR-MAIL-2: nothing can be sent, so the link is handed over on
+          // screen — once, in a dialog on this page, and never in the address
+          // bar.
+          const handle = await stash(
+            runtime,
+            JSON.stringify({ url: reset.url, email }),
+            { ttlSeconds: 600 }
+          )
+          return redirectWithCookies(`${list}?created=${handle}`)
+        } catch (error) {
+          runtime.logger.error("created the account but not its set-password link", {
+            email,
+            userId: user.id,
+            error: error instanceof Error ? error.message : String(error),
+          })
+          return redirectWithCookies(`${list}?notice=createdLinkFailed`)
+        }
       },
     },
   },

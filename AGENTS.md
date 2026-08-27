@@ -286,20 +286,37 @@ Verify a Dockerfile change with **both** platforms —
 `docker buildx build --platform linux/amd64,linux/arm64 -f docker/Dockerfile
 --output type=cacheonly .` — because none of the gates do.
 
-**An action reference is resolved at "Set up job", and a wrong one fails
-before any step runs.** `aquasecurity/trivy-action@0.28.0` sat in `ci.yml`
-from the beginning and is not a thing: that repository tags `v0.28.0`. Nothing
-caught it because nothing had ever run — `origin/main` held only the initial
-scaffold until 2026-08-27, so the first CI run and the first release run were
-the same afternoon, and both died at `Set up job` with a message that names no
-step. Verify every ref before trusting a workflow, which needs no token:
+**Read the annotations; they need no admin rights.** A job that fails at
+`Set up job` names no step, and `GET /repos/{owner}/{repo}/actions/jobs/{id}/logs`
+returns 403 without admin. The annotations do not:
+
+```bash
+curl -s https://api.github.com/repos/semantius/semantius-idp/check-runs/<job_id>/annotations |
+  python3 -c "import json,sys;[print(a['message']) for a in json.load(sys.stdin)]"
+```
+
+One call to that named the exact cause after two rounds of correlating job
+shapes had guessed wrong (**D75**). Reach for it first, not last.
+
+**An action reference is resolved before any step runs — including the ones
+*inside* the actions you name** (**D75**). `aquasecurity/trivy-action@0.28.0`
+was wrong twice over: that repository tags `v0.28.0`, and `v0.28.0` then calls
+`aquasecurity/setup-trivy@v0.2.1`, **a tag that has since been deleted**. Nothing
+local catches either. Verify the refs you wrote — and when one fails, read its
+`action.yaml` for the refs *it* uses:
 
 ```bash
 grep -rhoE "uses: [^@]+@[A-Za-z0-9_.-]+" .github/workflows/ | sed 's/uses: //' | sort -u |
   while read -r r; do repo="${r%@*}"; ver="${r#*@}"; o="${repo%%/*}"; n="$(echo "$repo" | cut -d/ -f2)"
     [ -n "$(git ls-remote --tags --heads "https://github.com/$o/$n" "$ver")" ] &&
-      echo "OK $r" || echo "MISSING $r"; done
+      echo "OK $r" || echo "CHECK $r"; done
 ```
+
+`CHECK` is not proof of a fault: a **commit SHA** is a valid ref and
+`ls-remote` lists only branches and tags, so a SHA-pinned action reports
+`CHECK` and is in fact the safest form — it cannot be retagged out from under a
+build, which is exactly what happened here. Confirm a SHA with
+`/repos/{o}/{n}/commits/{sha}`.
 
 **A tag never reaches `ci.yml`, and `release.yml` is what publishes** (**D73**).
 `ci.yml` triggers on `push: branches: [main]`; a tag push does not match a

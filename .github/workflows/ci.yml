@@ -260,11 +260,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 40
     needs: [check]
-    # Exactly what a job that builds and scans an image needs. It requested
-    # `security-events: write` for a SARIF upload that no longer happens, and
-    # that scope alone was refused at `Set up job` (**D75**).
     permissions:
       contents: read
+      security-events: write
 
     steps:
       - uses: actions/checkout@v4
@@ -300,7 +298,7 @@ jobs:
         run: bun run scripts/smoke-test.ts
 
       - name: Vulnerability scan (SEC-9)
-        uses: aquasecurity/trivy-action@v0.28.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: semantius-idp:ci
           format: sarif
@@ -312,20 +310,15 @@ jobs:
           exit-code: "0"
           ignore-unfixed: true
 
-      # A workflow artifact, not `codeql-action/upload-sarif` — which is the
-      # only thing here that wanted `security-events: write`, and that scope is
-      # what was killing this job at `Set up job` before any step ran (**D75**).
-      # The scan itself is unchanged and still reports; what moved is where the
-      # report lands. The Security tab is the better home and this is a
-      # downgrade, so it is worth restoring once somebody with admin rights
-      # establishes why the scope is refused on this repository.
       - name: Upload scan results
+        # Guarded on the file existing: if an earlier step fails Trivy never
+        # runs, and an unguarded upload turns one failure into two and buries
+        # the real one.
         if: always() && hashFiles('trivy.sarif') != ''
-        uses: actions/upload-artifact@v4
+        uses: github/codeql-action/upload-sarif@v3
         with:
-          name: trivy-image-sarif
-          path: trivy.sarif
-          retention-days: 30
+          sarif_file: trivy.sarif
+          category: trivy-image
 
       - name: SBOM (SEC-9)
         uses: anchore/sbom-action@v0

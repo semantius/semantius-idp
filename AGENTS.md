@@ -24,7 +24,7 @@ Four files, in this order. Read them before proposing anything.
 | File | What it is |
 | --- | --- |
 | [status.md](status.md) | The handoff. Done, not-done, and why — the ground truth between sessions. |
-| [spec-v1.md](spec-v1.md) | Signed off, amended through **D62**. Numbered requirements, and §12.1's decision log with the reasoning. |
+| [spec-v1.md](spec-v1.md) | Signed off, amended through **D68**. Numbered requirements, and §12.1's decision log with the reasoning. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | The gates, the style, and how to amend the spec. |
 | [docs/release.md](docs/release.md) | What is left before v1.0.0, and it is the owner's, not yours. |
 
@@ -140,15 +140,25 @@ ends up in the image — CSS, components, server code — and rebuild before
 and tags `semantius-idp:local`, which is what the suite defaults to.
 
 **"The password is wrong" is sometimes the origin.** Better Auth refuses a post
-whose `Origin` is not in `trustedOrigins` — which defaults to `server.baseUrl`
-alone — *before* it looks at a credential. Open the default deployment on
-`127.0.0.1:3000` instead of `localhost:3000` and every sign-in fails, including
-the first-run wizard's automatic one, so the very first account a deployment
-creates is the one it strands. Since **D57** that has its own code
-(`untrusted_origin`) and its own message; before it, it arrived as
-`invalid_credentials` and the page contradicted the server log, which was
-already saying `Invalid origin: …` on the line above. When a password that
-should work does not, read the log before you doubt the password.
+whose `Origin` is not trusted *before* it looks at a credential, and it says so
+in the log — `Invalid origin: …` — while the page used to say the password was
+wrong. Since **D57** that refusal has its own code (`untrusted_origin`) and its
+own message, and since **D68** an unconfigured deployment trusts the address
+the request arrived on (`X-Forwarded-Host`, else `Host`) rather than
+`server.baseUrl` alone, so neither `127.0.0.1`-instead-of-`localhost` nor a
+reverse proxy produces it any more. What still does: a configured
+`server.trustedOrigins` that does not name the address in use, and a genuine
+cross-site post. When a password that should work does not, read the log before
+you doubt the password.
+
+**Better Auth turns the origin check off under `NODE_ENV=test`.**
+`skipOriginCheck` defaults to `true` there (`context/create-context.mjs`), and
+its backward-compatibility arm takes the Fetch-Metadata CSRF check with it — so
+every test in this repository ran against a build with SEC-3 disabled until
+`advanced.disableOriginCheck: false` was set explicitly in
+`server/auth/instance.ts` (**D68**). Do not remove it to make a test pass: the
+test is telling you the request has no legitimate `Origin`, which is what the
+integration harness's `authRequest` sets for you.
 
 **`setResponseStatus` does not reach a rendered page.** It works for server
 routes and server functions and silently does nothing for an SSR document:

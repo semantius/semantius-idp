@@ -24,7 +24,7 @@ the process; there is no hot reload and `SIGHUP` is ignored (CFG-5).
 | `server.host` | string | `0.0.0.0` | Listen address. Also settable with HOST. |
 | `server.port` | integer | `3000` | Listen port. Also settable with PORT. |
 | `server.trustProxy` | boolean \| string[] | `false` | Honour X-Forwarded-* from the immediate upstream (true) or from the listed CIDR ranges. Client IP is the rightmost untrusted hop. |
-| `server.trustedOrigins` | string[] | — | CSRF origin allow-list. Defaults to [server.baseUrl]. |
+| `server.trustedOrigins` | string[] | — | CSRF origin allow-list. Empty by default, which trusts the address each request actually arrived on (its X-Forwarded-Host, or its Host) — what a deployment behind a reverse proxy needs when its public URL is not known at configuration time. Set it to pin the check to named origins instead; `https://*.example.com` matches a subdomain and `*` turns the check off. |
 | `server.allowInsecureHttp` | boolean | `false` | Permit a non-https baseUrl outside localhost. Development only. |
 | `server.shutdownTimeoutSeconds` | integer | `10` | SIGTERM drain budget. |
 | `secret` | string | — **required** | ≥ 32 random bytes. Fallback env: BETTER_AUTH_SECRET. Must be a placeholder in production. |

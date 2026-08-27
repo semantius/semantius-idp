@@ -45,6 +45,13 @@ export interface IdpConfig {
   readonly base: BasePathInfo
   /** CSRF origin allow-list, always containing the issuer origin. */
   readonly trustedOrigins: readonly string[]
+  /**
+   * True when `server.trustedOrigins` named nothing, which since **D68** means
+   * the check follows the request — the `Origin` has to match the host the
+   * request arrived on — rather than the issuer alone. Configuring the
+   * allow-list turns it off and pins the check to what it lists.
+   */
+  readonly trustRequestOrigin: boolean
   /** `true` when a Resend API key is configured; `false` puts the IdP in degraded mode (FR-MAIL-2). */
   readonly emailEnabled: boolean
   /** `auth.requireEmailVerification`, forced to false when e-mail is off. */
@@ -193,10 +200,13 @@ export function deriveConfig(
     file.apiKeys.tokenTtl
   )
 
-  const trustedOrigins = new Set<string>([
-    base.origin,
-    ...(file.server.trustedOrigins ?? []),
-  ])
+  // D68: an empty list is not "trust only the issuer" — it is "nothing was
+  // configured", and a deployment behind a reverse proxy usually cannot
+  // configure it. `[]` written out is the same statement as the key being
+  // absent, so both land in the same place rather than one of them meaning a
+  // stricter thing than an operator could have intended.
+  const configuredOrigins = file.server.trustedOrigins ?? []
+  const trustedOrigins = new Set<string>([base.origin, ...configuredOrigins])
 
   const defaultRole =
     roles.find((role) => role.default)?.name ?? roles[0]?.name ?? "user"
@@ -207,6 +217,7 @@ export function deriveConfig(
     roles,
     base,
     trustedOrigins: [...trustedOrigins],
+    trustRequestOrigin: configuredOrigins.length === 0,
     emailEnabled,
     // FR-MAIL-2: without a transport there is no way to verify an address.
     requireEmailVerification: emailEnabled

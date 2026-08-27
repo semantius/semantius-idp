@@ -301,6 +301,24 @@ describe("CFG-5 cross-checks", () => {
   })
 
   describe("warnings", () => {
+    it("warns when `*` switches the origin check off (D68)", () => {
+      const config = {
+        ...baseConfig(),
+        server: { baseUrl: "http://localhost:3000", trustedOrigins: ["*"] },
+      }
+      const { warnings } = load({ config })
+      expect(warnings.map((warning) => warning.code)).toContain(
+        "server.origin_check_disabled"
+      )
+    })
+
+    it("does not warn for the default, which still checks (D68)", () => {
+      const { warnings } = load({})
+      expect(warnings.map((warning) => warning.code)).not.toContain(
+        "server.origin_check_disabled"
+      )
+    })
+
     it("warns about unverified open registration", () => {
       const config = {
         ...baseConfig(),

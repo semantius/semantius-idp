@@ -73,6 +73,25 @@ const cidr = z
     "Expected a CIDR range, e.g. `10.0.0.0/8`."
   )
 
+/**
+ * An entry of `server.trustedOrigins`: an absolute origin, a wildcard pattern
+ * Better Auth understands (`https://*.example.com` — `absoluteUrl` parses one,
+ * because `URL` accepts `*` in a hostname), or the bare `*` that turns the
+ * origin check off entirely (**D68**).
+ *
+ * `*` is spelled out here rather than through a union so the exported JSON
+ * schema stays a plain `string[]`, which is what an editor's completion and
+ * the generated reference both read.
+ */
+const trustedOrigin = z.string().superRefine((value, ctx) => {
+  if (value === "*") return
+  const result = absoluteUrl().safeParse(value)
+  if (result.success) return
+  for (const issue of result.error.issues) {
+    ctx.addIssue({ code: "custom", message: issue.message })
+  }
+})
+
 const serverSchema = z.strictObject({
   baseUrl: absoluteUrl().describe(
     "Issuer. Scheme + host[:port] + optional path, no trailing slash. Every absolute URL the IdP emits derives from this value only."
@@ -90,9 +109,11 @@ const serverSchema = z.strictObject({
     .describe(
       "Honour X-Forwarded-* from the immediate upstream (true) or from the listed CIDR ranges. Client IP is the rightmost untrusted hop."
     ),
-  trustedOrigins: flexArray(absoluteUrl())
+  trustedOrigins: flexArray(trustedOrigin)
     .optional()
-    .describe("CSRF origin allow-list. Defaults to [server.baseUrl]."),
+    .describe(
+      "CSRF origin allow-list. Empty by default, which trusts the address each request actually arrived on (its X-Forwarded-Host, or its Host) — what a deployment behind a reverse proxy needs when its public URL is not known at configuration time. Set it to pin the check to named origins instead; `https://*.example.com` matches a subdomain and `*` turns the check off."
+    ),
   allowInsecureHttp: flexBoolean()
     .default(false)
     .describe(

@@ -35,8 +35,13 @@
     // `true` trusts the immediate upstream; a CIDR list trusts those ranges.
     "trustProxy": false,
 
-    // CSRF origin allow-list. Defaults to [baseUrl]; add other origins only if
-    // a browser app on a different origin posts to the IdP.
+    // CSRF origin allow-list. Leave it out and the check follows the request:
+    // the browser's Origin has to name the address the request arrived on
+    // (X-Forwarded-Host, or Host), which is what a deployment behind a reverse
+    // proxy needs when its public URL is not known here. Set it to pin the
+    // check to named origins instead — the issuer is always trusted, so this
+    // is for a browser app on a *different* origin that posts to the IdP.
+    // "*" turns the origin check off; nothing else does.
     // "trustedOrigins": ["https://apps.example.com"],
 
     // Development only: allow a non-https baseUrl outside localhost.

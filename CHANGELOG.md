@@ -408,4 +408,27 @@ were questions, and one was "polish every page".
   refresh token minting access tokens, against FR-OIDC-12. It moved into the
   guard's `after` hook, which runs for every caller.
 
+### Fixed from the field (2026-08-27)
+
+- **A deployment no longer has to know its own public URL to let anyone sign
+  in** (**D68**). `server.trustedOrigins` defaulted to `[server.baseUrl]`, so
+  behind a reverse proxy whose address the IdP is given later, every sign-in
+  met the `Origin` refusal of **D57** — permanently, not just on the
+  `127.0.0.1`-instead-of-`localhost` first run. With the key unset the check
+  now follows the request: the browser's `Origin` has to name the address the
+  request arrived on (`X-Forwarded-Host`, else `Host`), which needs no
+  configuration and is still a check a cross-site page cannot pass — it chooses
+  neither side of it, and neither host header can be added to a cross-site
+  request without a preflight this server does not answer. The header is
+  compared and nothing more: SEC-1 is untouched and every absolute URL the IdP
+  emits still comes from `server.baseUrl` alone. Setting the key pins the check
+  to what it lists, as before; `*` is the documented way to turn it off.
+- **The CSRF origin check was skipped in every test run this repository has
+  ever made.** Better Auth defaults `disableOriginCheck` to `true` under
+  `NODE_ENV=test`, and through its backward-compatibility arm that takes the
+  Fetch-Metadata check with it — so SEC-3, which the suite claims to assert,
+  was off wherever the suite could have noticed it breaking. The two new cases
+  that assert a cross-site sign-in is refused both passed it until
+  `advanced.disableOriginCheck: false` was set explicitly.
+
 [Unreleased]: https://github.com/semantius/semantius-idp/commits/main

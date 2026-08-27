@@ -36,7 +36,7 @@
           ]
         },
         "trustedOrigins": {
-          "description": "CSRF origin allow-list. Defaults to [server.baseUrl].",
+          "description": "CSRF origin allow-list. Empty by default, which trusts the address each request actually arrived on (its X-Forwarded-Host, or its Host) — what a deployment behind a reverse proxy needs when its public URL is not known at configuration time. Set it to pin the check to named origins instead; `https://*.example.com` matches a subdomain and `*` turns the check off.",
           "type": "array",
           "items": {
             "type": "string"

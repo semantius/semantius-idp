@@ -38,6 +38,7 @@ import type { AdminContext } from "../admin/context"
 import { buildAdminEndpoints } from "../admin/endpoints"
 import { buildAdminAfterHook, buildAdminGuard } from "../admin/guard"
 import { SOCKET_ADDRESS_HEADER } from "../http/client-ip"
+import { requestOrigins } from "../http/request-origin"
 import { buildEmailCallbacks } from "./options/email-callbacks"
 import { gateApiKeyPlugin, isApiKeySession } from "./options/api-key-gate"
 import { buildAfterHook, buildBeforeHook } from "./options/hooks"
@@ -110,7 +111,16 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
     baseURL: paths.origin,
     basePath: paths.authBasePath,
     secret: file.secret,
-    trustedOrigins: [...config.trustedOrigins],
+    // SEC-3. Two shapes, and which one is in force is a configuration fact:
+    // a static list when `server.trustedOrigins` names origins, and otherwise
+    // a per-request one that adds the address the request arrived on (D68 —
+    // `http/request-origin.ts` has the reasoning and the limits). Better Auth
+    // resolves the function once per request and keeps the issuer origin in
+    // front of whatever it returns, so the deployment's own address is trusted
+    // either way.
+    trustedOrigins: config.trustRequestOrigin
+      ? (request) => [...config.trustedOrigins, ...requestOrigins(request)]
+      : [...config.trustedOrigins],
 
     // SEC-8: no third-party origins at runtime.
     telemetry: { enabled: false },
@@ -231,6 +241,16 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
 
     // --------------------------------------------------------------- cookies --
     advanced: {
+      // SEC-3, and it has to be said out loud: Better Auth defaults
+      // `disableOriginCheck` to **true** under `NODE_ENV=test`
+      // (`context/create-context.mjs`), and with it the CSRF origin check and
+      // — through its backward-compatibility arm — the Fetch-Metadata one.
+      // Left alone, every test in this repository ran against a build with the
+      // protection off, so the suite could not have noticed the day it broke.
+      // A security property nothing exercises is a security property nobody
+      // has. `false` here is what production already does; it is only the test
+      // runs that change.
+      disableOriginCheck: false,
       // FR-AUTH-5: `Secure` follows the *issuer's* scheme, not the internal
       // one — behind a TLS-terminating proxy the app itself speaks http.
       useSecureCookies: paths.secureCookies,

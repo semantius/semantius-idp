@@ -70,6 +70,19 @@ export function runCrossChecks(input: CrossCheckInput): CrossCheckResult {
     })
   }
 
+  // D68: `*` is a supported value and the only one that removes the check
+  // rather than aiming it, so it says so at start-up. A deployment that meant
+  // "I do not know my public URL" wants the default — which still checks —
+  // and this line is how somebody who copied `*` from an issue thread finds
+  // out what they turned off.
+  if (config.server.trustedOrigins?.includes("*")) {
+    warnings.push({
+      code: "server.origin_check_disabled",
+      message:
+        "`server.trustedOrigins` contains `*`, which switches the CSRF origin check off: any site can post to this IdP with a signed-in visitor's cookies. Leaving the key out is not the same thing — it checks the browser's `Origin` against the address the request arrived on, which needs no configuration and works behind a reverse proxy.",
+    })
+  }
+
   // ---------------------------------------------------------------- secret --
   if (config.secret.length < 32) {
     issues.push({

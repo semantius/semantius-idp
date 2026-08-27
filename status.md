@@ -63,6 +63,72 @@ Everything buildable is built. What remains cannot be done from here:
 
 ---
 
+## "The login page says this address is not recognised" (2026-08-27, **D68**)
+
+Reported from a deployment that does not know its own public URL and sits
+behind a reverse proxy. It is **D57**'s refusal again — the CSRF origin check
+turning a sign-in away before it reads the password — but permanent rather than
+first-run: `server.trustedOrigins` defaulted to `[server.baseUrl]`, so a
+deployment that cannot name its public address at configuration time cannot
+sign anybody in at all. D57 made that refusal say what it is; it did not make
+it avoidable.
+
+The ask was to make the check optional, off by default. It is now **optional
+without being off**. With the key unset, the check follows the request: the
+browser's `Origin` has to name the address the request arrived on —
+`X-Forwarded-Host`, else `Host` — as well as the issuer.
+
+Why that is still a real check, and not a polite way of removing one: a
+cross-site page chooses **neither side** of it. `Origin` is set by the browser
+from the page doing the posting, and both host headers come from the browser or
+from our own proxy — neither is CORS-safelisted, so a cross-site request that
+tries to add one is preflighted and this server never answers a preflight. A
+caller who *can* set arbitrary headers is not who CSRF protects against: they
+have no cookies to ride.
+
+Three deliberate looseness decisions, all in `server/http/request-origin.ts`
+with the reasoning beside them:
+
+- **`X-Forwarded-Host` is read whatever `server.trustProxy` says.** That
+  setting governs whose *identity* is believed — the audit trail's and the rate
+  limiter's client address (`client-ip.ts`) — where a forged value is
+  attributed to the wrong person. Here the value is compared and then dropped:
+  never stored, never emitted, never used to build a URL. SEC-1 is untouched,
+  and the host-header-injection tests still pass unchanged.
+- **The scheme is ignored** (`https://host` and `http://host` are both
+  produced). A TLS-terminating proxy that forwards over plain http and omits
+  `X-Forwarded-Proto` is exactly the deployment this exists for; pinning the
+  scheme would fail it for the sake of an attacker who already controls http on
+  the deployment's own hostname.
+- **A wildcard is refused on the way in.** `URL` happily parses `*` as a
+  hostname, and Better Auth matches its allow-list as *patterns* — so an
+  `X-Forwarded-Host: *` would have switched the check off for the request that
+  sent it. The unit test that says so failed on the first run, which is why it
+  is there. From configuration `*` is still accepted: that is the documented
+  way to turn the check off, for whoever needs it.
+
+Setting `server.trustedOrigins` pins the check to what it lists, as before.
+`[]` reads as "nothing configured", not as "trust the issuer alone" — a
+generated or templated config leaves an empty array behind, and reading it as
+the stricter thing would surprise in the direction of a locked-out deployment.
+
+### The check was off in every test run this repository has ever made
+
+Found while writing the regression tests, and the more important half of the
+day. Better Auth sets `skipOriginCheck` to **true** when `NODE_ENV=test`
+(`context/create-context.mjs`), and through its backward-compatibility arm that
+takes the Fetch-Metadata CSRF check with it. Both new refusal cases — a
+cross-site `Origin`, and a forwarded `*` — **passed a sign-in** until
+`advanced.disableOriginCheck: false` was set explicitly in
+`server/auth/instance.ts`.
+
+So SEC-3, which the integration suite is written as if it asserts, was not
+being exercised anywhere. It is now, and the rest of the suite still passes
+with it on — which is itself worth knowing, because it means every test that
+posts with a session cookie was already sending a legitimate `Origin`.
+
+---
+
 ## Owner review round 3 — sixteen findings (2026-08-26)
 
 The owner walked the running application and filed sixteen findings: config

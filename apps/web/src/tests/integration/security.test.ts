@@ -221,6 +221,70 @@ describe("host-header injection (SEC-1)", () => {
   })
 })
 
+describe("the CSRF origin check (SEC-3, D68)", () => {
+  /**
+   * A browser two hops away: it is on `https://idp.example.com`, the proxy
+   * rewrote `Host` to the upstream it dialled, and `server.baseUrl` names
+   * neither. Before D68 every one of these was refused before the password was
+   * read, which is a deployment that cannot sign anybody in.
+   *
+   * The `cookie` header is not decoration — Better Auth only checks the origin
+   * of a request that carries one, and a browser's sign-in does.
+   */
+  const behindProxy = (origin: string) => ({
+    origin,
+    cookie: "unrelated=1",
+    host: "internal.svc:3000",
+    "x-forwarded-host": "idp.example.com",
+  })
+
+  it("accepts a sign-in from the address the request arrived on", async () => {
+    await makeUser("proxied@example.com")
+    const response = await ctx.auth.handler(
+      authRequest("/sign-in/email", {
+        json: { email: "proxied@example.com", password: PASSWORD },
+        headers: behindProxy("https://idp.example.com"),
+      })
+    )
+    expect(response.status).toBe(200)
+    expect(sessionCookie(response)).toBeTruthy()
+  })
+
+  it("still refuses one from somewhere else entirely", async () => {
+    // The half that must not move: the browser chose `Origin`, and a page on
+    // `evil.example` cannot choose `X-Forwarded-Host` or `Host` to match it.
+    await makeUser("targeted@example.com")
+    const response = await ctx.auth.handler(
+      authRequest("/sign-in/email", {
+        json: { email: "targeted@example.com", password: PASSWORD },
+        headers: behindProxy("https://evil.example"),
+      })
+    )
+    expect(response.status).toBe(403)
+    expect((await response.json()) as Record<string, unknown>).toMatchObject({
+      code: "INVALID_ORIGIN",
+    })
+  })
+
+  it("refuses a forwarded host that is a wildcard rather than a host", async () => {
+    // Better Auth matches the allow-list as patterns, so `*` reaching it would
+    // switch the check off for the request that sent it.
+    await makeUser("wildcard@example.com")
+    const response = await ctx.auth.handler(
+      authRequest("/sign-in/email", {
+        json: { email: "wildcard@example.com", password: PASSWORD },
+        headers: {
+          origin: "https://evil.example",
+          cookie: "unrelated=1",
+          host: "internal.svc:3000",
+          "x-forwarded-host": "*",
+        },
+      })
+    )
+    expect(response.status).toBe(403)
+  })
+})
+
 describe("mass assignment (FR-AUTH-7)", () => {
   it("ignores privileged fields in a sign-up body", async () => {
     const response = await ctx.auth.handler(

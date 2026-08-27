@@ -1,6 +1,6 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-27 · **Branch:** `main` · **Head:** `9a8b423` + the **D81** round below
+**As of:** 2026-08-27 · **Branch:** `main` · **Head:** `61e733c`, tagged **v0.2.0**
 **Plan:** `~/.claude/plans/1-should-all-users-jolly-lake.md` (owner review round 4)
 **Spec:** [spec-v1.md](spec-v1.md) — amended through **D81**
 
@@ -49,13 +49,25 @@ Everything buildable is built. What remains cannot be done from here:
   e-mail instead would silently create a second one.
 - **One real token against a real Neon project** — including a key rotation,
   to see the grace period behave.
-- **Tagging**, which builds and publishes the image under a name people will
-  pull. This is the mandatory gate: it needs the owner's decision, not a green
-  board. The machinery is now in place and was not before (**D73**, below) —
-  the workspace is at **0.1.0** and `git push origin v0.1.0` will publish
-  `0.1.0`, `0.1`, `0`, `latest` and `sha-<commit>` for amd64 and arm64.
-  Rehearse first with **Actions → Release → Run workflow**, which builds both
-  architectures and smoke-tests amd64 without pushing anything.
+- **Tagging `v1.0.0`.** Two versions are published — **v0.1.0** and, on
+  2026-08-27, **v0.2.0** (the D78 / D80 / D81 round) — because the image was
+  wanted before the two manual checks above could be performed. `1.0.0` is what
+  those checks gate, and it still needs the owner's decision rather than a green
+  board. Everything below about the machinery is now history rather than plan:
+  `docker/release.sh vX.Y.Z` bumps the three version files, commits, tags and
+  pushes, and the tag is the whole trigger. Rehearse a version first with
+  **Actions → Release → Run workflow**, which builds both architectures and
+  smoke-tests amd64 without pushing anything.
+
+**v0.2.0, as published.** `ghcr.io/semantius/semantius-idp` `0.2.0` · `0.2` ·
+`0` · `latest` · `sha-61e733c`, one digest
+(`sha256:99804fab…`) carrying `linux/amd64` and `linux/arm64`, plus the two
+buildx attestation manifests. Smoke test, Trivy scan and SBOM all green in
+[run 33124131255](https://github.com/semantius/semantius-idp/actions/runs/33124131255);
+the GitHub release carries the changelog's `[0.2.0]` section and the SPDX SBOM.
+The release checklist's "after" items are done except the two that need a
+machine other than this one: pulling the image somewhere clean and running the
+README quick start against it, and confirming `latest` from outside.
 
 ### 2. Open, non-blocking
 

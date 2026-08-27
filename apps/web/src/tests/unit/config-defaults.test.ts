@@ -53,7 +53,6 @@ describe("CFG-4 defaults", () => {
         expiresIn: 7 * 86_400,
         updateAge: 86_400,
         cookieCacheMinutes: 5,
-        freshAgeMinutes: 15,
         revokeOAuthTokensOnLogout: false,
       },
       social: {},

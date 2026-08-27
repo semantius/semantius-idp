@@ -371,9 +371,6 @@ const sessionSchema = z.strictObject({
   cookieCacheMinutes: flexInt({ min: 0, max: 5 })
     .default(5)
     .describe("Capped at 5 so revocations bite quickly (FR-AUTH-5)."),
-  freshAgeMinutes: flexInt({ min: 1, max: 1440 })
-    .default(15)
-    .describe("Sensitive actions require a session fresher than this."),
   revokeOAuthTokensOnLogout: flexBoolean()
     .default(false)
     .describe(

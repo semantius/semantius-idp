@@ -313,12 +313,6 @@
           "minimum": 0,
           "maximum": 5
         },
-        "freshAgeMinutes": {
-          "description": "Sensitive actions require a session fresher than this.",
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 1440
-        },
         "revokeOAuthTokensOnLogout": {
           "description": "Whether signing out of the IdP also kills the OAuth tokens issued to clients from that session. Off by default: a user closing this tab does not usually mean to sign out of every application they use (FR-AUTH-6).",
           "type": "boolean"

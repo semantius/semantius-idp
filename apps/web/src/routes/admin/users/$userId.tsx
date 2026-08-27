@@ -39,7 +39,7 @@ import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
 import { runAdminAction } from "@/server/http/admin-actions"
 import { readFormMulti, redirectWithCookies } from "@/server/http/auth-proxy"
-import { requireFreshSession } from "@/server/http/fresh-session"
+import { requireSession } from "@/server/http/require-session"
 import { stash } from "@/server/http/one-shot"
 import { fetchRoles, fetchUserDetail } from "@/server/functions/admin"
 import { getRuntime } from "@/server/runtime"
@@ -57,9 +57,10 @@ import { LocalTime } from "@/components/common/local-time"
  * an administrator cannot ban the last administrator from this page any more
  * than from `curl`.
  *
- * The whole page is behind the freshness gate. Administrative actions are the
- * definition of a "sensitive operation" in FR-AUTH-5, and an admin session
- * left open on a shared machine is exactly the case it exists for.
+ * Every write on this page requires a session, read authoritatively so a
+ * suspension or a revocation bites on the next write rather than whenever the
+ * cookie cache happens to expire. It used to require a *fresh* one as well;
+ * **D81** removed that.
  *
  * **The actions are links that open dialogs** (item 11). Eleven inline forms in
  * one column is a wall of controls where the important ones — suspend, delete —
@@ -93,8 +94,8 @@ export const Route = createFileRoute("/admin/users/$userId")({
         const userId = params.userId
         const here = `${base}/admin/users/${encodeURIComponent(userId)}`
 
-        const fresh = await requireFreshSession(runtime, request, here)
-        if (!fresh.ok) return fresh.response
+        const signedIn = await requireSession(runtime, request, here)
+        if (!signedIn.ok) return signedIn.response
 
         // `readFormMulti`, because the roles control repeats its field and
         // the plain reader keeps only the last ticked box.
@@ -109,7 +110,7 @@ export const Route = createFileRoute("/admin/users/$userId")({
           request,
           form,
           userId,
-          actorId: fresh.session.user.id,
+          actorId: signedIn.session.user.id,
         })
 
         const query = new URLSearchParams()

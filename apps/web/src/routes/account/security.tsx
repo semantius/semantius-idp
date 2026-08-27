@@ -23,7 +23,7 @@ import {
   redirectWithCookies,
   withError,
 } from "@/server/http/auth-proxy"
-import { requireFreshSession } from "@/server/http/fresh-session"
+import { requireSession } from "@/server/http/require-session"
 import { stash } from "@/server/http/one-shot"
 import { changePassword } from "@/server/auth/change-password"
 import { claimEnrolment } from "@/server/functions/account"
@@ -38,10 +38,12 @@ const HERE = "/account/security"
  * `/account/security` — password, e-mail address and the second factor
  * (FR-ACCT-1, FR-2FA-1).
  *
- * Everything on this page is a sensitive action, so every POST goes through
- * the freshness gate (FR-AUTH-5): each one changes what it takes to get back
- * into the account, which is exactly what someone who has borrowed an unlocked
- * browser would go for.
+ * Everything on this page changes what it takes to get back into the account,
+ * which is exactly what someone who has borrowed an unlocked browser would go
+ * for. That is what the freshness gate was for, and **D81** removed it: it
+ * could not be satisfied at all by an account that authenticates through a
+ * provider, which is most of them. Every POST still requires a session, read
+ * authoritatively.
  *
  * The password change is a dialog here, like every other action on the page —
  * it used to be a link away to `/change-password`, which is a page because it
@@ -81,8 +83,8 @@ export const Route = createFileRoute("/account/security")({
         const base = runtime.config.base.basePath
         const here = `${base}${HERE}`
 
-        const fresh = await requireFreshSession(runtime, request, HERE)
-        if (!fresh.ok) return fresh.response
+        const signedIn = await requireSession(runtime, request, HERE)
+        if (!signedIn.ok) return signedIn.response
 
         const form = await readForm(request)
 
@@ -105,7 +107,7 @@ export const Route = createFileRoute("/account/security")({
               request,
               form,
               here,
-              fresh.session.user.id
+              signedIn.session.user.id
             )
           case "confirm-2fa":
             return confirmTwoFactor(
@@ -113,7 +115,7 @@ export const Route = createFileRoute("/account/security")({
               request,
               form,
               here,
-              fresh.session.user.email
+              signedIn.session.user.email
             )
           case "disable-2fa":
             return disableTwoFactor(
@@ -121,7 +123,7 @@ export const Route = createFileRoute("/account/security")({
               request,
               form,
               here,
-              fresh.session.user.email
+              signedIn.session.user.email
             )
           default:
             return redirectWithCookies(withError(here, "not_found"))

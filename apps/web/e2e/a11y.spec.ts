@@ -1,6 +1,16 @@
 import AxeBuilder from "@axe-core/playwright"
 
-import { createVerifiedUser, signIn, signInAsAdmin, signOut, submit } from "./actions"
+import {
+  createVerifiedUser,
+  openDialog,
+  openMenuDialog,
+  openRowMenu,
+  signIn,
+  signInAsAdmin,
+  signOut,
+  submit,
+  submitDialog,
+} from "./actions"
 import { expect, test } from "./fixtures"
 import type { App } from "./fixtures"
 import type { Page } from "@playwright/test"
@@ -132,6 +142,28 @@ test.describe("accessibility", () => {
     await app.goto("/admin/users?q=e2e-admin@example.com")
     await page.getByRole("link", { name: "e2e-admin@example.com" }).click()
     await scan(page, "/admin/users/:id")
+
+    // **D80**: with a row's actions menu open. Only a database-registered
+    // client has one, and the pages above are scanned before any spec creates
+    // one — so the row is made here and removed again. Worth the six lines
+    // for the same reason D71 scanned the toast: it is a portalled widget
+    // outside the page's landmarks, and its trigger's accessible name is this
+    // application's rather than the registry's.
+    await app.goto("/admin/clients")
+    const form = await openDialog(page, "Add an application")
+    await form.getByLabel("Name").fill("Axe Scanned")
+    await form.getByLabel("Client ID").fill("a11y-client")
+    await form
+      .getByLabel("Redirect URIs", { exact: true })
+      .fill("https://example.test/callback")
+    await submitDialog(page, form, "Add an application")
+
+    const row = page.locator("tbody tr").filter({ hasText: "a11y-client" })
+    const menu = await openRowMenu(page, row, "Axe Scanned")
+    await scan(page, "/admin/clients with a row menu open")
+
+    const confirm = await openMenuDialog(page, menu, "Remove")
+    await submitDialog(page, confirm, "Remove")
     await signOut(page, app)
   })
 })

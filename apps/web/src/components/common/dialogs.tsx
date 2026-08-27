@@ -66,7 +66,7 @@ export function ActionDialog({
    */
   defaultOpen?: boolean
   /**
-   * Controlled, and **then there is no trigger** (**D79**).
+   * Controlled, and **then there is no trigger** (**D80**).
    *
    * What a dialog opened from a menu needs: the control that opens it is a
    * `menuitem` in a popup that closes on activation, so by the time the dialog

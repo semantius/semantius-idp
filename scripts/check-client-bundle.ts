@@ -48,11 +48,18 @@ const SERVER_ONLY_MARKERS = [
  * The markers above are what actually catch a server leak; this catches the
  * shape of one — the incident it was written from put the browser bundle over
  * 1 MB. The number was 600 kB against a ~330 kB bundle, and the comment saying
- * so went stale: the client is ~600 kB today, so the gate had drifted into a
- * tripwire that ordinary UI work sets off (the **D71** toast, 25 kB, brought
- * it to within 1.2 kB) while still passing anything short of the megabyte it
- * was aimed at. Raised to keep the headroom it was written with. Update the
- * measured figure here when it moves, so the next person can see the drift.
+ * so went stale: the client was ~600 kB when this was last raised, so the gate
+ * had drifted into a tripwire that ordinary UI work sets off (the **D71**
+ * toast, 25 kB, brought it to within 1.2 kB) while still passing anything
+ * short of the megabyte it was aimed at. Raised to keep the headroom it was
+ * written with. Update the measured figure here when it moves, so the next
+ * person can see the drift.
+ *
+ * **679 kB today** — the **D80** row-actions menu added ~79 kB of Base UI
+ * `Menu`. That is the second ordinary UI addition to spend the headroom, and
+ * the next one will be close: at ~70 kB left this is worth a look rather than
+ * another raise, since the markers are the real gate and the byte cap is only
+ * the shape of the incident.
  */
 const MAX_CLIENT_BYTES = 750_000
 

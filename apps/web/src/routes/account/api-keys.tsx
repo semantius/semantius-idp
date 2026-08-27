@@ -17,7 +17,7 @@ import {
   redirectWithCookies,
   withError,
 } from "@/server/http/auth-proxy"
-import { requireFreshSession } from "@/server/http/fresh-session"
+import { requireSession } from "@/server/http/require-session"
 import { stash } from "@/server/http/one-shot"
 import {
   apiKeyBelongsTo,
@@ -34,8 +34,9 @@ const HERE = "/account/api-keys"
  * `/account/api-keys` (FR-KEY-1).
  *
  * A key authenticates **as its owner** with the same roles, so creating one is
- * as consequential as changing a password — both are gated on a fresh session
- * (FR-AUTH-5). The secret is shown exactly once, in a dialog on the page the
+ * as consequential as changing a password. Both were gated on a fresh session
+ * until **D81**; both now require a session and no more than that. The secret
+ * is shown exactly once, in a dialog on the page the
  * creation redirects to, and never stored anywhere this page can read: the row
  * keeps a hash and the first few characters, which is all the list needs to be
  * useful.
@@ -82,8 +83,8 @@ export const Route = createFileRoute("/account/api-keys")({
 
         // Both actions on this page are sensitive: one mints a credential,
         // the other takes one away from whoever is holding it.
-        const fresh = await requireFreshSession(runtime, request, HERE)
-        if (!fresh.ok) return fresh.response
+        const signedIn = await requireSession(runtime, request, HERE)
+        if (!signedIn.ok) return signedIn.response
 
         const form = await readForm(request)
 
@@ -91,7 +92,7 @@ export const Route = createFileRoute("/account/api-keys")({
           const keyId = form.keyId ?? ""
           // "The id came from a page I rendered" is not an authorisation
           // check — the ownership test is.
-          if (!(await apiKeyBelongsTo(runtime, fresh.session, keyId))) {
+          if (!(await apiKeyBelongsTo(runtime, signedIn.session, keyId))) {
             return redirectWithCookies(withError(here, "not_found"))
           }
           const result = await callAuth(
@@ -107,7 +108,7 @@ export const Route = createFileRoute("/account/api-keys")({
             action: "apikey.revoked",
             outcome: "success",
             actorType: "session",
-            actorUserId: fresh.session.user.id,
+            actorUserId: signedIn.session.user.id,
             target: { type: "apikey", id: keyId },
           })
           return redirectWithCookies(`${here}?notice=apikey_revoked`)
@@ -141,11 +142,11 @@ export const Route = createFileRoute("/account/api-keys")({
           action: "apikey.created",
           outcome: "success",
           actorType: "session",
-          actorUserId: fresh.session.user.id,
+          actorUserId: signedIn.session.user.id,
           target: { type: "apikey", id },
           metadata: { name: (form.name ?? "").trim() },
         })
-        await runtime.mailer.send("apiKeyCreated", fresh.session.user.email, {
+        await runtime.mailer.send("apiKeyCreated", signedIn.session.user.email, {
           keyName: (form.name ?? "").trim(),
         })
 
@@ -154,7 +155,7 @@ export const Route = createFileRoute("/account/api-keys")({
         // abandoned tab leaves nothing claimable for long.
         const handle = await stash(
           runtime,
-          JSON.stringify({ userId: fresh.session.user.id, key }),
+          JSON.stringify({ userId: signedIn.session.user.id, key }),
           { ttlSeconds: 600 }
         )
         return redirectWithCookies(`${here}?created=${handle}`)

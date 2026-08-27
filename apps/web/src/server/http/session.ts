@@ -55,10 +55,10 @@ export interface ReadSessionOptions {
    *
    * The cookie cache (`session.cookieCacheMinutes`, capped at 5) is what makes
    * a page load cheap, and it is exactly wrong for a decision that depends on
-   * *current* state: the cached copy carries the `createdAt` and the ban flag
-   * as they were when it was minted. The freshness gate read the cache and
-   * happily let a twenty-minute-old session mint an API key, because the
-   * cookie still said the session was minutes old.
+   * *current* state: the cached copy carries the ban flag and the approval
+   * state as they were when it was minted, so a write authorised from it is a
+   * write authorised by a copy of the world up to five minutes old. Every form
+   * POST handler asks for the row (`http/require-session.ts`, **D81**).
    */
   authoritative?: boolean
 }

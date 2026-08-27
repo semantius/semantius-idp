@@ -233,8 +233,15 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
         enabled: file.session.cookieCacheMinutes > 0,
         maxAge: minutes(file.session.cookieCacheMinutes),
       },
-      // FR-AUTH-5: sensitive actions need a session fresher than this.
-      freshAge: minutes(file.session.freshAgeMinutes),
+      // **Zero disables it, and that is deliberate** (**D81**). Better Auth
+      // runs its own freshness check on `/delete-user` and on `/update-user`'s
+      // e-mail change, defaulting to a day; `0` is the documented way off
+      // (`api/routes/session.mjs` guards every use with `freshAge !== 0`).
+      // Left at the default it would reintroduce exactly what D81 removed —
+      // and reintroduce it as a Better Auth error code rather than a bounce,
+      // on accounts that authenticate through a provider and have no password
+      // to re-present.
+      freshAge: 0,
     },
 
     socialProviders: buildSocialProviders(config),

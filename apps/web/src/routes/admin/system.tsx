@@ -16,7 +16,7 @@ import {
   callAuth,
   redirectWithCookies,
 } from "@/server/http/auth-proxy"
-import { requireFreshSession } from "@/server/http/fresh-session"
+import { requireSession } from "@/server/http/require-session"
 import { fetchSystemInfo } from "@/server/functions/admin"
 import { getRuntime } from "@/server/runtime"
 import { PendingForm, SubmitButton } from "@/components/common/pending-form"
@@ -30,8 +30,8 @@ import { PendingForm, SubmitButton } from "@/components/common/pending-form"
  * operator reads here is byte-for-byte what they would get from `curl`, and
  * neither can leak a secret the other hides.
  *
- * Rotation is behind the freshness gate like every other administrative write.
- * It is also the slowest button in the application: it takes an advisory lock
+ * Rotation requires a session, like every other administrative write. It is
+ * also the slowest button in the application: it takes an advisory lock
  * on a direct connection, so a second click while the first is still running
  * waits rather than races.
  */
@@ -54,8 +54,8 @@ export const Route = createFileRoute("/admin/system")({
         const base = runtime.config.base.basePath
         const here = `${base}/admin/system`
 
-        const fresh = await requireFreshSession(runtime, request, here)
-        if (!fresh.ok) return fresh.response
+        const signedIn = await requireSession(runtime, request, here)
+        if (!signedIn.ok) return signedIn.response
 
         const result = await callAuth(runtime, "/idp/rotate-keys", {}, request)
         const query = new URLSearchParams(

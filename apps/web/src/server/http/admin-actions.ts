@@ -4,7 +4,7 @@
  *
  * One dispatcher rather than a handler per action, for a reason that is about
  * safety and not tidiness: every one of these is a `POST` to the same URL, and
- * they must all pass through the same three things — the freshness gate, the
+ * they must all pass through the same three things — the session gate, the
  * invariants, and the audit trail. A file of near-identical handlers is a file
  * where one of them is missing a step.
  *

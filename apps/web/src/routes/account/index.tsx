@@ -27,7 +27,7 @@ import { PendingForm, SubmitButton } from "@/components/common/pending-form"
  *
  * Only the display fields are editable here. The address is a *security*
  * change (it is what a reset link goes to), so it lives on `/account/security`
- * behind the freshness gate; changing a first name does not need one.
+ * with the rest of them; changing a first name does not.
  *
  * **The display name is not one of them** (**D49**). It is derived from the
  * first and last name in `site.nameFormat` order and shown read-only, so a

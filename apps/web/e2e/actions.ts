@@ -128,6 +128,44 @@ export function toast(page: Page): Locator {
   return page.locator('[data-slot="toast"]')
 }
 
+/**
+ * Opens a table row's actions menu and returns the popup (**D80**).
+ *
+ * `/admin/clients` moved its four per-row controls behind one `⋯` button, so
+ * a spec can no longer press "Remove" in a row — it presses the row's menu and
+ * then the item. The trigger is found by the accessible name the menu gives
+ * itself, `Actions for <application>`, which is the thing that makes one row's
+ * menu distinguishable from every other row's.
+ */
+export async function openRowMenu(
+  page: Page,
+  row: Locator,
+  client: string
+): Promise<Locator> {
+  await row.getByRole("button", { name: `Actions for ${client}` }).click()
+  const menu = page.getByRole("menu")
+  await expect(menu).toBeVisible()
+  return menu
+}
+
+/**
+ * {@link openDialog}, for a dialog a row-menu item opens.
+ *
+ * The menu closes as the item is activated, which is exactly why those dialogs
+ * are controlled rather than trigger-driven (**D80**) — so this waits for the
+ * modal rather than assuming it is there.
+ */
+export async function openMenuDialog(
+  page: Page,
+  menu: Locator,
+  item: string
+): Promise<Locator> {
+  await menu.getByRole("menuitem", { name: item, exact: true }).click()
+  const dialog = modal(page)
+  await expect(dialog).toBeVisible()
+  return dialog
+}
+
 export async function openDialog(
   page: Page,
   name: string,

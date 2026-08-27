@@ -135,9 +135,6 @@
     "updateAge": "1d",
     // Capped at 5 so a revocation takes effect quickly.
     "cookieCacheMinutes": 5,
-    // Sensitive actions (password/e-mail change, 2FA, API keys, admin writes)
-    // require a session fresher than this, or a re-authentication.
-    "freshAgeMinutes": 15,
     "revokeOAuthTokensOnLogout": false
   },
 

@@ -61,7 +61,6 @@ the process; there is no hot reload and `SIGHUP` is ignored (CFG-5).
 | `session.expiresIn` | number \| string | `7d` | How long a browser session lives without being renewed. |
 | `session.updateAge` | number \| string | `1d` | A session older than this is extended on the next request. |
 | `session.cookieCacheMinutes` | integer | `5` | Capped at 5 so revocations bite quickly (FR-AUTH-5). |
-| `session.freshAgeMinutes` | integer | `15` | Sensitive actions require a session fresher than this. |
 | `session.revokeOAuthTokensOnLogout` | boolean | `false` | Whether signing out of the IdP also kills the OAuth tokens issued to clients from that session. Off by default: a user closing this tab does not usually mean to sign out of every application they use (FR-AUTH-6). |
 | `social` | { … } | `{}` | Keyed by provider id — `google`, `github`, `microsoft`. Each entry needs `clientId` and `clientSecret`; `microsoft` also needs `tenantId` (FR-SOC-5). |
 | `twoFactor.enabled` | boolean | `true` | Whether users may enrol at all. Enrolment is per user and always optional (FR-2FA-1); turning this off hides the whole feature. |

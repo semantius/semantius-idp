@@ -40,7 +40,7 @@ import {
 } from "@/server/http/auth-proxy"
 import { stashDraft, withDraft } from "@/server/http/draft"
 import type { Draft } from "@/server/http/draft"
-import { requireFreshSession } from "@/server/http/fresh-session"
+import { requireSession } from "@/server/http/require-session"
 import { stash } from "@/server/http/one-shot"
 import { getRuntime } from "@/server/runtime"
 
@@ -98,43 +98,15 @@ export const Route = createFileRoute("/admin/clients")({
         const base = runtime.config.base.basePath
         const here = `${base}${HERE}`
 
-        // **The body is read before the gate** (D63). The order used to be the
-        // other way round, and FR-AUTH-5's fifteen minutes are easy to spend
-        // on a twelve-field form — so a submission that arrived one minute
-        // late was thrown away and retyped after signing in again. Safe to
-        // reorder: `readSession` reads headers only and `callAuth` builds a
-        // fresh Request, so nothing downstream wants the original stream
-        // (`login.tsx` has read the body before responding since M8).
+        // Read before the gate, which D63 established and **D81** kept: a
+        // refusal that arrives with the body already in hand can stash the
+        // draft, and the error paths below still do. Safe because
+        // `readSession` reads headers only and `callAuth` builds a fresh
+        // Request, so nothing downstream wants the original stream.
         const { fields: form, list: valuesOf } = await readFormMulti(request)
 
-        // Registering a client is a credential-minting act, so it sits behind
-        // the same freshness gate as every other admin write (FR-AUTH-5). The
-        // draft rides along only for `create` and `update`: the three
-        // one-field actions have nothing worth keeping, and a stale POST that
-        // is about to be refused should not write a row for a client id and a
-        // hidden input.
-        const fresh = await requireFreshSession(runtime, request, HERE, {
-          draft:
-            form.action === "delete" ||
-            form.action === "toggle" ||
-            form.action === "rotate-secret"
-              ? undefined
-              : {
-                  // **D72**: which dialog to reopen, and — for an edit — which
-                  // row's. Absent means create, so a draft stashed before this
-                  // existed still restores the dialog it came from.
-                  action: form.action,
-                  clientId: form.clientId,
-                  name: form.name,
-                  type: form.type,
-                  redirectUris: form.redirectUris,
-                  postLogoutRedirectUris: form.postLogoutRedirectUris,
-                  scopes: valuesOf("scopes"),
-                  requireConsent: form.requireConsent,
-                  enableEndSession: form.enableEndSession,
-                },
-        })
-        if (!fresh.ok) return fresh.response
+        const signedIn = await requireSession(runtime, request, HERE)
+        if (!signedIn.ok) return signedIn.response
 
         if (form.action === "delete") {
           const result = await callAuth(
@@ -333,6 +305,18 @@ function ClientsPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                {/* The actions column carries no visible heading — a menu
+                    button in every row needs no label above it — but a
+                    `<th>` with nothing in it is a column a screen reader
+                    cannot name (**D80**). First column and pinned (`sticky
+                    left-0`): the table overflows its Card sideways, and a
+                    menu that has to be scrolled to is a menu the owner
+                    reported as invisible — on the left specifically, by the
+                    owner's request (2026-08-27). Opaque background, because
+                    the rest of the row passes beneath it. */}
+                <TableHead className="sticky left-0 w-px bg-card">
+                  <span className="sr-only">{t.admin.actions.title}</span>
+                </TableHead>
                 <TableHead>{t.admin.clients.name}</TableHead>
                 <TableHead>{t.admin.clients.type}</TableHead>
                 <TableHead>{t.admin.clients.redirectUris}</TableHead>
@@ -340,18 +324,41 @@ function ClientsPage() {
                 <TableHead>{t.admin.clients.requireConsent}</TableHead>
                 <TableHead>{t.admin.clients.managedBy}</TableHead>
                 <TableHead>{t.admin.clients.status}</TableHead>
-                {/* The actions column carries no visible heading — a menu
-                    button in every row needs no label above it — but a
-                    `<th>` with nothing in it is a column a screen reader
-                    cannot name (**D79**). */}
-                <TableHead className="w-px">
-                  <span className="sr-only">{t.admin.actions.title}</span>
-                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {clients.map((client) => (
                 <TableRow key={client.clientId}>
+                  {/* Pinned like its header, and opaque for the same reason.
+                      Opaque also swallows the row's translucent
+                      `hover:bg-muted/50` / `has-aria-expanded:bg-muted/50`
+                      tints, which would leave an untinted patch under the one
+                      control the pointer is heading for — so the same two row
+                      states repaint this cell with `--muted` pre-mixed over
+                      `--card`, which is what 50 % muted composited on the
+                      Card works out to. */}
+                  <TableCell className="sticky left-0 bg-card transition-colors [tr:is(:hover,:has([aria-expanded=true]))_&]:bg-[color-mix(in_oklab,var(--muted)_50%,var(--card))]">
+                    {/* A file-managed row has no menu at all, rather than a
+                        menu of things it may not do: an edit here is one the
+                        next restart would silently undo (FR-OIDC-2). */}
+                    {client.managedBy === "database" ? (
+                      <ClientRowActions
+                        ui={ui}
+                        t={t}
+                        client={client}
+                        draft={editDraftFor(client.clientId)}
+                        error={
+                          editDraftFor(client.clientId) !== undefined
+                            ? messageForErrorCode(
+                                error,
+                                t,
+                                ui.passwordMinLength
+                              )
+                            : undefined
+                        }
+                      />
+                    ) : null}
+                  </TableCell>
                   <TableCell>
                     <span className="font-medium">{client.name}</span>
                     <code className="block text-xs text-muted-foreground">
@@ -392,7 +399,7 @@ function ClientsPage() {
                         : t.admin.clients.managedDatabase}
                     </Badge>
                   </TableCell>
-                  {/* Status, and only status (**D79**). The four actions
+                  {/* Status, and only status (**D80**). The four actions
                       used to hang under this badge, which made a one-line
                       column four buttons tall and put most of a row's
                       controls under a heading that does not describe them. */}
@@ -406,28 +413,6 @@ function ClientsPage() {
                         {t.admin.clients.enabled}
                       </Badge>
                     )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {/* A file-managed row has no menu at all, rather than a
-                        menu of things it may not do: an edit here is one the
-                        next restart would silently undo (FR-OIDC-2). */}
-                    {client.managedBy === "database" ? (
-                      <ClientRowActions
-                        ui={ui}
-                        t={t}
-                        client={client}
-                        draft={editDraftFor(client.clientId)}
-                        error={
-                          editDraftFor(client.clientId) !== undefined
-                            ? messageForErrorCode(
-                                error,
-                                t,
-                                ui.passwordMinLength
-                              )
-                            : undefined
-                        }
-                      />
-                    ) : null}
                   </TableCell>
                 </TableRow>
               ))}

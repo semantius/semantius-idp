@@ -1,8 +1,8 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-27 · **Branch:** `main` · **Head:** `76dec1c` + the **D78** round below
+**As of:** 2026-08-27 · **Branch:** `main` · **Head:** `9a8b423` + the **D81** round below
 **Plan:** `~/.claude/plans/1-should-all-users-jolly-lake.md` (owner review round 4)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D78**
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D81**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
 gate.** Every gate green: lint, typecheck, unit (600), integration (246 across
@@ -161,6 +161,84 @@ A disabled *Rotate secret* button was considered and rejected: a control that
 can never be enabled is noise, and the row, the field and the notice already
 answer the question it would have raised.
 
+### 5. Withdrawn — there was no timezone defect (2026-08-27, **D79**)
+
+This section claimed that postgres.js parsed `timestamp without time zone` in
+the process's zone, so every timestamp arrived an hour early and the freshness
+gate refused a session seconds old. **It is wrong.** The driver does parse it
+that way, but `drizzle-orm/postgres-js` replaces the parsers for oids
+1082/1083/1114/1184 with an identity function on `drizzle(sql)` and maps the
+strings itself, correctly. The probes that showed drift were raw `postgres()`
+handles with no `drizzle()` call; against the deployment's own database the
+server clock and the host clock agree to the second. The `types.timestamp`
+override committed in `9a8b423` was inert and has been removed from
+`db/client.ts`. The reported symptom was a session **five hours** old, and its
+answer is item 6.
+
+### 6. The re-authentication gate is gone (2026-08-27, **D81**)
+
+Reported four times in one round, the last of them: *"how can a session be
+expired when I was able to navigate 10 sec ago?"* It was not expired — the
+session was valid for another five days. Two different clocks: navigation asks
+whether the session is *valid*, saving asked when a password was last *typed*,
+and `session.freshAgeMinutes` was fifteen.
+
+The gate is removed rather than retuned, because for this deployment it could
+not work at all. With most accounts federating to Google, GitHub or Entra,
+there is no password to re-present; the provider button that remains posts no
+`callbackURL`, so it drops the `returnTo` and the draft, and the upstream then
+SSOs silently — a redirect the user does not interact with, opening the gate
+without proving anything. It functioned as designed only for password
+accounts. **spec-v0 asked for none of it**; the step-up sentence in FR-AUTH-5
+was written here.
+
+What replaced it keeps the property that was carrying the weight:
+`http/require-session.ts` requires a session on every mutating handler and
+reads the row rather than the cookie cache, so a revocation or a suspension
+bites on the next write. Better Auth's `freshAge` is pinned to `0` so it does
+not reimpose the same rule from inside. D63's drafts stay for the error paths.
+
+Full reasoning in spec §12.1, **D81**.
+
+### 6. The actions under Status (2026-08-27, **D80**)
+
+Reported in the same round, with the fix named: *"showing actions below Status
+is ugly ! can we not have a 3 dot menu with a drop down for the actions ?"*
+
+**D50** put Disable and Remove under the Enabled/Disabled badge, and **D72**
+added Edit and Rotate secret beside them — so a table whose other six columns
+are one line each had rows four buttons tall, and most of a row's controls sat
+under a heading that does not describe them. The four move into a trailing
+column with an `sr-only` heading, behind the registry's Base UI
+`dropdown-menu`, which cost no dependency (`@base-ui/react` was already there)
+and touched no `package.json`.
+
+Three mechanics, each a way to get a menu-plus-dialog wrong:
+
+- **The dialogs are controlled and share one piece of state.** A `menuitem`
+  closes its popup as it is activated, so the trigger a `DialogTrigger` needs
+  no longer exists by the time the dialog should open. `ActionDialog` grew an
+  `open`/`onOpenChange` pair that renders no trigger; one
+  `"edit" | "rotate" | "remove" | null` per row makes "never two at once" true
+  by construction.
+- **A refused edit still reopens itself** (**D62**, **D72**). That was
+  `defaultOpen`, which means nothing without a trigger; the claimed draft seeds
+  the row's state instead.
+- **Enable/Disable stays a real form post.** Its `<form>` stays in the row and
+  the menu item is its submitter by `form=` — nesting the form inside the
+  portalled popup would have it unmounted by the menu closing underneath its
+  own submission.
+
+**Remove is deliberately not red.** It keeps `variant="destructive"` for its
+semantics and its place after a separator, but `menuColor:
+"default-translucent"` stamps `**:data-[variant=destructive]:text-accent-foreground!`
+on the popup: a backdrop-blurred translucent surface cannot promise R-1's
+4.5:1 for coloured text over arbitrary page content, and axe cannot measure
+contrast through a backdrop filter either. Overriding it would fork registry
+output for a control that only opens a confirmation — and that confirmation's
+own submit button *is* destructive, above a sentence saying it cannot be
+undone.
+
 ### What guards it
 
 `e2e/admin.spec.ts` grew two tests, because every one of these is only visible
@@ -169,6 +247,14 @@ in a browser: a deletion that must name the account and must then vanish
 itself, must show no secret dialog, must offer no rotate control, and must hand
 one over when its type is changed to Web. The blur is a real window event and
 the dismissal is a real timer; no other gate in this repository can see either.
+
+The four client actions are driven through the menu now — `openRowMenu` and
+`openMenuDialog` in `e2e/actions.ts` — and the file-managed row is asserted to
+have **no menu** rather than to be missing four buttons, which is the better
+assertion in any case. The axe pass scans `/admin/clients` **with a row menu
+open**, on a client registered and removed for the purpose: every page it
+already covers is scanned before any spec creates a database-managed row, so
+the menu had no row to appear in.
 
 ---
 

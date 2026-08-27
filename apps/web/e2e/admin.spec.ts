@@ -4,6 +4,8 @@ import {
   modal,
   onLogin,
   openDialog,
+  openMenuDialog,
+  openRowMenu,
   signIn,
   signInAsAdmin,
   signOut,
@@ -348,15 +350,12 @@ test.describe("the admin area", () => {
     // an edit here is one the next restart would silently undo.
     const fileRow = page.locator("tbody tr").filter({ hasText: "e2e-app" })
     await expect(fileRow.getByText("From the file")).toBeVisible()
-    await expect(fileRow.getByRole("button", { name: "Remove" })).toHaveCount(0)
-    await expect(fileRow.getByRole("button", { name: "Disable" })).toHaveCount(
-      0
-    )
-    // D72 adds two more, and the file row must not have grown either of them:
-    // an edit here is exactly as undoable by the next restart as a removal.
-    await expect(fileRow.getByRole("button", { name: "Edit" })).toHaveCount(0)
+    // **D80**: the four controls are behind one menu now, so the assertion is
+    // that the row has no menu at all rather than that it is missing four
+    // buttons — a file row must not offer an edit the next restart undoes,
+    // and an empty menu would be a worse answer than no menu.
     await expect(
-      fileRow.getByRole("button", { name: "Rotate secret" })
+      fileRow.getByRole("button", { name: /^Actions for / })
     ).toHaveCount(0)
 
     // Registering one: the secret is generated here and shown once, in a
@@ -398,13 +397,18 @@ test.describe("the admin area", () => {
     await app.goto("/admin/clients")
     expect(await page.content()).not.toContain(secret)
 
-    await row.getByRole("button", { name: "Disable" }).click()
+    const menu = await openRowMenu(page, row, "Registered Here")
+    await menu.getByRole("menuitem", { name: "Disable" }).click()
     await expect(
       page.getByText("The application has been disabled.")
     ).toBeVisible()
     await expect(row.getByText("Disabled")).toBeVisible()
 
-    const confirm = await openDialog(page, "Remove")
+    const confirm = await openMenuDialog(
+      page,
+      await openRowMenu(page, row, "Registered Here"),
+      "Remove"
+    )
     await submitDialog(page, confirm, "Remove")
     await expect(
       page.getByText("The application has been removed.")
@@ -441,7 +445,11 @@ test.describe("the admin area", () => {
     // cannot see and the half that matters: `/idp/update-client` is a full
     // replace, so a field that came back blank would be a field that saving
     // clears.
-    const edit = await openDialog(page, "Edit", row)
+    const edit = await openMenuDialog(
+      page,
+      await openRowMenu(page, row, "Editable App"),
+      "Edit"
+    )
     await expect(edit.getByLabel("Name")).toHaveValue("Editable App")
     await expect(edit.getByLabel("Redirect URIs", { exact: true })).toHaveValue(
       "http://127.0.0.1:4601/callback"
@@ -464,7 +472,11 @@ test.describe("the admin area", () => {
     await expect(row.getByText("http://127.0.0.1:4601/moved")).toBeVisible()
 
     // Rotation: a new secret, shown once, in a dialog and never in the URL.
-    const rotate = await openDialog(page, "Rotate secret", row)
+    const rotate = await openMenuDialog(
+      page,
+      await openRowMenu(page, row, "Edited App"),
+      "Rotate secret"
+    )
     await submitDialog(page, rotate, "Rotate secret")
 
     const secretDialog = modal(page)
@@ -480,7 +492,11 @@ test.describe("the admin area", () => {
     await page.keyboard.press("Escape")
 
     // Cleaned up, so the next run of this spec starts from the same table.
-    const confirm = await openDialog(page, "Remove", row)
+    const confirm = await openMenuDialog(
+      page,
+      await openRowMenu(page, row, "Edited App"),
+      "Remove"
+    )
     await submitDialog(page, confirm, "Remove")
     await expect(
       page.locator("tbody tr").filter({ hasText: "e2e-editable" })
@@ -642,14 +658,15 @@ test.describe("the admin area", () => {
 
     const row = page.locator("tbody tr").filter({ hasText: "e2e-public" })
     await expect(row.getByText("Public — no client secret")).toBeVisible()
+    const publicMenu = await openRowMenu(page, row, "Public Only")
     await expect(
-      row.getByRole("button", { name: "Rotate secret" })
+      publicMenu.getByRole("menuitem", { name: "Rotate secret" })
     ).toHaveCount(0)
 
     // The way out, which is the answer to "the option to change the secret is
     // missing": the type change mints one and shows it once, and the row
     // grows the rotate control it did not have.
-    const edit = await openDialog(page, "Edit", row)
+    const edit = await openMenuDialog(page, publicMenu, "Edit")
     await edit.getByLabel("Type").selectOption("web")
     await submitDialog(page, edit, "Save")
 
@@ -660,10 +677,13 @@ test.describe("the admin area", () => {
     ).trim()
     expect(secret.length, "a generated client secret").toBeGreaterThan(31)
     await page.keyboard.press("Escape")
-    await expect(row.getByRole("button", { name: "Rotate secret" })).toBeVisible()
+    const confidentialMenu = await openRowMenu(page, row, "Public Only")
+    await expect(
+      confidentialMenu.getByRole("menuitem", { name: "Rotate secret" })
+    ).toBeVisible()
 
     // Cleaned up, so the next run starts from the same table.
-    const confirm = await openDialog(page, "Remove", row)
+    const confirm = await openMenuDialog(page, confidentialMenu, "Remove")
     await submitDialog(page, confirm, "Remove")
     await expect(
       page.locator("tbody tr").filter({ hasText: "e2e-public" })

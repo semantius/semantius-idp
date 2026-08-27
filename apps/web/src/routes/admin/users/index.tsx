@@ -44,7 +44,7 @@ import {
   withError,
 } from "@/server/http/auth-proxy"
 import { stashDraft, withDraft } from "@/server/http/draft"
-import { requireFreshSession } from "@/server/http/fresh-session"
+import { requireSession } from "@/server/http/require-session"
 import { stash } from "@/server/http/one-shot"
 import { createResetLink } from "@/server/auth/reset-link"
 import { displayName } from "@/server/display-name"
@@ -169,10 +169,8 @@ export const Route = createFileRoute("/admin/users/")({
           roles,
         }
 
-        const fresh = await requireFreshSession(runtime, request, HERE, {
-          draft: submitted,
-        })
-        if (!fresh.ok) return fresh.response
+        const signedIn = await requireSession(runtime, request, HERE)
+        if (!signedIn.ok) return signedIn.response
 
         /**
          * Back to the list, saying which account it is about (**D78**).

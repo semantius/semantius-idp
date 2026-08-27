@@ -49,7 +49,7 @@ export function ClientEditDialog({
   /** The refused submission, claimed by the loader — only if it was this row's. */
   draft?: Draft
   /**
-   * Controlled by the row's actions menu (**D79**), which owns one piece of
+   * Controlled by the row's actions menu (**D80**), which owns one piece of
    * state for all four of its dialogs. The `reopen` flag this replaced was a
    * `defaultOpen`, which only works while there is a trigger to have opened
    * it; there is not any more, so the same fact — a refused edit comes back

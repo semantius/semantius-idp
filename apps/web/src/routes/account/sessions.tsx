@@ -17,7 +17,7 @@ import {
   redirectWithCookies,
   withError,
 } from "@/server/http/auth-proxy"
-import { requireFreshSession } from "@/server/http/fresh-session"
+import { requireSession } from "@/server/http/require-session"
 import { readSession } from "@/server/http/session"
 import { fetchSessions } from "@/server/functions/account"
 import { APP_ROUTES } from "@/server/oidc/base-path"
@@ -31,11 +31,11 @@ const HERE = "/account/sessions"
 /**
  * `/account/sessions` — every live session, and how to end one (FR-ACCT-1).
  *
- * Signing out one device is not a sensitive action: the worst a stranger with
- * the browser can do is inconvenience you, and requiring a re-authentication
- * to *reduce* access would be backwards. Signing out **everywhere else** is
- * different — it is the move someone makes to lock the real owner out — so
- * that one goes through the freshness gate (FR-AUTH-5).
+ * Both scopes require a session; neither requires a recent one. Signing out
+ * **everywhere else** used to sit behind the freshness gate, on the reasoning
+ * that it is the move someone makes to lock the real owner out — but the gate
+ * itself is gone (**D81**), and the read is authoritative rather than cached,
+ * which is the property that actually mattered here.
  */
 export const Route = createFileRoute("/account/sessions")({
   loader: async ({ context, location }) => {
@@ -59,8 +59,8 @@ export const Route = createFileRoute("/account/sessions")({
         const all = form.scope === "others"
 
         if (all) {
-          const fresh = await requireFreshSession(runtime, request, HERE)
-          if (!fresh.ok) return fresh.response
+          const signedIn = await requireSession(runtime, request, HERE)
+          if (!signedIn.ok) return signedIn.response
         } else {
           const session = await readSession(runtime, request)
           if (!session) {

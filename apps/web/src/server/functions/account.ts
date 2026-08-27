@@ -12,8 +12,9 @@
  * cheaper and more honest answer than a 500 with a stack in it.
  *
  * These are **reads only**. Every mutation is a form POST to a route's own
- * `server.handlers`, where the fresh-session gate (FR-AUTH-5) and the audit
- * trail live — a server function called from the browser would bypass both if
+ * `server.handlers`, where the session gate (`http/require-session.ts`) and
+ * the audit trail live — a server function called from the browser would
+ * bypass both if
  * anyone ever wired one up.
  */
 

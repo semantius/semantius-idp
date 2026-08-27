@@ -25,7 +25,7 @@ type OpenDialog = "edit" | "rotate" | "remove" | null
 
 /**
  * Everything that can be done to one registered application, behind one
- * control (**D79**, FR-OIDC-2, FR-ADMIN-2).
+ * control (**D80**, FR-OIDC-2, FR-ADMIN-2).
  *
  * The four actions **D50** and **D72** added were rendered inline, wrapped
  * under the Enabled/Disabled badge in the Status column — so a table whose
@@ -87,13 +87,11 @@ export function ClientRowActions({
 
   return (
     <>
-      {/* Outside the menu on purpose. See mechanic 3. */}
-      <PendingForm
-        id={toggleForm}
-        busy={t.common.loading}
-        method="post"
-        className="hidden"
-      >
+      {/* Outside the menu on purpose. See mechanic 3. It holds nothing but
+          hidden inputs and `PendingForm`'s own `sr-only` live region, so it
+          is a zero-height block and is deliberately not `hidden` — that would
+          take the live region with it. */}
+      <PendingForm id={toggleForm} busy={t.common.loading} method="post">
         <input type="hidden" name="action" value="toggle" />
         <input type="hidden" name="clientId" value={client.clientId} />
         {client.disabled ? null : (
@@ -115,8 +113,11 @@ export function ClientRowActions({
         </DropdownMenuTrigger>
         {/* `w-auto`: the registry's default is `w-(--anchor-width)`, which is
             the width of the anchor — and the anchor here is a 28-pixel icon
-            button. */}
-        <DropdownMenuContent align="end" className="w-auto min-w-44">
+            button. `align="start"` because the trigger sits in the table's
+            leftmost, pinned column: `end` aligned the popup's right edge to a
+            28-pixel button at the card's left boundary, so the menu hung out
+            over the page margin instead of the table. */}
+        <DropdownMenuContent align="start" className="w-auto min-w-44">
           <DropdownMenuGroup>
             <DropdownMenuItem
               onClick={() => {

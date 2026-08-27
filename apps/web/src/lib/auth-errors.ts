@@ -129,8 +129,6 @@ export const NOTICE_CODES = new Set([
   "password_changed",
   "account_created",
   "signed_out",
-  "reauth",
-  "reauth_draft",
   "signin_required",
   "profile_saved",
   "email_change_sent",
@@ -159,15 +157,6 @@ export function messageForNoticeCode(
       return t.auth.signUp.done
     case "signed_out":
       return t.auth.signOut.description
-    case "reauth":
-      // FR-AUTH-5: the session was real, only too old for what was asked.
-      return t.auth.signIn.reauth
-    case "reauth_draft":
-      // The same refusal, plus the one thing the person on the other side
-      // wants to know: what they had filled in is still there (D63). A
-      // separate code rather than a sentence bolted onto `reauth`, which is
-      // also used where no draft was kept and would then be a lie.
-      return t.auth.signIn.reauthDraft
     case "signin_required":
       return t.auth.signIn.required
     case "profile_saved":

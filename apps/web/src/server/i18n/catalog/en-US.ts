@@ -61,13 +61,6 @@ export const enUS = {
       untrustedOrigin:
         "This page was opened from a web address this server does not recognise, so the sign-in was refused. Open it from the server's own address and try again.",
       unavailable: "This account is not available.",
-      // FR-AUTH-5: not a failure — the session is valid but too old for what
-      // was being attempted.
-      reauth: "Sign in again to continue. It has been a while.",
-      // D63: the same bounce, from a form. Saying so is the difference
-      // between signing in again and starting the form over from memory.
-      reauthDraft:
-        "Sign in again to continue. It has been a while — what you typed is kept.",
       required: "Sign in to continue.",
     },
     signUp: {
@@ -534,7 +527,7 @@ export const enUS = {
         "Everything except the client ID can be changed. The existing secret is kept unless the type changes.",
       clientIdFixed:
         "The client ID cannot be changed — tokens, consents and audit rows all reference it. Remove the application and add it again to use a different one.",
-      // **D79**: one of these per row, so the name has to say which row —
+      // **D80**: one of these per row, so the name has to say which row —
       // "Actions" repeated once per application is a list of identical
       // controls to a screen reader and an ambiguous locator to a test.
       actionsFor: (name: string) => `Actions for ${name}`,

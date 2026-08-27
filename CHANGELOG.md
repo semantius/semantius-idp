@@ -9,6 +9,23 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ## [Unreleased]
 
+### Removed
+
+- **The re-authentication gate on sensitive actions** (**D81**). FR-AUTH-5
+  required a session younger than `session.freshAgeMinutes` (15) for every
+  password, e-mail, second-factor, API-key and admin write, or a
+  re-authentication. It could not be satisfied by an account that
+  authenticates through Google, GitHub or Entra — there is no password to
+  re-present — and the provider button it fell back to drops the `returnTo`
+  and the draft, then satisfies the gate with a silent SSO that proves
+  nothing. Removed, with `session.freshAgeMinutes`, the `reauth` /
+  `reauth_draft` notices and `server/http/fresh-session.ts`. Every mutating
+  handler still requires a session, now read past the cookie cache
+  (`server/http/require-session.ts`), so a revocation or a suspension bites on
+  the next write rather than up to five minutes later. Better Auth's own
+  `freshAge` is set to `0` so it does not reimpose the rule on `/delete-user`
+  and the e-mail change.
+
 ### Fixed
 
 - **A success confirmation now names the account it is about** (**D78**). "The
@@ -34,6 +51,12 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ### Changed
 
+- **`/admin/clients`'s per-row actions are a `⋯` menu** (**D80**). Disable,
+  Edit, Rotate secret and Remove were stacked under the Enabled/Disabled badge
+  in the Status column, so a table of one-line columns had rows four buttons
+  tall. They move to a column of their own; Status is status again. The menu
+  is named for the application it acts on, and a file-managed row has no menu
+  rather than an empty one.
 - **The way to give a public application a secret is discoverable** (**D78**).
   Changing its type to Web in the edit dialog issues one and shows it once —
   a path **D72** built and the interface never mentioned.

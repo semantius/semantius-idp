@@ -98,11 +98,12 @@ export function createDb(
   options: CreateDbOptions = {}
 ): DbHandle {
   const schemaName = options.schemaName ?? config.file.database.schema
+  // Both are resolved in `derive.ts` and each already falls back to the other
+  // (**D74**), so a single-endpoint deployment gets the same string either
+  // way and this does not need to know which shape it is looking at.
   const url =
     options.url ??
-    (options.direct
-      ? (config.file.database.directUrl ?? config.file.database.url)
-      : config.file.database.url)
+    (options.direct ? config.databaseDirectUrl : config.databaseUrl)
   const schema = createAuthSchema(schemaName)
 
   const sql = postgres(url, {

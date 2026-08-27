@@ -94,7 +94,13 @@ export function runCrossChecks(input: CrossCheckInput): CrossCheckResult {
   }
 
   // -------------------------------------------------------------- database --
-  if (looksPooled(config.database.url) && !config.database.directUrl) {
+  // Only when `url` is actually set: since D74 it is optional, and a
+  // deployment configured with `directUrl` alone has nothing pooled in it.
+  if (
+    config.database.url !== undefined &&
+    looksPooled(config.database.url) &&
+    !config.database.directUrl
+  ) {
     warnings.push({
       code: "database.pooled_without_direct_url",
       message:

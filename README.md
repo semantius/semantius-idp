@@ -143,11 +143,19 @@ drift-gated in CI, so there is nothing to generate before a first run. The two
 generation commands exist for when you *change* the schema —
 [Development](#development) has them.
 
-> **`DATABASE_URL_ADMIN`** is required when `DATABASE_URL` points at a
-> transaction-mode connection pooler — Neon's `-pooler` endpoint, PgBouncer.
-> Session advisory locks do not hold through one, and start-up, migrations and
-> the operator CLI all rely on them. For Neon it is the same URL with `-pooler`
-> removed. Start-up warns when the URL looks pooled and this is unset.
+> **The database is a pair of connection strings, and at least one must be
+> set.** `DATABASE_URL` is ordinary application traffic — a transaction-mode
+> pooler belongs here and nowhere else. **`DATABASE_URL_ADMIN`** is the direct,
+> non-pooled endpoint, and it is the one that must always work: session
+> advisory locks do not hold through a pooler, and start-up, migrations, the
+> operator CLI and the cleanup job all rely on them. For Neon it is the same
+> URL with `-pooler` removed.
+>
+> Set both when your Postgres offers both endpoints. Set **either one alone**
+> and it serves both roles — which is right for a plain Postgres, including the
+> bundled compose one, whose single endpoint is already direct. Start-up warns
+> only for the combination that is actually wrong: `DATABASE_URL` looks pooled
+> and `DATABASE_URL_ADMIN` is unset.
 
 ## Configuration
 

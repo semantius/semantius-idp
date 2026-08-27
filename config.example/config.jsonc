@@ -57,10 +57,15 @@
   "database": {
     "url": "${env:DATABASE_URL}",
 
-    // Required when `url` points at a transaction-mode connection pooler
-    // (Neon's `-pooler` endpoint, PgBouncer): session advisory locks do not
-    // hold through one, and startup, migrations, the CLI and the cleanup job
-    // all rely on them. Give the direct endpoint here.
+    // The direct, non-pooled endpoint. Session advisory locks do not hold
+    // through a transaction-mode pooler (Neon's `-pooler` endpoint,
+    // PgBouncer), and startup, migrations, the CLI and the cleanup job all
+    // rely on them — so this is the connection that must always work.
+    //
+    // `url` and `directUrl` are a pair of which **at least one** must be set
+    // (D74). Both, when your Postgres offers both endpoints; `directUrl`
+    // alone, and it serves ordinary traffic too, which is what a single
+    // unpooled endpoint wants. Required whenever `url` is pooled.
     // "directUrl": "${env:DATABASE_URL_ADMIN}",
 
     // Every table, including drizzle's migration bookkeeping, lives here.

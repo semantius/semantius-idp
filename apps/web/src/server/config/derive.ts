@@ -58,6 +58,24 @@ export interface IdpConfig {
   readonly requireEmailVerification: boolean
   /** TOTP issuer label, defaulting to `site.name`. */
   readonly twoFactorIssuer: string
+  /**
+   * The connection string for ordinary traffic, resolved (**D74**).
+   *
+   * `database.url` when it is set, and `database.directUrl` when it is not —
+   * a deployment with one endpoint uses that endpoint for everything. Always
+   * a string: the schema refuses a `database` block with neither, so the
+   * fallback below cannot end up undefined.
+   */
+  readonly databaseUrl: string
+  /**
+   * The connection string for anything holding a session advisory lock —
+   * startup, migrations, the CLI, the cleanup job (**D27**, **D74**).
+   *
+   * `database.directUrl` when it is set, and `database.url` when it is not.
+   * The pair collapses to the same string on a single-endpoint deployment,
+   * which is correct: a plain Postgres endpoint is already direct.
+   */
+  readonly databaseDirectUrl: string
   /** `disable | require | verify-full`, defaulting to `require` off localhost. */
   readonly databaseSsl: "disable" | "require" | "verify-full"
   /** Retired keys stay published this long; defaults to the longest token lifetime + 1 h (FR-OIDC-16). */
@@ -211,6 +229,24 @@ export function deriveConfig(
   const defaultRole =
     roles.find((role) => role.default)?.name ?? roles[0]?.name ?? "user"
 
+  // D74: two names, one or two endpoints. Each role falls back to the other,
+  // so a deployment that has only a direct endpoint uses it for everything and
+  // one that has only a pooled endpoint is warned by `runCrossChecks` rather
+  // than silently taking session locks that do not hold.
+  //
+  // The `??` chain cannot produce `undefined` — `databaseSchema` refuses a
+  // block with neither — but the schema's guarantee is not visible in the
+  // inferred type, and a `!` here would be a claim with nothing behind it if
+  // that refinement is ever removed. So it is checked, once, at the only
+  // point where both values are in scope.
+  const databaseUrl = file.database.url ?? file.database.directUrl
+  const databaseDirectUrl = file.database.directUrl ?? file.database.url
+  if (databaseUrl === undefined || databaseDirectUrl === undefined) {
+    throw new Error(
+      "database.url and database.directUrl are both unset; the config schema should have refused this."
+    )
+  }
+
   return {
     file,
     clients,
@@ -227,10 +263,12 @@ export function deriveConfig(
     // Three sources, most explicit first: what the config says, what the
     // connection string says, and — only if neither said anything — the
     // assumption that a non-local host means an untrusted wire.
+    databaseUrl,
+    databaseDirectUrl,
     databaseSsl:
       file.database.ssl ??
-      sslModeFromUrl(file.database.url) ??
-      (isLocalhostUrl(file.database.url) ? "disable" : "require"),
+      sslModeFromUrl(databaseUrl) ??
+      (isLocalhostUrl(databaseUrl) ? "disable" : "require"),
     jwksGracePeriodSeconds: file.jwt.gracePeriod ?? longestTokenLifetime + 3600,
     defaultAudience,
     resources: [...resources.values()],

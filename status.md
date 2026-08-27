@@ -1,11 +1,11 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-27 · **Branch:** `feat/idp-v1` · **Base:** `main` · **Head:** the D69–D72 commits below
+**As of:** 2026-08-27 · **Branch:** `main` · **Head:** `a5e35d2` + the D73 release-workflow change below
 **Plan:** `~/.claude/plans/1-should-all-users-jolly-lake.md` (owner review round 4)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D72**
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D74**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
-gate.** Every gate green: lint, typecheck, unit (564), integration (226 across
+gate.** Every gate green: lint, typecheck, unit (599), integration (246 across
 twenty-four files), coverage thresholds including the 85 % per-module gates,
 schema-drift, config-schema staleness, the configuration-reference and
 example-config gates, dependency pinning, the client-bundle gate, the TST-8
@@ -49,9 +49,13 @@ Everything buildable is built. What remains cannot be done from here:
   e-mail instead would silently create a second one.
 - **One real token against a real Neon project** — including a key rotation,
   to see the grace period behave.
-- **Tagging `v1.0.0`**, which builds and publishes the image under a name
-  people will pull. This is the mandatory gate: it needs the owner's decision,
-  not a green board.
+- **Tagging**, which builds and publishes the image under a name people will
+  pull. This is the mandatory gate: it needs the owner's decision, not a green
+  board. The machinery is now in place and was not before (**D73**, below) —
+  the workspace is at **0.1.0** and `git push origin v0.1.0` will publish
+  `0.1.0`, `0.1`, `0`, `latest` and `sha-<commit>` for amd64 and arm64.
+  Rehearse first with **Actions → Release → Run workflow**, which builds both
+  architectures and smoke-tests amd64 without pushing anything.
 
 ### 2. Open, non-blocking
 
@@ -60,6 +64,245 @@ Everything buildable is built. What remains cannot be done from here:
   next boot serves the first-run setup page, which is now the only way an
   administrator is ever created. No credential to recover, and no command that
   changes one.
+
+---
+
+## The release workflow that had never run (2026-08-27, **D73**)
+
+Asked for a GitHub action that builds the image for x64 and arm64 and tags it
+`v0.1.0`. The steps that do that already existed. **They had never executed
+once.**
+
+`ci.yml`'s `docker` job carried the whole of OPS-1's publish path — QEMU, the
+`type=semver` tag patterns, the GHCR login, `platforms:
+linux/amd64,linux/arm64`, `push: true` — behind
+`startsWith(github.ref, 'refs/tags/v')` on five steps. That workflow triggers
+on `push: branches: [main]`, `pull_request` and a nightly `schedule`. **A tag
+push matches none of them**, so the conditions were evaluated by nothing and
+the job they belonged to was never reached by a tag. Meanwhile
+[docs/release.md](docs/release.md) told the owner, in the imperative, that "the
+tag builds amd64 and arm64, pushes `1.0.0`, `1.0`, `1`, `latest` and
+`sha-<commit>`". Nothing had ever been pushed anywhere.
+
+It is worth naming the failure mode, because it is not a typo: a correct
+conditional inside a workflow whose trigger cannot produce the ref it tests
+looks exactly like a working feature and reports exactly like a green board.
+Every review of that file — and there were several — read five steps that were
+right.
+
+### What replaced it
+
+[`.github/workflows/release.yml`](.github/workflows/release.yml), on
+`push: tags: v*`, in two jobs:
+
+- **`guard`** derives the version and refuses in about thirty seconds if the
+  tag is not `vX.Y.Z[-pre]`, or if the root `package.json` disagrees with it.
+  That second check is not bureaucracy: the image stamps `IDP_VERSION` from the
+  tag, and `/healthz`, `idp version` and `/admin/system` all report it, so a
+  tree saying 0.0.1 while the artefact says 0.1.0 is a running version nobody
+  can trace back to a commit.
+- **`image`** builds amd64 and loads it locally, runs the TST-8 container smoke
+  test, the Trivy scan and the SBOM **against that image**, then logs in and
+  pushes amd64 + arm64 from the same layer cache — so what reaches the registry
+  is the layers that were smoke-tested, not a second build that happens to
+  match. Finally it opens a GitHub release whose body is this changelog's
+  section for the version, with the SBOM attached.
+
+The source gates deliberately do **not** re-run on the tag. They ran on the
+commit when it landed on `main`, `docs/release.md` requires them green there,
+and re-running a forty-minute two-shape browser suite against an identical tree
+would only put the publish behind it.
+
+A **`workflow_dispatch` rehearses**: both architectures to `type=cacheonly`,
+amd64 smoke-tested, nothing pushed. It exists so "will this build for arm64?"
+can be answered before there is a tag to answer it badly, and there is no
+switch to get wrong — a dispatch cannot publish, a tag always does.
+
+arm64 costs almost nothing here, which is worth knowing before anyone reaches
+for a native runner: `docker/Dockerfile` pins `deps` and `build` to
+`--platform=$BUILDPLATFORM` because their output is JavaScript, so QEMU only
+executes the runtime stage's COPYs and one `chmod`. The comment in `ci.yml`
+claiming arm64 "roughly triples the build" predates that.
+
+`ci.yml` keeps building and smoking an amd64 image on every pull request and
+merge, and writes the layer cache both the e2e job and the release read. Its
+dead publish steps are gone.
+
+### And the arm64 image did not build
+
+Running the two-platform build — the first time anybody had, because the only
+thing that would have was the publish step that could not be reached — failed:
+
+```
+#31 1.685 qemu-x86_64: Could not open '/lib64/ld-linux-x86-64.so.2'
+ERROR: process "/bin/sh -c cd apps/web && bun build src/cli/index.ts …"
+       did not complete successfully: exit code: 255
+```
+
+That message reads like a missing library. It is an **amd64 binary being
+executed inside an arm64 root filesystem**.
+
+`docker/Dockerfile`'s `build` stage is pinned to `--platform=$BUILDPLATFORM`
+and *executes* the Bun binary it copies out of the `bun` stage — the whole
+"Bun, borrowed rather than installed" trick. The `bun` stage was **not**
+pinned. So BuildKit instantiates `bun` once per *target* platform while
+`build` exists once in total, and hands that single stage whichever `bun` the
+other pass happened to resolve. Reduced to eight lines and checked directly:
+with `--platform linux/arm64` the `$BUILDPLATFORM`-pinned stage came up
+`aarch64` while the binary copied into it was an amd64 ELF.
+
+`FROM --platform=$BUILDPLATFORM oven/bun:${BUN_VERSION}-slim AS bun` makes the
+borrowed binary match the rootfs that runs it on any build host. `runtime`
+stays unpinned — it is the artefact, and the one stage that must be
+per-architecture.
+
+**This was invisible to every gate here**, and would have been invisible to the
+release workflow too if that workflow had smoke-tested only amd64 and pushed
+both. A single-platform build cannot expose it. There is no gate that builds
+both; the release workflow's dispatch rehearsal is now the closest thing, and
+[AGENTS.md](AGENTS.md) says to run the two-platform build by hand after
+touching the Dockerfile.
+
+### Verified
+
+Both platforms build: `docker buildx build --platform
+linux/amd64,linux/arm64 -f docker/Dockerfile --output type=cacheonly .` exits
+0 with `linux/amd64 runtime 8/8` and `linux/arm64 runtime 8/8` both complete.
+Before the fix, the identical command failed at `bun build`.
+
+**And the image that passed the smoke test was the arm64 one.** This machine's
+Docker backend is `aarch64`, so `pnpm docker:smoke` built and ran
+`linux/arm64` — `uname -m` inside it is `aarch64` and its Bun is 1.3.12 — and
+it passed all nineteen TST-8 checks: ready in 0.33 s, image 117.9 MiB, idle
+RSS 185.4 MiB, SIGTERM exit 0, JWT verified against the published JWKS. That
+matters more here than it would elsewhere: this image's runtime **is** Bun, so
+the arm64 artefact runs a different binary from the one CI exercises, and
+until now nothing had ever run it. CI's `docker` job covers amd64. Between the
+two, both published architectures have now actually been started.
+
+`docker/release.sh` was run **for real**, in a throwaway clone wired to a local
+bare remote, never `origin`. It bumped 0.0.1 → 0.2.0 across all three files,
+committed, tagged and pushed; the tag came out GPG-signed and `git tag -v`
+verified it. Then, from that state: a pre-release (`v0.3.0-rc.1`) bumped to the
+**core** 0.3.0 — which is what the workflow compares — and printed the
+restricted tag set; and it correctly refused a re-run of an existing tag, a
+version older than the latest tag, a malformed version, an unknown option and
+this repository's own dirty tree. The sandbox was deleted afterwards.
+
+The release body assembles correctly: 586 lines, and the `## Docker image`
+header block carries no leading whitespace, which is the thing that would have
+turned the entire release page into one code block.
+
+The workflows parse, and both are Prettier-clean once line endings are
+normalised (this checkout is CRLF under `core.autocrlf=true`; every file in it
+warns, including untouched ones). `guard`'s shell was exercised outside CI over
+seven inputs — `v0.1.0`, `v0.1.0-rc1`, a version/tag mismatch, `v-old`,
+`vendor-x`, and both dispatch spellings — and accepts and refuses the right
+ones. The changelog extraction pulls 559 lines (37 KB, well inside GitHub's
+125 000-character release body) for `0.1.0` and falls back to
+`--generate-notes` for a version with no section. `pnpm lint`, `pnpm typecheck`
+and the 594 unit tests are green; `check-pinned-deps` passes. The lockfile
+records no importer versions, so the bump cannot affect
+`--frozen-lockfile`.
+
+**Not verified, and cannot be from here:** the workflow itself has not run.
+Pushing to GHCR, creating a release, the SARIF upload and the SBOM step all
+need GitHub. The two-platform build *was* verified, locally and directly,
+because that is the half that was broken. The rehearsal dispatch is there to be
+the first thing that exercises the rest.
+
+One difference worth knowing when reading the first run's log: this machine's
+Docker backend is `aarch64`, so `BUILDPLATFORM` is `linux/arm64` here and
+`linux/amd64` on `ubuntu-latest`. The bug reproduces either way — it is a
+mismatch between two stages, not a property of the host — but which pass fails
+swaps over, and so does the `qemu-` prefix in the message.
+
+### Aligned with `semantius-app`, which had already solved this
+
+`C:\dev\semantius-app` publishes a multi-architecture image from
+`.github/workflows/docker-publish.yml` and has cut **v0.1.0, v0.1.1 and
+v0.1.2** through it. Read against this one, it settled three things:
+
+- **It confirmed the repository slug.** `semantius-idp`'s own remote is
+  `github.com/semantius/semantius-idp`, so the Dockerfile's
+  `org.opencontainers.image.source` label — which said
+  `adenin/semantius-idp` — was simply wrong, and this file's earlier note
+  calling it "one of them is wrong" is now answered. Fixed. The label is how a
+  pulled image says where it came from.
+- **It had the piece this repository was missing: `docker/release.sh`.**
+  Adopted here, adapted in two ways. A **pre-release is allowed**: that script
+  refuses one because its workflow tags `latest` unconditionally, while this
+  workflow derives `latest` from whether the version is a pre-release. And a
+  **failed `git tag -s` degrades to `-a`** instead of aborting — by that point
+  the bump commit has been pushed, so an unusable signing key would otherwise
+  leave the branch bumped and the release untagged.
+- **Its release body is a better first screen than a bare changelog dump**, so
+  the `## Docker image` block with the `docker pull` line is now prepended to
+  the notes here too.
+
+Two divergences kept deliberately, both because this workflow is stricter:
+its `workflow_dispatch` **pushes** (from a branch, with no semver tag, so it
+would move `latest` to a branch build), where this one rehearses; and it
+pushes with no gate between build and publish, where this one smoke-tests,
+scans and SBOMs the image first.
+
+Their Dockerfiles differ for a real reason, which is why that repository never
+hit the bug above: `semantius-app` pins nothing to `$BUILDPLATFORM`, so its
+arm64 leg emulates node, pnpm and Vite outright — correct, and slow, as its own
+comment says. This image cross-builds the JavaScript on the build platform and
+emulates only the runtime stage, which is faster and is exactly what made a
+borrowed binary's architecture matter.
+
+### The database was one required URL and should have been two (2026-08-27, **D74**)
+
+Raised by the owner against a sentence in the release notes — "it needs a
+Postgres" — which is not what this image needs. It needs **two connection
+strings**, and the requirement was on the wrong one.
+
+`database.url` was required; `database.directUrl` was optional beside it. That
+is backwards. The **direct** endpoint is the one that must always work:
+startup, migrations, the CLI and the cleanup job all take session advisory
+locks, and those do not hold through a transaction-mode pooler (**D27**). The
+pooled endpoint is an optimisation, and a given Postgres may not offer one at
+all. So an operator holding only the direct endpoint had to file it under the
+name that describes the pooled one — and one who set only
+`DATABASE_URL_ADMIN`, which is the natural thing to do when that is the URL you
+have, was **refused outright** for a configuration that works perfectly.
+
+Both keys are optional now, with a `superRefine` requiring at least one and
+naming both env fallbacks when neither is present. Each falls back to the
+other, resolved once in `derive.ts` as `databaseUrl` / `databaseDirectUrl`, so
+a single-endpoint deployment gets the same string for both — correct, because a
+plain Postgres endpoint is already direct.
+
+Resolving in `derive.ts` rather than normalising in the loader was the design
+call: the published JSON Schema then states what is true — neither key is
+required on its own, and `required: ["url"]` is gone from
+`config-schema/config.schema.json` — while all six consumers still receive a
+guaranteed `string`.
+
+Two things fell out of it:
+
+- **The docs generator would have kept lying.** Its `required` column is one
+  boolean per key, derived from `MINIMAL` — the smallest file the schema
+  accepts — so it went on marking `database.url` required after it stopped
+  being. The generator now renders `one of url / directUrl` for the pair,
+  because "either of these two" is not a boolean. Fixing the output instead of
+  the generator would have been undone by the next run.
+- **`idp config validate` prints the direct endpoint**, but only when it
+  differs from the pooled one — a line that repeats itself says nothing.
+
+Verified end to end, not just in unit tests: a config carrying only
+`directUrl` validates and resolves it for both roles; a `database` block with
+neither is refused with a message naming both keys and both env variables. Five
+new unit tests cover directUrl-alone, `DATABASE_URL_ADMIN`-alone, url-alone,
+both-distinct and neither. 599 unit tests pass, both generated-file gates are
+clean, and `config.example/` still validates.
+
+### What is left for the owner
+
+Only the tag itself. `docker/release.sh v0.1.0` does the rest, and everything
+it depends on is verified except the parts that need GitHub.
 
 ---
 

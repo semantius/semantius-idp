@@ -1,0 +1,382 @@
+name: Release
+
+# ---------------------------------------------------------------------------
+# The release (OPS-1).
+#
+# This workflow exists because the release path did not. `ci.yml`'s `docker`
+# job carried a full set of `startsWith(github.ref, 'refs/tags/v')` steps —
+# QEMU, the GHCR login, the multi-architecture push — and **none of them could
+# ever run**: that workflow triggers on `push: branches: [main]`, and a tag
+# push does not match a branch filter. `docs/release.md` has said "the tag
+# builds amd64 and arm64, pushes 1.0.0, 1.0, 1, latest and sha-<commit>" since
+# it was written; nothing did. Publishing is a job of its own now, on its own
+# trigger, so the thing that publishes is the thing whose name says so (D73).
+#
+# What runs here and what does not:
+#
+#   * The **artefact** gates run — the container smoke test, the vulnerability
+#     scan, the SBOM. They ask whether *this image* works, and the image is
+#     what a tag publishes.
+#   * The **source** gates do not — lint, typecheck, unit, integration, e2e.
+#     `docs/release.md` requires them green on the commit being tagged, and
+#     they ran there when it landed on `main`; re-running forty minutes of
+#     browser tests against an identical tree tells nobody anything new, and
+#     it puts the publish behind them.
+#
+# A `workflow_dispatch` **rehearses** and never pushes: it builds both
+# architectures and smokes amd64, which answers "will v0.1.0 build for arm64?"
+# before there is a tag to answer it badly. Only a tag publishes.
+# ---------------------------------------------------------------------------
+
+on:
+  push:
+    tags:
+      # Release and pre-release, and nothing else. A `v`-prefixed tag that is
+      # not a version — `v-old`, `vendor-x` — must not start a publish.
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to rehearse (builds amd64 + arm64, publishes nothing)."
+        required: true
+        default: v0.1.0
+
+concurrency:
+  group: release-${{ github.ref }}
+  # Deliberately not `cancel-in-progress`. Cancelling a build is free;
+  # cancelling something between "pushed the manifest" and "created the
+  # release" leaves a half-published version behind.
+  cancel-in-progress: false
+
+env:
+  BUN_VERSION: "1.3.12"
+  IMAGE: ghcr.io/${{ github.repository }}
+  PLATFORMS: linux/amd64,linux/arm64
+
+jobs:
+  # -------------------------------------------------------------------------
+  # Fail in thirty seconds rather than at minute fifteen.
+  # -------------------------------------------------------------------------
+  guard:
+    name: version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      tag: ${{ steps.derive.outputs.tag }}
+      version: ${{ steps.derive.outputs.version }}
+      prerelease: ${{ steps.derive.outputs.prerelease }}
+      publish: ${{ steps.derive.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Derive and check the version
+        id: derive
+        env:
+          # Through the environment, never interpolated into the script: a tag
+          # name is attacker-controllable in a fork, and `${{ }}` inside a
+          # `run:` is textual substitution before the shell ever sees it.
+          INPUT_VERSION: ${{ inputs.version }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            tag="$INPUT_VERSION"
+            publish=false
+          else
+            tag="$GITHUB_REF_NAME"
+            publish=true
+          fi
+
+          version="${tag#v}"
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$'; then
+            echo "::error::'$tag' is not a version tag. Expected vX.Y.Z or vX.Y.Z-<pre>."
+            exit 1
+          fi
+
+          # The image stamps `IDP_VERSION` from the tag, and `/healthz`, `idp
+          # version` and the admin system page all report it. If the repository
+          # says 0.0.1 while the artefact says 0.1.0, a running version can no
+          # longer be traced back to a tree — so the two have to agree, and the
+          # bump belongs in the commit the tag points at.
+          core="${version%%-*}"
+          declared="$(node -p "require('./package.json').version")"
+          if [ "$declared" != "$core" ]; then
+            echo "::error::package.json says $declared; tag $tag says $core. Bump the version in the commit being tagged."
+            exit 1
+          fi
+
+          case "$version" in
+            *-*) prerelease=true ;;
+            *) prerelease=false ;;
+          esac
+
+          {
+            echo "tag=$tag"
+            echo "version=$version"
+            echo "prerelease=$prerelease"
+            echo "publish=$publish"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "\`$tag\` — version \`$version\`, prerelease \`$prerelease\`, publish \`$publish\`" >> "$GITHUB_STEP_SUMMARY"
+
+  # -------------------------------------------------------------------------
+  # Build, prove, publish.
+  # -------------------------------------------------------------------------
+  image:
+    name: image · amd64 + arm64
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    needs: [guard]
+    permissions:
+      contents: write # the GitHub release
+      packages: write # GHCR
+      security-events: write # the Trivy SARIF
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # `sha-<git>` and the OCI `revision` label both want the real commit.
+          fetch-depth: 0
+
+      # arm64 is emulated, and here that is nearly free: `docker/Dockerfile`
+      # pins `deps` and `build` to `--platform=$BUILDPLATFORM` because their
+      # output is JavaScript, so only the runtime stage — a handful of COPYs
+      # and one `chmod` — executes under QEMU. Native arm64 runners would buy
+      # seconds, not minutes, at the cost of a second job and a manifest to
+      # assemble by hand.
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Derive tags (OPS-1)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          # `value=` rather than the ref, so a dispatched rehearsal derives the
+          # same tag set from its input that a tag derives from itself.
+          # `{{major}}.{{minor}}`, `{{major}}` and `latest` are skipped for a
+          # pre-release by `metadata-action` itself: 0.1.0-rc1 must not become
+          # `0.1`, and it must certainly not become `latest`.
+          tags: |
+            type=semver,pattern={{version}},value=${{ needs.guard.outputs.tag }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.guard.outputs.tag }}
+            type=semver,pattern={{major}},value=${{ needs.guard.outputs.tag }}
+            type=sha,prefix=sha-,format=short
+          flavor: |
+            latest=${{ needs.guard.outputs.prerelease == 'false' }}
+
+      # amd64 first, into the local daemon, because the smoke test drives a
+      # real container and the runner is amd64. The multi-architecture build
+      # below reuses this cache, so what is pushed is these layers and not a
+      # second build that happens to be identical.
+      - name: Build amd64
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          load: true
+          tags: semantius-idp:release
+          build-args: |
+            IDP_VERSION=${{ needs.guard.outputs.version }}
+            IDP_REVISION=${{ github.sha }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Smoke test (TST-8, OPS-13)
+        # The only gate that asks whether the artefact works: it starts the
+        # image, migrates, completes the first-run wizard, verifies a token
+        # against the published JWKS and checks that SIGTERM exits 0.
+        env:
+          IDP_IMAGE: semantius-idp:release
+        run: bun run scripts/smoke-test.ts
+
+      - name: Vulnerability scan (SEC-9)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: semantius-idp:release
+          format: sarif
+          output: trivy.sarif
+          # Reports, does not gate — the same reasoning as CI's copy: a
+          # base-image CVE with no fix available would otherwise hold a release
+          # hostage to somebody else's patch.
+          exit-code: "0"
+          ignore-unfixed: true
+
+      - name: Upload scan results
+        # `always()` so a later failure still files the scan, but guarded on
+        # the file existing: if the smoke test fails, Trivy never ran, and an
+        # unguarded upload turns one failure into two and buries the real one.
+        if: always() && hashFiles('trivy.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy.sarif
+          category: trivy-release
+
+      - name: SBOM (SEC-9)
+        uses: anchore/sbom-action@v0
+        with:
+          image: semantius-idp:release
+          format: spdx-json
+          artifact-name: sbom.spdx.json
+          output-file: ${{ runner.temp }}/sbom.spdx.json
+
+      # ---- rehearsal -------------------------------------------------------
+      - name: Build both architectures (no push)
+        if: needs.guard.outputs.publish != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: ${{ env.PLATFORMS }}
+          # Nothing to export: this proves arm64 builds and warms the cache for
+          # the tag that follows. `load` cannot take two architectures and a
+          # registry push is the thing a rehearsal must not do.
+          outputs: type=cacheonly
+          build-args: |
+            IDP_VERSION=${{ needs.guard.outputs.version }}
+            IDP_REVISION=${{ github.sha }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ---- publish ---------------------------------------------------------
+      - name: Log in to GHCR
+        if: needs.guard.outputs.publish == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push (amd64 + arm64)
+        if: needs.guard.outputs.publish == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: true
+          platforms: ${{ env.PLATFORMS }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            IDP_VERSION=${{ needs.guard.outputs.version }}
+            IDP_REVISION=${{ github.sha }}
+          # `mode=max` provenance records how the image was built and from
+          # what, attached to the manifest — so it travels with the image
+          # rather than living in a workflow run that expires.
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha
+
+      - name: Summarise what was published
+        if: needs.guard.outputs.publish == 'true'
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          {
+            echo "### Published"
+            echo
+            printf '%s\n' "$TAGS" | sed 's/^/    /'
+            echo
+            echo "Platforms: \`$PLATFORMS\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: GitHub release
+        if: needs.guard.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO_SLUG: ${{ github.repository }}
+          TAG: ${{ needs.guard.outputs.tag }}
+          VERSION: ${{ needs.guard.outputs.version }}
+          PRERELEASE: ${{ needs.guard.outputs.prerelease }}
+        run: |
+          body="$RUNNER_TEMP/body.md"
+
+          # What was published, at the top where somebody arriving from the
+          # Releases page will see it.
+          #
+          # Deliberately **not** `semantius-app`'s "pull it and run it" block,
+          # which was written for a static SPA that nginx serves with no
+          # dependencies: a `docker run -p 7070:80` there is a working site.
+          # This image is an identity provider. It needs a Postgres, an
+          # `IDP_SECRET` and a `/config` mount before it does anything at all,
+          # so a bare `docker run` would be an instruction that fails. The
+          # compose stack in `docker/` is the supported way in, and the pull
+          # command is given as what it is — how to get the image — not as how
+          # to run the thing.
+          #
+          # `printf`, not a heredoc: this is a YAML block scalar, so every line
+          # here carries ten spaces of indentation that the shell would keep.
+          # Four or more leading spaces is a Markdown code block, and the whole
+          # release body would render as one.
+          printf '%s\n' \
+            '## Docker image' \
+            '' \
+            "Published to GHCR for \`linux/amd64\` and \`linux/arm64\`, running Bun as PID 1:" \
+            '' \
+            '```bash' \
+            "docker pull ghcr.io/${GH_REPO_SLUG}:${VERSION}" \
+            '```' \
+            '' \
+            "It needs a connection string, an \`IDP_SECRET\` and a \`/config\` mount before it starts. There are" \
+            "**two** database settings and at least one must be set: \`DATABASE_URL\` for ordinary traffic and" \
+            "\`DATABASE_URL_ADMIN\` for the direct, non-pooled endpoint that startup, migrations and the CLI need" \
+            "— session advisory locks do not hold through a transaction-mode pooler. A single unpooled endpoint" \
+            'can be given as either and serves both roles.' \
+            '' \
+            "See the [quick start](https://github.com/${GH_REPO_SLUG}#quick-start), which brings the whole stack" \
+            "up with \`docker/idp-create.sh\`. On a fresh database the first page is the setup wizard; whoever" \
+            'completes it is the first administrator.' \
+            '' \
+            '---' \
+            '' > "$body"
+
+          # The changelog is the release notes; keeping a second copy by hand
+          # is how the two start disagreeing. Take this version's section —
+          # everything up to the next `## `.
+          #
+          # The **core** version, not the tag's: a pre-release is described by
+          # the section for the version it is a candidate for, because
+          # `## [0.2.0-rc.1]` is not a heading anybody writes.
+          #
+          # `index(…) == 1` rather than a regex: the heading contains `[` and
+          # `]`, and a dynamic regex needs them escaped twice over — once for
+          # awk's string literal and once for the pattern. Get that wrong and
+          # `\[0.1.0\]` degrades into the character class `[0.1.0]`, which
+          # matches nothing here and fails silently as an empty file.
+          core="${VERSION%%-*}"
+          awk -v v="$core" '
+            index($0, "## [" v "]") == 1 { grab = 1; next }
+            grab && /^## / { exit }
+            grab && /^\[[^]]+\]: / { exit }
+            grab { print }
+          ' CHANGELOG.md >> "$body"
+
+          args=(--title "$TAG" --verify-tag --notes-file "$body")
+          if ! awk -v v="$core" 'index($0, "## [" v "]") == 1 { found = 1 }
+                                 END { exit !found }' CHANGELOG.md; then
+            # No section for this version. Say so rather than publishing a
+            # release whose body is only the pull command.
+            echo "::warning::CHANGELOG.md has no [$core] section; the release body is the image block alone."
+          fi
+          if [ "$PRERELEASE" = "true" ]; then
+            args+=(--prerelease)
+          fi
+
+          sbom="$RUNNER_TEMP/sbom.spdx.json"
+          if [ -f "$sbom" ]; then
+            args+=("$sbom#SBOM (SPDX JSON)")
+          fi
+
+          # Re-running this job after a failure further up must not fail here
+          # for the one reason that means it already worked.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::notice::Release $TAG already exists; leaving it alone."
+          else
+            gh release create "$TAG" "${args[@]}"
+          fi

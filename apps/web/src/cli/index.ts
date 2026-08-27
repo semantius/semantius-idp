@@ -152,7 +152,7 @@ async function reconcile(): Promise<void> {
 function sslSource(config: IdpConfig): string {
   if (config.file.database.ssl !== undefined) return "  (database.ssl)"
   try {
-    if (new URL(config.file.database.url).searchParams.get("sslmode")) {
+    if (new URL(config.databaseUrl).searchParams.get("sslmode")) {
       return "  (sslmode in the connection string)"
     }
   } catch {
@@ -185,7 +185,13 @@ function validateConfig(): void {
   process.stdout.write(
     `Configuration in ${dir} is valid.\n` +
       `  issuer      ${config.base.origin}${config.base.basePath}\n` +
-      `  database    ${maskConnectionString(config.file.database.url)}\n` +
+      `  database    ${maskConnectionString(config.databaseUrl)}\n` +
+      // D74: the two endpoints are separate settings and collapse to one when
+      // a deployment has one. Printing the direct one only when it *differs*
+      // says which shape this is without adding a line that repeats itself.
+      (config.databaseDirectUrl === config.databaseUrl
+        ? ""
+        : `  direct      ${maskConnectionString(config.databaseDirectUrl)}\n`) +
       // Printed because it is *derived*, and the three inputs that decide it —
       // `database.ssl`, the connection string's `sslmode`, and whether the host
       // is local — do not agree often enough for an operator to guess. Getting

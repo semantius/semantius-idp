@@ -46,6 +46,14 @@ jobs:
         # a supply-chain change sneaks into a release.
         run: bun run scripts/check-pinned-deps.ts
 
+      - name: Bun is pinned to one version everywhere (OPS-1)
+        # Bun is the *runtime*, not a build tool: the image is
+        # `oven/bun:<version>-slim` with Bun as PID 1, and on arm64 that is a
+        # different binary from the one this job runs. Five files carry the
+        # version and nothing compared them until a release workflow added the
+        # fifth copy by hand (D73).
+        run: bun run scripts/check-bun-version.ts
+
       - name: Lint
         run: pnpm lint
 
@@ -240,9 +248,11 @@ jobs:
   # visible to a unit or integration test, and all three are the sort of thing
   # that is only ever found in production.
   #
-  # amd64 only on a pull request: arm64 is emulated here and roughly triples the
-  # build for an artefact nobody merges. Tags build both, because that is what
-  # gets published.
+  # amd64 only, and nothing is published: arm64 is emulated here and would
+  # roughly triple the build for an artefact nobody merges. Both architectures
+  # and the registry belong to `release.yml`, which is the workflow a tag
+  # actually triggers — this one never sees a tag, because it filters on
+  # branches (**D73**).
   # ---------------------------------------------------------------------------
   docker:
     if: github.event_name != 'schedule'
@@ -252,38 +262,19 @@ jobs:
     needs: [check]
     permissions:
       contents: read
-      packages: write
       security-events: write
-
-    env:
-      IMAGE: ghcr.io/${{ github.repository }}
 
     steps:
       - uses: actions/checkout@v4
         with:
-          # `sha-<git>` and the OCI `revision` label both want the real commit,
-          # and a shallow checkout of a PR merge commit is not it.
+          # The OCI `revision` label wants the real commit, and a shallow
+          # checkout of a PR merge commit is not it.
           fetch-depth: 0
 
-      - uses: docker/setup-qemu-action@v3
-        if: startsWith(github.ref, 'refs/tags/v')
       - uses: docker/setup-buildx-action@v3
 
-      - name: Derive tags (OPS-1)
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.IMAGE }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha,prefix=sha-,format=short
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-
-      # Built once into the local daemon so the smoke test runs against exactly
-      # the image that will be pushed, rather than a second build of the same
-      # Dockerfile that happens to be identical.
+      # This is also the job that writes the layer cache the `e2e` job and
+      # `release.yml` read.
       - name: Build (amd64, loaded locally)
         uses: docker/build-push-action@v6
         with:
@@ -292,7 +283,7 @@ jobs:
           load: true
           tags: semantius-idp:ci
           build-args: |
-            IDP_VERSION=${{ steps.meta.outputs.version || '0.0.0-ci' }}
+            IDP_VERSION=0.0.0-ci
             IDP_REVISION=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -333,30 +324,11 @@ jobs:
           format: spdx-json
           artifact-name: sbom.spdx.json
 
-      # Only tags publish. A merge to main builds and smokes the image; it does
-      # not put one on the registry, because OPS-1's tag set is a release act.
-      - name: Log in to GHCR
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Push (amd64 + arm64)
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: docker/Dockerfile
-          push: true
-          platforms: linux/amd64,linux/arm64
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            IDP_VERSION=${{ steps.meta.outputs.version }}
-            IDP_REVISION=${{ github.sha }}
-          cache-from: type=gha
+      # Nothing is pushed from here. A merge to `main` builds and smokes the
+      # image; OPS-1's tag set is a release act, and `release.yml` performs it.
+      # The steps that used to sit at this point were guarded on
+      # `refs/tags/v*`, which this workflow's `on:` block cannot produce — a
+      # publish path that had never once executed (**D73**).
 
   # ---------------------------------------------------------------------------
   # Nightly dependency audit (SEC-9).

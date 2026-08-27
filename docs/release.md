@@ -121,14 +121,49 @@ The Neon constraints test asserts the shape. This asserts that Neon agrees.
 **This step needs the owner's sign-off.** It publishes an image under a name
 people will pull.
 
+Rehearse first. **Actions → Release → Run workflow**, with the version as the
+input: it builds amd64 *and* arm64 and runs the container smoke test, and it
+publishes nothing. Only a tag publishes.
+
+Then cut it with the script, which is the supported way:
+
+```bash
+docker/release.sh v1.0.0
+```
+
+It refuses a detached HEAD, a dirty tree, a branch out of sync with its
+upstream, a tag that already exists locally or on the remote, and a version
+that is not newer than the latest tag. Then it prints exactly what will be
+published — image tags, whether the changelog has a section for this version,
+and what CI last said about this commit — and asks before doing anything.
+`-y` skips the prompt.
+
+It bumps `package.json`, `apps/web/package.json` and `version.ts`'s
+development fallback in a `chore(release):` commit, then tags (signed if this
+machine has a signing key) and pushes. The bump is not cosmetic: the image
+stamps `IDP_VERSION` from the tag and `/healthz`, `idp version` and
+`/admin/system` all report it, so **the workflow's first job refuses a tag
+that disagrees with the root manifest** — before it builds anything.
+
+By hand, if you must:
+
 ```bash
 git tag -s v1.0.0 -m "v1.0.0"
 git push origin v1.0.0
 ```
 
-The tag builds amd64 and arm64, pushes `1.0.0`, `1.0`, `1`, `latest` and
-`sha-<commit>`, attaches an SBOM and uploads the vulnerability scan. A merge to
-`main` does none of that — only a tag publishes.
+The tag runs [`.github/workflows/release.yml`](../.github/workflows/release.yml):
+it builds amd64, smoke-tests, scans and SBOMs that image, then builds and
+pushes amd64 and arm64 from the same layer cache as `1.0.0`, `1.0`, `1`,
+`latest` and `sha-<commit>`, and opens a GitHub release whose notes are the
+changelog's section for the version. A merge to `main` does none of that.
+
+A pre-release tag (`v1.0.0-rc1`) publishes as `1.0.0-rc1` only — no `1.0`, no
+`1`, no `latest` — and the GitHub release is marked as a pre-release.
+
+> Until 2026-08-27 this section described behaviour that did not exist: the
+> publish steps lived in `ci.yml`, guarded on `refs/tags/v*`, in a workflow
+> that only triggers on branches. Nothing had ever been published. **D73**.
 
 ## After
 

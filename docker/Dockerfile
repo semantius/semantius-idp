@@ -18,8 +18,18 @@
 # cross-building it under emulation would be minutes of QEMU for a
 # byte-identical result. Only the runtime stage is per-architecture.
 
-# The digest pins the image, and the tag is here so a human can read which one.
-# Both are updated together; the digest is what Docker actually resolves.
+# Exact version tags, not digests — the comment that used to sit here claimed
+# "the digest is what Docker actually resolves", and there has never been a
+# digest in this file. Tags are what resolve, so `oven/bun:1.3.12-slim` is
+# pinned to a version and not to bytes.
+#
+# `BUN_VERSION` is the one that matters. Bun is not a build tool here, it is
+# **the runtime**: the final stage is `oven/bun:<version>-slim`, Bun is PID 1,
+# and on arm64 that is a different binary from the one CI runs. The version
+# lives in `.bun-version` and is copied into four other files;
+# `scripts/check-bun-version.ts` refuses a build where they disagree, because
+# the smoke test passing on one Bun while the image ships another is a failure
+# that only appears in somebody's deployment (**D73**).
 ARG BUN_VERSION=1.3.12
 ARG NODE_VERSION=22
 
@@ -27,7 +37,21 @@ ARG NODE_VERSION=22
 # for a `FROM` line but not for a `COPY --from=<image>` inside a stage, where
 # the reference is resolved before the ARG exists — the error is
 # "invalid reference format", which does not say that.
-FROM oven/bun:${BUN_VERSION}-slim AS bun
+#
+# `--platform=$BUILDPLATFORM`, and it is load-bearing: the `build` stage below
+# is pinned to the build platform, and it *executes* the binary copied out of
+# here. Without the pin this stage is instantiated once per **target**
+# platform, while `build` is instantiated once in total — so a
+# `--platform=linux/amd64,linux/arm64` run hands the single build stage
+# whichever `bun` one of the two passes resolved, and half the time that is the
+# wrong architecture. It failed exactly that way on 2026-08-27, on the first
+# multi-architecture build anybody had ever run: `qemu-x86_64: Could not open
+# '/lib64/ld-linux-x86-64.so.2'`, which reads like a missing library and is an
+# amd64 binary inside an arm64 root filesystem. The pin makes the borrowed
+# binary match the rootfs that runs it, on any host. `runtime` below is
+# deliberately **not** pinned — that stage is the artefact, and it is the one
+# thing here that must be per-architecture.
+FROM --platform=$BUILDPLATFORM oven/bun:${BUN_VERSION}-slim AS bun
 
 # ---------------------------------------------------------------- deps --
 FROM --platform=$BUILDPLATFORM node:${NODE_VERSION}-slim AS deps
@@ -107,7 +131,7 @@ ARG IDP_REVISION=
 LABEL org.opencontainers.image.title="semantius-idp" \
       org.opencontainers.image.description="Self-hosted OpenID Connect identity provider" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.source="https://github.com/adenin/semantius-idp" \
+      org.opencontainers.image.source="https://github.com/semantius/semantius-idp" \
       org.opencontainers.image.version="${IDP_VERSION}" \
       org.opencontainers.image.revision="${IDP_REVISION}"
 

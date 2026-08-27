@@ -24,7 +24,7 @@ Four files, in this order. Read them before proposing anything.
 | File | What it is |
 | --- | --- |
 | [status.md](status.md) | The handoff. Done, not-done, and why — the ground truth between sessions. |
-| [spec-v1.md](spec-v1.md) | Signed off, amended through **D72**. Numbered requirements, and §12.1's decision log with the reasoning. |
+| [spec-v1.md](spec-v1.md) | Signed off, amended through **D74**. Numbered requirements, and §12.1's decision log with the reasoning. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | The gates, the style, and how to amend the spec. |
 | [docs/release.md](docs/release.md) | What is left before v1.0.0, and it is the owner's, not yours. |
 
@@ -119,6 +119,7 @@ pnpm --filter web run test:integration      # starts a local Postgres if it must
 pnpm --filter web run test:coverage         # thresholds, both projects
 pnpm --filter web run test:e2e              # needs Docker; drives the built image
 bun run scripts/check-pinned-deps.ts
+bun run scripts/check-bun-version.ts     # Bun is the runtime; five files pin it
 pnpm --filter web run config:schemas -- --check
 pnpm --filter web run docs:config -- --check
 pnpm --filter web run db:generate-schema -- --check
@@ -260,6 +261,49 @@ against the invocation directory, so every command is
 `docker compose --env-file ../.env …` from `docker/`. The `idp-*.sh` / `.cmd`
 pairs do that for you. Build context is the repository root; the ignore file is
 `docker/Dockerfile.dockerignore` (BuildKit's per-Dockerfile ignore).
+
+**The database is a *pair* of connection strings** (**D74**). `database.url` is
+ordinary traffic, `database.directUrl` (env `DATABASE_URL_ADMIN`) is the
+direct, non-pooled endpoint every lock-taking step needs. Neither is required
+on its own and **at least one must be set**; each falls back to the other, so a
+single-endpoint deployment is configured under either name and both resolve to
+the same string. Read them as `config.databaseUrl` / `config.databaseDirectUrl`
+from `derive.ts`, never `config.file.database.url` — that one is
+`string | undefined` and is the raw file value, not the resolved one. "It needs
+a Postgres" is the wrong sentence for any documentation here.
+
+**A borrowed binary must be pinned to the same platform as the stage that runs
+it** (**D73**). `docker/Dockerfile`'s `build` stage is
+`--platform=$BUILDPLATFORM` and executes the Bun binary it copies out of the
+`bun` stage. When `bun` was unpinned, BuildKit made one instance of it per
+**target** platform against a `build` stage that exists once in total, and the
+two-platform build handed that one stage the wrong architecture's binary — a
+defect no single-platform build can expose, which is why it survived until the
+first `--platform=linux/amd64,linux/arm64` run. The symptom is
+`qemu-x86_64: Could not open '/lib64/ld-linux-x86-64.so.2'`, which reads like a
+missing library. `runtime` stays unpinned on purpose: it is the artefact.
+Verify a Dockerfile change with **both** platforms —
+`docker buildx build --platform linux/amd64,linux/arm64 -f docker/Dockerfile
+--output type=cacheonly .` — because none of the gates do.
+
+**A tag never reaches `ci.yml`, and `release.yml` is what publishes** (**D73**).
+`ci.yml` triggers on `push: branches: [main]`; a tag push does not match a
+branch filter. The whole of OPS-1's publish path used to live there behind
+`startsWith(github.ref, 'refs/tags/v')` and had therefore never run once —
+five steps that looked like a feature and read as green. Anything to do with
+publishing belongs in
+[.github/workflows/release.yml](.github/workflows/release.yml), which triggers
+on `push: tags: v*`; anything to do with validating a change belongs in
+`ci.yml`. Before tagging, rehearse: **Actions → Release → Run workflow**
+builds both architectures and smokes amd64 without pushing anything. The tag's
+version must equal the root `package.json` version, or the run refuses in its
+first job — the image stamps `IDP_VERSION` from the tag and three surfaces
+report it. **`docker/release.sh vX.Y.Z` is the supported way to cut one**: it
+checks the preconditions, bumps the three files that carry a version, commits,
+tags and pushes. It is the same script `semantius-app` uses, which is the
+sibling repository to copy release conventions from — its
+`.github/workflows/docker-publish.yml` has cut three releases and is worth
+reading before changing this one.
 
 **There is no bootstrap account.** A database with no users serves the first-run
 setup page (`/setup`, **D52**), and whoever completes it is the first

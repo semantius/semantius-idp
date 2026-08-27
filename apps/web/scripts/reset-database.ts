@@ -142,7 +142,11 @@ async function main(): Promise<number> {
   // it needs. `max: 2` because `--migrate` takes an advisory lock and then
   // queries through the same handle, which deadlocks on `max: 1`.
   const database = createDb(config, { direct: true, max: 2, schemaName })
-  const url = config.file.database.directUrl ?? config.file.database.url
+  // The same string `createDb(…, { direct: true })` just connected with —
+  // resolved in `derive.ts`, which falls back to `database.url` when a
+  // deployment has one endpoint rather than two (**D74**). Printed so the
+  // confirmation names the database it is about to drop a schema from.
+  const url = config.databaseDirectUrl
 
   try {
     const [existing] = await database.sql<{ tables: number }[]>`

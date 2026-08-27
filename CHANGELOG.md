@@ -9,8 +9,18 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ## [Unreleased]
 
-The first release has not been cut. Everything below is what v1.0.0 will
-contain.
+Nothing yet.
+
+## [0.1.0] — 2026-08-27
+
+The first published image. It is the whole of v1's functionality, released
+ahead of the v1.0.0 sign-off gate in [docs/release.md](docs/release.md) —
+the two checks that cannot be automated, the manual social walk-through and one
+real token against a real Neon project, are what 1.0.0 still waits on.
+
+Published as `ghcr.io/<owner>/semantius-idp:0.1.0` (also `0.1`, `0`, `latest`
+and `sha-<commit>`) for `linux/amd64` and `linux/arm64`, by
+[`.github/workflows/release.yml`](.github/workflows/release.yml) (**D73**).
 
 ### Added
 
@@ -536,4 +546,95 @@ were questions, and one was "polish every page".
   application itself uses: an explicit `sslmode` wins, then loopback in any
   spelling means off.
 
-[Unreleased]: https://github.com/semantius/semantius-idp/commits/main
+### Release plumbing (2026-08-27)
+
+- **A tag now publishes something.** `ci.yml` carried the whole release path —
+  QEMU, the GHCR login, the amd64 + arm64 push, the `X.Y.Z`/`X.Y`/`X`/`latest`
+  tag set OPS-1 specifies — behind `startsWith(github.ref, 'refs/tags/v')`, in
+  a workflow that triggers on `push: branches: [main]`. A tag does not match a
+  branch filter, so **none of it had ever run**, while
+  [docs/release.md](docs/release.md) described it as the thing tagging does.
+  Publishing moved to its own [`release.yml`](.github/workflows/release.yml)
+  on its own `push: tags:` trigger (**D73**): it builds amd64, runs the TST-8
+  container smoke test, the Trivy scan and the SBOM against that image, then
+  builds and pushes both architectures from the same layer cache and opens a
+  GitHub release whose notes are this file's section for the version. A
+  `workflow_dispatch` **rehearses** — both architectures, no push — so
+  "does arm64 build?" can be answered before a tag exists to answer it badly.
+  `ci.yml` keeps building and smoking an amd64 image on every pull request and
+  merge, and its dead publish steps are gone.
+- **The arm64 image had never been built, and did not build.** OPS-1 has said
+  "amd64 + arm64" since it was written, and the first
+  `--platform=linux/amd64,linux/arm64` run anybody ever performed failed at
+  `bun build` with `qemu-x86_64: Could not open
+  '/lib64/ld-linux-x86-64.so.2'` — which reads like a missing library and is
+  an amd64 binary being executed inside an arm64 root filesystem. The cause is
+  the borrowed Bun: `docker/Dockerfile`'s `build` stage is pinned to
+  `--platform=$BUILDPLATFORM` and *executes* the binary it copies out of the
+  `bun` stage, but the `bun` stage was **not** pinned — so BuildKit
+  instantiates it once per *target* platform while `build` exists once in
+  total, and the single build stage is handed whichever of the two the other
+  pass resolved. `FROM --platform=$BUILDPLATFORM oven/bun:…` makes the
+  borrowed binary match the rootfs that runs it, on any build host. `runtime`
+  stays unpinned, because that stage is the artefact and is the one thing here
+  that must be per-architecture.
+- **The tag and `package.json` have to agree.** The image stamps
+  `IDP_VERSION` from the tag and `/healthz`, `idp version` and the admin
+  system page all report it, so a repository claiming 0.0.1 while the artefact
+  claims 0.1.0 is one whose running version cannot be traced back to a tree.
+  The release workflow's first job refuses the tag otherwise, in thirty
+  seconds rather than at minute fifteen. The workspace is at **0.1.0**
+  accordingly, and `version.ts`'s development fallback with it.
+- **`docker/release.sh vX.Y.Z` cuts a release**, adopted from `semantius-app`,
+  whose copy has cut three. It refuses a detached HEAD, a dirty tree, a branch
+  out of sync with its upstream, a tag that already exists locally or on the
+  remote, and a version that is not newer than the latest tag; prints what will
+  be published — image tags, whether the changelog has a section for the
+  version, what CI last said about the commit — and asks before doing anything.
+  Then it bumps all three files that carry a version, commits, tags (signed
+  where a key is configured, annotated where not) and pushes. Two deliberate
+  differences from the sibling: a **pre-release is allowed** here, because this
+  workflow derives `latest` from the version rather than tagging it
+  unconditionally; and a **failed `-s` degrades to `-a`** rather than aborting
+  after the bump commit has already been pushed, which is the one state that
+  needs a human to unpick.
+- **Either database connection string alone is now a valid deployment**
+  (**D74**). `database.url` was required and `database.directUrl` optional
+  beside it, which had it backwards. The **direct** endpoint is the one that
+  must always work — startup, migrations, the CLI and the cleanup job take
+  session advisory locks, and those do not hold through a transaction-mode
+  pooler (**D27**) — while the pooled endpoint is an optimisation a given
+  Postgres may not offer at all. So an operator holding only the direct
+  endpoint had to file it under the name that describes the pooled one, and
+  one who set only `DATABASE_URL_ADMIN` was refused outright for a
+  configuration that works perfectly. Both keys are optional now, with at
+  least one required; each falls back to the other, resolved once in
+  `derive.ts` as `databaseUrl` and `databaseDirectUrl`, so a single-endpoint
+  deployment gets the same string for both — which is correct, because a plain
+  Postgres endpoint is already direct. The pooled-without-direct warning is
+  unchanged; it is still the one combination that is genuinely wrong.
+  `idp config validate` prints the direct endpoint too, but only when it
+  differs.
+- **Bun's version is pinned in five files and nothing compared them.**
+  `.bun-version`, `package.json`'s `engines.bun`, the Dockerfile's
+  `ARG BUN_VERSION`, and now both workflows. Bun is not a build tool in this
+  repository — it is **the runtime**: the final stage is
+  `oven/bun:<version>-slim` with Bun as PID 1, and on arm64 that is a
+  different binary from the one CI runs. Drift would be quiet and specific —
+  the smoke test passing on one Bun while the image ships another, surfacing
+  only as a runtime failure in somebody's deployment.
+  `scripts/check-bun-version.ts` compares all five against `.bun-version` and
+  is a CI gate. A pin whose line has moved reports as missing rather than
+  passing, because a checker that silently stops checking is worse than none.
+- **The Dockerfile claimed to pin digests and never has.** "The digest pins
+  the image … the digest is what Docker actually resolves" sat above two
+  `ARG`s and zero `sha256:` references. The images are pinned to exact version
+  *tags*, which is a weaker guarantee, and the comment now says so.
+- **The image's `org.opencontainers.image.source` label pointed at the wrong
+  repository** — `adenin/semantius-idp`, where the remote and this file's own
+  links both say `semantius/semantius-idp`. The label is how a pulled image
+  says where it came from, so it was sending anyone who inspected it to a
+  repository that is not this one.
+
+[Unreleased]: https://github.com/semantius/semantius-idp/compare/v0.1.0...main
+[0.1.0]: https://github.com/semantius/semantius-idp/releases/tag/v0.1.0

@@ -128,13 +128,16 @@ const databaseSchema = z.strictObject({
   url: z
     .string()
     .min(1)
-    .describe("Postgres connection string. Fallback env: DATABASE_URL."),
+    .optional()
+    .describe(
+      "Connection string for ordinary application traffic. A transaction-mode pooler belongs here and nowhere else. Optional: when it is absent, `directUrl` serves both roles, which is the single-endpoint deployment (**D74**). Fallback env: DATABASE_URL."
+    ),
   directUrl: z
     .string()
     .min(1)
     .optional()
     .describe(
-      "Connection string for steps that hold a session advisory lock — startup, migrations, the CLI and the cleanup job. Required when `database.url` points at a transaction-mode connection pooler (Neon's `-pooler` endpoint, PgBouncer), where session locks do not hold. Fallback env: DATABASE_URL_ADMIN."
+      "Direct, non-pooled connection string, used by every step that holds a session advisory lock — startup, migrations, the CLI and the cleanup job — because session locks do not hold through a transaction-mode pooler. This is the connection that must always work; `url` is the optional optimisation beside it. At least one of the two must be set, and when `url` looks pooled this one is required. Fallback env: DATABASE_URL_ADMIN."
     ),
   schema: z
     .string()
@@ -166,6 +169,24 @@ const databaseSchema = z.strictObject({
   migrateOnBoot: flexBoolean()
     .default(true)
     .describe("Also settable with IDP_MIGRATE_ON_BOOT."),
+}).superRefine((database, ctx) => {
+  // Both fields are optional individually and at least one is mandatory
+  // together, because which of the two a deployment has depends on its
+  // Postgres and not on this schema (**D74**). Neon hands out a pooled and a
+  // direct endpoint; a plain Postgres or the bundled compose one is a single
+  // endpoint that is already direct. Making `url` the required field — as it
+  // was — meant an operator who had only the direct endpoint had to put it
+  // under the name that describes the pooled one, and one who set only
+  // `DATABASE_URL_ADMIN` was refused outright for a configuration that is
+  // perfectly serviceable.
+  if (database.url === undefined && database.directUrl === undefined) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["url"],
+      message:
+        "Set `database.url`, `database.directUrl`, or both — at least one connection string is required. A single-endpoint deployment can use either name; `directUrl` is the one that must be a direct, non-pooled connection. Fallback env: DATABASE_URL, DATABASE_URL_ADMIN.",
+    })
+  }
 })
 
 const siteSchema = z.strictObject({

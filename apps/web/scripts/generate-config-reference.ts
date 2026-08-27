@@ -108,6 +108,22 @@ const MINIMAL = {
   jwt: { audience: "https://idp.example.com" },
 }
 
+/**
+ * Keys `MINIMAL` supplies that are nevertheless **not** required on their own.
+ *
+ * `SUPPLIED` is otherwise the required set, and that held until **D74** made
+ * `database.url` and `database.directUrl` a pair of which at least one must be
+ * present. A minimal file still has to name a connection string, so `MINIMAL`
+ * still carries `database.url` — but the reference must not tell an operator
+ * that a key they can legitimately omit is required. The text here replaces
+ * the `— **required**` cell for these keys, because the column is one boolean
+ * per key and "one of these two" is not expressible as one.
+ */
+const CONDITIONALLY_REQUIRED: Record<string, string> = {
+  "database.url": "— **one of** `url` / `directUrl`",
+  "database.directUrl": "— **one of** `url` / `directUrl`",
+}
+
 /** The paths MINIMAL supplies, whose "defaults" are this script's invention. */
 function suppliedPaths(): Set<string> {
   const paths = new Set<string>()
@@ -237,7 +253,9 @@ function render(rows: Row[]): string {
   ]
 
   for (const row of rows) {
-    const fallback = row.required ? "— **required**" : (row.fallback || "—")
+    const fallback =
+      CONDITIONALLY_REQUIRED[row.key] ??
+      (row.required ? "— **required**" : row.fallback || "—")
     lines.push(
       `| \`${row.key}\` | ${row.type || "—"} | ${fallback} | ${row.description || ""} |`
     )

@@ -206,6 +206,58 @@ describe("config loader", () => {
       expect(config.file.server.baseUrl).toBe("http://localhost:3000")
     })
 
+    // D74. Before it, `database.url` was the required key and an operator
+    // holding only the direct endpoint — the one that must work, the one every
+    // lock-taking step needs — was refused for a configuration that is
+    // perfectly serviceable.
+    describe("the two connection strings (D74)", () => {
+      it("accepts directUrl alone and uses it for regular access too", () => {
+        const stripped = {
+          ...baseConfig(),
+          database: { directUrl: "postgres://admin@db/idp" },
+        }
+        const { config } = load({ config: stripped })
+        expect(config.databaseDirectUrl).toBe("postgres://admin@db/idp")
+        expect(config.databaseUrl).toBe("postgres://admin@db/idp")
+      })
+
+      it("accepts DATABASE_URL_ADMIN alone, with no DATABASE_URL", () => {
+        const stripped = { ...baseConfig(), database: {} }
+        const { config } = load(
+          { config: stripped },
+          { DATABASE_URL_ADMIN: "postgres://admin@db/idp" }
+        )
+        expect(config.databaseUrl).toBe("postgres://admin@db/idp")
+        expect(config.databaseDirectUrl).toBe("postgres://admin@db/idp")
+      })
+
+      it("accepts url alone and uses it for lock-taking steps too", () => {
+        const { config } = load()
+        expect(config.databaseUrl).toBe(config.databaseDirectUrl)
+      })
+
+      it("keeps the two apart when both are given", () => {
+        const stripped = {
+          ...baseConfig(),
+          database: {
+            url: "postgres://app@db-pooler/idp",
+            directUrl: "postgres://admin@db/idp",
+          },
+        }
+        const { config } = load({ config: stripped })
+        expect(config.databaseUrl).toBe("postgres://app@db-pooler/idp")
+        expect(config.databaseDirectUrl).toBe("postgres://admin@db/idp")
+      })
+
+      it("refuses a database block with neither", () => {
+        const stripped = { ...baseConfig(), database: {} }
+        const issues = expectIssues({ config: stripped })
+        expect(
+          issues.some((issue) => issue.message.includes("at least one"))
+        ).toBe(true)
+      })
+    })
+
     it("falls back to the env-only bootstrap variables", () => {
       const { config } = load(
         {},

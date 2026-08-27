@@ -28,8 +28,8 @@ the process; there is no hot reload and `SIGHUP` is ignored (CFG-5).
 | `server.allowInsecureHttp` | boolean | `false` | Permit a non-https baseUrl outside localhost. Development only. |
 | `server.shutdownTimeoutSeconds` | integer | `10` | SIGTERM drain budget. |
 | `secret` | string | — **required** | ≥ 32 random bytes. Fallback env: BETTER_AUTH_SECRET. Must be a placeholder in production. |
-| `database.url` | string | — **required** | Postgres connection string. Fallback env: DATABASE_URL. |
-| `database.directUrl` | string | — | Connection string for steps that hold a session advisory lock — startup, migrations, the CLI and the cleanup job. Required when `database.url` points at a transaction-mode connection pooler (Neon's `-pooler` endpoint, PgBouncer), where session locks do not hold. Fallback env: DATABASE_URL_ADMIN. |
+| `database.url` | string | — **one of** `url` / `directUrl` | Connection string for ordinary application traffic. A transaction-mode pooler belongs here and nowhere else. Optional: when it is absent, `directUrl` serves both roles, which is the single-endpoint deployment (**D74**). Fallback env: DATABASE_URL. |
+| `database.directUrl` | string | — **one of** `url` / `directUrl` | Direct, non-pooled connection string, used by every step that holds a session advisory lock — startup, migrations, the CLI and the cleanup job — because session locks do not hold through a transaction-mode pooler. This is the connection that must always work; `url` is the optional optimisation beside it. At least one of the two must be set, and when `url` looks pooled this one is required. Fallback env: DATABASE_URL_ADMIN. |
 | `database.schema` | string | `idp` | All IdP tables and the drizzle migrations table live here; nothing is created in `public`. |
 | `database.ssl` | `disable` \| `require` \| `verify-full` | — | Overrides the connection string's sslmode. Defaults to `require` unless the host is localhost. |
 | `database.sslCa` | string | — | PEM certificate authority, typically `${file:/run/secrets/ca.pem}`. |

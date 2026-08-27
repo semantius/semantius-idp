@@ -25,6 +25,7 @@ import { SecretDialog } from "@/components/common/dialogs"
 import { UserBadges } from "@/components/admin/user-badges"
 import { UserCreateDialog } from "@/components/admin/user-create-dialog"
 import { FormAlert } from "@/components/auth/form-parts"
+import { NoticeToast } from "@/components/common/notice-toast"
 import { messageForErrorCode, messageForNoticeCode } from "@/lib/auth-errors"
 import { parseInviteLink } from "@/lib/invite-link"
 import { searchString } from "@/lib/search-params"
@@ -294,7 +295,7 @@ function UsersPage() {
         />
       }
     >
-      <FormAlert variant="default">{messageForNoticeCode(notice, t)}</FormAlert>
+      <NoticeToast message={messageForNoticeCode(notice, t)} />
       {/* Not when the dialog is reopening with it — the modal would cover it. */}
       <FormAlert>
         {draft === undefined

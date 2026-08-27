@@ -40,7 +40,18 @@ test.describe("the account area", () => {
     await submit(page, "Save")
 
     await expect(page.getByText("Profile updated.")).toBeVisible()
+
+    // **D71**: the confirmation is a toast that consumes its own parameter.
+    // The banner it replaced was seeded from `?notice=` and nothing ever
+    // removed it, so the URL went on claiming the save had just happened —
+    // a reload re-announced it, and so did coming Back to the page later.
+    await expect(page).not.toHaveURL(/notice=/)
+
     await page.reload()
+    await expect(
+      page.getByText("Profile updated."),
+      "a reload does not re-announce a save from before it"
+    ).toHaveCount(0)
     await expect(page.getByLabel("First name")).toHaveValue("Renamed")
     await expect(page.getByText("Renamed Person")).toBeVisible()
   })

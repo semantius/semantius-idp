@@ -462,4 +462,17 @@ were questions, and one was "polish every page".
   `ok` answer with no user id is refused rather than minting a link for `""`;
   both land back on the list saying the account was created but its link was
   not, and naming the two ways to give it a password.
+- **A success message no longer outlives what it is about** (**D71**). "Roles
+  updated.", "Signed out everywhere.", "Profile updated." — each arrived as
+  `?notice=<code>` on the page the 303 landed on and was rendered as an inline
+  banner, and nothing ever removed the parameter. So a reload re-announced the
+  save, Back re-announced it, and a bookmarked URL announced last week's
+  deletion as news. The eight admin and account pages now show the sentence as
+  a toast and strip the parameter from the address bar as they do, without
+  re-running a loader or spending a one-shot handle a sibling parameter has
+  not read yet. Errors are unchanged and stay inline beside the form that
+  produced them, where the restored draft is; the public auth pages keep their
+  banners, because there the message *is* the page; and a one-time client
+  secret or API key still gets its dialog. The component is the shadcn
+  registry's Base UI `toast`, used verbatim — including its placement.
 [Unreleased]: https://github.com/semantius/semantius-idp/commits/main

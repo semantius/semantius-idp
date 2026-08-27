@@ -1,6 +1,7 @@
 import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router"
 
 import appCss from "@workspace/ui/globals.css?url"
+import { Toaster } from "@workspace/ui/components/toast"
 
 import { BASE_PATH_ATTRIBUTE, assetUrl } from "@/lib/base-path"
 import { fetchUiContext } from "@/server/functions/ui"
@@ -63,6 +64,14 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         {children}
+        {/*
+          One toast host for the whole application (**D71**). Success notices
+          arrive as `?notice=<code>` on the page a 303 lands on, so any of them
+          could be the one that has something to say — mounting the provider
+          per page would mean remembering to, and forgetting on the eight that
+          matter. It renders nothing until a `NoticeToast` adds something.
+        */}
+        <Toaster />
         <Scripts />
       </body>
     </html>

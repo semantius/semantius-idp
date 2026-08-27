@@ -33,6 +33,7 @@ import { RoleCheckboxes } from "@/components/admin/role-checkboxes"
 import { ActionDialog } from "@/components/common/dialogs"
 import { UserBadges } from "@/components/admin/user-badges"
 import { FormAlert } from "@/components/auth/form-parts"
+import { NoticeToast } from "@/components/common/notice-toast"
 import { messageForErrorCode, messageForNoticeCode } from "@/lib/auth-errors"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
@@ -158,7 +159,7 @@ function UserDetailPage() {
       <FormAlert>
         {messageForErrorCode(error, t, ui.passwordMinLength)}
       </FormAlert>
-      <FormAlert variant="default">{messageForNoticeCode(notice, t)}</FormAlert>
+      <NoticeToast message={messageForNoticeCode(notice, t)} />
 
       {user.unknownRoles.length > 0 ? (
         <Alert variant="destructive" className="mb-4">

@@ -6,6 +6,7 @@ import {
 } from "@/components/account/account-shell"
 import { ActionDialog, SecretDialog } from "@/components/common/dialogs"
 import { FormAlert, TextField } from "@/components/auth/form-parts"
+import { NoticeToast } from "@/components/common/notice-toast"
 import { messageForErrorCode, messageForNoticeCode } from "@/lib/auth-errors"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
@@ -176,7 +177,7 @@ function ApiKeysPage() {
       impersonated={profile.impersonated}
       isAdmin={profile.isAdmin}
     >
-      <FormAlert variant="default">{messageForNoticeCode(notice, t)}</FormAlert>
+      <NoticeToast message={messageForNoticeCode(notice, t)} />
       <FormAlert>
         {messageForErrorCode(error, t, ui.passwordMinLength)}
       </FormAlert>

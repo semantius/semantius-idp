@@ -37,3 +37,24 @@ export function searchFlag(value: unknown): boolean {
   const text = searchString(value)
   return text === "1" || text === "true"
 }
+
+/**
+ * The same URL with one query parameter removed (**D71**).
+ *
+ * A success notice arrives as `?notice=…` and is shown once; leaving the
+ * parameter behind is what made the old inline banner outlive its truth —
+ * reloading, or coming Back to the page an hour later, re-announced something
+ * that had already happened. Only the named parameter goes: `error`, `draft`
+ * and `created` are siblings on the same URL and each has its own consumer.
+ *
+ * A plain string in, a plain string out, so it is testable without a router
+ * and without a DOM.
+ */
+export function hrefWithoutParam(href: string, name: string): string {
+  // Relative to an origin that is thrown away again: `URL` needs an absolute
+  // input, and every caller passes `location.href`, which already is one.
+  const url = new URL(href, "http://localhost")
+  if (!url.searchParams.has(name)) return href
+  url.searchParams.delete(name)
+  return `${url.pathname}${url.search}${url.hash}`
+}

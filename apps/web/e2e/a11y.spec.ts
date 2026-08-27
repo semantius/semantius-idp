@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright"
 
-import { createVerifiedUser, signIn, signInAsAdmin, signOut } from "./actions"
+import { createVerifiedUser, signIn, signInAsAdmin, signOut, submit } from "./actions"
 import { expect, test } from "./fixtures"
 import type { App } from "./fixtures"
 import type { Page } from "@playwright/test"
@@ -102,6 +102,20 @@ test.describe("accessibility", () => {
     const user = await createVerifiedUser(page, app, stack, "a11y")
     await signIn(page, app, user.email, user.password)
     await scanAll(page, app, ACCOUNT_PAGES)
+
+    // **D71**: with a toast on screen. It is a live region rendered into a
+    // portal outside the page's landmarks, and its close button's accessible
+    // name comes from the registry component rather than from this
+    // application's catalog — both of which are exactly the kind of thing axe
+    // catches and a reading of the JSX does not. Scanned here rather than as a
+    // page of its own, because a toast only exists as a consequence of a save.
+    await app.goto("/account")
+    await page.getByLabel("First name").fill("Axe")
+    await page.getByLabel("Last name").fill("Scanned")
+    await submit(page, "Save")
+    await expect(page.getByText("Profile updated.")).toBeVisible()
+    await scan(page, "/account with a toast showing")
+
     await signOut(page, app)
   })
 

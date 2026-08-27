@@ -20,6 +20,7 @@ import { AdminShell } from "@/components/admin/admin-shell"
 import { ClientCreateDialog } from "@/components/admin/client-create-dialog"
 import { ActionDialog, SecretDialog } from "@/components/common/dialogs"
 import { FormAlert } from "@/components/auth/form-parts"
+import { NoticeToast } from "@/components/common/notice-toast"
 import { messageForErrorCode, messageForNoticeCode } from "@/lib/auth-errors"
 import { skipConsentFromForm, uriLines } from "@/lib/client-rules"
 import { searchString } from "@/lib/search-params"
@@ -242,7 +243,7 @@ function ClientsPage() {
         />
       }
     >
-      <FormAlert variant="default">{messageForNoticeCode(notice, t)}</FormAlert>
+      <NoticeToast message={messageForNoticeCode(notice, t)} />
       {/* Not when the dialog is reopening with it — the modal would cover it. */}
       <FormAlert>
         {draft === undefined

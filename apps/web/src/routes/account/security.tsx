@@ -12,6 +12,7 @@ import {
 import { ChangePasswordFields } from "@/components/auth/change-password-fields"
 import { usePasswordConfirm } from "@/components/auth/confirmed-password"
 import { ActionDialog } from "@/components/common/dialogs"
+import { NoticeToast } from "@/components/common/notice-toast"
 import { messageForErrorCode, messageForNoticeCode } from "@/lib/auth-errors"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
@@ -290,7 +291,7 @@ function SecurityPage() {
       impersonated={profile.impersonated}
       isAdmin={profile.isAdmin}
     >
-      <FormAlert variant="default">{messageForNoticeCode(notice, t)}</FormAlert>
+      <NoticeToast message={messageForNoticeCode(notice, t)} />
       {/* A password refusal is reported inside the dialog that produced it,
           where the fields are; repeating it here would say the same thing
           twice on one screen. */}

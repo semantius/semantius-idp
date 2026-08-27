@@ -10,7 +10,11 @@
 
 import { describe, expect, it } from "vitest"
 
-import { searchFlag, searchString } from "@/lib/search-params"
+import {
+  hrefWithoutParam,
+  searchFlag,
+  searchString,
+} from "@/lib/search-params"
 
 describe("searchString", () => {
   it("passes a string through", () => {
@@ -58,5 +62,64 @@ describe("searchFlag", () => {
     // `?forced` parses to an empty string; every link the app emits supplies
     // a value, so a missing one means the URL was edited by hand.
     expect(searchFlag("")).toBe(false)
+  })
+})
+
+describe("hrefWithoutParam (D71)", () => {
+  it("removes the named parameter and leaves the rest of the URL alone", () => {
+    expect(
+      hrefWithoutParam("http://idp.test/admin/users?notice=created", "notice")
+    ).toBe("/admin/users")
+  })
+
+  it("keeps every sibling parameter, because each has its own consumer", () => {
+    // `error`, `draft` and `created` all travel on these URLs and are claimed
+    // by something else; a strip that took the whole query string would spend
+    // a one-shot handle the page has not read yet.
+    expect(
+      hrefWithoutParam(
+        "http://idp.test/admin/users?q=ada&notice=created&pageSize=50",
+        "notice"
+      )
+    ).toBe("/admin/users?q=ada&pageSize=50")
+    expect(
+      hrefWithoutParam(
+        "http://idp.test/admin/clients?notice=clientCreated&created=abc123",
+        "notice"
+      )
+    ).toBe("/admin/clients?created=abc123")
+  })
+
+  it("strips whichever parameter it is told to", () => {
+    // `/admin/system` names its confirmation `rotated`, because it carries the
+    // successor key id rather than a code.
+    expect(
+      hrefWithoutParam("http://idp.test/admin/system?rotated=kid-2", "rotated")
+    ).toBe("/admin/system")
+  })
+
+  it("returns the input untouched when the parameter is not there", () => {
+    // The ordinary case: every page mounts the toast, and almost none of them
+    // is showing one. Identity in, identity out — no history entry is
+    // rewritten for nothing.
+    const href = "http://idp.test/account?error=server_error"
+    expect(hrefWithoutParam(href, "notice")).toBe(href)
+  })
+
+  it("keeps the path and the fragment", () => {
+    expect(
+      hrefWithoutParam(
+        "http://idp.test/idp/account/security?notice=twofactor_on#backup",
+        "notice"
+      )
+    ).toBe("/idp/account/security#backup")
+  })
+
+  it("removes every repetition of the parameter", () => {
+    // A hand-edited URL, or a redirect chain that appended twice. Leaving one
+    // behind would re-announce the notice on the next paint.
+    expect(
+      hrefWithoutParam("http://idp.test/account?notice=a&notice=b", "notice")
+    ).toBe("/account")
   })
 })

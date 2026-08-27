@@ -6,6 +6,7 @@ import {
   DetailRow,
 } from "@/components/admin/admin-shell"
 import { FormAlert } from "@/components/auth/form-parts"
+import { NoticeToast } from "@/components/common/notice-toast"
 import { messageForErrorCode } from "@/lib/auth-errors"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
@@ -97,9 +98,12 @@ function SystemPage() {
       <FormAlert>
         {messageForErrorCode(error, t, ui.passwordMinLength)}
       </FormAlert>
-      <FormAlert variant="default">
-        {rotated ? t.admin.system.rotated(rotated) : undefined}
-      </FormAlert>
+      {/* `rotated`, not `notice`: this page's one confirmation carries the
+          successor key id, so the parameter it is stripped from is its own. */}
+      <NoticeToast
+        param="rotated"
+        message={rotated ? t.admin.system.rotated(rotated) : undefined}
+      />
 
       <AdminCard>
         <dl className="divide-y">

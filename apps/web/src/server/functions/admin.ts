@@ -5,8 +5,8 @@
  * they import reaches the client bundle, and `createServerFn` is the seam that
  * keeps Drizzle, Better Auth and the configuration out of it. **Reads only** —
  * every mutation is a form POST to a route's own `server.handlers`, where the
- * invariants (`admin/guard.ts`), the fresh-session gate and the audit trail
- * live.
+ * invariants (`admin/guard.ts`), the session requirement (`http/require-session.ts`,
+ * which replaced the freshness gate in **D81**) and the audit trail live.
  *
  * Each function checks the admin role itself rather than trusting the layout
  * route to have done it. A server function is an HTTP endpoint whatever the

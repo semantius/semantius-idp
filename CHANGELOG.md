@@ -9,6 +9,16 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-08-27
+
+Owner review round 4, and the first release cut after one. Three field
+reports from the running deployment and one requirement that could not be
+met by the accounts it applied to.
+
+Published as `ghcr.io/<owner>/semantius-idp:0.2.0` (also `0.2`, `0`, `latest`
+and `sha-<commit>`) for `linux/amd64` and `linux/arm64`, by
+[`.github/workflows/release.yml`](.github/workflows/release.yml) (**D73**).
+
 ### Removed
 
 - **The re-authentication gate on sensitive actions** (**D81**). FR-AUTH-5
@@ -748,5 +758,6 @@ were questions, and one was "polish every page".
   says where it came from, so it was sending anyone who inspected it to a
   repository that is not this one.
 
-[Unreleased]: https://github.com/semantius/semantius-idp/compare/v0.1.0...main
+[Unreleased]: https://github.com/semantius/semantius-idp/compare/v0.2.0...main
+[0.2.0]: https://github.com/semantius/semantius-idp/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/semantius/semantius-idp/releases/tag/v0.1.0

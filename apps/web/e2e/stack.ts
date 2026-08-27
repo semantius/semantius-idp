@@ -25,6 +25,7 @@
 
 import { spawnSync } from "node:child_process"
 import {
+  chmodSync,
   mkdirSync,
   readFileSync,
   readdirSync,
@@ -216,6 +217,24 @@ function writeConfig(
   const configDir = join(stack.workDir, "config")
   mkdirSync(configDir, { recursive: true })
   mkdirSync(stack.mailDir, { recursive: true })
+
+  // **The container has to be able to write here, and by default it cannot on
+  // Linux** (**D77**). `/mail` is this directory bind-mounted in, the image
+  // runs as `bun` (uid 1000, OPS-1), and this process creates the directory as
+  // whoever runs the suite — uid 1001 on a GitHub runner. A bind mount carries
+  // the host's ownership straight through, so the capture transport had
+  // nowhere to write and every test that waits for a verification link failed
+  // with `Captured: nothing`: twenty of them, all the ones needing a verified
+  // user, while every anonymous test passed.
+  //
+  // It cannot reproduce on Docker Desktop, whose bind mounts do not enforce
+  // host uids — which is why this suite is green on Windows and macOS and was
+  // red the first time a Linux runner ran it.
+  //
+  // `0o777` on a directory `mkdtemp` created for one run: the alternative is
+  // pinning the container to the host's uid, which changes the artefact under
+  // test and defeats the point of driving the published image.
+  chmodSync(stack.mailDir, 0o777)
 
   // D48: whole connection strings, in the file compose reads and the container
   // inherits. `postgres` is the service name on the compose network.
@@ -503,9 +522,19 @@ export async function waitForMail(
   }
 
   const all = readMail(stack).map((m) => `${m.template} → ${m.to}`)
+  // **An empty directory and a missing message are different faults** (D77).
+  // "Captured: nothing" was the whole of what twenty simultaneous failures
+  // said, and the cause was that the container could not write to this
+  // directory at all — a fact this message now offers, because the difference
+  // between "the IdP sent the wrong mail" and "the IdP could not write any"
+  // is the difference between reading application code and reading a mount.
+  const hint =
+    all.length > 0
+      ? `Captured: ${all.join(", ")}`
+      : `Captured: nothing at all in ${stack.mailDir} — if this is Linux, ` +
+        `check the container (uid 1000) can write to a directory this process created`
   throw new Error(
-    `no ${options.template ?? "captured"} e-mail for ${to} within the timeout. ` +
-      `Captured: ${all.length > 0 ? all.join(", ") : "nothing"}`
+    `no ${options.template ?? "captured"} e-mail for ${to} within the timeout. ${hint}`
   )
 }
 

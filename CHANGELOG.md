@@ -667,6 +667,16 @@ were questions, and one was "polish every page".
   reporter is added in CI, which writes `::error` lines into
   `check-runs/{job_id}/annotations`. Same wall the container smoke test hit,
   same way through it.
+- **The e2e mail directory was unwritable by the container on Linux**
+  (**D77**). Twenty tests failed on the first CI run the suite ever had, all
+  with `Captured: nothing`, and every anonymous test passed - the split was
+  exactly "needs a verified user". The capture transport writes JSON files into
+  a directory bind-mounted to `/mail`; the image runs as uid 1000 and a GitHub
+  runner as uid 1001, and a bind mount carries host ownership through. Docker
+  Desktop does not enforce host uids, so it cannot reproduce - 78 tests pass
+  locally against the exact image that failed on the runner. The directory is
+  now `chmod 0777` (a `mkdtemp` directory for one run), rather than pinning the
+  container's uid, which would change the artefact under test.
 - **Bun's version is pinned in five files and nothing compared them.**
   `.bun-version`, `package.json`'s `engines.bun`, the Dockerfile's
   `ARG BUN_VERSION`, and now both workflows. Bun is not a build tool in this

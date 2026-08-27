@@ -24,7 +24,7 @@ Four files, in this order. Read them before proposing anything.
 | File | What it is |
 | --- | --- |
 | [status.md](status.md) | The handoff. Done, not-done, and why — the ground truth between sessions. |
-| [spec-v1.md](spec-v1.md) | Signed off, amended through **D76**. Numbered requirements, and §12.1's decision log with the reasoning. |
+| [spec-v1.md](spec-v1.md) | Signed off, amended through **D77**. Numbered requirements, and §12.1's decision log with the reasoning. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | The gates, the style, and how to amend the spec. |
 | [docs/release.md](docs/release.md) | What is left before v1.0.0, and it is the owner's, not yours. |
 
@@ -317,6 +317,16 @@ grep -rhoE "uses: [^@]+@[A-Za-z0-9_.-]+" .github/workflows/ | sed 's/uses: //' |
 `CHECK` and is in fact the safest form — it cannot be retagged out from under a
 build, which is exactly what happened here. Confirm a SHA with
 `/repos/{o}/{n}/commits/{sha}`.
+
+**A bind mount carries host ownership into the container, and Docker Desktop
+hides it** (**D77**). The image runs as `bun`, uid 1000; a GitHub runner runs
+as uid 1001; the e2e suite bind-mounts a directory it created to `/mail` for
+D30's capture transport. On Linux the container could not write there, so
+twenty tests failed with `Captured: nothing` while every anonymous test passed.
+Docker Desktop's bind mounts do not enforce host uids, so **this whole class is
+invisible locally on Windows and macOS** - 78 tests passed here against the
+exact image that failed on the runner. Anything the container must *write* to
+through a bind mount needs its permissions set explicitly by the test harness.
 
 **A tag never reaches `ci.yml`, and `release.yml` is what publishes** (**D73**).
 `ci.yml` triggers on `push: branches: [main]`; a tag push does not match a

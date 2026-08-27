@@ -2,7 +2,7 @@
 
 **As of:** 2026-08-27 · **Branch:** `main` · **Head:** `a5e35d2` + the D73 release-workflow change below
 **Plan:** `~/.claude/plans/1-should-all-users-jolly-lake.md` (owner review round 4)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D74**
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D75**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
 gate.** Every gate green: lint, typecheck, unit (599), integration (246 across

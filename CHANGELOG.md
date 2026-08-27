@@ -615,6 +615,21 @@ were questions, and one was "polish every page".
   unchanged; it is still the one combination that is genuinely wrong.
   `idp config validate` prints the direct endpoint too, but only when it
   differs.
+- **The Trivy report is a workflow artifact, not the Security tab** (**D75**).
+  The first CI run and the first release run this repository ever had were
+  minutes apart, and both died at `Set up job` — a phase that runs before any
+  step and names none in its summary. Two causes, found one at a time.
+  `aquasecurity/trivy-action@0.28.0` is not a version that exists (that
+  repository tags `v0.28.0`), and an action reference is resolved during setup.
+  The second survived the fix, and the sibling repository is what found it:
+  `semantius-app` publishes with `contents: write` + `packages: write` and has
+  cut three releases that way, so write scopes are grantable here — and the only
+  scope these jobs added was **`security-events: write`**, present in both
+  failures and absent from every success. The SARIF now goes to
+  `actions/upload-artifact`; the release job requests exactly the pair
+  `semantius-app` has proven. The scan itself is unchanged and still reports —
+  what moved is where the report lands, and that is a downgrade worth undoing
+  once somebody with admin rights establishes why the scope is capped.
 - **Bun's version is pinned in five files and nothing compared them.**
   `.bun-version`, `package.json`'s `engines.bun`, the Dockerfile's
   `ARG BUN_VERSION`, and now both workflows. Bun is not a build tool in this

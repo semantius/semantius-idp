@@ -127,10 +127,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     needs: [guard]
+    # Exactly the set `semantius-app`'s publish workflow uses, which has cut
+    # three releases with it. It also carried `security-events: write` for a
+    # SARIF upload, and that scope alone killed the job at `Set up job` before
+    # any step ran — twice, with a message that names no step (**D75**).
     permissions:
       contents: write # the GitHub release
       packages: write # GHCR
-      security-events: write # the Trivy SARIF
 
     steps:
       - uses: actions/checkout@v4
@@ -208,14 +211,16 @@ jobs:
           ignore-unfixed: true
 
       - name: Upload scan results
-        # `always()` so a later failure still files the scan, but guarded on
-        # the file existing: if the smoke test fails, Trivy never ran, and an
-        # unguarded upload turns one failure into two and buries the real one.
+        # A workflow artifact rather than the Security tab (**D75**). `always()`
+        # so a later failure still files the scan, guarded on the file existing:
+        # if the smoke test fails Trivy never ran, and an unguarded upload turns
+        # one failure into two and buries the real one.
         if: always() && hashFiles('trivy.sarif') != ''
-        uses: github/codeql-action/upload-sarif@v3
+        uses: actions/upload-artifact@v4
         with:
-          sarif_file: trivy.sarif
-          category: trivy-release
+          name: trivy-release-sarif
+          path: trivy.sarif
+          retention-days: 90
 
       - name: SBOM (SEC-9)
         uses: anchore/sbom-action@v0

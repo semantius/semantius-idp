@@ -1,16 +1,16 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-27 · **Branch:** `main` · **Head:** `a5e35d2` + the D73 release-workflow change below
+**As of:** 2026-08-27 · **Branch:** `main` · **Head:** `76dec1c` + the **D78** round below
 **Plan:** `~/.claude/plans/1-should-all-users-jolly-lake.md` (owner review round 4)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D77**
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D78**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
-gate.** Every gate green: lint, typecheck, unit (599), integration (246 across
+gate.** Every gate green: lint, typecheck, unit (600), integration (246 across
 twenty-four files), coverage thresholds including the 85 % per-module gates,
 schema-drift, config-schema staleness, the configuration-reference and
 example-config gates, dependency pinning, the client-bundle gate, the TST-8
 container smoke test — run against the moved `docker/` layout and now
-completing the first-run wizard — and the TST-6 end-to-end suite: 74 tests in a
+completing the first-run wizard — and the TST-6 end-to-end suite: 82 tests in a
 real browser against the built image, in both deployment shapes.
 
 The `docker/idp-*` lifecycle scripts were exercised end to end as well —
@@ -64,6 +64,111 @@ Everything buildable is built. What remains cannot be done from here:
   next boot serves the first-run setup page, which is now the only way an
   administrator is ever created. No credential to recover, and no command that
   changes one.
+
+---
+
+## Owner review round 5 — four findings (2026-08-27, **D78**)
+
+Reported after using the running application. Three of the four are the same
+defect seen from different angles.
+
+### 1. "The account has been deleted" — which account? (**D78**)
+
+That sentence is identical for every account, and it lands on `/admin/users`,
+where the row that could answer *which one* is precisely the thing that has
+just gone. The address is now a second line on the toast — Base UI's
+`description`, not the catalog sentence, because folding it into the wording
+would mean a second string for every notice and a translator deciding where a
+proper noun goes in each of them, while an e-mail address is the same in every
+language.
+
+Most of it needed no plumbing: every action on `/admin/users/:id` comes back to
+`/admin/users/:id`, and every `/account/*` page knows its own session, so the
+loader already has the address. **Two redirects do not** — a deletion and a
+creation both land on the list — and there it travels as a **one-shot handle**,
+the same stash the client secret and the set-password link use.
+`?subject=jane@example.com` was rejected: `safeUrlForLog` keeps the query string
+of every path outside `/oauth2/*` and `/api/auth/*`, so that would write a
+deleted account's address into the request log of a codebase that anonymises IP
+addresses for exactly that reason (SEC-5).
+
+The dispatcher reads the address **before** the removal. That is a select, not
+a write, so the rule at the top of `http/admin-actions.ts` — everything goes
+through Better Auth's endpoints, which is what keeps the invariants and the
+audit trail in the path — is untouched.
+
+Two notices deliberately go without one. `/account/security`'s change-email
+notice is about a *different* address, and "Check the new address for a
+confirmation link" with the old address under it reads as a contradiction;
+`/account/api-keys` and `/account/consents` are about a key and an application,
+not an account.
+
+### 2. Toasts did not always disappear (**D78**)
+
+They do, in a focused window: ten seconds, and it was measured. What was not
+visible from the code is that **Base UI pauses every auto-dismiss timer when
+the window loses focus** and resumes it only on the way back — so a
+confirmation left behind a switched-away window is pinned to the corner of the
+screen for as long as the absence lasts. Against a running instance a toast was
+still there fifteen seconds after a window blur; with the fix it was gone
+eleven seconds after the same blur.
+
+That is exactly the outliving-its-truth **D71** set out to end. D71 removed the
+parameter that made a banner immortal and inherited a timer that can be frozen.
+
+There is no provider prop for it and the store is not reachable through
+`useToastManager`, so `NoticeToast` keeps its own **wall-clock backstop**: a
+`setTimeout` two seconds past the nominal lifetime that closes the toast by id.
+It is *not* a replacement for the library's timer — that one still runs and
+still wins whenever it is running, so hovering the toast or tabbing into it
+still pauses the dismissal, which is the pause WCAG 2.2.1 asks for. The
+backstop respects the same state, re-arming while
+`[data-slot="toast"][data-expanded]` is on screen, and it is deliberately not
+cleared on unmount, because the toast lives in the root's `Toaster` and
+outlives the page that raised it. Patching
+`packages/ui/src/components/toast.tsx` was rejected on AGENTS.md's standing
+rule: it is registry output and the next `shadcn add` overwrites it.
+
+### 3 and 4. "The secret does not show" and "the option to change it is missing" (**D78**)
+
+One defect, reported twice, and nothing about the mechanism was wrong.
+
+The registration form's default type is **`spa`**, chosen in round 2 because a
+browser application is what an operator adds here. `spa` and `native` are
+public clients: no secret is generated (FR-OIDC-3), and
+`/idp/rotate-client-secret` refuses one rather than quietly minting a secret
+(**D72**). So the commonest registration on that page produced "The application
+has been registered.", no secret dialog, and a row with no *Rotate secret*
+control — three facts with nothing anywhere saying they are one fact. From
+outside it looks like two bugs, which is how it was reported.
+
+Three surfaces now say it:
+
+- **The type field**, in both dialogs: only a Web application keeps a secret,
+  and changing the type is what issues or destroys one. That is also the answer
+  to the second report — **an edit that turns a public client into a `web` one
+  mints a secret and shows it once**, a path D72 built and the interface never
+  mentioned.
+- **The confirmation**, which distinguishes the two reasons a create or update
+  returns no secret, off the `isPublic` the endpoints already answer with: a
+  public client has none, an update that kept its existing one has nothing to
+  re-show.
+- **The table**, which reads "Public — no client secret" where it read
+  "Public"; and `addHelp`, which now promises a secret only for a Web
+  application.
+
+A disabled *Rotate secret* button was considered and rejected: a control that
+can never be enabled is noise, and the row, the field and the notice already
+answer the question it would have raised.
+
+### What guards it
+
+`e2e/admin.spec.ts` grew two tests, because every one of these is only visible
+in a browser: a deletion that must name the account and must then vanish
+**with the window blurred**, and a public-client registration that must explain
+itself, must show no secret dialog, must offer no rotate control, and must hand
+one over when its type is changed to Web. The blur is a real window event and
+the dismissal is a real timer; no other gate in this repository can see either.
 
 ---
 

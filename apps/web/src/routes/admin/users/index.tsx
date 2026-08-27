@@ -25,7 +25,7 @@ import { SecretDialog } from "@/components/common/dialogs"
 import { UserBadges } from "@/components/admin/user-badges"
 import { UserCreateDialog } from "@/components/admin/user-create-dialog"
 import { FormAlert } from "@/components/auth/form-parts"
-import { NoticeToast } from "@/components/common/notice-toast"
+import { NoticeToast, SUBJECT_PARAM } from "@/components/common/notice-toast"
 import { messageForErrorCode, messageForNoticeCode } from "@/lib/auth-errors"
 import { parseInviteLink } from "@/lib/invite-link"
 import { searchString } from "@/lib/search-params"
@@ -114,6 +114,15 @@ export const Route = createFileRoute("/admin/users/")({
       inviteLink: parseInviteLink(
         await claimAdminSecret({ data: searchString(search.created) ?? "" })
       ),
+      // Who the notice is about (**D78**). The same one-shot store, because
+      // the alternative is an e-mail address in the query string and therefore
+      // in the request log. Absent for every notice that is not about one
+      // account, and for the invite-link path, which carries the address in
+      // its own stash already.
+      subject:
+        (await claimAdminSecret({
+          data: searchString(search[SUBJECT_PARAM]) ?? "",
+        })) ?? undefined,
       // A refused creation, so the dialog reopens with what was typed (D62).
       draft:
         (await claimAdminDraft({ data: searchString(search.draft) ?? "" })) ??
@@ -164,6 +173,25 @@ export const Route = createFileRoute("/admin/users/")({
           draft: submitted,
         })
         if (!fresh.ok) return fresh.response
+
+        /**
+         * Back to the list, saying which account it is about (**D78**).
+         *
+         * The address travels as a **one-shot handle**, not as itself:
+         * `safeUrlForLog` keeps the query string of every path outside
+         * `/oauth2/*` and `/api/auth/*`, so `?subject=jane@example.com` would
+         * write the address into the request log of a codebase that
+         * anonymises IP addresses for exactly that reason (SEC-5). Two
+         * minutes is a redirect's worth of life, and the claim consumes it.
+         */
+        const landOnList = async (notice: string) =>
+          redirectWithCookies(
+            `${list}?notice=${notice}&${SUBJECT_PARAM}=${await stash(
+              runtime,
+              email,
+              { ttlSeconds: 120 }
+            )}`
+          )
 
         const created = await callAuth(
           runtime,
@@ -223,7 +251,7 @@ export const Route = createFileRoute("/admin/users/")({
           runtime.logger.error("create-user succeeded without a user id", {
             email,
           })
-          return redirectWithCookies(`${list}?notice=createdLinkFailed`)
+          return landOnList("createdLinkFailed")
         }
 
         try {
@@ -236,7 +264,7 @@ export const Route = createFileRoute("/admin/users/")({
 
           if (runtime.mailer.enabled) {
             await runtime.mailer.send("setPassword", email, { url: reset.url })
-            return redirectWithCookies(`${list}?notice=created`)
+            return landOnList("created")
           }
 
           // FR-MAIL-2: nothing can be sent, so the link is handed over on
@@ -254,7 +282,7 @@ export const Route = createFileRoute("/admin/users/")({
             userId: user.id,
             error: error instanceof Error ? error.message : String(error),
           })
-          return redirectWithCookies(`${list}?notice=createdLinkFailed`)
+          return landOnList("createdLinkFailed")
         }
       },
     },
@@ -265,8 +293,18 @@ export const Route = createFileRoute("/admin/users/")({
 const STATUSES = ["pending", "active", "rejected"] as const
 
 function UsersPage() {
-  const { ui, gate, query, page, roles, notice, error, inviteLink, draft } =
-    Route.useLoaderData()
+  const {
+    ui,
+    gate,
+    query,
+    page,
+    roles,
+    notice,
+    error,
+    inviteLink,
+    subject,
+    draft,
+  } = Route.useLoaderData()
   const t = getCatalog(ui.locale)
   const impersonated = gate.admin ? gate.impersonated : false
 
@@ -295,7 +333,7 @@ function UsersPage() {
         />
       }
     >
-      <NoticeToast message={messageForNoticeCode(notice, t)} />
+      <NoticeToast message={messageForNoticeCode(notice, t)} subject={subject} />
       {/* Not when the dialog is reopening with it — the modal would cover it. */}
       <FormAlert>
         {draft === undefined

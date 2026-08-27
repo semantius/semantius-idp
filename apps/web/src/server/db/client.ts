@@ -54,6 +54,49 @@ export interface CreateDbOptions {
 }
 
 /**
+ * Reads a `timestamp without time zone` as the UTC instant it was written as.
+ *
+ * **Every timestamp column in the auth schema is `timestamp`, not
+ * `timestamptz`** — that is what Better Auth's generator emits and what
+ * `auth-schema.ts` therefore says, and it is not ours to change by hand. So
+ * the column carries a wall clock with no zone attached, and the zone it
+ * means is decided entirely by who writes it and who reads it.
+ *
+ * The write side is already UTC: postgres.js serialises a `Date` with
+ * `toISOString()`, and Postgres discards the offset when the target is
+ * `timestamp without time zone`, so `19:58Z` is stored as the literal `19:58`.
+ * **The read side was not.** postgres.js parses oid 1114 with plain
+ * `new Date(x)` on a string like `2026-08-27 19:58:38.81`, which JavaScript
+ * resolves in the *process's* zone — and Drizzle, which does append `+0000`
+ * for exactly this reason, never sees it, because `mapFromDriverValue`
+ * returns a non-string through untouched.
+ *
+ * The result is that every timestamp read out of the database arrives shifted
+ * by the local UTC offset, and always into the past for a zone east of
+ * Greenwich. Anything that compares one to `Date.now()` is then wrong by that
+ * much: the freshness gate (`http/fresh-session.ts`, FR-AUTH-5) is the loudest
+ * — with `session.freshAgeMinutes` at 15 and a machine on UTC+1, a session
+ * that was seconds old measured an hour and one minute, so **every** sensitive
+ * action bounced to `/login?notice=reauth…` and re-authenticating produced
+ * another session that was just as stale. Reported that way on 2026-08-27:
+ * a re-authentication demanded ten seconds after the page was opened.
+ *
+ * `docker/Dockerfile` sets `TZ=UTC`, so the image, the e2e suite and CI are
+ * all immune — this is only ever visible to a developer whose machine is not
+ * on UTC, which is why no gate here has ever seen it (**D79**).
+ *
+ * Only oid 1114 is overridden. 1082 (`date`) has no time to misplace and
+ * 1184 (`timestamptz`) already arrives with an offset; both keep postgres.js's
+ * own parser.
+ */
+export function parseTimestampUtc(value: string): Date {
+  // `infinity` / `-infinity` are not dates and must stay whatever the default
+  // made of them (an invalid `Date`) rather than becoming one an hour off.
+  if (!/^\d/.test(value)) return new Date(value)
+  return new Date(`${value.replace(" ", "T")}Z`)
+}
+
+/**
  * Heuristic for "this connection string goes through a transaction pooler".
  * Used only to warn — the fix is always an explicit `database.directUrl`.
  */
@@ -117,6 +160,17 @@ export function createDb(
     // arrive as rejected promises.
     onnotice: () => {},
     prepare: false,
+    // **D79**: a `timestamp without time zone` is written as UTC and must be
+    // read back as UTC. See `parseTimestampUtc`.
+    types: {
+      timestamp: {
+        to: 1114,
+        from: [1114],
+        serialize: (x: Date | string) =>
+          (x instanceof Date ? x : new Date(x)).toISOString(),
+        parse: parseTimestampUtc,
+      },
+    },
   })
 
   const db = drizzle(sql, { schema })

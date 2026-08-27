@@ -14,6 +14,8 @@
  * last administrator that the API refuses.
  */
 
+import { eq } from "drizzle-orm"
+
 import { adminErrorCodeFor, callAuth } from "./auth-proxy"
 import type { AuthCallResult } from "./auth-proxy"
 import { displayName } from "../display-name"
@@ -34,6 +36,15 @@ export interface AdminActionOutcome {
   notice?: string
   /** An error code for `messageForErrorCode` when it did not. */
   error?: string
+  /**
+   * The account the notice is about, so the toast can name it (**D78**).
+   *
+   * Only ever set where the page the notice lands on cannot work the address
+   * out for itself. Every action that comes back to `/admin/users/:id` can —
+   * its loader re-reads the account — so `delete` is the one case, because
+   * the row it would have read is the thing that just went away.
+   */
+  subject?: string
   /** Where to go instead of back to the user's page. */
   redirect?: string
   /** Cookies to replay — impersonation sets a session. */
@@ -103,6 +114,14 @@ export async function runAdminAction(
       )
 
     case "delete": {
+      // Read **before** the removal (**D78**). "The account has been deleted."
+      // lands on the list, where the row that could answer *which* account is
+      // the one thing that is certainly gone — so the address is taken while
+      // it still exists and carried to the toast. A read, not a write: the
+      // rule at the top of this file is that nothing here writes to the
+      // database, because a direct write is a write the invariants and the
+      // audit trail never see. A select is neither.
+      const email = await emailOf(input)
       const result = await simple(
         input,
         "/admin/remove-user",
@@ -111,7 +130,7 @@ export async function runAdminAction(
       )
       // The account is gone, so its page is gone with it.
       if (!result.error) {
-        return { ...result, redirect: "/admin/users?notice=deleted" }
+        return { ...result, subject: email, redirect: "/admin/users" }
       }
       return result
     }
@@ -290,6 +309,27 @@ export async function runAdminAction(
 
     default:
       return { error: "invalid_request" }
+  }
+}
+
+/**
+ * The account's e-mail address, or `undefined` if it cannot be read.
+ *
+ * `undefined` rather than a throw: this is the label on a confirmation, and a
+ * deletion that worked must not be reported as a failure because the sentence
+ * above it would have been less specific.
+ */
+async function emailOf(input: AdminActionInput): Promise<string | undefined> {
+  try {
+    const { db, schema } = input.runtime.database
+    const [row] = await db
+      .select({ email: schema.user.email })
+      .from(schema.user)
+      .where(eq(schema.user.id, input.userId))
+      .limit(1)
+    return row?.email
+  } catch {
+    return undefined
   }
 }
 

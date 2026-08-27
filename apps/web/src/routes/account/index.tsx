@@ -111,7 +111,13 @@ function ProfilePage() {
       impersonated={profile.impersonated}
       isAdmin={profile.isAdmin}
     >
-      <NoticeToast message={messageForNoticeCode(notice, t)} />
+      {/* **D78**: whose account. Redundant when it is your own and your own
+          only — and not, the moment an administrator is impersonating, which
+          is the one time "Profile updated." needs to say *whose*. */}
+      <NoticeToast
+        message={messageForNoticeCode(notice, t)}
+        subject={profile.email}
+      />
       <FormAlert>
         {messageForErrorCode(error, t, ui.passwordMinLength)}
       </FormAlert>

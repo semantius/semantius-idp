@@ -115,6 +115,19 @@ export function modal(page: Page): Locator {
   return page.locator('[data-slot="dialog-content"]')
 }
 
+/**
+ * The toast, and not the modal — the other half of the same problem.
+ *
+ * Both are `role="dialog"`, so neither can be selected by its role while the
+ * other is on screen. `data-slot="toast"` is what Base UI's toast root stamps
+ * and `DialogContent` does not. Scoping to it is what lets a spec assert the
+ * *subject* of a confirmation (**D78**) without matching the same address
+ * where it appears in the table behind the toast.
+ */
+export function toast(page: Page): Locator {
+  return page.locator('[data-slot="toast"]')
+}
+
 export async function openDialog(
   page: Page,
   name: string,

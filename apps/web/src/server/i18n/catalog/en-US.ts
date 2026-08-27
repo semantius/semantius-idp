@@ -522,8 +522,10 @@ export const enUS = {
       removeConfirm:
         "Removing the application revokes its tokens and disconnects everyone who allowed it. This cannot be undone.",
       add: "Add an application",
+      // **D78**: "a Web application's", because only that type has one — the
+      // sentence promised a secret the default type never produces.
       addHelp:
-        "The client secret is generated here and shown once. Redirect URIs are matched exactly.",
+        "A Web application's client secret is generated here and shown once. Redirect URIs are matched exactly.",
       // D72: every field except the id, which is the natural key four other
       // tables reference.
       edit: "Edit",
@@ -532,6 +534,10 @@ export const enUS = {
         "Everything except the client ID can be changed. The existing secret is kept unless the type changes.",
       clientIdFixed:
         "The client ID cannot be changed — tokens, consents and audit rows all reference it. Remove the application and add it again to use a different one.",
+      // **D79**: one of these per row, so the name has to say which row —
+      // "Actions" repeated once per application is a list of identical
+      // controls to a screen reader and an ambiguous locator to a test.
+      actionsFor: (name: string) => `Actions for ${name}`,
       rotateSecret: "Rotate secret",
       rotateConfirm:
         "A new client secret is generated and shown once. The current one stops working immediately, so the application has to be updated before it can sign anyone in again.",
@@ -541,11 +547,21 @@ export const enUS = {
       typeWeb: "Web — a server-side app that can keep a secret",
       typeSpa: "Single-page app — no secret, PKCE required",
       typeNative: "Mobile or desktop app",
+      // **D78**: said at the point of choosing, because the type is what
+      // decides whether a secret exists at all — and it is also the only way
+      // to give an application one afterwards.
+      typeHelp:
+        "Only a Web application keeps a client secret. Changing an application to Web issues one and shows it once; changing it away from Web destroys it and revokes its tokens.",
       onePerLine: "One per line. Matched exactly, so no wildcards.",
       secretTitle: "The client secret",
       secretHelp:
         "Copy it now — it is stored as a hash and cannot be shown again.",
-      public: "Public",
+      // **D78**: the consequence, not only the OAuth term. "Public" is what
+      // the specification calls it; "no client secret" is the thing an
+      // operator was looking for when they registered an application, saw no
+      // secret and no way to rotate one, and had nothing on the page to tell
+      // them why.
+      public: "Public — no client secret",
       confidential: "Confidential",
       disabled: "Disabled",
       redirectUris: "Redirect URIs",
@@ -695,8 +711,17 @@ export const enUS = {
       keyRevoked: "The API key has been revoked.",
       profileSaved: "Profile updated.",
       clientCreated: "The application has been registered.",
+      // **D78**: the same event, for a client that has no secret to show. It
+      // used to be reported with the sentence above and nothing else, so an
+      // operator who took the default type — a single-page app — saw a
+      // registration succeed, no secret dialog, and no rotate control on the
+      // row, with nothing anywhere saying the three facts were one fact.
+      clientCreatedPublic:
+        "The application has been registered. It is a public client, so it has no secret — it authenticates with PKCE. Change its type to Web to issue one.",
       clientDeleted: "The application has been removed.",
       clientUpdated: "The application has been updated.",
+      clientUpdatedPublic:
+        "The application has been updated. It is a public client, so it has no secret — it authenticates with PKCE. Change its type to Web to issue one.",
       clientDisabled: "The application has been disabled.",
       clientEnabled: "The application has been enabled.",
       created: "The account has been created.",

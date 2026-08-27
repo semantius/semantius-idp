@@ -39,7 +39,8 @@ export function ClientEditDialog({
   t,
   client,
   draft,
-  reopen,
+  open,
+  onOpenChange,
   error,
 }: {
   ui: UiContext
@@ -47,7 +48,15 @@ export function ClientEditDialog({
   client: AdminClientRow
   /** The refused submission, claimed by the loader — only if it was this row's. */
   draft?: Draft
-  reopen?: boolean
+  /**
+   * Controlled by the row's actions menu (**D79**), which owns one piece of
+   * state for all four of its dialogs. The `reopen` flag this replaced was a
+   * `defaultOpen`, which only works while there is a trigger to have opened
+   * it; there is not any more, so the same fact — a refused edit comes back
+   * with the dialog open (**D62**) — seeds the menu's state instead.
+   */
+  open: boolean
+  onOpenChange: (open: boolean) => void
   /** The refusal, rendered inside the dialog, for the reason `ClientCreateDialog` gives. */
   error?: string
 }) {
@@ -68,9 +77,8 @@ export function ClientEditDialog({
       label={t.admin.clients.edit}
       title={t.admin.clients.editTitle}
       description={t.admin.clients.editHelp}
-      variant="outline"
-      size="sm"
-      defaultOpen={reopen}
+      open={open}
+      onOpenChange={onOpenChange}
     >
       <PendingForm
         busy={t.common.loading}

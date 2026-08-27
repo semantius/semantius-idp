@@ -9,6 +9,7 @@ import {
   signOut,
   submit,
   submitDialog,
+  toast,
   uniqueEmail,
 } from "./actions"
 import { expect, test } from "./fixtures"
@@ -157,6 +158,14 @@ test.describe("the admin area", () => {
     // Item 10: both outcomes land on the list the account was created for.
     await expect(page).toHaveURL(new RegExp(`${app.basePath}/admin/users`))
     await expect(page.getByText("The account has been created.")).toBeVisible()
+    // **D78**: and *which* account. That sentence is identical for every
+    // creation, so an administrator adding several in a row had nothing to
+    // tell one confirmation from the next.
+    await expect(toast(page).getByText(email)).toBeVisible()
+    // The address travelled as a one-shot handle, and both the notice and the
+    // handle are stripped once the toast has them: an e-mail address in the
+    // query string is one in the request log.
+    await expect(page).not.toHaveURL(/notice=|subject=/)
 
     await page.getByLabel("Search by name or e-mail").fill(email)
     await submit(page, "Search")
@@ -553,5 +562,111 @@ test.describe("the admin area", () => {
     await signOut(page, app)
     await signIn(page, app, user.email, PASSWORD)
     await expect(page).toHaveURL(/change-password\?forced=1/)
+  })
+
+  test("a deleted account is named, and the confirmation does not outlive it (D78)", async ({
+    page,
+    app,
+    stack,
+  }) => {
+    const user = await createVerifiedUser(page, app, stack, "deleted")
+    await signInAsAdmin(page, app)
+
+    await app.goto("/admin/users")
+    await page.getByLabel("Search by name or e-mail").fill(user.email)
+    await submit(page, "Search")
+    await page.getByRole("link", { name: user.email }).click()
+
+    const remove = await openDialog(page, "Delete this account")
+    await submitDialog(page, remove, "Delete this account")
+
+    // The account's own page is gone with it, so this lands on the list —
+    // where the row that could answer "which one?" is exactly what is missing.
+    await expect(page).toHaveURL(new RegExp(`${app.basePath}/admin/users`))
+    const confirmation = toast(page)
+    await expect(
+      confirmation.getByText("The account has been deleted.")
+    ).toBeVisible()
+    await expect(confirmation.getByText(user.email)).toBeVisible()
+    await expect(page).not.toHaveURL(/notice=|subject=/)
+
+    // **D78**, the other half. Base UI freezes every auto-dismiss timer while
+    // the *window* is unfocused and thaws it only on the way back, so a
+    // confirmation left behind a switched-away window stays on screen for as
+    // long as the absence lasts — the outliving-its-truth D71 set out to end,
+    // reintroduced by the component that replaced the banner. Only a browser
+    // can see this: the blur is a real window event and the dismissal is a
+    // real timer.
+    await page.evaluate(() => {
+      window.dispatchEvent(new FocusEvent("blur"))
+    })
+    await expect(
+      confirmation,
+      "the toast goes even though the window never came back"
+    ).toHaveCount(0, { timeout: 25_000 })
+  })
+
+  test("a public client says why it has no secret, and how to get one (D78)", async ({
+    page,
+    app,
+  }) => {
+    await signInAsAdmin(page, app)
+    await app.goto("/admin/clients")
+
+    const form = await openDialog(page, "Add an application")
+    // The type is the only control that decides whether a secret exists, and
+    // — in the edit dialog — the only way to give one to an application that
+    // has none. Neither was said anywhere.
+    await expect(
+      form.getByText(/Only a Web application keeps a client secret/)
+    ).toBeVisible()
+
+    await form.getByLabel("Name").fill("Public Only")
+    await form.getByLabel("Client ID").fill("e2e-public")
+    // **The default type, left alone.** This is the registration an operator
+    // actually makes, and the one that produced a bare "The application has
+    // been registered.", no secret dialog and no rotate control, with nothing
+    // anywhere connecting the three.
+    await expect(form.getByLabel("Type")).toHaveValue("spa")
+    await form
+      .getByLabel("Redirect URIs", { exact: true })
+      .fill("https://example.test/callback")
+    await submitDialog(page, form, "Add an application")
+
+    await expect(
+      page.getByText(/It is a public client, so it has no secret/)
+    ).toBeVisible()
+    // No secret dialog, because there is no secret. The point is that the
+    // page says so rather than looking like a dialog that failed to open.
+    await expect(modal(page)).toHaveCount(0)
+
+    const row = page.locator("tbody tr").filter({ hasText: "e2e-public" })
+    await expect(row.getByText("Public — no client secret")).toBeVisible()
+    await expect(
+      row.getByRole("button", { name: "Rotate secret" })
+    ).toHaveCount(0)
+
+    // The way out, which is the answer to "the option to change the secret is
+    // missing": the type change mints one and shows it once, and the row
+    // grows the rotate control it did not have.
+    const edit = await openDialog(page, "Edit", row)
+    await edit.getByLabel("Type").selectOption("web")
+    await submitDialog(page, edit, "Save")
+
+    const issued = modal(page)
+    await expect(issued).toBeVisible()
+    const secret = (
+      await issued.locator('[data-slot="one-shot-value"]').innerText()
+    ).trim()
+    expect(secret.length, "a generated client secret").toBeGreaterThan(31)
+    await page.keyboard.press("Escape")
+    await expect(row.getByRole("button", { name: "Rotate secret" })).toBeVisible()
+
+    // Cleaned up, so the next run starts from the same table.
+    const confirm = await openDialog(page, "Remove", row)
+    await submitDialog(page, confirm, "Remove")
+    await expect(
+      page.locator("tbody tr").filter({ hasText: "e2e-public" })
+    ).toHaveCount(0)
   })
 })

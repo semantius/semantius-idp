@@ -18,8 +18,8 @@ import {
 
 import { AdminShell } from "@/components/admin/admin-shell"
 import { ClientCreateDialog } from "@/components/admin/client-create-dialog"
-import { ClientEditDialog } from "@/components/admin/client-edit-dialog"
-import { ActionDialog, SecretDialog } from "@/components/common/dialogs"
+import { ClientRowActions } from "@/components/admin/client-row-actions"
+import { SecretDialog } from "@/components/common/dialogs"
 import { FormAlert } from "@/components/auth/form-parts"
 import { NoticeToast } from "@/components/common/notice-toast"
 import { messageForErrorCode, messageForNoticeCode } from "@/lib/auth-errors"
@@ -43,7 +43,6 @@ import type { Draft } from "@/server/http/draft"
 import { requireFreshSession } from "@/server/http/fresh-session"
 import { stash } from "@/server/http/one-shot"
 import { getRuntime } from "@/server/runtime"
-import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 const HERE = "/admin/clients"
 
@@ -245,12 +244,23 @@ export const Route = createFileRoute("/admin/clients")({
             ? result.body.clientSecret
             : ""
         if (secret === "") {
-          // Nothing to hand over: a public client has no secret, and an update
-          // that kept the existing one deliberately does not re-show it — the
-          // row holds a hash, so there is nothing to re-show.
-          return redirectWithCookies(
-            `${here}?notice=${updating ? "clientUpdated" : "clientCreated"}`
-          )
+          // Nothing to hand over, for one of two reasons, and **which one
+          // matters** (**D78**). A public client has no secret at all: the
+          // form's default type is `spa`, so the commonest registration on
+          // this page produced "The application has been registered." and no
+          // secret dialog, and the operator had no way to tell that from a
+          // failure to show one. An update that kept the existing secret is
+          // the other reason, and deliberately does not re-show it — the row
+          // holds a hash. The endpoint answers `isPublic` for exactly this.
+          const isPublic = result.body.isPublic === true
+          const notice = updating
+            ? isPublic
+              ? "clientUpdatedPublic"
+              : "clientUpdated"
+            : isPublic
+              ? "clientCreatedPublic"
+              : "clientCreated"
+          return redirectWithCookies(`${here}?notice=${notice}`)
         }
         const handle = await stash(runtime, secret, { ttlSeconds: 600 })
         return redirectWithCookies(`${here}?created=${handle}`)
@@ -330,6 +340,13 @@ function ClientsPage() {
                 <TableHead>{t.admin.clients.requireConsent}</TableHead>
                 <TableHead>{t.admin.clients.managedBy}</TableHead>
                 <TableHead>{t.admin.clients.status}</TableHead>
+                {/* The actions column carries no visible heading — a menu
+                    button in every row needs no label above it — but a
+                    `<th>` with nothing in it is a column a screen reader
+                    cannot name (**D79**). */}
+                <TableHead className="w-px">
+                  <span className="sr-only">{t.admin.actions.title}</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -375,6 +392,10 @@ function ClientsPage() {
                         : t.admin.clients.managedDatabase}
                     </Badge>
                   </TableCell>
+                  {/* Status, and only status (**D79**). The four actions
+                      used to hang under this badge, which made a one-line
+                      column four buttons tall and put most of a row's
+                      controls under a heading that does not describe them. */}
                   <TableCell className="text-xs">
                     {client.disabled ? (
                       <Badge variant="destructive">
@@ -385,94 +406,27 @@ function ClientsPage() {
                         {t.admin.clients.enabled}
                       </Badge>
                     )}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {/* A file-managed row has no menu at all, rather than a
+                        menu of things it may not do: an edit here is one the
+                        next restart would silently undo (FR-OIDC-2). */}
                     {client.managedBy === "database" ? (
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <PendingForm busy={t.common.loading} method="post">
-                          <input type="hidden" name="action" value="toggle" />
-                          <input
-                            type="hidden"
-                            name="clientId"
-                            value={client.clientId}
-                          />
-                          {client.disabled ? null : (
-                            <input type="hidden" name="disabled" value="on" />
-                          )}
-                          <SubmitButton variant="outline" size="sm">
-                            {client.disabled
-                              ? t.admin.clients.enable
-                              : t.admin.clients.disable}
-                          </SubmitButton>
-                        </PendingForm>
-                        <ClientEditDialog
-                          ui={ui}
-                          t={t}
-                          client={client}
-                          draft={editDraftFor(client.clientId)}
-                          reopen={
-                            editDraftFor(client.clientId) !== undefined
-                          }
-                          error={
-                            editDraftFor(client.clientId) !== undefined
-                              ? messageForErrorCode(
-                                  error,
-                                  t,
-                                  ui.passwordMinLength
-                                )
-                              : undefined
-                          }
-                        />
-                        {/* Only where there is a secret to replace. A public
-                            client authenticates with PKCE, and the endpoint
-                            refuses it rather than quietly minting one. */}
-                        {client.isPublic ? null : (
-                          <ActionDialog
-                            label={t.admin.clients.rotateSecret}
-                            description={t.admin.clients.rotateConfirm}
-                            variant="outline"
-                          >
-                            <PendingForm
-                              busy={t.common.loading}
-                              method="post"
-                              className="grid gap-4"
-                            >
-                              <input
-                                type="hidden"
-                                name="action"
-                                value="rotate-secret"
-                              />
-                              <input
-                                type="hidden"
-                                name="clientId"
-                                value={client.clientId}
-                              />
-                              <SubmitButton>
-                                {t.admin.clients.rotateSecret}
-                              </SubmitButton>
-                            </PendingForm>
-                          </ActionDialog>
-                        )}
-                        <ActionDialog
-                          label={t.admin.clients.remove}
-                          description={t.admin.clients.removeConfirm}
-                          variant="destructive"
-                        >
-                          <PendingForm
-                            busy={t.common.loading}
-                            method="post"
-                            className="grid gap-4"
-                          >
-                            <input type="hidden" name="action" value="delete" />
-                            <input
-                              type="hidden"
-                              name="clientId"
-                              value={client.clientId}
-                            />
-                            <SubmitButton variant="destructive">
-                              {t.admin.clients.remove}
-                            </SubmitButton>
-                          </PendingForm>
-                        </ActionDialog>
-                      </div>
+                      <ClientRowActions
+                        ui={ui}
+                        t={t}
+                        client={client}
+                        draft={editDraftFor(client.clientId)}
+                        error={
+                          editDraftFor(client.clientId) !== undefined
+                            ? messageForErrorCode(
+                                error,
+                                t,
+                                ui.passwordMinLength
+                              )
+                            : undefined
+                        }
+                      />
                     ) : null}
                   </TableCell>
                 </TableRow>

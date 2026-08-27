@@ -291,7 +291,14 @@ function SecurityPage() {
       impersonated={profile.impersonated}
       isAdmin={profile.isAdmin}
     >
-      <NoticeToast message={messageForNoticeCode(notice, t)} />
+      {/* Every notice here is about this account — except the one that is
+          about a *different* address. "Check the new address for a
+          confirmation link", with the old address underneath it, reads as a
+          contradiction, so that one goes without (**D78**). */}
+      <NoticeToast
+        message={messageForNoticeCode(notice, t)}
+        subject={notice === "email_change_sent" ? undefined : profile.email}
+      />
       {/* A password refusal is reported inside the dialog that produced it,
           where the fields are; repeating it here would say the same thing
           twice on one screen. */}

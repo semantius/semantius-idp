@@ -29,6 +29,19 @@ describe("NoticeToast, before hydration", () => {
     expect(render(<NoticeToast message={undefined} />)).toBe("")
   })
 
+  it("never server-renders the subject either", () => {
+    // **D78** put the account's address on the toast as its description. The
+    // same rule applies to it as to the sentence: the first paint contains
+    // neither, or the toast that follows is a second copy of both.
+    const html = render(
+      <NoticeToast
+        message="The account has been deleted."
+        subject="jane@example.com"
+      />
+    )
+    expect(html).toBe("")
+  })
+
   it("never server-renders the sentence itself", () => {
     // The regression this guards: a "helpful" fallback that renders the
     // message inline for the pre-hydration case would put it on screen twice

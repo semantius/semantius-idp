@@ -47,6 +47,8 @@ export function ActionDialog({
   size = "sm",
   className,
   defaultOpen,
+  open,
+  onOpenChange,
   children,
 }: {
   /** The trigger's text, and the dialog's accessible name when no title is given. */
@@ -63,15 +65,38 @@ export function ActionDialog({
    * visible. Uncontrolled, so closing it works exactly as it always did.
    */
   defaultOpen?: boolean
+  /**
+   * Controlled, and **then there is no trigger** (**D79**).
+   *
+   * What a dialog opened from a menu needs: the control that opens it is a
+   * `menuitem` in a popup that closes on activation, so by the time the dialog
+   * should appear the trigger no longer exists to have opened it. The caller
+   * holds the state instead — `/admin/clients`'s row actions hold one value
+   * for four dialogs, which is also what makes "only one of these at a time"
+   * true by construction rather than by luck.
+   *
+   * Leave it `undefined` for the uncontrolled form, which is every dialog with
+   * a visible button of its own.
+   */
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
   children: ReactNode
 }) {
+  const controlled = open !== undefined
+
   return (
-    <Dialog defaultOpen={defaultOpen}>
-      <DialogTrigger
-        render={<Button variant={variant} size={size} className={className} />}
-      >
-        {label}
-      </DialogTrigger>
+    <Dialog
+      {...(controlled ? { open, onOpenChange } : { defaultOpen })}
+    >
+      {controlled ? null : (
+        <DialogTrigger
+          render={
+            <Button variant={variant} size={size} className={className} />
+          }
+        >
+          {label}
+        </DialogTrigger>
+      )}
       {/* The registry popup is `fixed top-1/2 -translate-y-1/2` with no
           max-height and no overflow, so a form taller than the viewport hangs
           off both ends of it with nothing to scroll — and its submit button

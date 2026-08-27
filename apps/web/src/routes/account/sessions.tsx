@@ -124,7 +124,10 @@ function SessionsPage() {
       impersonated={profile.impersonated}
       isAdmin={profile.isAdmin}
     >
-      <NoticeToast message={messageForNoticeCode(notice, t)} />
+      <NoticeToast
+        message={messageForNoticeCode(notice, t)}
+        subject={profile.email}
+      />
       <FormAlert>
         {messageForErrorCode(error, t, ui.passwordMinLength)}
       </FormAlert>

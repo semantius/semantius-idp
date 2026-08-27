@@ -173,11 +173,23 @@ export function ClientFormFields({
           name="type"
           defaultValue={values.type}
           className="w-full"
+          aria-describedby={field("type-help")}
         >
           <option value="spa">{t.admin.clients.typeSpa}</option>
           <option value="web">{t.admin.clients.typeWeb}</option>
           <option value="native">{t.admin.clients.typeNative}</option>
         </NativeSelect>
+        {/* **D78**: this control is the only thing that decides whether the
+            application has a secret, and — in the edit dialog — the only way
+            to give one to an application that has none. Neither was said
+            anywhere, so registering the default type produced no secret, no
+            rotate control on the row, and no explanation for either. The
+            option labels carry the fact; this carries the consequence, and it
+            is the same sentence in both dialogs because the transition it
+            describes runs both ways. */}
+        <FieldDescription id={field("type-help")}>
+          {t.admin.clients.typeHelp}
+        </FieldDescription>
       </Field>
       <Field>
         <FieldLabel htmlFor={field("redirectUris")}>

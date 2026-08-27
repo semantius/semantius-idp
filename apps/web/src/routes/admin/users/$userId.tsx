@@ -33,13 +33,14 @@ import { RoleCheckboxes } from "@/components/admin/role-checkboxes"
 import { ActionDialog } from "@/components/common/dialogs"
 import { UserBadges } from "@/components/admin/user-badges"
 import { FormAlert } from "@/components/auth/form-parts"
-import { NoticeToast } from "@/components/common/notice-toast"
+import { NoticeToast, SUBJECT_PARAM } from "@/components/common/notice-toast"
 import { messageForErrorCode, messageForNoticeCode } from "@/lib/auth-errors"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
 import { runAdminAction } from "@/server/http/admin-actions"
 import { readFormMulti, redirectWithCookies } from "@/server/http/auth-proxy"
 import { requireFreshSession } from "@/server/http/fresh-session"
+import { stash } from "@/server/http/one-shot"
 import { fetchRoles, fetchUserDetail } from "@/server/functions/admin"
 import { getRuntime } from "@/server/runtime"
 import { PendingForm, SubmitButton } from "@/components/common/pending-form"
@@ -114,10 +115,26 @@ export const Route = createFileRoute("/admin/users/$userId")({
         const query = new URLSearchParams()
         if (outcome.notice) query.set("notice", outcome.notice)
         if (outcome.error) query.set("error", outcome.error)
+        // **D78**: a handle, never the address. `safeUrlForLog` keeps the query
+        // string of everything outside `/oauth2/*` and `/api/auth/*`, so
+        // `?subject=jane@example.com` would put a deleted account's address in
+        // the request log — in a codebase that anonymises IP addresses for
+        // exactly that reason (SEC-5). Two minutes is a redirect's worth of
+        // life; the claim consumes it either way.
+        if (outcome.subject) {
+          query.set(
+            SUBJECT_PARAM,
+            await stash(runtime, outcome.subject, { ttlSeconds: 120 })
+          )
+        }
         const suffix = query.toString() ? `?${query.toString()}` : ""
 
+        // The suffix goes on whichever destination was chosen. It used to be
+        // dropped for a redirecting action, which is why `delete` had to spell
+        // `?notice=deleted` into its own redirect — and why nothing else could
+        // travel with it.
         return redirectWithCookies(
-          outcome.redirect ? `${base}${outcome.redirect}` : `${here}${suffix}`,
+          `${outcome.redirect ? `${base}${outcome.redirect}` : here}${suffix}`,
           outcome.cookies
         )
       },
@@ -159,7 +176,14 @@ function UserDetailPage() {
       <FormAlert>
         {messageForErrorCode(error, t, ui.passwordMinLength)}
       </FormAlert>
-      <NoticeToast message={messageForNoticeCode(notice, t)} />
+      {/* **D78**: which account, taken straight from the loader — every
+          action on this page comes back to this page, so there is nothing to
+          carry across a redirect. `delete` is the exception and lands on the
+          list, which is why the dispatcher hands *that* one its subject. */}
+      <NoticeToast
+        message={messageForNoticeCode(notice, t)}
+        subject={user.email}
+      />
 
       {user.unknownRoles.length > 0 ? (
         <Alert variant="destructive" className="mb-4">

@@ -9,7 +9,34 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **A success confirmation now names the account it is about** (**D78**). "The
+  account has been deleted." was the same sentence for every account, and it
+  lands on the list, where the row that could answer *which one* is exactly
+  what has gone. The address appears on a second line of the toast. Across the
+  two redirects that need it — a deletion and a creation — it travels as a
+  one-shot handle rather than in the query string, which the request log keeps.
+- **A toast can no longer be pinned to the screen by an unfocused window**
+  (**D78**). Base UI freezes every auto-dismiss timer while the window is
+  blurred and thaws it only on the way back, so a confirmation left behind a
+  switched-away window stayed there for the length of the absence — the
+  outliving-its-truth D71 set out to end. A wall-clock backstop closes it two
+  seconds past its nominal lifetime; hovering it or tabbing into it still
+  pauses the dismissal, which is the pause WCAG 2.2.1 asks for.
+- **Registering an application now says why it has no client secret**
+  (**D78**). The form's default type is a single-page app, which is a public
+  client: no secret is generated, no *Rotate secret* control appears on its
+  row, and nothing said the two facts were one fact. The type field states the
+  consequence in both dialogs, the confirmation distinguishes a public client
+  from an update that kept its secret, and the table reads "Public — no client
+  secret".
+
+### Changed
+
+- **The way to give a public application a secret is discoverable** (**D78**).
+  Changing its type to Web in the edit dialog issues one and shows it once —
+  a path **D72** built and the interface never mentioned.
 
 ## [0.1.0] — 2026-08-27
 

@@ -431,4 +431,17 @@ were questions, and one was "polish every page".
   that assert a cross-site sign-in is refused both passed it until
   `advanced.disableOriginCheck: false` was set explicitly.
 
+### Fixed after the fourth owner review (2026-08-27)
+
+- **The first administrator holds the catalog's default role as well**
+  (**D69**). The first-run wizard stored the first entry of
+  `admin.adminRoles` and nothing else, while every other way an account comes
+  into being — self-registration, the admin create form, the admin API's own
+  fallback — also assigns the role marked `default: true`. So the one account
+  a deployment is guaranteed to have was the one account an application gating
+  on `user` excluded, which is how the owner got locked out of their own app.
+  The two names are deduplicated, so a catalog whose admin role *is* the
+  default stores `admin`, not `admin,admin`. Existing deployments are not
+  migrated: the checkbox on `/admin/users/:id` is the fix for an account that
+  already exists.
 [Unreleased]: https://github.com/semantius/semantius-idp/commits/main

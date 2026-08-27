@@ -94,7 +94,9 @@ describe("first-run setup (D52)", () => {
 
     const result = await createFirstUser(deps(ctx), input)
     expect(result.created).toBe(true)
-    expect(result.role).toBe("admin")
+    // **D69**: the admin role *and* the catalog default, so a downstream app
+    // keying on `user` does not exclude the person who set the IdP up.
+    expect(splitRoles(result.role)).toEqual(["admin", "user"])
 
     const users = await ctx.database.db.select().from(ctx.database.schema.user)
     expect(users).toHaveLength(1)
@@ -103,6 +105,7 @@ describe("first-run setup (D52)", () => {
     // FR-AUTH-1: normalised on the way in.
     expect(admin.email).toBe("first.operator@example.com")
     expect(splitRoles(admin.role)).toContain("admin")
+    expect(splitRoles(admin.role)).toContain("user")
     expect(admin.status).toBe("active")
     expect(admin.emailVerified).toBe(true)
     expect(admin.approvedBy).toBe("system")
@@ -186,7 +189,30 @@ describe("first-run setup (D52)", () => {
       targetType: "user",
       targetId: result.userId,
     })
-    expect(rows[0]!.metadata).toMatchObject({ via: "setup", role: "admin" })
+    expect(rows[0]!.metadata).toMatchObject({
+      via: "setup",
+      role: "admin,user",
+    })
+  })
+
+  it("does not repeat a role when the catalog default is itself an admin role (D69)", async () => {
+    const ctx = await createTestContext("setup-default-is-admin", {
+      roles: [
+        { name: "admin", description: "Everything.", default: true },
+        { name: "staff", description: "Not the default.", default: false },
+      ],
+    })
+    contexts.push(ctx)
+
+    const result = await createFirstUser(deps(ctx), input)
+    // Not `"admin,admin"`: the join dedups, because the two sources coincide
+    // whenever a deployment makes its admin role the default one.
+    expect(result.role).toBe("admin")
+
+    const [admin] = await ctx.database.db
+      .select()
+      .from(ctx.database.schema.user)
+    expect(admin!.role).toBe("admin")
   })
 
   it("never records the password", async () => {

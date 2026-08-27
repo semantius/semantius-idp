@@ -39,6 +39,7 @@ import { withAdvisoryLock } from "../db/advisory-lock"
 import type { DbHandle } from "../db/client"
 import { displayName } from "../display-name"
 import type { Logger } from "../logger"
+import { joinRoles } from "../role-utils"
 
 /** Better Auth's provider id for an e-mail + password credential. */
 const CREDENTIAL_PROVIDER_ID = "credential"
@@ -65,6 +66,7 @@ export interface FirstUserResult {
   /** False when another submission won the race; the caller says "already set up". */
   created: boolean
   userId?: string
+  /** The stored role column: the first admin role plus the catalog default (**D69**). */
   role?: string
 }
 
@@ -123,7 +125,16 @@ export async function createFirstUser(
   input: FirstUserInput
 ): Promise<FirstUserResult> {
   const email = input.email.trim().toLowerCase()
-  const role = deps.config.adminRoles[0] ?? "admin"
+  // **D69**: the admin role *and* the catalog's default. FR-ROLE-1 makes roles
+  // downstream labels, and every other creation path — self-registration, the
+  // admin create form, the admin API's fallback — assigns the default one; the
+  // wizard account was the only one in the deployment without it, so an app
+  // keying on `user` excluded precisely the person who set the IdP up. Deduped
+  // through a `Set` because a catalog whose default *is* an admin role would
+  // otherwise store `"admin,admin"`.
+  const role = joinRoles([
+    ...new Set([deps.config.adminRoles[0] ?? "admin", deps.config.defaultRole]),
+  ])
 
   const result = await withAdvisoryLock(
     deps.locking.sql,

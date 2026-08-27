@@ -197,6 +197,21 @@ proved nothing; D72's rotation case is what exposed it. Use
 token: wrong secret is `401 invalid_client`, right secret is
 `200 {"active": false}`.
 
+**A toast is a `role="dialog"`.** Base UI gives it one (with
+`aria-modal="false"`) so a keyboard user can reach its close and action
+buttons. Since **D71** put a toast on every admin and account page, a bare
+`page.getByRole("dialog")` matches two elements the moment a confirmation is
+showing, and Playwright's strict mode fails the *test*. The e2e helpers export
+`modal(page)`, which selects `[data-slot="dialog-content"]` — what
+`DialogContent` stamps and the toast does not. Use it, never the role.
+
+**`--destructive` diverges from the shadcn preset on purpose.** The preset's
+own value made `variant="destructive"` — `bg-destructive/10 text-destructive` —
+a 3.98:1 pairing, under R-1's 4.5:1 floor, and the axe gate failed on every
+page with a destructive dialog trigger. Both themes are darkened, with the
+measurements in `globals.css` beside the token. **Re-applying a preset resets
+it**, so re-measure after any `shadcn apply`.
+
 **The integration suite runs against a remote Neon database and is slow.** A
 schema create plus full migration per *file*, over the internet: `setup.test.ts`
 alone is ~2.5 minutes, `admin.test.ts` ~10. Run it in the background and write

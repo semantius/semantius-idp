@@ -100,6 +100,21 @@ export async function signInAsAdmin(page: Page, app: App): Promise<void> {
  * therefore scoped to the returned dialog, which is the only way those two
  * assertions can be told apart.
  */
+/**
+ * The modal, and not the toast.
+ *
+ * Base UI's toast is a `role="dialog"` (`aria-modal="false"`) so a keyboard
+ * user can reach its close and action buttons -- which means that from D71,
+ * when a success confirmation is a toast, a bare `getByRole("dialog")` matches
+ * two things and Playwright's strict mode fails the test rather than the app.
+ * The registry component is used verbatim (AGENTS.md), so the selector is what
+ * gets more specific: `data-slot="dialog-content"` is what `DialogContent`
+ * stamps and the toast does not.
+ */
+export function modal(page: Page): Locator {
+  return page.locator('[data-slot="dialog-content"]')
+}
+
 export async function openDialog(
   page: Page,
   name: string,
@@ -113,8 +128,11 @@ export async function openDialog(
 ): Promise<Locator> {
   // Before the click the dialog is not in the DOM at all (Base UI portals on
   // open), so the trigger is the only thing this can match.
-  await (within ?? page).getByRole("button", { name, exact: true }).first().click()
-  const dialog = page.getByRole("dialog")
+  await (within ?? page)
+    .getByRole("button", { name, exact: true })
+    .first()
+    .click()
+  const dialog = modal(page)
   await expect(dialog).toBeVisible()
   return dialog
 }

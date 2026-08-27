@@ -169,6 +169,31 @@ invalid_client`, a right one is `200 {"active": false}`. Both halves are
 asserted now — the good secret opens the door and a made-up one does not — so
 the test cannot go quiet again.
 
+### Two things the end-to-end suite found while verifying the four
+
+Neither is in the plan; both had to be fixed to get a green gate.
+
+**The axe gate was already red, and it took the second deployment shape with
+it.** `variant="destructive"` is `bg-destructive/10 text-destructive`, which is
+`#e7000b` on `#fde5e7` — **3.98:1**, under R-1's 4.5:1 — so every page with a
+destructive dialog trigger failed, starting at `/admin/users/:id`. Confirmed
+pre-existing by rebuilding the image at `a74d861` and getting the identical
+violation, so it is not this round's doing; status.md's "74 e2e tests passing"
+was written before it appeared. It matters more than one red test looks:
+`playwright.config.ts` runs the sub-path project *after* the host-root one, so
+a single failure there means **half the suite never runs at all**.
+`--destructive` is darkened in both themes — light 4.62:1, dark 4.59:1, the
+dark pairing having been sitting exactly on 4.50 — with the measurements in
+`globals.css`. It diverges from the shadcn preset deliberately; re-applying one
+resets it.
+
+**A toast is a `role="dialog"`.** Base UI gives it one, `aria-modal="false"`,
+so its close and action buttons are reachable. From D71 that means a bare
+`getByRole("dialog")` matches two elements whenever a confirmation is showing,
+and Playwright's strict mode fails the test rather than the application. The
+helpers export `modal(page)` — `[data-slot="dialog-content"]`, which
+`DialogContent` stamps and the toast does not.
+
 ---
 
 ## "The login page says this address is not recognised" (2026-08-27, **D68**)

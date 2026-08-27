@@ -87,7 +87,9 @@ export function ClientEditDialog({
           errors={errors}
           fixedClientId
         />
-        <SubmitButton>{t.common.save}</SubmitButton>
+        {/* `admin.actions.save` ("Save"), not `common.save` ("Save changes"):
+            every other dialog in this area is labelled the first way. */}
+        <SubmitButton>{t.admin.actions.save}</SubmitButton>
       </PendingForm>
     </ActionDialog>
   )

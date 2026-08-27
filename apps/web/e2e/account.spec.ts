@@ -1,6 +1,7 @@
 import {
   appFor,
   createVerifiedUser,
+  modal,
   openDialog,
   signIn,
   signOut,
@@ -75,7 +76,9 @@ test.describe("the account area", () => {
     await submitDialog(page, form, "Change password")
 
     await expect(page).toHaveURL(/\/account\/security/)
-    await expect(page.getByText("Your password has been changed.")).toBeVisible()
+    await expect(
+      page.getByText("Your password has been changed.")
+    ).toBeVisible()
 
     const notice = await waitForMail(stack, user.email, {
       template: "password-changed",
@@ -108,7 +111,9 @@ test.describe("the account area", () => {
     await expect(rows).toHaveCount(2)
 
     await submit(page, "Sign out everywhere else")
-    await expect(page.getByText("That session has been signed out.")).toBeVisible()
+    await expect(
+      page.getByText("That session has been signed out.")
+    ).toBeVisible()
     await expect(page.locator("main li")).toHaveCount(1)
 
     // The other browser really is out, not merely absent from a list.
@@ -134,7 +139,7 @@ test.describe("the account area", () => {
 
     // Shown once, in a dialog, and **not** in the URL: the POST stashes the key
     // server-side and the redirect carries an opaque handle (one-shot.ts).
-    const shown = page.getByRole("dialog")
+    const shown = modal(page)
     await expect(
       shown.getByText("Copy this key now — it will not be shown again.")
     ).toBeVisible()

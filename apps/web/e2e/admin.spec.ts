@@ -1,6 +1,7 @@
 import {
   PASSWORD,
   createVerifiedUser,
+  modal,
   onLogin,
   openDialog,
   signIn,
@@ -195,7 +196,7 @@ test.describe("the admin area", () => {
     await submitDialog(page, form, "Create")
 
     // D62: the dialog comes back open with what was typed still in it.
-    const reopened = page.getByRole("dialog")
+    const reopened = modal(page)
     await expect(reopened).toBeVisible()
     await expect(reopened.getByLabel("E-mail address")).toHaveValue(user.email)
     await expect(
@@ -365,7 +366,7 @@ test.describe("the admin area", () => {
       .fill("http://127.0.0.1:4599/callback")
     await submitDialog(page, form, "Add an application")
 
-    const secretDialog = page.getByRole("dialog")
+    const secretDialog = modal(page)
     await expect(secretDialog).toBeVisible()
     const secret = (
       await secretDialog.locator('[data-slot="one-shot-value"]').innerText()
@@ -421,10 +422,7 @@ test.describe("the admin area", () => {
     await submitDialog(page, form, "Add an application")
 
     const created = (
-      await page
-        .getByRole("dialog")
-        .locator('[data-slot="one-shot-value"]')
-        .innerText()
+      await modal(page).locator('[data-slot="one-shot-value"]').innerText()
     ).trim()
     await page.keyboard.press("Escape")
 
@@ -436,9 +434,9 @@ test.describe("the admin area", () => {
     // clears.
     const edit = await openDialog(page, "Edit", row)
     await expect(edit.getByLabel("Name")).toHaveValue("Editable App")
-    await expect(
-      edit.getByLabel("Redirect URIs", { exact: true })
-    ).toHaveValue("http://127.0.0.1:4601/callback")
+    await expect(edit.getByLabel("Redirect URIs", { exact: true })).toHaveValue(
+      "http://127.0.0.1:4601/callback"
+    )
     // Shown and not editable: the id is the natural key four other tables
     // reference, so changing it is removing this application and adding a
     // different one.
@@ -450,7 +448,9 @@ test.describe("the admin area", () => {
       .fill("http://127.0.0.1:4601/moved")
     await submitDialog(page, edit, "Save")
 
-    await expect(page.getByText("The application has been updated.")).toBeVisible()
+    await expect(
+      page.getByText("The application has been updated.")
+    ).toBeVisible()
     await expect(row.getByText("Edited App")).toBeVisible()
     await expect(row.getByText("http://127.0.0.1:4601/moved")).toBeVisible()
 
@@ -458,7 +458,7 @@ test.describe("the admin area", () => {
     const rotate = await openDialog(page, "Rotate secret", row)
     await submitDialog(page, rotate, "Rotate secret")
 
-    const secretDialog = page.getByRole("dialog")
+    const secretDialog = modal(page)
     await expect(secretDialog).toBeVisible()
     const rotated = (
       await secretDialog.locator('[data-slot="one-shot-value"]').innerText()

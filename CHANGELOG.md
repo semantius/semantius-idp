@@ -503,5 +503,19 @@ were questions, and one was "polish every page".
   `invalid_grant`. Found because the new rotation test asserts the *old* secret
   stops working and was told it had not. Both now use `/oauth2/introspect`,
   which authenticates the client before it answers, and assert both directions.
+- **Destructive controls met the WCAG AA contrast floor they are gated on.**
+  `variant="destructive"` is `bg-destructive/10 text-destructive`, which put
+  `#e7000b` on `#fde5e7` — 3.98:1, under the 4.5:1 R-1 requires — so every page
+  carrying a destructive dialog trigger failed the axe gate, and with it the
+  whole end-to-end suite, including the second deployment shape that runs
+  behind it. Found while running that suite; it predates this round's work.
+  `--destructive` is darkened in both themes (light 4.62:1, dark 4.59:1 — the
+  dark pairing had been sitting exactly on 4.50). A deliberate divergence from
+  the shadcn preset, noted where the token is.
+- **A toast is a `role="dialog"`.** Base UI gives it one, with
+  `aria-modal="false"`, so its close and action buttons are reachable — which
+  means a bare `getByRole("dialog")` matches two things once a confirmation is
+  on screen, and Playwright's strict mode fails the test rather than the app.
+  The end-to-end helpers select the modal by `data-slot="dialog-content"` now.
 
 [Unreleased]: https://github.com/semantius/semantius-idp/commits/main

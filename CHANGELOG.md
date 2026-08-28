@@ -9,8 +9,40 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ## [Unreleased]
 
+### Security
+
+- **The nightly `pnpm audit` is green again** (**D85**). It was failing with
+  sixteen advisories — 12 high, 3 moderate, 1 low — every one of them a
+  *transitive dev* dependency: `brace-expansion` under two different
+  `minimatch` majors, `js-yaml` under `eslint`, `shell-quote` and
+  `launch-editor` under `@tanstack/devtools-vite`, `postcss` and `nanoid`
+  under `vite`, `esbuild` under `drizzle-kit`'s deprecated `@esbuild-kit`
+  loader. None of them ships in the image. They are closed with exact
+  `pnpm.overrides`, scoped by version where two majors are in the tree and by
+  parent where a global bump would be the bigger change — not by raising
+  `--audit-level` and not by an ignore list. The install removed nine packages
+  and the lockfile lost 261 lines: most of the advisories were duplicate
+  copies of the same library. One `low` remains on purpose and is named in the
+  decision: `drizzle-kit>tsx>esbuild`, whose fix is a major bump of the loader
+  that reads `drizzle.config.ts`.
+- `check-pinned-deps.ts` now checks `pnpm.overrides` as well as the four
+  dependency fields — an override is a dependency decision, and one written as
+  a range would drift exactly like a floating dependency (**D85**).
+
 ### Changed
 
+- **`/admin/database` says it is read-only in its opening sentence**, and the
+  paragraph that used to restate it below is gone (**D84**). A writable
+  deployment keeps its second line, which is an instruction rather than a
+  restatement.
+- **`SchemaExplorer` and `SQLRunner` are forks now, not verbatim registry
+  output** (**D84**). The registry component has no prop for a row action and
+  the runner cannot be told to run, so both carry a header naming their
+  divergences and every one is marked in place. A table row is a
+  `div role="treeitem"` rather than a `button` carrying that role: a `tree`
+  may own nothing but `treeitem` and `group`, so the action button cannot be
+  the row's sibling without a critical axe finding, and a `button` inside a
+  `button` is invalid HTML the parser un-nests into a hydration mismatch.
 - **`/admin/*` and `/account/*` wear a sidebar shell** (**D82**), the one the
   sibling `semantius-app` has: a collapsible left sidebar carrying the
   navigation, the signed-in identity and its menu in the footer, full-width
@@ -38,6 +70,29 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ### Added
 
+- **`/admin/database` chooses its schema, and every table row runs** (**D84**).
+  `GET /idp/database/schema` now answers with every schema the console's
+  connection may read — `has_schema_privilege(…, 'USAGE')`, catalog schemas
+  and `information_schema` excluded — and takes `?schema=` to say which one to
+  describe; an unknown name is `400 UNKNOWN_SCHEMA`, never a silent fall back
+  to the deployment's own. The page draws the list as the schema tree's own
+  header line, in place of a database name the runner beside it already
+  carries and a `/ to search` hint that sat opposite a permanently visible
+  search field. Every table row carries a run button that puts
+  `select * from "schema"."table" limit 100` in the editor and executes it,
+  schema-qualified because the search path is the deployment's schema and an
+  unqualified name would read the wrong table the moment the selector moves.
+  Neither widens what an administrator can reach: the query endpoint has
+  always taken arbitrary SQL. The run request survives a click made before the
+  editor pane has finished loading — both panes are lazy, and the tree is
+  25 kB against the editor's 830.
+- **`pnpm drizzle:studio`** — Drizzle Studio against this deployment's
+  database, delegating to `pnpm --filter web run db:studio` the way
+  `drizzle:reset` already does. It reads `apps/web/drizzle.config.ts`, so it
+  inherits the two things that matter: `DATABASE_URL` from the repo-root `.env`
+  and the `schemaFilter` of `IDP_SCHEMA_NAME ?? "idp"`, which keeps it out of
+  every other schema in the database. `IDP_SCHEMA_NAME=idp_scratch
+  pnpm drizzle:studio` aims it at a throwaway.
 - **`/admin/database` — a schema explorer and a SQL console** over this
   deployment's own Postgres, behind the new tri-state `admin.database`
   (`disabled` | `read-only` | `read-write`, default **`disabled`**) —

@@ -12,6 +12,7 @@
     "test:integration": "turbo test:integration",
     "test:e2e": "turbo test:e2e",
     "drizzle:reset": "pnpm --filter web run drizzle:reset",
+    "drizzle:studio": "pnpm --filter web run db:studio",
     "docker:build": "docker compose -f docker/docker-compose.yml --env-file .env build",
     "docker:up": "docker compose -f docker/docker-compose.yml --env-file .env up -d --wait",
     "docker:down": "docker compose -f docker/docker-compose.yml --env-file .env down",
@@ -34,6 +35,16 @@
       "esbuild",
       "lightningcss",
       "unrs-resolver"
-    ]
+    ],
+    "overrides": {
+      "brace-expansion@1": "1.1.18",
+      "brace-expansion@5": "5.0.9",
+      "js-yaml@4": "4.3.2",
+      "shell-quote": "1.10.0",
+      "nanoid@3": "3.3.18",
+      "postcss": "8.5.26",
+      "launch-editor": "2.14.1",
+      "@esbuild-kit/core-utils>esbuild": "0.25.12"
+    }
   }
 }

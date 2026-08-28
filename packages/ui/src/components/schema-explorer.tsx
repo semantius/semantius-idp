@@ -1,5 +1,25 @@
 "use client";
 
+/**
+ * **A fork of ui.neon.com's `SchemaExplorer`, not registry output any more**
+ * (D84). It was vendored verbatim under D83; the owner then asked for a run
+ * control on every table row, which the registry component has no prop for.
+ * Three divergences, all additive, all marked `Fork (D84)` where they sit:
+ *
+ * 1. `onTableAction` / `tableActionLabel` — the per-row button.
+ * 2. A table row is a `div role="treeitem"` rather than a `button` carrying
+ *    that role, because a `button` inside a `button` is invalid HTML that the
+ *    parser un-nests, which is a hydration mismatch. See the note on
+ *    `TableRow` for why a *sibling* button will not do either.
+ * 3. The action's Enter and Space are stopped short of the tree's own key
+ *    handler.
+ * 4. `titleSlot` — a header that is a control rather than a label — and the
+ *    removal of the `/ to search` hint that used to sit opposite it.
+ *
+ * Re-running `shadcn add schema-explorer` overwrites all three. That is the
+ * cost of the fork and it is written down rather than discovered.
+ */
+
 import {
   ArrowRight01Icon,
   Cancel01Icon,
@@ -7,12 +27,13 @@ import {
   HashIcon,
   Key01Icon,
   Link01Icon,
+  PlayIcon,
   Search01Icon,
   Table01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ComponentProps, KeyboardEvent } from "react";
+import type { ComponentProps, KeyboardEvent, ReactNode } from "react";
 
 import { cn } from "@workspace/ui/lib/utils";
 
@@ -168,6 +189,20 @@ const Constraint = ({ children }: { children: string }) => (
   </span>
 );
 
+/**
+ * Fork (D84). **The row is a `div` carrying `role="treeitem"`, not a
+ * `button`.** The action has to live inside the row: a `tree` may own nothing
+ * but `treeitem` and `group`, so a button rendered as the row's *sibling* is
+ * an axe `aria-required-children` violation — critical, and the R-1 gate
+ * scans this page. Inside the row it is legal, because `treeitem` is not one
+ * of the roles whose children must be presentational, which is what
+ * `nested-interactive` keys on. A `button` inside a `button` is not an
+ * option: the HTML parser un-nests it and the hydrated tree no longer matches
+ * the streamed one.
+ *
+ * What the element change costs is the native button's Enter and Space, and
+ * the tree's own key handler was already doing that job for table rows.
+ */
 const TableRow = ({
   treeId,
   table,
@@ -177,6 +212,8 @@ const TableRow = ({
   tabIndex,
   onFocus,
   onToggle,
+  actionLabel,
+  onAction,
 }: {
   treeId: string;
   table: Table;
@@ -186,14 +223,22 @@ const TableRow = ({
   tabIndex: number;
   onFocus: () => void;
   onToggle: () => void;
+  actionLabel?: string;
+  onAction?: () => void;
 }) => (
-  <button
+  <div
     aria-expanded={open}
     aria-level={1}
     className={cn(
       "group flex min-h-10 w-full min-w-0 items-center gap-2 rounded-md px-2 text-left outline-none",
+      // Fork (D84). Preflight gives a `button` the pointer and the
+      // unselectable text; a `div` has to ask for both, or the row it used to
+      // be starts selecting its own label on a drag.
+      "cursor-pointer select-none",
       "hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring/50",
-      "active:bg-muted data-[state=open]:bg-muted/35"
+      "active:bg-muted data-[state=open]:bg-muted/35",
+      // The action sits at the right-hand edge and brings its own padding.
+      onAction && "pr-1"
     )}
     data-active={active ? "true" : undefined}
     data-state={open ? "open" : "closed"}
@@ -202,7 +247,6 @@ const TableRow = ({
     onFocus={onFocus}
     role="treeitem"
     tabIndex={tabIndex}
-    type="button"
   >
     <HugeiconsIcon
       aria-hidden="true"
@@ -235,7 +279,40 @@ const TableRow = ({
         </>
       )}
     </span>
-  </button>
+    {onAction ? (
+      // Fork (D84). `stopPropagation` on the click, or the row toggles open
+      // behind the statement it just ran; on Enter and Space, or the tree's
+      // own handler does the same thing a keystroke later. Arrow keys are
+      // deliberately left to bubble, so navigation still works from here.
+      <button
+        aria-label={actionLabel}
+        className={cn(
+          "grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground outline-none",
+          "hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50",
+          "active:scale-[0.96] motion-reduce:active:scale-100"
+        )}
+        onClick={(event) => {
+          event.stopPropagation();
+          onAction();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.stopPropagation();
+          }
+        }}
+        tabIndex={tabIndex}
+        title={actionLabel}
+        type="button"
+      >
+        <HugeiconsIcon
+          aria-hidden="true"
+          className="size-3"
+          icon={PlayIcon}
+          strokeWidth={2}
+        />
+      </button>
+    ) : null}
+  </div>
 );
 
 const LeafRow = ({
@@ -379,6 +456,19 @@ export type SchemaExplorerProps = Omit<ComponentProps<"div">, "children"> & {
   onExpandedChange?: (expanded: string[]) => void;
   onColumnSelect?: (table: Table, column: Column) => void;
   onIndexSelect?: (table: Table, index: Index) => void;
+  /** Fork (D84). A per-table action, drawn at the row's right-hand end. */
+  onTableAction?: (table: Table) => void;
+  /**
+   * Fork (D84). Its accessible name, per table — the button is an icon, so
+   * this is the only name it has, and it is a function because the string
+   * that reads well names the table it acts on.
+   */
+  tableActionLabel?: (table: Table) => string;
+  /**
+   * Fork (D84). Rendered in the header in place of `title`, for a caller
+   * whose header line is a control rather than a label.
+   */
+  titleSlot?: ReactNode;
   title?: string;
   isLoading?: boolean;
 };
@@ -390,6 +480,9 @@ export const SchemaExplorer = ({
   onExpandedChange,
   onColumnSelect,
   onIndexSelect,
+  onTableAction,
+  tableActionLabel = (table) => `Run a query on ${table.name}`,
+  titleSlot,
   title = "public",
   isLoading = false,
   className,
@@ -587,18 +680,28 @@ export const SchemaExplorer = ({
             strokeWidth={2}
           />
         </span>
-        <div className="min-w-0">
-          <p className="truncate font-medium text-xs">{title}</p>
-          <p className="text-[10px] text-muted-foreground">
-            {tables.length} {tables.length === 1 ? "table" : "tables"}
-          </p>
-        </div>
-        <span className="ml-auto hidden text-[10px] text-muted-foreground @[280px]:block">
-          <kbd className="rounded border border-border/60 bg-background px-1 py-0.5 font-sans shadow-xs">
-            /
-          </kbd>{" "}
-          to search
-        </span>
+        {/* Fork (D84). With a `titleSlot` the header is a control and the
+            count moves beside it; without one it is the registry's own
+            two-line block. The `/ to search` hint that used to sit on the
+            right is gone: the search field is permanently visible a row
+            below, so the hint bought nothing but the misleading half of the
+            truth -- the key only works from inside the tree, which it did not
+            say. The shortcut itself is untouched. */}
+        {titleSlot ? (
+          <>
+            <div className="min-w-0 flex-1">{titleSlot}</div>
+            <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
+              {tables.length} {tables.length === 1 ? "table" : "tables"}
+            </span>
+          </>
+        ) : (
+          <div className="min-w-0">
+            <p className="truncate font-medium text-xs">{title}</p>
+            <p className="text-[10px] text-muted-foreground">
+              {tables.length} {tables.length === 1 ? "table" : "tables"}
+            </p>
+          </div>
+        )}
       </header>
 
       <label className="flex h-10 items-center gap-2 border-border/60 border-b px-3 focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring/40">
@@ -668,6 +771,14 @@ export const SchemaExplorer = ({
                 {row.kind === "table" ? (
                   <TableRow
                     {...common}
+                    actionLabel={
+                      onTableAction ? tableActionLabel(row.table) : undefined
+                    }
+                    onAction={
+                      onTableAction
+                        ? () => onTableAction(row.table)
+                        : undefined
+                    }
                     onToggle={() => activateTable(row.table.name)}
                     open={
                       openTables.has(row.table.name) || Boolean(normalizedQuery)

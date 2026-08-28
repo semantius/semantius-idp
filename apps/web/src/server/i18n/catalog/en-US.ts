@@ -676,22 +676,33 @@ export const enUS = {
     /**
      * `/admin/database` (FR-ADMIN-7).
      *
-     * The two vendored Neon components carry their own English strings --
+     * The two forked Neon components carry their own English strings --
      * "Read only", "Run", "Enable writes", the results grid's empty state.
-     * They are registry output and are never hand-patched (AGENTS.md), so that
-     * is a bounded FR-I18N-1 exception, recorded in the spec text beside the
-     * requirement and in D83. Everything the page itself writes is here.
+     * They are near-verbatim registry output and their strings are not
+     * catalogued, so that is a bounded FR-I18N-1 exception, recorded in the
+     * spec text beside the requirement and in D83. Everything the page itself
+     * writes is here -- including, since D84, the schema selector's label and
+     * the name of the run button the fork added, both of which are ours.
      */
     database: {
       title: "Database",
+      /**
+       * Two spellings of one sentence rather than one with the words "read
+       * only" interpolated (D84): the mode is the most important thing on the
+       * page and it belongs in the opening line, and a translator needs the
+       * whole sentence to put it where their language wants it. The second
+       * paragraph that used to carry it is gone.
+       */
       description:
         "The schema and a SQL console for this deployment's own database. One statement at a time; every run is recorded in the audit trail.",
-      readOnly:
-        "Every statement runs inside a READ ONLY transaction. A write is refused by the database itself, not by the editor.",
+      descriptionReadOnly:
+        "The schema and a read-only SQL console for this deployment's own database. One statement at a time; every run is recorded in the audit trail.",
       readWrite:
         "Switch the editor to “Read + write” to run a statement that changes data. It commits.",
-      explorer: "Schema",
       runner: "SQL",
+      /** The selector's label. Was `explorer`, which nothing ever drew. */
+      schema: "Schema",
+      preview: (table: string) => `Show the first 100 rows of ${table}`,
       truncated: (rows: number) =>
         `Showing the first ${rows} rows. Large cells are cut. Add a LIMIT or narrow the columns to see the rest.`,
       unavailable:

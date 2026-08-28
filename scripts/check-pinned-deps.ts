@@ -5,11 +5,14 @@
  * ranges. Upgrades are deliberate, reviewed changelog entries — not something
  * that happens because someone re-ran `pnpm install` on a Tuesday.
  *
+ * `pnpm.overrides` is covered too (D85): an override is what closes a
+ * transitive advisory, and one written as a range would drift the same way.
+ *
  *   bun run scripts/check-pinned-deps.ts
  */
 
 import { readFileSync, readdirSync, statSync } from "node:fs"
-import { dirname, join } from "node:path"
+import { dirname, join, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..")
@@ -29,9 +32,15 @@ const ALLOWED_PROTOCOLS = ["workspace:", "link:", "file:", "catalog:", "patch:"]
 
 interface Violation {
   file: string
+  /** A dependency field, or `pnpm.overrides`. */
   field: string
   name: string
   spec: string
+}
+
+/** Repository-relative and with forward slashes, for the report. */
+function relativePath(path: string): string {
+  return path.slice(ROOT.length + 1).split(sep).join("/")
 }
 
 function packageJsonPaths(): string[] {
@@ -70,12 +79,34 @@ function check(): Violation[] {
         }
         if (EXACT_VERSION.test(spec)) continue
         violations.push({
-          file: path.slice(ROOT.length + 1).replace(/\\/g, "/"),
+          file: relativePath(path),
           field,
           name,
           spec,
         })
       }
+    }
+
+    // `pnpm.overrides` is a dependency decision like any other -- it is how a
+    // transitive advisory is closed (SEC-9, D85) -- and it sat outside this
+    // check until the first one existed. The *key* carries a range on purpose
+    // (`brace-expansion@1`, `parent>child`); it is the resolved version on
+    // the right that has to be exact, and a range there would drift exactly
+    // like a floating dependency.
+    const pnpmSection = manifest.pnpm as
+      | { overrides?: Record<string, string> }
+      | undefined
+    for (const [name, spec] of Object.entries(pnpmSection?.overrides ?? {})) {
+      if (ALLOWED_PROTOCOLS.some((protocol) => spec.startsWith(protocol))) {
+        continue
+      }
+      if (EXACT_VERSION.test(spec)) continue
+      violations.push({
+        file: relativePath(path),
+        field: "pnpm.overrides",
+        name,
+        spec,
+      })
     }
   }
   return violations

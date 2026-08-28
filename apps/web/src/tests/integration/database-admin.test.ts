@@ -173,6 +173,75 @@ describe("the read-only console", () => {
       // in a tree row and `timestamptz` is what an operator writes anyway.
       expect(createdAt?.type).toMatch(/^timestamp/)
     })
+
+    it("lists every schema the connection can look into (D84)", async () => {
+      const response = await ctx.auth.handler(
+        authRequest("/idp/database/schema", { headers: { cookie } })
+      )
+      const body = (await response.json()) as {
+        schemaName: string
+        schemas: string[]
+      }
+
+      // Its own, and `public`, which every Postgres has. The catalog schemas
+      // are excluded on purpose -- the selector is a list of this
+      // deployment's data, not a tour of the server's bookkeeping.
+      expect(body.schemas).toContain(ctx.schemaName)
+      expect(body.schemas).toContain("public")
+      expect(body.schemas).not.toContain("pg_catalog")
+      expect(body.schemas).not.toContain("information_schema")
+      // Sorted, because it is drawn as a list a person reads.
+      expect(body.schemas).toEqual([...body.schemas].sort())
+      // Without `?schema=` the answer is still the deployment's own, which is
+      // what every caller written before D84 gets.
+      expect(body.schemaName).toBe(ctx.schemaName)
+    })
+
+    it("introspects the schema `?schema=` names (D84)", async () => {
+      const other = `${ctx.schemaName}_other`
+      const quoted = `"${other}"`
+      await ctx.database.sql.unsafe(`create schema ${quoted}`)
+      try {
+        await ctx.database.sql.unsafe(
+          `create table ${quoted}.widget (id int primary key, label text)`
+        )
+
+        const response = await ctx.auth.handler(
+          authRequest(`/idp/database/schema?schema=${other}`, {
+            headers: { cookie },
+          })
+        )
+        expect(response.status).toBe(200)
+        const body = (await response.json()) as {
+          schemaName: string
+          schemas: string[]
+          tables: { name: string; schema?: string }[]
+        }
+
+        expect(body.schemaName).toBe(other)
+        expect(body.tables.map((table) => table.name)).toEqual(["widget"])
+        // The tables carry the schema they came from, which is what the run
+        // button qualifies its `select` with.
+        expect(body.tables[0]?.schema).toBe(other)
+        // And the list still names every schema, so the selector can move
+        // back without another round trip to discover the options.
+        expect(body.schemas).toContain(ctx.schemaName)
+      } finally {
+        await ctx.database.sql.unsafe(`drop schema ${quoted} cascade`)
+      }
+    })
+
+    it("refuses a schema that is not on this database (D84)", async () => {
+      const response = await ctx.auth.handler(
+        authRequest("/idp/database/schema?schema=no_such_schema", {
+          headers: { cookie },
+        })
+      )
+      // A 400, not a silent fall back to the deployment's own schema: the
+      // tree would otherwise describe one schema under another's name.
+      expect(response.status).toBe(400)
+      expect((await bodyOf(response)).code).toBe("UNKNOWN_SCHEMA")
+    })
   })
 
   describe("running a statement", () => {
@@ -204,6 +273,28 @@ describe("the read-only console", () => {
       expect(metadata.rowCount).toBe(1)
       expect(metadata.command).toBe("SELECT")
       expect(typeof metadata.durationMs).toBe("number")
+    })
+
+    it("puts the deployment's schema on the search path", async () => {
+      // **Asserted through `show search_path`, not through an unqualified
+      // query.** The test database is a plain local Postgres, where the
+      // startup parameter `createDb` asks for already works, so
+      // `select * from "user"` would pass whether or not `runQuery` sets
+      // anything -- and the defect this covers only appears through a
+      // transaction-mode pooler, which drops that parameter. Reading the GUC
+      // back inside the transaction is what proves the `SET LOCAL` ran.
+      const response = await query(ctx, cookie, { query: "show search_path" })
+      expect(response.status).toBe(200)
+      const value = (await bodyOf(response)).rows as { search_path: string }[]
+      expect(value[0]?.search_path).toBe(`"${ctx.schemaName}", public`)
+    })
+
+    it("resolves an unqualified table name to that schema", async () => {
+      const response = await query(ctx, cookie, {
+        query: `select count(*)::int as n from "user"`,
+      })
+      expect(response.status).toBe(200)
+      expect((await bodyOf(response)).rows).toEqual([{ n: await userCount() }])
     })
 
     it("caps at 500 rows and says it did", async () => {

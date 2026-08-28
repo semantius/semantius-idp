@@ -1,8 +1,8 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-28 · **Branch:** `feat/database` · **Head:** `c701d3c`, last tag **v0.2.0**
+**As of:** 2026-08-28 · **Branch:** `feat/database` · **Head:** `1b9b24c`, last tag **v0.2.0**
 **Plan:** `~/.claude/plans/make-the-admin-layout-shiny-unicorn.md` (the sidebar shell)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D83**
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D85**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
 gate.** Every gate green: lint, typecheck, unit (599), integration (243 across
@@ -78,6 +78,129 @@ README quick start against it, and confirming `latest` from outside.
   changes one.
 
 ---
+
+## The nightly audit was red (2026-08-28, **D85**)
+
+`pnpm audit --audit-level moderate` — CI's nightly SEC-9 job — was failing
+with **sixteen** advisories: 12 high, 3 moderate, 1 low. **Every one is a
+transitive dev dependency and none of them is in the image**, which carries
+production dependencies only: `brace-expansion` under `eslint>minimatch` and
+again under `@tanstack/eslint-config>eslint-plugin-import-x>minimatch`,
+`js-yaml` under `eslint>@eslint/eslintrc`, `shell-quote` and `launch-editor`
+under `@tanstack/devtools-vite`, `postcss` and its `nanoid` under `vite`,
+`esbuild` under `drizzle-kit>@esbuild-kit/core-utils`.
+
+They are closed with exact `pnpm.overrides` — version-scoped where two majors
+of one package are in the tree (`brace-expansion@1` → `1.1.18`,
+`brace-expansion@5` → `5.0.9`), parent-scoped where a global bump would be the
+bigger change (`@esbuild-kit/core-utils>esbuild` → `0.25.12`, already in the
+tree for Vite). Not by raising `--audit-level`, which hides the class next
+time, and not by an ignore list, which nobody revisits. The install *removed*
+nine packages and the lockfile lost 261 lines: most of these were duplicate
+copies of one library.
+
+**One `low` is left on purpose**: `drizzle-kit>tsx>esbuild`
+(GHSA-g7r4-m6w7-qqqr, patched in `0.28.1`) is below the gate's threshold, and
+`tsx` pins its own `0.27` line — forcing a major on the loader that reads
+`drizzle.config.ts` risks the migration generator for a dev-only file-read
+finding. Written down here so it is not rediscovered as an oversight.
+
+`check-pinned-deps.ts` reads `pnpm.overrides` now as well as the four
+dependency fields, and refuses a range there for the same reason it refuses
+one anywhere else.
+
+## The console's second round — four owner notes (2026-08-28, **D84**)
+
+Four notes on `/admin/database` the day after it landed. All four are done.
+
+**1. The mode belonged in the first sentence.** The page introduced itself and
+*then*, in a second paragraph, said "Every statement runs inside a READ ONLY
+transaction" — the most important fact on the page, in the position a reader
+skips. The description now says "a read-only SQL console" on a `read-only`
+deployment and the second paragraph is gone. Two full spellings in the
+catalog rather than one sentence with an interpolated fragment: a translator
+needs to put those words where their own language wants them. The writable
+deployment keeps its second line, because that one is an instruction — switch
+the editor to Read + write — rather than a restatement.
+
+**2. The schema is a selector now — and it is the tree card's header line.** `GET /idp/database/schema` described
+`database.schema` and nothing else; it now lists every schema the console's
+connection may read (`has_schema_privilege(…, 'USAGE')`, catalog schemas and
+`information_schema` excluded, the deployment's own always offered even if the
+catalog walk missed it) and takes `?schema=` to say which to describe. An
+unknown name is `400 UNKNOWN_SCHEMA`, never a quiet fall back — the tree would
+otherwise describe one schema under another's label. **It widens no
+privilege**: `POST /idp/database/query` has always taken arbitrary SQL, so
+every one of those schemas was already one `select` away. What it widens is
+the tree. The choice deliberately does **not** go in the URL: the statement in
+the editor beside it would not survive the reload.
+
+The placement took a second pass, and the owner's question is the whole
+argument: the selector first sat *above* the card under its own label, while
+the card's header showed the database name beside a `/ to search` hint — a
+strip 20 rem wide and entirely decorative. The database name is on the runner
+beside it; the search field the hint names is permanently visible one row
+below; and the hint told half a truth, since the key only works from inside
+the tree. The header is the control now, the table count keeps its place
+opposite it, and the hint is gone — the shortcut is not. The label is the
+select's own `aria-label`, because a visible one costs the width the control
+needs, and `title` is still passed unseen because the tree's `aria-label` is
+built from it.
+
+**3. "What does `/` to search?"** It is the vendored explorer's own keyboard
+hint, and it is honest but narrow: pressing `/` while focus is *inside the
+tree* jumps to the search box. It does nothing from anywhere else on the page,
+which is why it reads as a puzzle. Left as it is for now — the hint is the
+registry's, the behaviour is standard for a tree widget, and widening it to
+the whole panel means intercepting `/` from inside the search input itself.
+Worth revisiting if it confuses anybody else.
+
+**4. Every table row has a run button.** Right of the column and row counts, a
+play icon that writes `select * from "schema"."table" limit 100` into the
+editor and runs it. Two things in it are load-bearing:
+
+- **The statement is schema-qualified.** The search path is the *deployment's*
+  schema, so an unqualified name reads the wrong table — or none — the moment
+  the selector points somewhere else.
+- **The run goes through an effect, not the click handler.** `SQLRunner`'s new
+  `ref.run()` reads the editor's current value, and the `setState` that put the
+  statement there has not reached it as a prop until the commit. Called
+  inline, the button would execute whatever the editor held *before* it was
+  clicked — the previous statement, or nothing at all on the first click.
+- **The handle lives in state, through a callback ref.** Both panes are lazy
+  and the tree arrives first — 25 kB against the editor's 830 — so a click in
+  that window found `ref.current` still null and typed a statement that never
+  ran. The end-to-end suite found it while the machine was busy with the
+  coverage run, which is exactly what a slow connection looks like. State
+  re-renders when the runner mounts, the effect runs again, and the request is
+  honoured late rather than dropped. That is also why the runner's handle is
+  built **once** and reads `run` through a ref of its own:
+  `useImperativeHandle` detaches and re-attaches on every render, so a handle
+  rebuilt each time would call a callback ref with `null` and a new object
+  forever.
+
+**The cost is that both Neon components are forks now.** `SchemaExplorer` has
+no prop for a row action and `SQLRunner` cannot be told to run. Each file
+carries a header naming its divergences and each divergence is marked
+`Fork (D84)` where it sits; `shadcn add` over either overwrites the lot.
+
+**And one of those divergences is an accessibility trap worth remembering.** A
+table row was a `<button role="treeitem">`. The action button could not go
+beside it — a `tree` may own nothing but `treeitem` and `group`, so a sibling
+button is a *critical* axe `aria-required-children` finding, and
+`/admin/database` is in the R-1 scan. It could not go inside it either, while
+the row was a `<button>`: a button inside a button is invalid HTML that the
+parser un-nests, which is a hydration mismatch. The row is a
+`div role="treeitem"` now, the action sits inside it — legal, because
+`treeitem` is not one of the roles whose children must be presentational —
+and the tree's own key handler supplies the Enter and Space the element no
+longer has natively. The action stops those two keys short of that handler and
+lets the arrows bubble, so navigation still works from the button.
+
+Covered by three new integration tests (the schema list, `?schema=` against a
+throwaway schema created and dropped in the test, and the `UNKNOWN_SCHEMA`
+refusal) and two new end-to-end tests (the run button's statement *and* its
+result grid; the selector moving the tree off `idp`).
 
 ## The database console (2026-08-28, **D83**)
 

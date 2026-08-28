@@ -59,6 +59,64 @@ test.describe("the database console", () => {
     ).toBeVisible()
   })
 
+  test("a table row's run button queries that table (D84)", async ({
+    page,
+    app,
+  }) => {
+    await signInAsAdmin(page, app)
+    await app.goto("/admin/database")
+
+    // **Wait for the editor before clicking.** Both panes are lazy and the
+    // tree is 25 kB against the editor's 830, so a click in that window is a
+    // run request the runner is not mounted for yet. The page holds the
+    // request until it is (D84) -- this wait is about testing the button, not
+    // the race, which has its own reason to be right.
+    await expect(page.getByRole("textbox", { name: "SQL query" })).toBeVisible()
+
+    // The button is an icon, so its accessible name is the whole of what a
+    // screen reader gets -- and it is the catalog's string, not the vendored
+    // component's, because the fork added the control (D84).
+    await page
+      .getByRole("button", {
+        name: "Show the first 100 rows of user",
+        exact: true,
+      })
+      .click()
+
+    // Two assertions, and both matter. The editor holds a *schema-qualified*
+    // statement, which is what keeps the button honest once the selector
+    // points at another schema...
+    await expect(
+      page.getByRole("textbox", { name: "SQL query" })
+    ).toContainText('select * from "idp"."user" limit 100')
+    // ...and the result grid drew, which is the half that proves the click
+    // ran the statement rather than only typing it. The trailing space is
+    // the anchor: a header's accessible name carries its type ("email
+    // text"), and `/email/` also matches `email_verified` -- two elements,
+    // and Playwright's strict mode fails the *test* rather than the
+    // assertion.
+    await expect(
+      page.getByRole("columnheader", { name: /^email / })
+    ).toBeVisible()
+  })
+
+  test("the schema selector moves the tree (D84)", async ({ page, app }) => {
+    await signInAsAdmin(page, app)
+    await app.goto("/admin/database")
+
+    const selector = page.getByRole("combobox", { name: "Schema" })
+    await expect(selector).toHaveValue("idp")
+    await expect(page.getByRole("treeitem", { name: /user/ }).first()).toBeVisible()
+
+    await selector.selectOption("public")
+
+    // `public` is not where this deployment's tables live, so the tree that
+    // was full of them is the assertion: the switch is a round trip to the
+    // endpoint, not a filter over what was already loaded.
+    await expect(selector).toHaveValue("public")
+    await expect(page.getByRole("treeitem", { name: /^user/ })).toHaveCount(0)
+  })
+
   test("refuses a write with the database's own error (25006)", async ({
     page,
     app,

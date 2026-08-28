@@ -46,6 +46,7 @@ import {
   buildSchemaTables,
   errorToQueryFailure,
   introspectSchema,
+  listSchemas,
   runQuery,
 } from "./database"
 import { requireAdmin } from "./gate"
@@ -963,15 +964,45 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
    * the same reason the runner does: `runtime.database` is the pool ordinary
    * traffic borrows from, and this feature's whole premise is that an operator
    * is typing statements into it.
+   *
+   * **`?schema=` names which one** (D84). Without it the answer is the
+   * deployment's own `database.schema`, which is what the page opens on and
+   * what an existing caller keeps getting. An unknown name is a 400 rather
+   * than a silent fall back to the default: the tree would otherwise describe
+   * a schema nobody asked for, under a label saying it was the one they did.
    */
   const databaseSchema = createAuthEndpoint(
     "/idp/database/schema",
-    { method: "GET", requireHeaders: true, use: [gate] },
+    {
+      method: "GET",
+      requireHeaders: true,
+      // 63 is Postgres's own `NAMEDATALEN - 1`; anything longer cannot be a
+      // schema name, so it is refused before it reaches a query.
+      query: z.object({ schema: z.string().min(1).max(63).optional() }),
+      use: [gate],
+    },
     async (ctx) => {
       const handle = consoleDb()
-      const raw = await introspectSchema(handle)
+      const schemas = await listSchemas(handle)
+      const requested = ctx.query.schema
+
+      if (requested && !schemas.includes(requested)) {
+        throw new APIError("BAD_REQUEST", {
+          code: "UNKNOWN_SCHEMA",
+          message: `There is no schema called ${requested} on this database, or the connection cannot read it.`,
+        })
+      }
+
+      const raw = await introspectSchema(handle, requested)
       return ctx.json({
         schemaName: raw.schemaName,
+        // The deployment's own schema is offered even when the catalog walk
+        // did not find it -- a database whose migrations have never run has
+        // no `idp` schema, and a selector that silently omits the name the
+        // page is showing is worse than one that lists an empty schema.
+        schemas: schemas.includes(raw.schemaName)
+          ? schemas
+          : [...schemas, raw.schemaName].sort(),
         database: raw.database,
         // The *deployment's* mode, not the request's. The page needs it to
         // decide whether to render the runner's own read/write toggle at all,

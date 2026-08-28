@@ -763,6 +763,8 @@ export const fetchSystemInfo = createServerFn({ method: "GET" }).handler(
 
 export interface AdminDatabaseSchema {
   schemaName: string
+  /** Every schema the console's connection may look into (D84). Sorted. */
+  schemas: string[]
   /** `current_database()`, which is the label on the runner's header. */
   database: string
   /** The *deployment's* setting, which decides whether a write toggle exists. */
@@ -779,25 +781,34 @@ export interface AdminDatabaseSchema {
  * gate (FR-ADMIN-6). `callAuth` cannot be used -- it is POST-only, and this
  * one is a GET.
  */
-export const fetchDatabaseSchema = createServerFn({ method: "GET" }).handler(
-  async (): Promise<AdminDatabaseSchema | null> => {
+export const fetchDatabaseSchema = createServerFn({ method: "GET" })
+  // Optional, and normalised to `{}` rather than left undefined: the loader
+  // calls this with no argument at all, and the page calls it again with a
+  // schema name every time the selector changes (D84).
+  .validator((input: { schema?: string } | undefined) => input ?? {})
+  .handler(async ({ data }): Promise<AdminDatabaseSchema | null> => {
     const context = await admin()
     if (!context) return null
     const { runtime } = context
 
+    const search = data.schema
+      ? `?schema=${encodeURIComponent(data.schema)}`
+      : ""
     const response = await runtime.auth.handler(
       new Request(
-        `${runtime.config.base.origin}${runtime.config.base.basePath}/api/auth/idp/database/schema`,
+        `${runtime.config.base.origin}${runtime.config.base.basePath}/api/auth/idp/database/schema${search}`,
         { headers: getRequest().headers }
       )
     )
     // 404 when `admin.database` is `disabled` -- the endpoint is not
     // registered at all. The route already threw `notFound()` before getting
-    // here, so this is the belt to that pair of braces.
+    // here, so this is the belt to that pair of braces. A 400 lands here too,
+    // which is a schema that went away between the listing and the click; the
+    // page keeps the tree it has and says the console is unavailable rather
+    // than emptying the column.
     if (!response.ok) return null
     return (await response.json()) as AdminDatabaseSchema
-  }
-)
+  })
 
 /** What `executeDatabaseQuery` hands back, which is never a thrown error. */
 export type DatabaseQueryOutcome =

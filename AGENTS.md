@@ -24,7 +24,7 @@ Four files, in this order. Read them before proposing anything.
 | File | What it is |
 | --- | --- |
 | [status.md](status.md) | The handoff. Done, not-done, and why — the ground truth between sessions. |
-| [spec-v1.md](spec-v1.md) | Signed off, amended through **D83**. Numbered requirements, and §12.1's decision log with the reasoning. |
+| [spec-v1.md](spec-v1.md) | Signed off, amended through **D85**. Numbered requirements, and §12.1's decision log with the reasoning. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | The gates, the style, and how to amend the spec. |
 | [docs/release.md](docs/release.md) | What is left before v1.0.0, and it is the owner's, not yours. |
 
@@ -129,7 +129,20 @@ pnpm docker:smoke                           # TST-8, builds the image
 
 Dependencies are **pinned exactly** — no `^`, no `~`, no `latest`. Tools that
 add a floating range (the shadcn CLI adds `shadcn: ^4.19.0`) fail
-`check-pinned-deps.ts`, which is the point.
+`check-pinned-deps.ts`, which is the point. **`pnpm.overrides` counts as a
+dependency and is checked too** (**D85**).
+
+**A red `pnpm audit` is closed with an override, not with a threshold**
+(**D85**). The nightly SEC-9 job runs `pnpm audit --audit-level moderate`, and
+when it goes red the finding is almost always a *transitive dev* dependency —
+sixteen of them at once on 2026-08-28, none in the image. Add an exact
+`pnpm.overrides` entry: version-scoped (`brace-expansion@1`) when two majors
+of one package are in the tree, parent-scoped (`@esbuild-kit/core-utils>esbuild`)
+when a global bump would be the bigger change. Do **not** raise
+`--audit-level` and do **not** add to an ignore list; if an advisory really is
+being left, name it in the decision log with the reason, the way D85 leaves
+`drizzle-kit>tsx>esbuild`. Run `pnpm install` afterwards and re-run the gates:
+overrides move `postcss`, `esbuild` and friends, which is the build.
 
 ---
 
@@ -221,6 +234,20 @@ onto a square holding an initial would have failed R-1 on every page of both
 signed-in areas; `nav-user.tsx` uses the accent surface instead (16.04:1 /
 14.56:1) and records the numbers beside the class. **Measure before you copy a
 pairing from the reference app**, and re-measure after a preset.
+
+**A control inside a `role="tree"` has to be inside a `treeitem`, not beside
+one** (**D84**). `/admin/database`'s run button is in the schema tree, and axe
+is strict about what a `tree` owns: nothing but `treeitem` and `group`, so a
+button rendered as a row's *sibling* is a critical `aria-required-children`
+finding on a page the R-1 scan visits. Inside the row it is legal —
+`treeitem` is not one of the roles whose children must be presentational,
+which is what `nested-interactive` keys on — but that means the row cannot be
+a `<button>`, because a `button` inside a `button` is invalid HTML that the
+parser un-nests, and the hydrated tree then does not match the streamed one.
+The row is a `div role="treeitem"` and the tree's own key handler supplies the
+Enter and Space the element no longer has. When you add a control to a
+composite widget, check what the container's role is allowed to own before
+you write the markup.
 
 **The sidebar chrome lives in the two layout routes, not in the page shells**
 (**D82**). `SidebarProvider` holds the collapse state, the mobile sheet's state
@@ -425,6 +452,15 @@ are already off there for this reason, most recently
 rule is the fix and the file never is. `sidebar.tsx` added an eighth,
 `no-shadow`, for a `setOpen(open => !open)` inside a closure that already has
 an `open`.
+
+**Two files are exceptions, and they say so in their own headers**:
+`schema-explorer.tsx` and `sql-runner.tsx` are **forks** of ui.neon.com's
+components (**D84**) — the first has no prop for a row action, the second
+cannot be told to run, and `/admin/database` needs both. Each header lists its
+divergences and each one is marked `Fork (D84)` where it sits. `shadcn add`
+over either of them overwrites the lot; re-apply from the header's list.
+Nothing else in `packages/ui/src/components` is forked, and the next component
+that wants to be should be argued for rather than assumed.
 
 ### Adding one: `-c packages/ui`, and answer the overwrite prompt
 

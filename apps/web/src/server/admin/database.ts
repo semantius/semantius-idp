@@ -48,6 +48,7 @@
 import postgres from "postgres"
 
 import type { DbHandle } from "../db/client"
+import { quoteIdentifier } from "../db/client"
 
 /** How long any one statement may run. `SET LOCAL`, so it is pooler-safe. */
 const STATEMENT_TIMEOUT_MS = 10_000
@@ -173,12 +174,52 @@ export interface RawIntrospection {
 }
 
 /**
+ * Every schema on this database the console's role may look into (D84).
+ *
+ * `has_schema_privilege` rather than a bare listing: a schema the role cannot
+ * read would introspect to an empty tree and look like an empty schema, which
+ * is a worse answer than not offering it. `pg_catalog`, `pg_toast` and the
+ * per-backend `pg_temp_*` schemas go, and `information_schema` with them,
+ * because the selector is a list of *this* deployment's data rather than a
+ * tour of the server's own bookkeeping. Nothing here widens what an
+ * administrator can reach: `POST /idp/database/query` has always taken
+ * arbitrary SQL, so every one of these schemas was already one `select` away.
+ * What it widens is the *tree*, which used to describe `database.schema` and
+ * nothing else.
+ *
+ * **`left(…, 3)` rather than `not like 'pg\_%'`**, which is the obvious
+ * spelling and is wrong twice over here: a template literal eats the
+ * backslash before postgres.js ever sees it (`\_` cooks to `_`), so the
+ * pattern reaching Postgres is `pg_%` — where `_` is LIKE's own
+ * any-single-character wildcard, and a schema called `pgx_things` would
+ * quietly vanish from the selector. Doubling the backslash would work and
+ * would have to be explained; a prefix comparison needs no explanation.
+ */
+export async function listSchemas(handle: DbHandle): Promise<string[]> {
+  const rows = await handle.sql<{ name: string }[]>`
+    select n.nspname as name
+    from pg_namespace n
+    where left(n.nspname, 3) <> 'pg_'
+      and n.nspname <> 'information_schema'
+      and has_schema_privilege(n.oid, 'USAGE')
+    order by n.nspname
+  `
+  return rows.map((row) => row.name)
+}
+
+/**
  * The four introspection queries plus `current_database()`.
  *
  * Every one is parameterized on `$1 = schemaName` — the schema name is a
  * runtime configuration value, not a constant, and building it into the SQL by
  * concatenation is the shape this file exists to avoid on principle even
  * though an operator who can edit the config can already do worse.
+ *
+ * `schemaName` defaults to the handle's — the deployment's own
+ * `database.schema` — and the caller passes another only after checking it
+ * against `listSchemas` (D84). The check is not what makes this safe (the
+ * name is a bind parameter either way); it is what keeps a typo from
+ * rendering an empty tree that looks like an empty schema.
  *
  * The catalogs rather than `information_schema` wherever the catalog answers
  * a question the standard views cannot: `pg_class.reltuples` for the row
@@ -187,9 +228,11 @@ export interface RawIntrospection {
  * `information_schema.key_column_usage` reports but only after three joins.
  */
 export async function introspectSchema(
-  handle: DbHandle
+  handle: DbHandle,
+  schema?: string
 ): Promise<RawIntrospection> {
-  const { sql, schemaName } = handle
+  const { sql } = handle
+  const schemaName = schema ?? handle.schemaName
 
   const [databaseRow] = await sql<{ name: string }[]>`
     select current_database() as name
@@ -401,12 +444,22 @@ export async function runQuery(
   // `count` and `columns`. An async function returns a promise, which that
   // branch does not touch.
   const run = async (tx: postgres.TransactionSql) => {
-    // `SET LOCAL` via `set_config(..., true)`: scoped to this transaction, so
-    // it survives a transaction-mode pooler handing the connection on and
-    // cannot leak a timeout into anyone else's session.
+    // Both `SET LOCAL`, via `set_config(..., true)`: scoped to this
+    // transaction, so neither survives into whatever borrows the connection
+    // next -- which is the same containment the file header argues for.
+    //
+    // **The search path has to be set here, and it is not belt-and-braces.**
+    // `createDb` asks for one as a *startup parameter*, and its own comment
+    // says that is best-effort because a transaction-mode pooler drops it --
+    // true, and invisible everywhere else, because every query Drizzle emits
+    // is schema-qualified. This console is the one place that runs SQL a
+    // person typed, where an unqualified `select * from jwks` is the normal
+    // spelling. Against a Neon `-pooler` endpoint it answered
+    // `42P01 relation "jwks" does not exist` while the tree beside it listed
+    // the table, which is the most confusing form the failure could take.
     await tx.unsafe(
-      "select set_config('statement_timeout', $1, true)",
-      [String(STATEMENT_TIMEOUT_MS)],
+      "select set_config('statement_timeout', $1, true), set_config('search_path', $2, true)",
+      [String(STATEMENT_TIMEOUT_MS), `${quoteIdentifier(handle.schemaName)}, public`],
       EXTENDED_PROTOCOL
     )
     // The write barrier. See the file header: with an empty parameter list and

@@ -1,5 +1,14 @@
 "use client";
 
+/**
+ * **A fork of ui.neon.com's `SQLRunner`, not registry output any more**
+ * (D84), for the same reason `schema-explorer.tsx` beside it is: the schema
+ * tree's run button has to put a statement in this editor *and execute it*,
+ * and the registry component can be handed a `value` but not told to run.
+ * One divergence, marked `Fork (D84)` where it sits: a `ref` exposing
+ * `run()`. Re-running `shadcn add sql-runner` overwrites it.
+ */
+
 import { PostgreSQL, sql } from "@codemirror/lang-sql";
 import {
   bracketMatching,
@@ -29,8 +38,8 @@ import {
 import { HugeiconsIcon } from "@hugeicons/react";
 import { tags } from "@lezer/highlight";
 import { minimalSetup } from "codemirror";
-import { useEffect, useRef, useState } from "react";
-import type { ComponentProps } from "react";
+import { useEffect, useImperativeHandle, useRef, useState } from "react";
+import type { ComponentProps, Ref } from "react";
 
 import { Button } from "@workspace/ui/components/button";
 import { cn } from "@workspace/ui/lib/utils";
@@ -640,7 +649,17 @@ const ResultsGrid = ({ result }: { result: SQLResult }) => {
   );
 };
 
-export type SQLRunnerProps = Omit<ComponentProps<"div">, "children"> & {
+/** Fork (D84). What the `ref` hands back. */
+export interface SQLRunnerHandle {
+  /** Run what is in the editor, exactly as the Run button does. */
+  run: () => void;
+}
+
+// `ref` is omitted from the div's own props and re-declared below: this
+// component's ref is its handle, not its root element (fork, D84).
+export type SQLRunnerProps = Omit<ComponentProps<"div">, "children" | "ref"> & {
+  /** Fork (D84). Imperative access, for a caller that fills the editor. */
+  ref?: Ref<SQLRunnerHandle>;
   /** Execute SQL. Throw an Error or SQLRunnerError-shaped error on failure. */
   onExecute: (
     query: string,
@@ -659,6 +678,7 @@ export type SQLRunnerProps = Omit<ComponentProps<"div">, "children"> & {
 
 // oxlint-disable-next-line eslint/complexity -- explicit runner states stay co-located for honest precedence
 export const SQLRunner = ({
+  ref,
   onExecute,
   value,
   defaultValue = "",
@@ -690,6 +710,10 @@ export const SQLRunner = ({
     selection: "",
   });
   const controllerRef = useRef<AbortController | null>(null);
+  // Fork (D84). Filled in below, once `run` exists; see the handle.
+  const latestRun = useRef<(selection?: string) => Promise<void>>(() =>
+    Promise.resolve()
+  );
   const query = valueControlled ? value : internalValue;
   const safetyMode = modeControlled ? mode : internalMode;
   const stale = Boolean(
@@ -768,6 +792,24 @@ export const SQLRunner = ({
       }
     }
   };
+
+  // Fork (D84). **One handle for the component's whole life, reading `run`
+  // through a ref.** Two things need that. A handle rebuilt every render
+  // would close over a stale `query` unless it were rebuilt on every change,
+  // and -- worse -- `useImperativeHandle` detaches and re-attaches on each
+  // render, so a caller passing a *callback* ref would be called with null
+  // and a new object endlessly. The ref is written during render on purpose:
+  // it is the same value the JSX below is about to use.
+  latestRun.current = run;
+  useImperativeHandle(
+    ref,
+    () => ({
+      run: () => {
+        void latestRun.current();
+      },
+    }),
+    []
+  );
 
   return (
     <div

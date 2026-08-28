@@ -451,8 +451,18 @@ pnpm typecheck
 pnpm lint
 pnpm --filter web run test:integration   # needs a real Postgres
 pnpm --filter web run test:e2e           # needs Docker; drives the built image
+pnpm drizzle:studio # Drizzle Studio, scoped to this deployment's schema
 pnpm drizzle:reset  # start over: drop the schema and everything in it
 ```
+
+`pnpm drizzle:studio` runs Drizzle Studio on
+<https://local.drizzle.studio> against `DATABASE_URL`. It reads the same
+`drizzle.config.ts` the migration generator does, so it sees only
+`IDP_SCHEMA_NAME ?? "idp"` and nothing else in the database;
+`IDP_SCHEMA_NAME=idp_scratch pnpm drizzle:studio` aims it at a throwaway.
+It is a full read-write editor on a live schema — for browsing a running
+deployment there is `/admin/database`, which is admin-gated, can be held at
+`read-only`, and writes an audit row per statement (**D83**).
 
 `pnpm drizzle:reset` is how you get back to a clean database (**D56**).
 Migrations are forward-only and there is no seed step, so the reset is the

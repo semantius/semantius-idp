@@ -1,6 +1,6 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-28 · **Branch:** `feat/database` · **Head:** `cb8084d`, last tag **v0.2.0**
+**As of:** 2026-08-28 · **Branch:** `feat/database` · **Head:** `c701d3c`, last tag **v0.2.0**
 **Plan:** `~/.claude/plans/make-the-admin-layout-shiny-unicorn.md` (the sidebar shell)
 **Spec:** [spec-v1.md](spec-v1.md) — amended through **D83**
 

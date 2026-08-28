@@ -95,7 +95,7 @@
           "type": "string"
         },
         "poolMax": {
-          "description": "Maximum pooled connections. One instance is the supported topology (OPS-11), so this is the whole deployment's budget.",
+          "description": "Maximum pooled connections. One instance is the supported topology, so this is the whole deployment's budget.",
           "type": "integer",
           "minimum": 1,
           "maximum": 200
@@ -160,7 +160,7 @@
         },
         "defaultLocale": {
           "default": "en-US",
-          "description": "Only `en-US` ships in v1 (FR-I18N-1).",
+          "description": "Only `en-US` ships in v1.",
           "type": "string"
         },
         "nameFormat": {
@@ -187,7 +187,7 @@
           "type": "object",
           "properties": {
             "apiKey": {
-              "description": "Absent ⇒ degraded mode: every e-mail feature is disabled (FR-MAIL-2).",
+              "description": "Absent ⇒ degraded mode: every e-mail feature is disabled.",
               "type": "string"
             }
           },
@@ -209,11 +209,11 @@
       "type": "object",
       "properties": {
         "enabled": {
-          "description": "Governs password and social registration alike (FR-SIGNUP-1).",
+          "description": "Governs password and social registration alike.",
           "type": "boolean"
         },
         "requireApproval": {
-          "description": "Self-registrations land as `pending` (FR-SIGNUP-2).",
+          "description": "Self-registrations land as `pending`.",
           "type": "boolean"
         },
         "allowedEmailDomains": {
@@ -308,20 +308,20 @@
           ]
         },
         "cookieCacheMinutes": {
-          "description": "Capped at 5 so revocations bite quickly (FR-AUTH-5).",
+          "description": "Capped at 5 so revocations bite quickly.",
           "type": "integer",
           "minimum": 0,
           "maximum": 5
         },
         "revokeOAuthTokensOnLogout": {
-          "description": "Whether signing out of the IdP also kills the OAuth tokens issued to clients from that session. Off by default: a user closing this tab does not usually mean to sign out of every application they use (FR-AUTH-6).",
+          "description": "Whether signing out of the IdP also kills the OAuth tokens issued to clients from that session. Off by default: a user closing this tab does not usually mean to sign out of every application they use.",
           "type": "boolean"
         }
       },
       "additionalProperties": false
     },
     "social": {
-      "description": "Keyed by provider id — `google`, `github`, `microsoft`. Each entry needs `clientId` and `clientSecret`; `microsoft` also needs `tenantId` (FR-SOC-5).",
+      "description": "Keyed by provider id — `google`, `github`, `microsoft`. Each entry needs `clientId` and `clientSecret`; `microsoft` also needs `tenantId`.",
       "default": {},
       "type": "object",
       "propertyNames": {
@@ -344,7 +344,7 @@
             "description": "A `${env:…}` placeholder in production; never a literal."
           },
           "syncProfile": {
-            "description": "Refresh profile fields from the provider on every sign-in (FR-SOC-4).",
+            "description": "Refresh profile fields from the provider on every sign-in.",
             "type": "boolean"
           },
           "allowedEmailDomains": {
@@ -356,7 +356,7 @@
             }
           },
           "tenantId": {
-            "description": "Required for `microsoft`: a tenant GUID or verified domain (FR-SOC-5).",
+            "description": "Required for `microsoft`: a tenant GUID or verified domain.",
             "type": "string"
           }
         },
@@ -372,7 +372,7 @@
       "type": "object",
       "properties": {
         "enabled": {
-          "description": "Whether users may enrol at all. Enrolment is per user and always optional (FR-2FA-1); turning this off hides the whole feature.",
+          "description": "Whether users may enrol at all. Enrolment is per user and always optional; turning this off hides the whole feature.",
           "type": "boolean"
         },
         "issuer": {
@@ -393,7 +393,7 @@
       "type": "object",
       "properties": {
         "enabled": {
-          "description": "Off hides the account page and 404s its route (FR-KEY-1).",
+          "description": "Off hides the account page and 404s its route.",
           "type": "boolean"
         },
         "defaultExpiresIn": {
@@ -422,12 +422,12 @@
         },
         "tokenClientId": {
           "default": "idp",
-          "description": "`azp` of JWTs exchanged from an API key (FR-KEY-3).",
+          "description": "`azp` of JWTs exchanged from an API key.",
           "type": "string",
           "minLength": 1
         },
         "tokenTtl": {
-          "description": "Lifetime of a JWT exchanged from a key (FR-KEY-3).",
+          "description": "Lifetime of a JWT exchanged from a key.",
           "default": 3600,
           "anyOf": [
             {
@@ -469,7 +469,7 @@
           "description": "Default RFC 8707 resource, applied whenever a client sends no `resource` parameter. Becomes the JWT `aud`."
         },
         "includeUserData": {
-          "description": "Whether access tokens carry the user's name, address and roles at all. Off removes exactly that set (FR-OIDC-7).",
+          "description": "Whether access tokens carry the user's name, address and roles at all. Off removes exactly that set.",
           "type": "boolean"
         },
         "userClaims": {
@@ -512,7 +512,7 @@
           "type": "boolean"
         },
         "rotationInterval": {
-          "description": "How often a new signing key is created. The old one keeps verifying for `jwt.gracePeriod` (FR-OIDC-16).",
+          "description": "How often a new signing key is created. The old one keeps verifying for `jwt.gracePeriod`.",
           "default": "90d",
           "anyOf": [
             {
@@ -539,7 +539,7 @@
           "type": "object",
           "properties": {
             "ttl": {
-              "description": "Lifetime of a JWT from `GET /api/auth/token`, the first-party session exchange (FR-OIDC-14).",
+              "description": "Lifetime of a JWT from `GET /api/auth/token`, the first-party session exchange.",
               "default": 3600,
               "anyOf": [
                 {
@@ -561,7 +561,7 @@
       "type": "object",
       "properties": {
         "accessTokenTtl": {
-          "description": "Also the window in which a revoked token still verifies for a stateless resource server (FR-OIDC-12).",
+          "description": "Also the window in which a revoked token still verifies for a stateless resource server.",
           "default": "15m",
           "anyOf": [
             {
@@ -675,7 +675,7 @@
           "type": "object",
           "properties": {
             "prune": {
-              "description": "Delete rows for clients no longer in the file instead of disabling them (FR-OIDC-2).",
+              "description": "Delete rows for clients no longer in the file instead of disabling them.",
               "type": "boolean"
             }
           },
@@ -697,12 +697,12 @@
           }
         },
         "allowImpersonation": {
-          "description": "Lets an administrator act as another user, ≤ 1 h, never against another administrator, every action audited (FR-ADMIN-5).",
+          "description": "Lets an administrator act as another user, ≤ 1 h, never against another administrator, every action audited.",
           "type": "boolean"
         },
         "database": {
           "default": "disabled",
-          "description": "`/admin/database`, a schema explorer and SQL console over this deployment's own Postgres (FR-ADMIN-7). `read-only` runs every statement in a READ ONLY transaction; `read-write` adds a mode toggle and commits when it is set. `disabled` removes the page, the nav entry and both endpoints. One statement per run, 10 s timeout, 500-row cap, every execution audited as `database.queried`. An administrator who can run SQL can read every row at rest — password hashes and session tokens included — so leave it off unless that is intended.",
+          "description": "`/admin/database`, a schema explorer and SQL console over this deployment's own Postgres. `read-only` runs every statement in a READ ONLY transaction; `read-write` adds a mode toggle and commits when it is set. `disabled` removes the page, the nav entry and both endpoints. One statement per run, 10 s timeout, 500-row cap, every execution audited as `database.queried`. An administrator who can run SQL can read every row at rest — password hashes and session tokens included — so leave it off unless that is intended.",
           "type": "string",
           "enum": [
             "disabled",
@@ -718,7 +718,7 @@
       "type": "object",
       "properties": {
         "enabled": {
-          "description": "Turning this off removes the SEC-2 limits on sign-in, reset, 2FA and the token endpoint. For tests.",
+          "description": "Turning this off removes the rate limits on sign-in, reset, 2FA and the token endpoint. For tests.",
           "type": "boolean"
         },
         "storage": {
@@ -766,7 +766,7 @@
       "type": "object",
       "properties": {
         "intervalMinutes": {
-          "description": "How often the retention job runs: expired sessions, spent verification rows, dead tokens, stale rate-limit rows and retired keys (OPS-8, DM-5).",
+          "description": "How often the retention job runs: expired sessions, spent verification rows, dead tokens, stale rate-limit rows and retired keys.",
           "type": "integer",
           "minimum": 1,
           "maximum": 1440

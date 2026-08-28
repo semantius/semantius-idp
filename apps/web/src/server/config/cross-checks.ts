@@ -334,7 +334,7 @@ export function runCrossChecks(input: CrossCheckInput): CrossCheckResult {
     warnings.push({
       code: "email.degraded",
       message:
-        "No Resend API key configured: password reset, e-mail verification and all notification e-mails are disabled, and `auth.requireEmailVerification` is forced to false (FR-MAIL-2).",
+        "No Resend API key configured: password reset, e-mail verification and all notification e-mails are disabled, and `auth.requireEmailVerification` is forced to false.", // FR-MAIL-2
     })
   }
   if (

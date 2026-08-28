@@ -161,7 +161,7 @@ const databaseSchema = z.strictObject({
   poolMax: flexInt({ min: 1, max: 200 })
     .default(10)
     .describe(
-      "Maximum pooled connections. One instance is the supported topology (OPS-11), so this is the whole deployment's budget."
+      "Maximum pooled connections. One instance is the supported topology, so this is the whole deployment's budget." // OPS-11
     ),
   connectTimeoutSeconds: flexInt({ min: 1, max: 300 })
     .default(30)
@@ -232,7 +232,7 @@ const siteSchema = z.strictObject({
   defaultLocale: z
     .string()
     .default("en-US")
-    .describe("Only `en-US` ships in v1 (FR-I18N-1)."),
+    .describe("Only `en-US` ships in v1."), // FR-I18N-1
   nameFormat: z
     .enum(["first-last", "last-first"])
     .default("first-last")
@@ -248,7 +248,7 @@ const emailSchema = z.strictObject({
         .string()
         .optional()
         .describe(
-          "Absent ⇒ degraded mode: every e-mail feature is disabled (FR-MAIL-2)."
+          "Absent ⇒ degraded mode: every e-mail feature is disabled." // FR-MAIL-2
         ),
     })
     .prefault({}),
@@ -267,10 +267,10 @@ const emailSchema = z.strictObject({
 const signUpSchema = z.strictObject({
   enabled: flexBoolean()
     .default(false)
-    .describe("Governs password and social registration alike (FR-SIGNUP-1)."),
+    .describe("Governs password and social registration alike."), // FR-SIGNUP-1
   requireApproval: flexBoolean()
     .default(true)
-    .describe("Self-registrations land as `pending` (FR-SIGNUP-2)."),
+    .describe("Self-registrations land as `pending`."), // FR-SIGNUP-2
   allowedEmailDomains: flexArray(z.string().min(1))
     .default([])
     .describe("Empty = no restriction. Admin-created users always bypass it."),
@@ -370,11 +370,11 @@ const sessionSchema = z.strictObject({
     .describe("A session older than this is extended on the next request."),
   cookieCacheMinutes: flexInt({ min: 0, max: 5 })
     .default(5)
-    .describe("Capped at 5 so revocations bite quickly (FR-AUTH-5)."),
+    .describe("Capped at 5 so revocations bite quickly."), // FR-AUTH-5
   revokeOAuthTokensOnLogout: flexBoolean()
     .default(false)
     .describe(
-      "Whether signing out of the IdP also kills the OAuth tokens issued to clients from that session. Off by default: a user closing this tab does not usually mean to sign out of every application they use (FR-AUTH-6)."
+      "Whether signing out of the IdP also kills the OAuth tokens issued to clients from that session. Off by default: a user closing this tab does not usually mean to sign out of every application they use." // FR-AUTH-6
     ),
 })
 
@@ -393,7 +393,7 @@ const socialProviderSchema = z.looseObject({
   syncProfile: flexBoolean()
     .default(true)
     .describe(
-      "Refresh profile fields from the provider on every sign-in (FR-SOC-4)."
+      "Refresh profile fields from the provider on every sign-in." // FR-SOC-4
     ),
   allowedEmailDomains: flexArray(z.string().min(1))
     .default([])
@@ -404,7 +404,7 @@ const socialProviderSchema = z.looseObject({
     .string()
     .optional()
     .describe(
-      "Required for `microsoft`: a tenant GUID or verified domain (FR-SOC-5)."
+      "Required for `microsoft`: a tenant GUID or verified domain." // FR-SOC-5
     ),
 })
 
@@ -412,7 +412,7 @@ const twoFactorSchema = z.strictObject({
   enabled: flexBoolean()
     .default(true)
     .describe(
-      "Whether users may enrol at all. Enrolment is per user and always optional (FR-2FA-1); turning this off hides the whole feature."
+      "Whether users may enrol at all. Enrolment is per user and always optional; turning this off hides the whole feature." // FR-2FA-1
     ),
   issuer: z
     .string()
@@ -428,7 +428,7 @@ const twoFactorSchema = z.strictObject({
 const apiKeysSchema = z.strictObject({
   enabled: flexBoolean()
     .default(true)
-    .describe("Off hides the account page and 404s its route (FR-KEY-1)."),
+    .describe("Off hides the account page and 404s its route."), // FR-KEY-1
   defaultExpiresIn: duration({ min: 60 })
     .prefault("365d")
     .describe("Pre-filled expiry on the create form."),
@@ -439,10 +439,10 @@ const apiKeysSchema = z.strictObject({
     .string()
     .min(1)
     .default("idp")
-    .describe("`azp` of JWTs exchanged from an API key (FR-KEY-3)."),
+    .describe("`azp` of JWTs exchanged from an API key."), // FR-KEY-3
   tokenTtl: duration({ min: 60, max: 86400 })
     .prefault(3600)
-    .describe("Lifetime of a JWT exchanged from a key (FR-KEY-3)."),
+    .describe("Lifetime of a JWT exchanged from a key."), // FR-KEY-3
 })
 
 const jwtSchema = z.strictObject({
@@ -460,7 +460,7 @@ const jwtSchema = z.strictObject({
   includeUserData: flexBoolean()
     .default(true)
     .describe(
-      "Whether access tokens carry the user's name, address and roles at all. Off removes exactly that set (FR-OIDC-7)."
+      "Whether access tokens carry the user's name, address and roles at all. Off removes exactly that set." // FR-OIDC-7
     ),
   userClaims: flexArray(z.enum(USER_CLAIM_NAMES))
     .optional()
@@ -480,7 +480,7 @@ const jwtSchema = z.strictObject({
   rotationInterval: duration({ min: 3600 })
     .prefault("90d")
     .describe(
-      "How often a new signing key is created. The old one keeps verifying for `jwt.gracePeriod` (FR-OIDC-16)."
+      "How often a new signing key is created. The old one keeps verifying for `jwt.gracePeriod`." // FR-OIDC-16
     ),
   gracePeriod: duration({ min: 60 })
     .optional()
@@ -492,7 +492,7 @@ const jwtSchema = z.strictObject({
       ttl: duration({ min: 60, max: 86400 })
         .prefault(3600)
         .describe(
-          "Lifetime of a JWT from `GET /api/auth/token`, the first-party session exchange (FR-OIDC-14)."
+          "Lifetime of a JWT from `GET /api/auth/token`, the first-party session exchange." // FR-OIDC-14
         ),
     })
     .prefault({}),
@@ -512,7 +512,7 @@ const oauthSchema = z.strictObject({
   accessTokenTtl: duration({ min: 60 })
     .prefault("15m")
     .describe(
-      "Also the window in which a revoked token still verifies for a stateless resource server (FR-OIDC-12)."
+      "Also the window in which a revoked token still verifies for a stateless resource server." // FR-OIDC-12
     ),
   idTokenTtl: duration({ min: 60 }).prefault("1h"),
   codeTtl: duration({ min: 10, max: 600 })
@@ -541,7 +541,7 @@ const oauthSchema = z.strictObject({
       prune: flexBoolean()
         .default(false)
         .describe(
-          "Delete rows for clients no longer in the file instead of disabling them (FR-OIDC-2)."
+          "Delete rows for clients no longer in the file instead of disabling them." // FR-OIDC-2
         ),
     })
     .prefault({}),
@@ -556,13 +556,13 @@ const adminSchema = z.strictObject({
   allowImpersonation: flexBoolean()
     .default(false)
     .describe(
-      "Lets an administrator act as another user, ≤ 1 h, never against another administrator, every action audited (FR-ADMIN-5)."
+      "Lets an administrator act as another user, ≤ 1 h, never against another administrator, every action audited." // FR-ADMIN-5
     ),
   database: z
     .enum(["disabled", "read-only", "read-write"])
     .default("disabled")
     .describe(
-      "`/admin/database`, a schema explorer and SQL console over this deployment's own Postgres (FR-ADMIN-7). `read-only` runs every statement in a READ ONLY transaction; `read-write` adds a mode toggle and commits when it is set. `disabled` removes the page, the nav entry and both endpoints. One statement per run, 10 s timeout, 500-row cap, every execution audited as `database.queried`. An administrator who can run SQL can read every row at rest — password hashes and session tokens included — so leave it off unless that is intended."
+      "`/admin/database`, a schema explorer and SQL console over this deployment's own Postgres. `read-only` runs every statement in a READ ONLY transaction; `read-write` adds a mode toggle and commits when it is set. `disabled` removes the page, the nav entry and both endpoints. One statement per run, 10 s timeout, 500-row cap, every execution audited as `database.queried`. An administrator who can run SQL can read every row at rest — password hashes and session tokens included — so leave it off unless that is intended." // FR-ADMIN-7
     ),
 })
 
@@ -570,8 +570,8 @@ const rateLimitSchema = z.strictObject({
   enabled: flexBoolean()
     .default(true)
     .describe(
-      "Turning this off removes the SEC-2 limits on sign-in, reset, 2FA and the token endpoint. For tests."
-    ),
+      "Turning this off removes the rate limits on sign-in, reset, 2FA and the token endpoint. For tests."
+    ), // SEC-2
   storage: z
     .enum(["database", "memory"])
     .default("database")
@@ -610,7 +610,7 @@ export const configFileSchema = z.strictObject({
     .record(z.string(), socialProviderSchema)
     .prefault({})
     .describe(
-      "Keyed by provider id — `google`, `github`, `microsoft`. Each entry needs `clientId` and `clientSecret`; `microsoft` also needs `tenantId` (FR-SOC-5)."
+      "Keyed by provider id — `google`, `github`, `microsoft`. Each entry needs `clientId` and `clientSecret`; `microsoft` also needs `tenantId`." // FR-SOC-5
     ),
   twoFactor: twoFactorSchema.prefault({}),
   apiKeys: apiKeysSchema.prefault({}),
@@ -624,7 +624,7 @@ export const configFileSchema = z.strictObject({
       intervalMinutes: flexInt({ min: 1, max: 1440 })
         .default(60)
         .describe(
-          "How often the retention job runs: expired sessions, spent verification rows, dead tokens, stale rate-limit rows and retired keys (OPS-8, DM-5)."
+          "How often the retention job runs: expired sessions, spent verification rows, dead tokens, stale rate-limit rows and retired keys." // OPS-8, DM-5
         ),
     })
     .prefault({}),

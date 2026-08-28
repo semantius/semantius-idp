@@ -124,7 +124,7 @@ const baseClientSchema = z.strictObject({
   firstParty: flexBoolean()
     .default(false)
     .describe(
-      "Same-host app that may use the session-JWT endpoint (FR-OIDC-14)."
+      "Same-host app that may use the session-JWT endpoint." // FR-OIDC-14
     ),
   redirectUris: flexArray(z.string().min(1)).default([]),
   postLogoutRedirectUris: flexArray(z.string().min(1)).default([]),
@@ -135,7 +135,7 @@ const baseClientSchema = z.strictObject({
     .union([absoluteUrl(), flexArray(absoluteUrl(), { min: 1 })])
     .optional()
     .describe(
-      "Per-client default audience; overrides `jwt.audience` for this client (FR-OIDC-6)."
+      "Per-client default audience; overrides `jwt.audience` for this client." // FR-OIDC-6
     ),
   grantTypes: flexArray(grantTypeSchema).optional(),
   responseTypes: flexArray(z.literal("code")).optional(),
@@ -151,7 +151,7 @@ const baseClientSchema = z.strictObject({
   resourceServer: flexBoolean()
     .default(false)
     .describe(
-      "May introspect tokens it is an audience for, not only its own (FR-OIDC-4)."
+      "May introspect tokens it is an audience for, not only its own." // FR-OIDC-4
     ),
   disabled: flexBoolean().default(false),
   uri: absoluteUrl().optional(),

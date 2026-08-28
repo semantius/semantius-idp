@@ -3,8 +3,10 @@
 /**
  * **A fork of ui.neon.com's `SchemaExplorer`, not registry output any more**
  * (D84). It was vendored verbatim under D83; the owner then asked for a run
- * control on every table row, which the registry component has no prop for.
- * Three divergences, all additive, all marked `Fork (D84)` where they sit:
+ * control on every table row, which the registry component has no prop for;
+ * **D87** then made the card fill its container and **D88** took the row
+ * estimate off it. Six divergences, each marked `Fork (D84)`, `Fork (D87)`
+ * or `Fork (D88)` where it sits:
  *
  * 1. `onTableAction` / `tableActionLabel` — the per-row button.
  * 2. A table row is a `div role="treeitem"` rather than a `button` carrying
@@ -15,8 +17,17 @@
  *    handler.
  * 4. `titleSlot` — a header that is a control rather than a label — and the
  *    removal of the `/ to search` hint that used to sit opposite it.
+ * 5. **The row estimate is not drawn** (**D88**). `Table.rowCount` stays in
+ *    the interface, because the endpoint still returns it; the tree ignores
+ *    it. `formatCount`, which had no other caller, went with it.
+ * 6. **It fills its container instead of capping the tree at `max-h-96`**
+ *    (**D87**). The card is a flex column and the tree is its `flex-1` row,
+ *    so a caller that gives the card a height gets a tree that grows and
+ *    shrinks with the window. Given no height it still behaves — a column
+ *    whose only growable row has `min-h-0` is its content's height — but the
+ *    24 rem ceiling is gone, so a caller that wants one now says so.
  *
- * Re-running `shadcn add schema-explorer` overwrites all three. That is the
+ * Re-running `shadcn add schema-explorer` overwrites all six. That is the
  * cost of the fork and it is written down rather than discovered.
  */
 
@@ -64,7 +75,11 @@ export interface Table {
   schema?: string;
   columns: Column[];
   indexes?: Index[];
-  /** Approximate row count. */
+  /**
+   * Approximate row count. **Accepted and not drawn** (fork, D88) — see the
+   * note on `TableRow` for why a `pg_class.reltuples` estimate is the wrong
+   * thing to put beside a table name.
+   */
   rowCount?: number;
 }
 
@@ -75,14 +90,6 @@ interface TreeRow {
   column?: Column;
   index?: Index;
 }
-
-const formatCount = (value: number) => {
-  const formatter = new Intl.NumberFormat("en", {
-    maximumFractionDigits: 1,
-    notation: "compact",
-  });
-  return formatter.format(value).toLowerCase();
-};
 
 const normalize = (value: string) => value.trim().toLowerCase();
 
@@ -268,16 +275,26 @@ const TableRow = ({
     <span className="min-w-0 truncate font-medium text-xs">
       <Match query={query}>{table.name}</Match>
     </span>
+    {/* Fork (D88). The row estimate is **not drawn**, and `table.rowCount`
+        is deliberately left unread. It is `pg_class.reltuples`, which is a
+        planner statistic and not a count: `-1` until something gathers
+        statistics, and nothing does on a table that is merely written to.
+        Measured on a throwaway database rather than recalled: `CREATE
+        TABLE` with its indexes built while empty leaves `-1`, three inserts
+        leave `-1`, and only `ANALYZE`, `VACUUM` or an index built over rows
+        that already exist sets it. A schema whose migrations create every
+        table before a single row arrives therefore starts at `-1` and stays
+        there until autovacuum's analyse pass, which triggers at **fifty
+        modifications** — so what the column really reported was *write
+        volume*. `rate_limit` alone had one, because `rateLimit.storage:
+        "database"` updates it on nearly every request while it holds two
+        rows; the other seventeen tables showed nothing, several of them
+        holding more rows than it did. A number that appears on the least populated table
+        and on no other is worse than no number. The endpoint still returns
+        it (FR-ADMIN-7), where it is documented as an estimate and read by
+        something that can treat it as one. */}
     <span className="ml-auto flex shrink-0 items-center gap-1.5 text-[10px] text-muted-foreground tabular-nums">
       <span>{table.columns.length} columns</span>
-      {table.rowCount === undefined ? null : (
-        <>
-          <span aria-hidden="true" className="text-border">
-            /
-          </span>
-          <span>{formatCount(table.rowCount)} rows</span>
-        </>
-      )}
     </span>
     {onAction ? (
       // Fork (D84). `stopPropagation` on the click, or the row toggles open
@@ -433,7 +450,10 @@ const LeafRow = ({
 };
 
 const LoadingTree = () => (
-  <output aria-label="Loading schema" className="block space-y-1 p-2">
+  <output
+    aria-label="Loading schema"
+    className="block min-h-0 flex-1 space-y-1 overflow-hidden p-2"
+  >
     {[72, 58, 84, 64].map((width) => (
       <div className="flex h-10 items-center gap-2 px-2" key={width}>
         <span className="size-3.5 animate-pulse rounded-sm bg-muted motion-reduce:animate-none" />
@@ -665,13 +685,15 @@ export const SchemaExplorer = ({
   return (
     <div
       className={cn(
-        "@container w-full min-w-0 overflow-hidden rounded-lg border border-border/60 bg-card shadow-xs",
+        // Fork (D87). `flex flex-col` and nothing else: the height comes
+        // from the caller, and with none the column is as tall as its rows.
+        "@container flex w-full min-w-0 flex-col overflow-hidden rounded-lg border border-border/60 bg-card shadow-xs",
         className
       )}
       data-slot="schema-explorer"
       {...props}
     >
-      <header className="flex min-h-11 items-center gap-2 border-border/60 border-b px-3">
+      <header className="flex min-h-11 shrink-0 items-center gap-2 border-border/60 border-b px-3">
         <span className="grid size-6 place-items-center rounded-md bg-primary/10 text-primary">
           <HugeiconsIcon
             aria-hidden="true"
@@ -704,7 +726,7 @@ export const SchemaExplorer = ({
         )}
       </header>
 
-      <label className="flex h-10 items-center gap-2 border-border/60 border-b px-3 focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring/40">
+      <label className="flex h-10 shrink-0 items-center gap-2 border-border/60 border-b px-3 focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring/40">
         <HugeiconsIcon
           aria-hidden="true"
           className="size-3.5 shrink-0 text-muted-foreground"
@@ -752,7 +774,10 @@ export const SchemaExplorer = ({
       {!isLoading && rows.length > 0 ? (
         <div
           aria-label={`${title} database schema`}
-          className="neon-scroll-fade max-h-96 space-y-0.5 overflow-y-auto p-1.5"
+          // Fork (D87). Was `max-h-96`. `min-h-0` is what makes the scroll
+          // happen in here rather than in the page: a flex item's default
+          // `min-height: auto` refuses to shrink below its content.
+          className="neon-scroll-fade min-h-0 flex-1 space-y-0.5 overflow-y-auto p-1.5"
           onKeyDown={onTreeKeyDown}
           ref={treeRef}
           role="tree"
@@ -808,7 +833,7 @@ export const SchemaExplorer = ({
       ) : null}
 
       {!isLoading && rows.length === 0 ? (
-        <div className="grid min-h-36 place-items-center px-6 py-8 text-center">
+        <div className="grid min-h-36 flex-1 place-items-center px-6 py-8 text-center">
           <div>
             <div className="mx-auto mb-2 grid size-8 place-items-center rounded-lg border border-border/60 bg-background shadow-xs">
               <HugeiconsIcon

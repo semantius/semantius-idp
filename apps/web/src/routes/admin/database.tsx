@@ -3,8 +3,14 @@ import { Suspense, lazy, useEffect, useRef, useState } from "react"
 import { createFileRoute, notFound } from "@tanstack/react-router"
 
 import { NativeSelect } from "@workspace/ui/components/native-select"
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@workspace/ui/components/resizable"
 import type { Table } from "@workspace/ui/components/schema-explorer"
 import { Skeleton } from "@workspace/ui/components/skeleton"
+import { cn } from "@workspace/ui/lib/utils"
 import type {
   SQLExecutionContext,
   SQLResult,
@@ -72,9 +78,43 @@ const SQLRunner = lazy(async () => ({
  */
 const quoted = (name: string) => `"${name.replace(/"/g, '""')}"`
 
+/** Tailwind's `lg`, which is where the two panes used to stop sitting side by side. */
+const SIDE_BY_SIDE = 1024
+
+/**
+ * Whether the two panes fit beside each other (**D87**).
+ *
+ * The layout used to be `lg:grid-cols-…`, and a media query in CSS cannot
+ * reach a prop. This is `use-mobile.ts`'s shape — the registry hook the
+ * sidebar already runs on every page of both signed-in areas — for the same
+ * reason it is: the server has no viewport, so the first paint is the
+ * desktop one and a narrow browser corrects it on mount. **One group either
+ * way, with only `orientation` changing**, so nothing unmounts when a window
+ * crosses the breakpoint: two branches would remount CodeMirror and take the
+ * operator's half-written statement with it.
+ */
+function useSideBySide() {
+  const [wide, setWide] = useState(true)
+
+  useEffect(() => {
+    const query = window.matchMedia(`(min-width: ${String(SIDE_BY_SIDE)}px)`)
+    const onChange = () => {
+      setWide(query.matches)
+    }
+    query.addEventListener("change", onChange)
+    onChange()
+    return () => {
+      query.removeEventListener("change", onChange)
+    }
+  }, [])
+
+  return wide
+}
+
 function DatabasePage() {
   const { ui, schema: loaded } = Route.useLoaderData()
   const t = getCatalog(ui.locale)
+  const sideBySide = useSideBySide()
   // `SQLResult` has no truncation flag, so the caption is the page's job.
   const [truncatedRows, setTruncatedRows] = useState<number | null>(null)
   /**
@@ -219,6 +259,11 @@ function DatabasePage() {
 
   return (
     <AdminShell
+      // D87: the console is the page, so it takes the height the window has
+      // left rather than the height its widest result happens to want, and
+      // its one-sentence subtitle is not held to a paragraph's measure.
+      fill
+      wideDescription
       title={t.admin.database.title}
       // The mode is in the opening sentence rather than a paragraph of its
       // own beneath it (D84): a `read-only` console says so where the page
@@ -231,21 +276,55 @@ function DatabasePage() {
       }
     >
       {writable ? (
-        <p className="mb-4 text-sm text-muted-foreground">
+        <p className="mb-4 shrink-0 text-sm text-muted-foreground">
           {t.admin.database.readWrite}
         </p>
       ) : null}
 
-      {/* The tree column is capped rather than proportional. `2fr_3fr` gave it
-          40 % of a wide screen for content that is a table name and a column
-          count -- the runner is where the width is worth spending, and it is
-          the half that has to hold a result grid. `min-w-0` on both children:
-          the admin shell is `overflow-x-hidden` and a grid child defaults to
-          `min-width: auto`, so a wide result would push its column instead of
-          scrolling inside the runner. */}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
-        <div className="min-w-0 space-y-2">
-          <Suspense fallback={<Skeleton className="h-96 w-full rounded-lg" />}>
+      {/* **A resizable group, not a grid** (D87). The tree column was
+          `minmax(0,20rem)` and the two panes were fixed-height cards inside
+          it: nothing followed the window, and the operator could not spend a
+          wide screen on whichever half they were reading. The defaults are
+          what the grid gave — 20 rem of tree — and the pixel `minSize`s are
+          the point at which each pane stops being worth drawing. `min-w-0` on
+          both panels for the reason it was on both grid children: the admin
+          shell is `overflow-x-hidden` and a flex item's `min-width: auto`
+          would let a wide result push its panel instead of scrolling inside
+          the runner. */}
+      <ResizablePanelGroup
+        // **Stacked, it is allowed to be taller than the window.** Side by
+        // side the group is exactly the space left below the heading and the
+        // panes divide it. Stacked, that space has to hold the tree
+        // *and* the whole console one under the other, and on a short narrow
+        // window there is not enough of it: the editor was squeezed to its
+        // three-row minimum on a fresh load at 900 x 800. Below `lg` — the
+        // same 1024 px `SIDE_BY_SIDE` switches on — the group takes a
+        // floor of 46 rem instead — 20 rem of tree, the separator, and a
+        // console at its opening size — and `SidebarLayout`'s content box
+        // scrolls to it.
+        className="min-h-0 flex-1 max-lg:min-h-[46rem]"
+        orientation={sideBySide ? "horizontal" : "vertical"}
+      >
+        <ResizablePanel
+          className="flex min-h-0 min-w-0 flex-col gap-2"
+          defaultSize={320}
+          // The grid capped this column at `20rem` and gave every extra pixel
+          // to the runner, which is still the right split (D84: a table name
+          // and a column count do not want the width; a result grid does).
+          // `preserve-pixel-size` is that cap, now movable.
+          groupResizeBehavior="preserve-pixel-size"
+          // **Capped only when the panes are stacked.** Side by side the
+          // operator is free to give the tree as much width as they like.
+          // Stacked, the group is a fixed 46 rem and the console below needs
+          // the rest of it — and the orientation flips *after* hydration
+          // (the server has no viewport), so the tree arrives carrying the
+          // ratio it had as a column and would otherwise keep it.
+          maxSize={sideBySide ? undefined : 320}
+          minSize={200}
+        >
+          <Suspense
+            fallback={<Skeleton className="min-h-0 flex-1 rounded-lg" />}
+          >
             {/* **The selector *is* the card's header line** (D84, second
                 pass). It sat above the card at first, under its own label,
                 with the header showing the database name beside a "/ to
@@ -257,6 +336,9 @@ function DatabasePage() {
                 because a visible one would cost the width the control
                 needs. */}
             <SchemaExplorer
+              // The card is the pane; the notice below it, when there is one,
+              // is what the `gap-2` on the panel is for.
+              className="min-h-0 flex-1"
               isLoading={pending !== null}
               onTableAction={onTableAction}
               tableActionLabel={(table) => t.admin.database.preview(table.name)}
@@ -284,13 +366,28 @@ function DatabasePage() {
             />
           </Suspense>
           {switchFailed ? (
-            <p className="text-xs text-muted-foreground">
+            <p className="shrink-0 text-xs text-muted-foreground">
               {t.admin.database.unavailable}
             </p>
           ) : null}
-        </div>
-        <div className="min-w-0">
-          <Suspense fallback={<Skeleton className="h-96 w-full rounded-lg" />}>
+        </ResizablePanel>
+
+        {/* The gap the grid's `gap-4` used to provide, given to the control
+            that now sits in it. A `separator` reports *its own* orientation,
+            which is the opposite of the group's — a row of panels is divided
+            by a vertical line — so the horizontal arm is the stacked case. */}
+        <ResizableHandle
+          className="mx-2 aria-[orientation=horizontal]:mx-0 aria-[orientation=horizontal]:my-2"
+          withHandle
+        />
+
+        <ResizablePanel
+          className="flex min-h-0 min-w-0 flex-col gap-2"
+          minSize={280}
+        >
+          <Suspense
+            fallback={<Skeleton className="min-h-0 flex-1 rounded-lg" />}
+          >
             {/* A `read-only` deployment gets the runner pinned to
                 `read-write` with its mode fieldset hidden — which reads
                 backwards and is deliberate. With the mode controlled to
@@ -315,19 +412,27 @@ function DatabasePage() {
               value={sql}
               {...(writable
                 ? { defaultMode: "read" as const }
-                : {
-                    mode: "read-write" as const,
-                    className: "[&_fieldset]:hidden",
-                  })}
+                : { mode: "read-write" as const })}
+              // **After the spread, and merged rather than passed twice**
+              // (D87). The `read-only` arm used to carry a `className` of its
+              // own, so a second one written above the spread was silently
+              // replaced: the card lost `flex-1`, stopped filling its panel,
+              // and the editor and the grid — two panes of a group with no
+              // height — rendered at zero. A prop that a conditional spread
+              // may also set has to be resolved in one place.
+              className={cn(
+                "min-h-0 flex-1",
+                !writable && "[&_fieldset]:hidden"
+              )}
             />
           </Suspense>
           {truncatedRows === null ? null : (
-            <p className="mt-2 text-xs text-muted-foreground">
+            <p className="shrink-0 text-xs text-muted-foreground">
               {t.admin.database.truncated(truncatedRows)}
             </p>
           )}
-        </div>
-      </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </AdminShell>
   )
 }

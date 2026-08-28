@@ -1,8 +1,9 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-28 · **Branch:** `main` · **Head:** `acf44b8`, last tag **v0.3.0**
+**As of:** 2026-08-28 · **Branch:** `main` · **Head:** `92523f8`, last tag **v0.3.1**
+**Uncommitted:** the D87 layout work below — everything else here is committed.
 **Plan:** `~/.claude/plans/make-the-admin-layout-shiny-unicorn.md` (the sidebar shell)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D86**
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D89**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
 gate.** Every gate green: lint, typecheck, unit (599), integration (243 across
@@ -80,6 +81,73 @@ README quick start against it, and confirming `latest` from outside.
   next boot serves the first-run setup page, which is now the only way an
   administrator is ever created. No credential to recover, and no command that
   changes one.
+
+---
+
+## The console's layout — three owner notes (2026-08-28, **D87**, **D88**)
+
+Three notes on `/admin/database`, all about the page rather than the query, and
+one question that turned out not to be a defect.
+
+**The panes did not follow the window.** They were two cards in a
+`lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]` grid, and every one of them was
+a fixed height: the schema tree `max-h-96`, CodeMirror's own `height: 190px`,
+the result grid `max-h-80`. A maximised browser bought a screen of empty space,
+and a long result scrolled the document. The page is a full-height column now
+and each pane scrolls inside itself.
+
+**`min-h-svh` is not a height, and the first attempt shipped broken because of
+it.** The registry's `SidebarProvider` sets a *minimum*, which leaves the box
+indefinite, and `height: 100%` against an indefinite box computes to `auto`.
+`react-resizable-panels` puts exactly that on its own group — so the first
+build had the tree grown to all eighteen tables, the document scrolling, and
+**the SQL editor gone**, because two panes with `flex-basis: 0` in a group with
+no height are two panes 0 px tall. `SidebarLayout` pins the shell to `h-svh`
+and makes its content box the scroll container; the sidebar and the header row
+stay where they are, and a long page scrolls beside them.
+
+**A conditional spread ate a `className`.** `<SQLRunner>`'s `read-only` arm
+carries `className: "[&_fieldset]:hidden"`, so the `min-h-0 flex-1` written
+*above* the spread was silently replaced — on exactly the deployment shape this
+repository runs. It is one `cn()` after the spread now.
+
+**Two separators, and nine rows that stay nine rows.** The registry's
+`resizable` rather than a hand-rolled splitter, because the handles have to be
+real `role="separator"` controls with `aria-valuenow` and arrow keys on a page
+the R-1 scan visits. Sizes are pixels — the v4 API takes them — and the editor
+pane is `preserve-pixel-size`, without which it was five rows in a 620 px
+window and thirteen in a 1080 px one. Below `lg` the group is allowed to be
+taller than the window (`min-h-[46rem]`) and the content box scrolls to it,
+because stacked, that space has to hold the tree *and* the whole console.
+
+**The description wrapped onto two lines** because `AdminShell` caps one at
+`max-w-2xl`. That measure is right for a paragraph and wrong for a subtitle
+over a full-width console; `wideDescription` drops it for this page rather than
+shortening the sentence, which would have cost the clause saying every run is
+audited.
+
+**And the row counts were not a bug — but the column is gone anyway**
+(**D88**). The tree showed one against `rate_limit` and against nothing else.
+The number is `pg_class.reltuples`, a planner statistic: `-1` until something
+gathers statistics, and **inserting rows does not**. Measured rather than
+recalled — a `CREATE TABLE` whose index is built while empty stays `-1`, three
+inserts leave it `-1`, and only `ANALYZE`, `VACUUM` or an index built over
+existing rows sets it. The migrations create every table and index before a row
+arrives, so nothing moves until autovacuum's analyse pass, which triggers at
+**fifty modifications** (`autovacuum_analyze_threshold` 50 +
+`autovacuum_analyze_scale_factor` 0.1, naptime 60 s). An `UPDATE` counts like
+an `INSERT`, and `rateLimit.storage: "database"` makes `rate_limit` the
+most-written table in the schema while holding two rows — so the column was
+reporting **write volume, not size**, and put a figure on the smallest table
+beside a 31-row `audit_log` with none. The owner's call: do not show it. The
+tree draws the column count and nothing else; the endpoint still returns the
+estimate, documented as one, for an API caller who can read it as such.
+
+Verified in a browser against a throwaway schema (`idp_layout_check`, dropped
+afterwards) at 1920 × 1080, 1400 × 900, 1400 × 620, 1280 × 720 and 900 × 800:
+the document never scrolls, the tree tracks the window, the editor is 204 px at
+every one of them, and `/admin`, `/admin/users`, `/admin/system`, `/account`
+and `/account/security` still scroll — inside the content box now.
 
 ---
 

@@ -635,7 +635,7 @@ export const enUS = {
       issuer: "Issuer",
       email: "E-mail",
       emailOn: (transport: string) => `On, via ${transport}`,
-      emailOff: "Off — the server runs in degraded mode (FR-MAIL-2)",
+      emailOff: "Off — the server runs in degraded mode", // FR-MAIL-2
       keys: "Signing keys",
       algorithm: "Algorithm",
       // "Signing key" over a `kid` read as though the key itself were on the
@@ -645,7 +645,7 @@ export const enUS = {
       publishedKeys: "Published",
       rotate: "Rotate the signing key now",
       rotateHelp:
-        "The new key is published first and starts signing an hour later, so tokens already issued keep verifying (FR-OIDC-16).",
+        "The new key is published first and starts signing an hour later, so tokens already issued keep verifying.", // FR-OIDC-16
       rotated: (keyId: string) => `A successor key was created: ${keyId}.`,
       startup: "Start-up",
       reconcile: "Client reconciliation",

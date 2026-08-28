@@ -24,7 +24,7 @@ Four files, in this order. Read them before proposing anything.
 | File | What it is |
 | --- | --- |
 | [status.md](status.md) | The handoff. Done, not-done, and why — the ground truth between sessions. |
-| [spec-v1.md](spec-v1.md) | Signed off, amended through **D86**. Numbered requirements, and §12.1's decision log with the reasoning. |
+| [spec-v1.md](spec-v1.md) | Signed off, amended through **D89**. Numbered requirements, and §12.1's decision log with the reasoning. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | The gates, the style, and how to amend the spec. |
 | [docs/release.md](docs/release.md) | What is left before v1.0.0, and it is the owner's, not yours. |
 
@@ -282,6 +282,17 @@ Three more things about it that are easy to get wrong:
   drawer that still holds the focus trap. `ShellSidebar` closes it on the
   route, in an effect — not on each link, which the next link would forget and
   which the back button could not reach anyway.
+- **`min-h-svh` is a minimum, not a height, and that difference broke a page**
+  (**D87**). The registry provider is `min-h-svh`, which leaves the box
+  *indefinite* — and `height: 100%` against an indefinite box computes to
+  `auto`. `/admin/database`'s resizable groups set exactly that on
+  themselves, so the schema tree grew to every table, the document scrolled,
+  and the SQL editor disappeared: two panes with `flex-basis: 0` in a group
+  with no height are two panes 0 px tall. The shell is `h-svh` as well now,
+  and **`SidebarLayout`'s content box is the scroll container**, not the
+  document. A page that wants to fill the window asks `AdminShell` for
+  `fill`; everything else is unchanged, because a page shorter than the
+  viewport never scrolls either way.
 
 **The integration suite runs against a local Postgres, and must.** It used to
 default to the deployment's own Neon instance in `us-east-2` — **~102 ms per
@@ -475,8 +486,12 @@ an `open`.
 
 **Two files are exceptions, and they say so in their own headers**:
 `schema-explorer.tsx` and `sql-runner.tsx` are **forks** of ui.neon.com's
-components (**D84**) — the first has no prop for a row action, the second
-cannot be told to run, and `/admin/database` needs both. Each header lists its
+components (**D84**, **D87**) — the first has no prop for a row action, the
+second cannot be told to run, neither followed the window, and
+`/admin/database` needs all of it. **Both now fill their container rather than
+capping themselves, and the runner requires a parent with a definite height**:
+it splits itself with a panel group, and a panel group in an auto-height
+column measures zero. Each header lists its
 divergences and each one is marked `Fork (D84)` where it sits. `shadcn add`
 over either of them overwrites the lot; re-apply from the header's list.
 Nothing else in `packages/ui/src/components` is forked, and the next component

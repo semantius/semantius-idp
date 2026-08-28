@@ -5,8 +5,19 @@
  * (D84), for the same reason `schema-explorer.tsx` beside it is: the schema
  * tree's run button has to put a statement in this editor *and execute it*,
  * and the registry component can be handed a `value` but not told to run.
- * One divergence, marked `Fork (D84)` where it sits: a `ref` exposing
- * `run()`. Re-running `shadcn add sql-runner` overwrites it.
+ * Two divergences, marked `Fork (D84)` / `Fork (D87)` where they sit:
+ *
+ * 1. A `ref` exposing `run()` (**D84**).
+ * 2. **The card fills its container and splits itself** (**D87**). The editor
+ *    was 190 px of fixed CodeMirror and the grid `max-h-80`, so neither
+ *    followed the window; both are panes of a vertical
+ *    `ResizablePanelGroup` now, the editor opening at nine rows and
+ *    scrolling past them, the grid taking whatever is left.
+ *    **This makes a height-constrained parent a requirement**: a panel group
+ *    measures its own box, and in an auto-height column it measures zero.
+ *    `/admin/database` gives it one; anything else that mounts this has to.
+ *
+ * Re-running `shadcn add sql-runner` overwrites both.
  */
 
 import { PostgreSQL, sql } from "@codemirror/lang-sql";
@@ -42,6 +53,11 @@ import { useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { ComponentProps, Ref } from "react";
 
 import { Button } from "@workspace/ui/components/button";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@workspace/ui/components/resizable";
 import { cn } from "@workspace/ui/lib/utils";
 
 export type SQLRunnerMode = "read" | "read-write";
@@ -218,12 +234,31 @@ const ModeControl = ({
 
 const EXTERNAL_UPDATE = Annotation.define<boolean>();
 
+/**
+ * Fork (D87). The editor pane's opening height, in pixels.
+ *
+ * **Nine rows plus the position bar, and every term is one of the numbers in
+ * `editorTheme` below.** `.cm-scroller` is `lineHeight: 20px`, `.cm-content`
+ * is `padding: 12px 0`, and the bar under the editor is `h-7`. Change any of
+ * the three and change this with it — the arithmetic is written out rather
+ * than folded into a literal for exactly that reason.
+ */
+const EDITOR_PANE_PX = 9 * 20 + 2 * 12 + 28;
+
+/** Three rows, which is the least that is worth calling an editor. */
+const MIN_EDITOR_PANE_PX = 3 * 20 + 2 * 12 + 28;
+
+/** The results header plus a row of the grid, so the pane never reads empty. */
+const MIN_RESULTS_PANE_PX = 36 + 60;
+
 const editorTheme = EditorView.theme({
   "&": {
     backgroundColor: "var(--background)",
     color: "var(--foreground)",
     fontSize: "13px",
-    height: "190px",
+    // Fork (D87). Was `190px`. The pane above decides the height now, and
+    // 100 % of a flex item whose size flex resolved is a definite one.
+    height: "100%",
   },
   "&.cm-focused": { outline: "none" },
   "&.cm-focused .cm-cursor": { borderLeftColor: "var(--primary)" },
@@ -489,9 +524,11 @@ const Editor = ({
   }, [error]);
 
   return (
-    <div className="overflow-hidden bg-background">
+    // Fork (D87). Two flex rows deep so CodeMirror's `height: 100%` has
+    // something definite to be 100 % of.
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
       <div
-        className="min-w-0 [&_.cm-editor.cm-focused]:ring-2 [&_.cm-editor.cm-focused]:ring-inset [&_.cm-editor.cm-focused]:ring-ring/40"
+        className="min-h-0 min-w-0 flex-1 [&_.cm-editor.cm-focused]:ring-2 [&_.cm-editor.cm-focused]:ring-inset [&_.cm-editor.cm-focused]:ring-ring/40"
         ref={mountRef}
       />
     </div>
@@ -571,7 +608,7 @@ const ResultsGrid = ({ result }: { result: SQLResult }) => {
 
   if (!hasRows) {
     return (
-      <div className="grid min-h-32 place-items-center px-5 py-8 text-center">
+      <div className="grid min-h-32 flex-1 place-items-center px-5 py-8 text-center">
         <div>
           <span className="mx-auto mb-2 grid size-8 place-items-center rounded-full bg-primary/10 text-primary">
             <HugeiconsIcon
@@ -593,7 +630,8 @@ const ResultsGrid = ({ result }: { result: SQLResult }) => {
   }
 
   return (
-    <div className="neon-scroll-fade max-h-80 overflow-auto">
+    // Fork (D87). Was `max-h-80`.
+    <div className="neon-scroll-fade min-h-0 flex-1 overflow-auto">
       <table className="w-full min-w-max border-collapse text-left text-xs">
         <thead className="sticky top-0 z-10 bg-card shadow-[0_1px_0_0_var(--border)]">
           <tr>
@@ -814,7 +852,8 @@ export const SQLRunner = ({
   return (
     <div
       className={cn(
-        "@container w-full min-w-0 overflow-hidden rounded-lg border border-border/60 bg-card shadow-xs",
+        // Fork (D87). `flex flex-col`, and the height is the caller's.
+        "@container flex w-full min-w-0 flex-col overflow-hidden rounded-lg border border-border/60 bg-card shadow-xs",
         className
       )}
       data-mode={safetyMode}
@@ -822,7 +861,7 @@ export const SQLRunner = ({
       data-state={status}
       {...props}
     >
-      <header className="flex min-h-12 flex-wrap items-center gap-2 border-border/60 border-b px-3 py-2">
+      <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-2 border-border/60 border-b px-3 py-2">
         <span className="grid size-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
           <HugeiconsIcon
             aria-hidden="true"
@@ -866,97 +905,134 @@ export const SQLRunner = ({
         )}
       </header>
 
-      <Editor
-        disabled={disabled}
-        error={error}
-        onCancel={cancel}
-        onChange={setQuery}
-        onPositionChange={(position, selection) =>
-          setEditorState({ position, selection })
-        }
-        onRun={run}
-        running={status === "running"}
-        value={query}
-      />
-      <div className="flex h-7 items-center gap-2 border-border/50 border-t bg-muted/15 px-3 text-[10px] text-muted-foreground tabular-nums">
-        <span>Ln {editorState.position.line}</span>
-        <span>Col {editorState.position.column}</span>
-        {editorState.position.selectedCharacters > 0 ? (
-          <span className="rounded-sm bg-primary/10 px-1.5 py-0.5 text-primary">
-            {editorState.position.selectedCharacters} selected
-          </span>
-        ) : null}
-        <span className="ml-auto">PostgreSQL</span>
-      </div>
+      {/* Fork (D87). The editor and the results are two panes of one
+          vertical group rather than two fixed-height blocks. `EDITOR_PANE_PX`
+          is nine rows of the editor plus the position bar under it, in
+          pixels, because that is the unit the requirement is written in and
+          `react-resizable-panels` takes one: a percentage would be nine rows
+          at exactly one window height and some other number of rows at every
+          other. Double-clicking the separator puts it back. */}
+      <ResizablePanelGroup className="min-h-0 flex-1" orientation="vertical">
+        <ResizablePanel
+          className="flex min-h-0 flex-col"
+          defaultSize={EDITOR_PANE_PX}
+          // Fork (D87). **Nine rows stay nine rows when the window changes
+          // size**, which is the requirement; the default here is
+          // `preserve-relative-size`, and it made the editor 5 rows in a
+          // short window and 13 in a tall one. The results pane keeps the
+          // default and absorbs the difference -- a group must contain at
+          // least one panel that does.
+          groupResizeBehavior="preserve-pixel-size"
+          minSize={MIN_EDITOR_PANE_PX}
+        >
+          <Editor
+            disabled={disabled}
+            error={error}
+            onCancel={cancel}
+            onChange={setQuery}
+            onPositionChange={(position, selection) =>
+              setEditorState({ position, selection })
+            }
+            onRun={run}
+            running={status === "running"}
+            value={query}
+          />
+          <div className="flex h-7 shrink-0 items-center gap-2 border-border/50 border-t bg-muted/15 px-3 text-[10px] text-muted-foreground tabular-nums">
+            <span>Ln {editorState.position.line}</span>
+            <span>Col {editorState.position.column}</span>
+            {editorState.position.selectedCharacters > 0 ? (
+              <span className="rounded-sm bg-primary/10 px-1.5 py-0.5 text-primary">
+                {editorState.position.selectedCharacters} selected
+              </span>
+            ) : null}
+            <span className="ml-auto">PostgreSQL</span>
+          </div>
+        </ResizablePanel>
 
-      {status === "blocked" ? (
-        <BlockedWrite onEnable={() => setMode("read-write")} />
-      ) : null}
-      {status === "error" && error ? <ErrorPanel error={error} /> : null}
+        <ResizableHandle withHandle />
 
-      <div className="border-border/60 border-t" data-slot="sql-runner-results">
-        <div className="flex h-9 items-center gap-2 border-border/50 border-b px-3">
-          <p className="font-medium text-[11px]">Results</p>
+        {/* The refusal panels moved *below* the separator with the results
+            (D87): a run that ends in an error produces one instead of a grid,
+            so it belongs in the pane the answer is read in — and above the
+            separator it would eat the rows the operator just asked for nine
+            of. */}
+        <ResizablePanel
+          className="flex min-h-0 flex-col"
+          minSize={MIN_RESULTS_PANE_PX}
+        >
+          {status === "blocked" ? (
+            <BlockedWrite onEnable={() => setMode("read-write")} />
+          ) : null}
+          {status === "error" && error ? <ErrorPanel error={error} /> : null}
+
           <div
-            aria-live="polite"
-            className="ml-auto flex items-center gap-2 text-[10px] text-muted-foreground"
+            className="flex min-h-0 flex-1 flex-col"
+            data-slot="sql-runner-results"
           >
-            {stale ? (
-              <span className="rounded-sm bg-[var(--status-scaling)]/10 px-1.5 py-0.5 text-[var(--status-scaling)]">
-                Previous query
-              </span>
-            ) : null}
-            {status === "running" ? (
-              <span className="flex items-center gap-1">
-                <HugeiconsIcon
-                  aria-hidden="true"
-                  className="size-3 animate-spin motion-reduce:animate-none"
-                  icon={Loading03Icon}
-                  strokeWidth={2}
-                />
-                Running
-              </span>
-            ) : null}
-            {status === "cancelled" ? <span>Cancelled</span> : null}
-            {result && status !== "running" ? (
-              <>
-                <span className="tabular-nums">
-                  {result.rowCount ?? result.rows.length}{" "}
-                  {(result.rowCount ?? result.rows.length) === 1
-                    ? "row"
-                    : "rows"}
-                </span>
-                {result.durationMs === undefined ? null : (
-                  <span className="flex items-center gap-1 tabular-nums">
+            <div className="flex h-9 shrink-0 items-center gap-2 border-border/50 border-b px-3">
+              <p className="font-medium text-[11px]">Results</p>
+              <div
+                aria-live="polite"
+                className="ml-auto flex items-center gap-2 text-[10px] text-muted-foreground"
+              >
+                {stale ? (
+                  <span className="rounded-sm bg-[var(--status-scaling)]/10 px-1.5 py-0.5 text-[var(--status-scaling)]">
+                    Previous query
+                  </span>
+                ) : null}
+                {status === "running" ? (
+                  <span className="flex items-center gap-1">
                     <HugeiconsIcon
                       aria-hidden="true"
-                      className="size-3"
-                      icon={Clock01Icon}
+                      className="size-3 animate-spin motion-reduce:animate-none"
+                      icon={Loading03Icon}
                       strokeWidth={2}
                     />
-                    {formatDuration(result.durationMs)}
+                    Running
                   </span>
-                )}
-              </>
-            ) : null}
-          </div>
-        </div>
-
-        {result ? (
-          <ResultsGrid result={result} />
-        ) : (
-          <div className="grid min-h-28 place-items-center px-5 py-7 text-center">
-            <div>
-              <p className="text-[11px] text-muted-foreground">
-                Run a query to see results.
-              </p>
-              <p className="mt-1 text-[10px] text-muted-foreground/60">
-                Read-only mode blocks statements that can change data.
-              </p>
+                ) : null}
+                {status === "cancelled" ? <span>Cancelled</span> : null}
+                {result && status !== "running" ? (
+                  <>
+                    <span className="tabular-nums">
+                      {result.rowCount ?? result.rows.length}{" "}
+                      {(result.rowCount ?? result.rows.length) === 1
+                        ? "row"
+                        : "rows"}
+                    </span>
+                    {result.durationMs === undefined ? null : (
+                      <span className="flex items-center gap-1 tabular-nums">
+                        <HugeiconsIcon
+                          aria-hidden="true"
+                          className="size-3"
+                          icon={Clock01Icon}
+                          strokeWidth={2}
+                        />
+                        {formatDuration(result.durationMs)}
+                      </span>
+                    )}
+                  </>
+                ) : null}
+              </div>
             </div>
+
+            {result ? (
+              <ResultsGrid result={result} />
+            ) : (
+              <div className="grid min-h-28 flex-1 place-items-center px-5 py-7 text-center">
+                <div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Run a query to see results.
+                  </p>
+                  <p className="mt-1 text-[10px] text-muted-foreground/60">
+                    Read-only mode blocks statements that can change data.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </ResizablePanel>
+      </ResizablePanelGroup>
     </div>
   );
 };

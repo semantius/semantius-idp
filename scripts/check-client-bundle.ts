@@ -65,12 +65,21 @@ const SERVER_ONLY_MARKERS = [
  * the ceiling had to move. Raised to the measured total plus the same ~40 kB
  * of headroom the previous figure carried.
  *
+ * **1180 kB today**, up from 1143 kB. The delta is `react-resizable-panels`,
+ * ~37 kB, which **D87** put on `/admin/database` for the two splitters
+ * between the schema tree, the SQL editor and the result grid. Unlike
+ * CodeMirror it is *not* behind the route's `React.lazy` — the page module
+ * itself renders the group — so it is in that route's chunk rather than in a
+ * pane's. It is still only downloaded by somebody who opens `/admin/database`,
+ * because the router splits by route. Raised again to the measured total plus
+ * the same ~40 kB of headroom.
+ *
  * The point stands: **the markers above are the real gate.** This number is
  * the shape of one incident, and re-raising it for a deliberate, chunked,
  * lazily-loaded addition is what it is for. Re-raising it because "the bundle
  * grew again" is not — check what grew first.
  */
-const MAX_CLIENT_BYTES = 1_185_000
+const MAX_CLIENT_BYTES = 1_220_000
 
 function jsFiles(dir: string): string[] {
   let entries: string[]

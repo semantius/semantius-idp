@@ -41,17 +41,20 @@ import { reconcileClients } from "../server/oidc/reconcile"
 import { rotateKeys } from "../server/oidc/rotate-keys"
 import { revision, version } from "../server/version"
 
+// Requirement IDs stay out of this text: it is what an operator reads.
+// config validate CFG-5; migrate DM-1, OPS-6; reconcile-clients FR-OIDC-2;
+// rotate-keys FR-OIDC-16; cleanup DM-5, OPS-8; the config dir is CFG-1.
 const USAGE = `idp ${version}
 
 Usage:
-  idp config validate     Load and check the configuration, then exit (CFG-5)
-  idp migrate             Apply pending database migrations (DM-1, OPS-6)
-  idp reconcile-clients   Sync oauth_clients.jsonc into the database (FR-OIDC-2)
-  idp rotate-keys         Publish a successor signing key (FR-OIDC-16)
-  idp cleanup             Purge what DM-5 retires, now (OPS-8)
+  idp config validate     Load and check the configuration, then exit
+  idp migrate             Apply pending database migrations
+  idp reconcile-clients   Sync oauth_clients.jsonc into the database
+  idp rotate-keys         Publish a successor signing key
+  idp cleanup             Purge expired sessions, tokens and retired keys now
   idp version             Print the running version
 
-Configuration is read from IDP_CONFIG_DIR, or /config (CFG-1).`
+Configuration is read from IDP_CONFIG_DIR, or /config.`
 
 /**
  * Everything the database-touching commands share: config, a logger, and the

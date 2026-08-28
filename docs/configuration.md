@@ -5,18 +5,17 @@
 # Configuration reference
 
 Every key of `config.jsonc`, generated from the schemas the loader itself
-validates against (CFG-4). A key marked **required** has no default and
+validates against. A key marked **required** has no default and
 start-up fails without it.
 
 Values are JSONC — comments and trailing commas are allowed — and any
 string may contain `${env:NAME}`, `${env:NAME:-default}` or
-`${file:/abs/path}`, substituted once before validation (CFG-2). Three keys
+`${file:/abs/path}`, substituted once before validation. Three keys
 also have a fallback environment variable, used only when the file leaves
-them out: `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET` and `DATABASE_URL`
-(CFG-3).
+them out: `BETTER_AUTH_URL`, `BETTER_AUTH_SECRET` and `DATABASE_URL`.
 
 Configuration is read **once**, at start-up. Changing it means restarting
-the process; there is no hot reload and `SIGHUP` is ignored (CFG-5).
+the process; there is no hot reload and `SIGHUP` is ignored.
 
 | Key | Type | Default | Notes |
 | --- | --- | --- | --- |
@@ -33,7 +32,7 @@ the process; there is no hot reload and `SIGHUP` is ignored (CFG-5).
 | `database.schema` | string | `idp` | All IdP tables and the drizzle migrations table live here; nothing is created in `public`. |
 | `database.ssl` | `disable` \| `require` \| `verify-full` | — | Overrides the connection string's sslmode. Defaults to `require` unless the host is localhost. |
 | `database.sslCa` | string | — | PEM certificate authority, typically `${file:/run/secrets/ca.pem}`. |
-| `database.poolMax` | integer | `10` | Maximum pooled connections. One instance is the supported topology (OPS-11), so this is the whole deployment's budget. |
+| `database.poolMax` | integer | `10` | Maximum pooled connections. One instance is the supported topology, so this is the whole deployment's budget. |
 | `database.connectTimeoutSeconds` | integer | `30` | How long a new connection may take before start-up gives up. |
 | `database.migrateOnBoot` | boolean | `true` | Also settable with IDP_MIGRATE_ON_BOOT. |
 | `site.name` | string | — **required** | Branding name; also the default TOTP issuer label. |
@@ -44,13 +43,13 @@ the process; there is no hot reload and `SIGHUP` is ignored (CFG-5).
 | `site.termsUrl` | string | — | Linked from the sign-up form and the consent screen. |
 | `site.privacyUrl` | string | — | Linked from the sign-up form and the consent screen. |
 | `site.theme` | `system` \| `light` \| `dark` | `system` | `system` follows the browser. The built-in themes are the only ones; there is no custom CSS hook in v1. |
-| `site.defaultLocale` | string | `en-US` | Only `en-US` ships in v1 (FR-I18N-1). |
+| `site.defaultLocale` | string | `en-US` | Only `en-US` ships in v1. |
 | `site.nameFormat` | `first-last` \| `last-first` | `first-last` | How a display name is composed from the first and last name that were captured (D49). `first-last` gives "Jane Smith"; `last-first` gives "Smith, Jane". The name itself is never an input field. |
-| `email.resend.apiKey` | string | — | Absent ⇒ degraded mode: every e-mail feature is disabled (FR-MAIL-2). |
+| `email.resend.apiKey` | string | — | Absent ⇒ degraded mode: every e-mail feature is disabled. |
 | `email.from` | string | — | Required whenever an API key is configured. |
 | `email.replyTo` | string | — | Where a reply goes. Absent, replies go to `email.from`, which is usually a mailbox nobody reads. |
-| `signUp.enabled` | boolean | `false` | Governs password and social registration alike (FR-SIGNUP-1). |
-| `signUp.requireApproval` | boolean | `true` | Self-registrations land as `pending` (FR-SIGNUP-2). |
+| `signUp.enabled` | boolean | `false` | Governs password and social registration alike. |
+| `signUp.requireApproval` | boolean | `true` | Self-registrations land as `pending`. |
 | `signUp.allowedEmailDomains` | string[] | `[]` | Empty = no restriction. Admin-created users always bypass it. |
 | `auth.defaultRedirect` | string | `/account` | Where a completed sign-in lands when no OAuth continuation and no validated returnTo apply. Relative path, or an absolute URL when the IdP sits beside the product. |
 | `auth.requireEmailVerification` | boolean | `true` | Gates password sign-in only. Forced false when e-mail is not configured. |
@@ -60,48 +59,48 @@ the process; there is no hot reload and `SIGHUP` is ignored (CFG-5).
 | `auth.passwordReset.tokenTtlMinutes` | integer | `60` | Reset links expire after this; verification links are fixed at 24 h. |
 | `session.expiresIn` | number \| string | `7d` | How long a browser session lives without being renewed. |
 | `session.updateAge` | number \| string | `1d` | A session older than this is extended on the next request. |
-| `session.cookieCacheMinutes` | integer | `5` | Capped at 5 so revocations bite quickly (FR-AUTH-5). |
-| `session.revokeOAuthTokensOnLogout` | boolean | `false` | Whether signing out of the IdP also kills the OAuth tokens issued to clients from that session. Off by default: a user closing this tab does not usually mean to sign out of every application they use (FR-AUTH-6). |
-| `social` | { … } | `{}` | Keyed by provider id — `google`, `github`, `microsoft`. Each entry needs `clientId` and `clientSecret`; `microsoft` also needs `tenantId` (FR-SOC-5). |
-| `twoFactor.enabled` | boolean | `true` | Whether users may enrol at all. Enrolment is per user and always optional (FR-2FA-1); turning this off hides the whole feature. |
+| `session.cookieCacheMinutes` | integer | `5` | Capped at 5 so revocations bite quickly. |
+| `session.revokeOAuthTokensOnLogout` | boolean | `false` | Whether signing out of the IdP also kills the OAuth tokens issued to clients from that session. Off by default: a user closing this tab does not usually mean to sign out of every application they use. |
+| `social` | { … } | `{}` | Keyed by provider id — `google`, `github`, `microsoft`. Each entry needs `clientId` and `clientSecret`; `microsoft` also needs `tenantId`. |
+| `twoFactor.enabled` | boolean | `true` | Whether users may enrol at all. Enrolment is per user and always optional; turning this off hides the whole feature. |
 | `twoFactor.issuer` | string | — | TOTP issuer label. Defaults to site.name. |
 | `twoFactor.trustDeviceDays` | integer | `30` | How long a device stays trusted after a successful challenge. `0` asks every time and removes the checkbox. |
-| `apiKeys.enabled` | boolean | `true` | Off hides the account page and 404s its route (FR-KEY-1). |
+| `apiKeys.enabled` | boolean | `true` | Off hides the account page and 404s its route. |
 | `apiKeys.defaultExpiresIn` | number \| string | `365d` | Pre-filled expiry on the create form. |
 | `apiKeys.maxExpiresIn` | number \| string | `730d` | The longest expiry a user may choose. |
-| `apiKeys.tokenClientId` | string | `idp` | `azp` of JWTs exchanged from an API key (FR-KEY-3). |
-| `apiKeys.tokenTtl` | number \| string | `3600` | Lifetime of a JWT exchanged from a key (FR-KEY-3). |
+| `apiKeys.tokenClientId` | string | `idp` | `azp` of JWTs exchanged from an API key. |
+| `apiKeys.tokenTtl` | number \| string | `3600` | Lifetime of a JWT exchanged from a key. |
 | `jwt.algorithm` | `ES256` \| `RS256` | `ES256` | Neon validates ES256 and RS256 only; any other algorithm is rejected at startup. |
 | `jwt.audience` | string \| string[] | — **required** | Default RFC 8707 resource, applied whenever a client sends no `resource` parameter. Becomes the JWT `aud`. |
-| `jwt.includeUserData` | boolean | `true` | Whether access tokens carry the user's name, address and roles at all. Off removes exactly that set (FR-OIDC-7). |
+| `jwt.includeUserData` | boolean | `true` | Whether access tokens carry the user's name, address and roles at all. Off removes exactly that set. |
 | `jwt.userClaims` | `email` \| `name` \| `given_name` \| `family_name` \| `roles`[] | — | Subset selector over {email, name, given_name, family_name, roles}. Defaults to all of them. |
 | `jwt.claims` | { … } | `{}` | Static claims merged into access tokens, e.g. `{ "role": "authenticated" }` for Neon/PostgREST. |
 | `jwt.claimsInIdToken` | boolean | `false` | Also merge `jwt.claims` into ID tokens. Off by default: an ID token asserts authentication, and profile data belongs at userinfo. |
-| `jwt.rotationInterval` | number \| string | `90d` | How often a new signing key is created. The old one keeps verifying for `jwt.gracePeriod` (FR-OIDC-16). |
+| `jwt.rotationInterval` | number \| string | `90d` | How often a new signing key is created. The old one keeps verifying for `jwt.gracePeriod`. |
 | `jwt.gracePeriod` | number \| string | — | Retired keys stay published for this long. Defaults to the longest token lifetime + 1 h. |
-| `jwt.sessionToken.ttl` | number \| string | `3600` | Lifetime of a JWT from `GET /api/auth/token`, the first-party session exchange (FR-OIDC-14). |
-| `oauth.accessTokenTtl` | number \| string | `15m` | Also the window in which a revoked token still verifies for a stateless resource server (FR-OIDC-12). |
+| `jwt.sessionToken.ttl` | number \| string | `3600` | Lifetime of a JWT from `GET /api/auth/token`, the first-party session exchange. |
+| `oauth.accessTokenTtl` | number \| string | `15m` | Also the window in which a revoked token still verifies for a stateless resource server. |
 | `oauth.idTokenTtl` | number \| string | `1h` |  |
 | `oauth.codeTtl` | number \| string | `60s` | Authorization codes are single-use as well as short-lived. |
 | `oauth.refreshTokenTtl` | number \| string | `30d` | Sliding: every use rotates the token and restarts this clock. |
 | `oauth.refreshTokenMaxLifetime` | number \| string | `90d` | The ceiling the sliding window cannot pass. After this the user signs in again. |
 | `oauth.scopes` | string[] | `["openid","profile","email","offline_access"]` | Every scope any client may request. A client's own `scopes` must be a subset. |
 | `oauth.resources` | { … }[] | `[]` | Extra RFC 8707 resources beyond `jwt.audience` and the per-client ones, each optionally with its own allowed scopes and token lifetime. |
-| `oauth.reconcile.prune` | boolean | `false` | Delete rows for clients no longer in the file instead of disabling them (FR-OIDC-2). |
+| `oauth.reconcile.prune` | boolean | `false` | Delete rows for clients no longer in the file instead of disabling them. |
 | `admin.adminRoles` | string[] | `["admin"]` | Holding any of these opens `/admin` and the admin API. Every name must exist in the role catalog. |
-| `admin.allowImpersonation` | boolean | `false` | Lets an administrator act as another user, ≤ 1 h, never against another administrator, every action audited (FR-ADMIN-5). |
-| `admin.database` | `disabled` \| `read-only` \| `read-write` | `disabled` | `/admin/database`, a schema explorer and SQL console over this deployment's own Postgres (FR-ADMIN-7). `read-only` runs every statement in a READ ONLY transaction; `read-write` adds a mode toggle and commits when it is set. `disabled` removes the page, the nav entry and both endpoints. One statement per run, 10 s timeout, 500-row cap, every execution audited as `database.queried`. An administrator who can run SQL can read every row at rest — password hashes and session tokens included — so leave it off unless that is intended. |
-| `rateLimit.enabled` | boolean | `true` | Turning this off removes the SEC-2 limits on sign-in, reset, 2FA and the token endpoint. For tests. |
+| `admin.allowImpersonation` | boolean | `false` | Lets an administrator act as another user, ≤ 1 h, never against another administrator, every action audited. |
+| `admin.database` | `disabled` \| `read-only` \| `read-write` | `disabled` | `/admin/database`, a schema explorer and SQL console over this deployment's own Postgres. `read-only` runs every statement in a READ ONLY transaction; `read-write` adds a mode toggle and commits when it is set. `disabled` removes the page, the nav entry and both endpoints. One statement per run, 10 s timeout, 500-row cap, every execution audited as `database.queried`. An administrator who can run SQL can read every row at rest — password hashes and session tokens included — so leave it off unless that is intended. |
+| `rateLimit.enabled` | boolean | `true` | Turning this off removes the rate limits on sign-in, reset, 2FA and the token endpoint. For tests. |
 | `rateLimit.storage` | `database` \| `memory` | `database` | `database` survives a restart, which is the point of a limit. `memory` is for a single process nobody restarts to get past it. |
 | `logging.level` | `trace` \| `debug` \| `info` \| `warn` \| `error` | `info` | Also settable with LOG_LEVEL. |
 | `logging.format` | `json` \| `pretty` | `json` | `json` for anything that collects logs; `pretty` for a terminal. Also settable with LOG_FORMAT. |
-| `cleanup.intervalMinutes` | integer | `60` | How often the retention job runs: expired sessions, spent verification rows, dead tokens, stale rate-limit rows and retired keys (OPS-8, DM-5). |
+| `cleanup.intervalMinutes` | integer | `60` | How often the retention job runs: expired sessions, spent verification rows, dead tokens, stale rate-limit rows and retired keys. |
 | `audit.retentionDays` | integer | `90` | How long audit rows are kept. They are the answer to what happened, so a short window is a decision, not a saving. |
 
 ## Environment-only settings
 
 These never appear in a file. They decide where the configuration is read
-from and how the process behaves before any of it has been parsed (CFG-3).
+from and how the process behaves before any of it has been parsed.
 
 | Variable | Default | What it does |
 | --- | --- | --- |

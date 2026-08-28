@@ -74,22 +74,59 @@ export function adminNavItems(ui: UiContext, t: Catalog): ShellNavItem[] {
 export function AdminShell({
   title,
   description,
+  wideDescription,
   actions,
+  fill,
   children,
 }: {
   title: string
   description?: ReactNode
+  /**
+   * Drop the `max-w-2xl` measure from the description (**D87**).
+   *
+   * The cap is right for a paragraph — 65-odd characters is where prose stops
+   * being comfortable to read — and wrong for a page whose body is a
+   * full-width console: `/admin/database`'s two sentences wrapped onto a
+   * second line while the panel beneath them was twice as wide, which reads
+   * as a paragraph rather than as the subtitle it is. Shortening the sentence
+   * was the alternative and it costs the half that says every run is audited.
+   */
+  wideDescription?: boolean
   /** Buttons that belong beside the heading rather than in the body. */
   actions?: ReactNode
+  /**
+   * The page owns the rest of the viewport instead of growing with its
+   * content (**D87**).
+   *
+   * `SidebarLayout` pins the shell to `h-svh` and hands this section's parent
+   * `flex-1`, so a `flex-1 min-h-0` section here is exactly the height left
+   * below the header — which is what lets a pane inside it scroll rather than
+   * the document. **A definite height is the requirement, not a minimum**:
+   * see the note on that class, which cost a broken page to learn. `min-h-0`
+   * is the other load-bearing half — a flex item defaults to
+   * `min-height: auto`, so without it a tall result grid pushes the section
+   * past the viewport instead of scrolling inside.
+   */
+  fill?: boolean
   children: ReactNode
 }) {
   return (
-    <section>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+    <section className={cn(fill && "flex min-h-0 flex-1 flex-col")}>
+      <div
+        className={cn(
+          "flex flex-wrap items-start justify-between gap-3",
+          fill ? "mb-4 shrink-0" : "mb-6"
+        )}
+      >
         <div>
           <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
           {description ? (
-            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+            <p
+              className={cn(
+                "mt-1 text-sm text-muted-foreground",
+                wideDescription ? undefined : "max-w-2xl"
+              )}
+            >
               {description}
             </p>
           ) : null}

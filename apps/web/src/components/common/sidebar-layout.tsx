@@ -299,9 +299,21 @@ export function SidebarLayout({
         // `overflow-x-hidden` is semantius-app's own guard: the admin tables
         // are wider than the viewport and would otherwise push the whole shell
         // sideways instead of scrolling inside their own container.
+        // **`h-svh`, not only the registry's `min-h-svh`** (**D87**). A
+        // minimum height leaves the box *indefinite*, and a percentage
+        // height resolves against nothing — which is exactly what a page
+        // that wants to fill the window needs. `/admin/database`'s panel
+        // groups set `height: 100%` on themselves; against `min-h-svh` alone
+        // that computed to `auto`, so the schema tree grew to eighteen
+        // tables, the document scrolled, and the SQL editor — two panes with
+        // `flex-basis: 0` inside a group with no height — rendered at zero
+        // and disappeared. Both classes are kept: they are different
+        // tailwind-merge groups, and the minimum is still right for the
+        // pages that do not fill.
         className={cn(
-          "overflow-x-hidden",
-          impersonated && "min-h-[calc(100svh-var(--banner-h))]"
+          "h-svh overflow-x-hidden",
+          impersonated &&
+            "h-[calc(100svh-var(--banner-h))] min-h-[calc(100svh-var(--banner-h))]"
         )}
       >
         {/* The registry says to wrap the app in this, and semantius-app wraps
@@ -342,7 +354,14 @@ export function SidebarLayout({
                 {heading}
               </h1>
             </header>
-            <div className="flex min-w-0 flex-1 flex-col gap-4 overflow-x-hidden p-4 pt-0">
+            {/* **The scroll container is here, not the document** (D87).
+                With the shell pinned to the viewport, a page taller than it
+                has to scroll somewhere, and this is the box that leaves the
+                sidebar and the header row where they are. `min-h-0` is what
+                lets it be shorter than its content: a flex item's automatic
+                minimum size is that content, so without it the box grows and
+                nothing ever scrolls. */}
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-x-hidden overflow-y-auto p-4 pt-0">
               {children}
             </div>
           </SidebarInset>

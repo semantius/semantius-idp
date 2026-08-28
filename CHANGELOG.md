@@ -7,6 +7,60 @@ Notable changes to this project. The format follows
 Decisions that changed a numbered requirement carry their `D` number from
 [spec-v1.md](spec-v1.md) §12, where the reasoning is.
 
+## [Unreleased]
+
+### Changed
+
+- **Requirement IDs no longer appear anywhere a user can read** (**D89**).
+  `/admin/system` described e-mail as "Off — the server runs in degraded mode
+  (FR-MAIL-2)" and offered a key rotation "so tokens already issued keep
+  verifying (FR-OIDC-16)"; the degraded-mode warning on the same page ended the
+  same way. Nothing outside this repository resolves those codes. The same
+  habit is cleared from `idp --help` — where `idp cleanup` now says what it
+  purges instead of naming a data-model rule — from the twenty-five
+  configuration descriptions that feed `config-schema/*.schema.json` and the
+  hover text an editor shows over a `config.jsonc`, and from
+  `docs/configuration.md`. Every ID moves to a comment on the line it left, so
+  the traceability is unchanged for anyone reading the source.
+- **`/admin/database` is as tall as the window, and its three panes resize with
+  it** (**D87**). The schema tree, the SQL editor and the result grid were each
+  a fixed height inside a two-column grid, so none of them followed the
+  browser: a wide window bought empty space beside two short cards, and a long
+  result scrolled the whole document. The page is a full-height column now —
+  `AdminShell` takes a `fill` prop for it — and every pane scrolls inside
+  itself. Two `role="separator"` handles divide the tree from the console and
+  the editor from the grid; both take arrow keys, and a double-click puts
+  either back where it started. The editor opens at exactly nine rows and
+  scrolls past them, sized in pixels rather than a percentage so that it is
+  nine rows at every window height.
+- **The schema tree no longer shows a row count** (**D88**). It was
+  `pg_class.reltuples`, a planner statistic rather than a count: `-1` until
+  something gathers statistics, and *inserting rows does not gather them*.
+  Since the migrations build every table and its indexes before a row exists,
+  every table stays at `-1` until autovacuum analyses it — which happens after
+  fifty modifications. So the column reported **write volume, not size**:
+  `rate_limit`, updated on nearly every request and holding two rows, was the
+  only table with a figure beside it, while a `user` table, a `session` table
+  and a 31-row `audit_log` showed nothing. A number that appears on the
+  smallest table and on no other is worse than none. `GET /idp/database/schema`
+  still returns the estimate, where it is documented as one.
+- The page's description no longer wraps onto a second line. `AdminShell`'s
+  `max-w-2xl` measure is right for a paragraph and wrong for a subtitle
+  standing over a full-width console, so it takes a `wideDescription` prop
+  (**D87**).
+- **The `/admin` and `/account` shell is pinned to the viewport, and its
+  content box is the scroll container** (**D87**). The registry's
+  `SidebarProvider` is `min-h-svh` — a *minimum*, which leaves the box
+  indefinite, so a child asking for a percentage of it got nothing. The
+  sidebar and the header row now stay put on a page taller than the window,
+  and that page scrolls beside them instead of the document.
+- The client-bundle ceiling moves from 1185 kB to 1220 kB — the measured total
+  plus the ~40 kB of headroom that figure has carried since it was written.
+  The delta is `react-resizable-panels`, ~37 kB, taken from the shadcn
+  registry rather than hand-rolled: the handles have to be real
+  keyboard-operable separators on a page the R-1 accessibility scan visits
+  (**D87**).
+
 ## [0.3.1] — 2026-08-28
 
 **`v0.3.0` was tagged and never published.** Its release run built the image,

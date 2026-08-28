@@ -33,7 +33,7 @@
             ]
           },
           "firstParty": {
-            "description": "Same-host app that may use the session-JWT endpoint (FR-OIDC-14).",
+            "description": "Same-host app that may use the session-JWT endpoint.",
             "type": "boolean"
           },
           "redirectUris": {
@@ -59,7 +59,7 @@
             }
           },
           "audience": {
-            "description": "Per-client default audience; overrides `jwt.audience` for this client (FR-OIDC-6).",
+            "description": "Per-client default audience; overrides `jwt.audience` for this client.",
             "anyOf": [
               {
                 "type": "string"
@@ -98,7 +98,7 @@
             "type": "boolean"
           },
           "resourceServer": {
-            "description": "May introspect tokens it is an audience for, not only its own (FR-OIDC-4).",
+            "description": "May introspect tokens it is an audience for, not only its own.",
             "type": "boolean"
           },
           "disabled": {

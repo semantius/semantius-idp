@@ -7,7 +7,7 @@ Notable changes to this project. The format follows
 Decisions that changed a numbered requirement carry their `D` number from
 [spec-v1.md](spec-v1.md) §12, where the reasoning is.
 
-## [Unreleased]
+## [0.3.0] — 2026-08-28
 
 ### Security
 
@@ -891,6 +891,7 @@ were questions, and one was "polish every page".
   says where it came from, so it was sending anyone who inspected it to a
   repository that is not this one.
 
-[Unreleased]: https://github.com/semantius/semantius-idp/compare/v0.2.0...main
+[Unreleased]: https://github.com/semantius/semantius-idp/compare/v0.3.0...main
+[0.3.0]: https://github.com/semantius/semantius-idp/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/semantius/semantius-idp/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/semantius/semantius-idp/releases/tag/v0.1.0

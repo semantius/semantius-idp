@@ -1,6 +1,6 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-28 · **Branch:** `feat/database` · **Head:** `1b9b24c`, last tag **v0.2.0**
+**As of:** 2026-08-28 · **Branch:** `main` · **Head:** `acf44b8`, last tag **v0.3.0**
 **Plan:** `~/.claude/plans/make-the-admin-layout-shiny-unicorn.md` (the sidebar shell)
 **Spec:** [spec-v1.md](spec-v1.md) — amended through **D85**
 
@@ -49,9 +49,11 @@ Everything buildable is built. What remains cannot be done from here:
   e-mail instead would silently create a second one.
 - **One real token against a real Neon project** — including a key rotation,
   to see the grace period behave.
-- **Tagging `v1.0.0`.** Two versions are published — **v0.1.0** and, on
-  2026-08-27, **v0.2.0** (the D78 / D80 / D81 round) — because the image was
-  wanted before the two manual checks above could be performed. `1.0.0` is what
+- **Tagging `v1.0.0`.** Three versions are published — **v0.1.0**,
+  **v0.2.0** (2026-08-27, the D78 / D80 / D81 round) and **v0.3.0**
+  (2026-08-28, the database console's second round and the audit fix —
+  **D84**, **D85**) — because the image was wanted before the two manual
+  checks above could be performed. `1.0.0` is what
   those checks gate, and it still needs the owner's decision rather than a green
   board. Everything below about the machinery is now history rather than plan:
   `docker/release.sh vX.Y.Z` bumps the three version files, commits, tags and

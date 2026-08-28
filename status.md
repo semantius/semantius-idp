@@ -1,7 +1,6 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-28 · **Branch:** `main` · **Head:** `92523f8`, last tag **v0.3.1**
-**Uncommitted:** the D87 layout work below — everything else here is committed.
+**As of:** 2026-08-28 · **Branch:** `main` · **Head:** `73469b3`, last tag **v0.4.0**
 **Plan:** `~/.claude/plans/make-the-admin-layout-shiny-unicorn.md` (the sidebar shell)
 **Spec:** [spec-v1.md](spec-v1.md) — amended through **D89**
 
@@ -50,10 +49,13 @@ Everything buildable is built. What remains cannot be done from here:
   e-mail instead would silently create a second one.
 - **One real token against a real Neon project** — including a key rotation,
   to see the grace period behave.
-- **Tagging `v1.0.0`.** Three versions are published — **v0.1.0**,
-  **v0.2.0** (2026-08-27, the D78 / D80 / D81 round) and **v0.3.1**
+- **Tagging `v1.0.0`.** Four versions are published — **v0.1.0**,
+  **v0.2.0** (2026-08-27, the D78 / D80 / D81 round), **v0.3.1**
   (2026-08-28, the database console's second round, the audit fix and the
-  image-size fix — **D84**, **D85**, **D86**) — because the image was wanted
+  image-size fix — **D84**, **D85**, **D86**) and **v0.4.0** (2026-08-28,
+  the full-height resizable console, the row count that was a planner
+  statistic, and the requirement IDs swept out of every surface a user reads
+  — **D87**, **D88**, **D89**) — because the image was wanted
   before the two manual checks above could be performed. **`v0.3.0` is a tag
   that published nothing**: its release run failed OPS-13's size gate, which
   is what D86 is about; `v0.3.1` carries everything it was going to. `1.0.0` is what

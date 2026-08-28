@@ -1,0 +1,150 @@
+/*
+ * The parts of Neon UI's `neon-tokens` registry item that `schema-explorer.tsx`
+ * and `sql-runner.tsx` actually reference — and nothing else.
+ *
+ * Both components list `https://ui.neon.com/r/neon-tokens.json` as a registry
+ * dependency, so `shadcn add` writes its `tokens.css` beside them. That file is
+ * NOT imported here, and the copy the CLI created was deleted: it `@import`s a
+ * second `shadcn/tailwind.css` base (already imported by `globals.css`) and it
+ * redefines the whole shadcn palette in the Neon brand colours — including
+ * `--primary`, `--destructive` and every `--sidebar-*`. Two of those are
+ * hand-measured divergences from this project's preset that exist because the
+ * preset's own values failed R-1's 4.5:1 floor in `e2e/a11y.spec.ts`; letting
+ * Neon's palette land on top of them would silently undo the measurements
+ * recorded beside the tokens in `globals.css`.
+ *
+ * So: the two custom properties and the one utility class the two components
+ * name, copied across, and everything else left behind. If a future `shadcn add`
+ * from ui.neon.com re-creates `tokens.css`, delete it again — see AGENTS.md.
+ *
+ * `--status-scaling` / `--status-sleeping` are consumed only as arbitrary
+ * values (`bg-[var(--status-scaling)]/15`, `text-[var(--status-scaling)]`, and
+ * the CodeMirror theme's inline `color`), never as a Tailwind colour utility,
+ * so they need no `@theme inline` registration.
+ */
+
+:root {
+  /* Darkened from Neon's own #d97706. The component pairs the colour with
+     itself at low alpha -- `text-[var(--status-scaling)]` over
+     `bg-[var(--status-scaling)]/5` in the blocked-write banner, and over `/15`
+     in the mode toggle -- so the ground is nearly white and the ink is the
+     same hue. #d97706 measures 3.02:1 at /5 and 2.71:1 at /15, well under
+     R-1's 4.5:1 floor, and the axe scan of /admin/database in
+     `e2e/a11y.spec.ts` fails on it. #92400e measures 6.57:1 at /5 and 5.60:1
+     at /15 (7.09:1 on plain white). Same kind of deliberate divergence as
+     `--destructive` in globals.css: re-vendoring the registry writes its own
+     `tokens.css` again, so re-measure after any `shadcn add` from ui.neon.com.
+     Measured with the WCAG 2.x relative-luminance formula, alpha composited
+     over `--background` (light: #ffffff). */
+  --status-scaling: #92400e;
+  /* The CodeMirror theme's comment colour, drawn on `--background`. Neon's own
+     value already measures 4.83:1 there, so it is kept. */
+  --status-sleeping: #6b7280;
+}
+
+.dark {
+  /* Dark mode needs no correction: #f59e0b measures 7.52:1 over `--card` at /5
+     and 7.33:1 over `--background` at /15. Kept at Neon's value. */
+  --status-scaling: #f59e0b;
+  /* Neon's dark value is #6b7280, which measures 2.27:1 on `--card` -- fine for
+     a syntax comment by its own lights but under the floor if anything else
+     ever draws text with it. #9ca3af (Neon's own `--muted-foreground` for dark)
+     measures 6.89:1 and reads as the same colour role. */
+  --status-sleeping: #9ca3af;
+}
+
+/* Scroll-aware edge fade + thin scrollbar for the explorer tree and the result
+   grid. Copied verbatim from `neon-tokens`' `tokens.css`; both components hard-
+   code the class name. */
+@property --neon-scroll-fade-t {
+  syntax: "<length-percentage>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --neon-scroll-fade-b {
+  syntax: "<length-percentage>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@keyframes neon-scroll-fade-reveal-t {
+  from {
+    --neon-scroll-fade-t: 0px;
+  }
+
+  to {
+    --neon-scroll-fade-t: 32px;
+  }
+}
+
+@keyframes neon-scroll-fade-reveal-b {
+  from {
+    --neon-scroll-fade-b: 32px;
+  }
+
+  to {
+    --neon-scroll-fade-b: 0px;
+  }
+}
+
+.neon-scroll-fade {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--neon-scroll-fade-t, 0px),
+    #000 calc(100% - var(--neon-scroll-fade-b, 0px)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    #000 var(--neon-scroll-fade-t, 0px),
+    #000 calc(100% - var(--neon-scroll-fade-b, 0px)),
+    transparent 100%
+  );
+  scrollbar-color: var(--border) transparent;
+  scrollbar-width: thin;
+}
+
+.neon-scroll-fade::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.neon-scroll-fade::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.neon-scroll-fade::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 999px;
+}
+
+.neon-scroll-fade::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+}
+
+.neon-scroll-fade::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+@supports (animation-timeline: scroll()) {
+  .neon-scroll-fade {
+    animation:
+      neon-scroll-fade-reveal-t 1ms ease-in-out,
+      neon-scroll-fade-reveal-b 1ms ease-in-out;
+    animation-fill-mode: both;
+    animation-range:
+      0 96px,
+      calc(100% - 96px) 100%;
+    animation-timeline: scroll(self y), scroll(self y);
+  }
+}
+
+@supports not (animation-timeline: scroll()) {
+  .neon-scroll-fade {
+    --neon-scroll-fade-t: 0px;
+    --neon-scroll-fade-b: 0px;
+  }
+}

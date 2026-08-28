@@ -2,7 +2,7 @@
 
 **As of:** 2026-08-28 · **Branch:** `main` · **Head:** `acf44b8`, last tag **v0.3.0**
 **Plan:** `~/.claude/plans/make-the-admin-layout-shiny-unicorn.md` (the sidebar shell)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D85**
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D86**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
 gate.** Every gate green: lint, typecheck, unit (599), integration (243 across
@@ -50,10 +50,12 @@ Everything buildable is built. What remains cannot be done from here:
 - **One real token against a real Neon project** — including a key rotation,
   to see the grace period behave.
 - **Tagging `v1.0.0`.** Three versions are published — **v0.1.0**,
-  **v0.2.0** (2026-08-27, the D78 / D80 / D81 round) and **v0.3.0**
-  (2026-08-28, the database console's second round and the audit fix —
-  **D84**, **D85**) — because the image was wanted before the two manual
-  checks above could be performed. `1.0.0` is what
+  **v0.2.0** (2026-08-27, the D78 / D80 / D81 round) and **v0.3.1**
+  (2026-08-28, the database console's second round, the audit fix and the
+  image-size fix — **D84**, **D85**, **D86**) — because the image was wanted
+  before the two manual checks above could be performed. **`v0.3.0` is a tag
+  that published nothing**: its release run failed OPS-13's size gate, which
+  is what D86 is about; `v0.3.1` carries everything it was going to. `1.0.0` is what
   those checks gate, and it still needs the owner's decision rather than a green
   board. Everything below about the machinery is now history rather than plan:
   `docker/release.sh vX.Y.Z` bumps the three version files, commits, tags and
@@ -80,6 +82,40 @@ README quick start against it, and confirming `latest` from outside.
   changes one.
 
 ---
+
+## The release that the size gate stopped (2026-08-28, **D86**)
+
+`v0.3.0` was tagged, and its release run built the image, started it,
+migrated, signed a user in, minted a token — and then measured the image at
+**374.8 MiB** against OPS-13's 350 MiB ceiling and refused to publish.
+**Nothing was pushed**: no GHCR image, no GitHub release. The gate did exactly
+what D76 built it for.
+
+The cause is `@hugeicons/core-free-icons`, the free icon set the two Neon
+components import: one module per icon, several thousand of them, **148 MB**
+in `node_modules`. **Nothing at runtime reads a byte of it** — Vite inlines
+the icons that are used, and the built server chunk carries
+`Database01Icon`'s path data while importing nothing from the package. It is
+on `docker/Dockerfile`'s by-name prune list now; `/app` went from 336 MB to
+188 MB, which is about 227 MiB on a runner.
+
+Three things worth keeping:
+
+- **`lucide-react` is not on that list and must not be.** The server chunks
+  really do `import { CheckIcon } from "lucide-react"`. Bundled or
+  externalised is a property of what the build did, not of the package, and
+  the built output is what answers it — the `from` specifiers left in
+  `apps/web/dist/server/assets/*.js` are exactly what the image still has to
+  carry.
+- **The local smoke test cannot catch this.** Docker Desktop's containerd
+  store answers `docker image inspect` with the *compressed* size — 89.5 MiB
+  here against 374.8 MiB on the runner's classic store. `scripts/smoke-test.ts`
+  says so in its own comment, and the ceiling has now been breached twice by a
+  change that looked small locally.
+- **The end-to-end suite is what proves a prune is safe.** It drives the built
+  image and renders `/admin/database`, the one page made of these icons, so a
+  wrongly deleted package fails a test rather than a deployment. All 98 pass
+  against the pruned image.
 
 ## The nightly audit was red (2026-08-28, **D85**)
 

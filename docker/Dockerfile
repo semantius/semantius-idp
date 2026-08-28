@@ -138,6 +138,20 @@ RUN pnpm --filter web deploy --legacy --prod /prod/web
 # image, migrates, signs somebody in and mints a token, and a module this
 # deleted would fail it.
 #
+# **`@hugeicons+*` is on the list and `lucide-react` deliberately is not**
+# (**D86**). The free icon set is **148 MB** — one module per icon, several
+# thousand of them — and it took the image to 374.8 MiB on the runner, 25 MiB
+# over OPS-13's ceiling, on the first release that contained the database
+# console. Vite *inlines* what the two components use: the built server chunk
+# holds `Database01Icon`'s path data and imports nothing from the package, so
+# in the image it is 148 MB of files nothing can reach. `lucide-react` is the
+# opposite and stays — the server chunks really do
+# `import { CheckIcon } from "lucide-react"`, and deleting it would break the
+# first page that renders. Which of the two a dependency is decides whether it
+# belongs here, and the built output answers it: grep the `from` specifiers in
+# `apps/web/dist/server/assets/*.js` for everything the server still expects
+# to find in node_modules.
+#
 # `set -e` with an explicit count, so a rename upstream fails the build here
 # rather than silently reverting the saving.
 RUN set -eu; cd /prod/web/node_modules/.pnpm; \
@@ -145,7 +159,8 @@ RUN set -eu; cd /prod/web/node_modules/.pnpm; \
     rm -rf esbuild@* @esbuild+* @rolldown+binding-* rolldown@* \
            drizzle-kit@* prettier@* vitest@* @vitest+* vite@* \
            lightningcss@* lightningcss-* caniuse-lite@* bun-types@* \
-           typescript@* @types+* playwright@* @playwright+*; \
+           typescript@* @types+* playwright@* @playwright+* \
+           @hugeicons+*; \
     after=$(du -sm . | cut -f1); \
     echo "pruned build tooling: ${before} MB -> ${after} MB"; \
     if [ "$before" -le "$after" ]; then \

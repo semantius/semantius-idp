@@ -24,7 +24,7 @@ Four files, in this order. Read them before proposing anything.
 | File | What it is |
 | --- | --- |
 | [status.md](status.md) | The handoff. Done, not-done, and why — the ground truth between sessions. |
-| [spec-v1.md](spec-v1.md) | Signed off, amended through **D85**. Numbered requirements, and §12.1's decision log with the reasoning. |
+| [spec-v1.md](spec-v1.md) | Signed off, amended through **D86**. Numbered requirements, and §12.1's decision log with the reasoning. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | The gates, the style, and how to amend the spec. |
 | [docs/release.md](docs/release.md) | What is left before v1.0.0, and it is the owner's, not yours. |
 
@@ -397,6 +397,26 @@ Docker Desktop's bind mounts do not enforce host uids, so **this whole class is
 invisible locally on Windows and macOS** - 78 tests passed here against the
 exact image that failed on the runner. Anything the container must *write* to
 through a bind mount needs its permissions set explicitly by the test harness.
+
+**A dependency the build *inlines* still ships in the image unless you delete
+it** (**D86**). `pnpm deploy --legacy` copies the whole virtual store, so
+`docker/Dockerfile` removes build tooling by name — and
+`@hugeicons/core-free-icons`, the console's icon set, is **148 MB** of it that
+Vite had already inlined into the server chunks. It took the image 25 MiB over
+OPS-13's ceiling and failed the `v0.3.0` release run at the smoke gate.
+`lucide-react` is the opposite case and must stay: the server chunks import it
+at runtime. **Which one a dependency is, is a property of the build, not of the
+package** — ask the built output:
+
+```bash
+grep -ho 'from"[^"]*"' apps/web/dist/server/assets/*.js | sort -u
+```
+
+Everything that lists is still expected in `node_modules`; everything else is
+inlined and is a candidate for the prune list. Prove a prune with
+`test:e2e`, never with the local smoke test — **Docker Desktop reports the
+*compressed* size** (89.5 MiB here against 374.8 MiB on a runner), so the size
+gate cannot fail locally and never could.
 
 **A tag never reaches `ci.yml`, and `release.yml` is what publishes** (**D73**).
 `ci.yml` triggers on `push: branches: [main]`; a tag push does not match a

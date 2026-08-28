@@ -7,7 +7,24 @@ Notable changes to this project. The format follows
 Decisions that changed a numbered requirement carry their `D` number from
 [spec-v1.md](spec-v1.md) §12, where the reasoning is.
 
-## [0.3.0] — 2026-08-28
+## [0.3.1] — 2026-08-28
+
+**`v0.3.0` was tagged and never published.** Its release run built the image,
+started it, migrated and signed a user in, then measured it at 374.8 MiB
+against OPS-13's 350 MiB ceiling and refused to push — no image, no release.
+The first entry below is the fix, and this version carries everything that
+version was going to.
+
+### Fixed
+
+- **The image was 148 MB of icons nobody could reach** (**D86**). The first
+  release containing the database console measured **374.8 MiB** on the runner
+  against OPS-13's 350 MiB ceiling and refused to publish.
+  `@hugeicons/core-free-icons` — one module per icon, several thousand of them
+  — is inlined by Vite into the server chunks and read by nothing at runtime,
+  so it joins `docker/Dockerfile`'s by-name prune list beside the compilers
+  and test runners (**D76**). `lucide-react` deliberately stays: the server
+  chunks import it. `/app` goes from 336 MB to 188 MB.
 
 ### Security
 
@@ -891,7 +908,7 @@ were questions, and one was "polish every page".
   says where it came from, so it was sending anyone who inspected it to a
   repository that is not this one.
 
-[Unreleased]: https://github.com/semantius/semantius-idp/compare/v0.3.0...main
-[0.3.0]: https://github.com/semantius/semantius-idp/compare/v0.2.0...v0.3.0
+[Unreleased]: https://github.com/semantius/semantius-idp/compare/v0.3.1...main
+[0.3.1]: https://github.com/semantius/semantius-idp/compare/v0.2.0...v0.3.1
 [0.2.0]: https://github.com/semantius/semantius-idp/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/semantius/semantius-idp/releases/tag/v0.1.0

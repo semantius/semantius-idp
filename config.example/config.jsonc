@@ -232,7 +232,19 @@
     // the user table is empty the IdP serves a first-run setup page, and
     // whoever completes it is the first administrator (D52).
 
-    "allowImpersonation": false
+    "allowImpersonation": false,
+
+    // `/admin/database`: a schema explorer and a SQL console over this
+    // deployment's own Postgres (FR-ADMIN-7). "disabled" (the default) removes
+    // the page, the nav entry and both API endpoints; "read-only" runs every
+    // statement in a READ ONLY transaction; "read-write" adds a mode toggle
+    // and commits when it is set. One statement per run, 10 s timeout,
+    // 500-row cap, every execution audited as `database.queried`.
+    //
+    // An administrator who can run SQL reads every row at rest -- password
+    // hashes and session tokens included. That is what the console is for;
+    // leave it off unless it is what you want.
+    "database": "disabled"
   },
 
   "rateLimit": {

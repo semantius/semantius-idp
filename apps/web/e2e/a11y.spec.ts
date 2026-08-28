@@ -84,6 +84,10 @@ const ADMIN_PAGES = [
   "/admin/clients",
   "/admin/roles",
   "/admin/audit",
+  // FR-ADMIN-7. The base stack runs `read-only` so the page is here to scan;
+  // the vendored Neon components are the only third-party markup in the tree,
+  // and their low-alpha inks are what this scan is for.
+  "/admin/database",
   "/admin/system",
 ]
 

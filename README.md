@@ -211,6 +211,7 @@ The keys that decide what you can do on day one:
 | `email.resend.apiKey` | — | Without it the IdP runs in **degraded mode**: no verification, no reset, no notifications, and `/forgot-password` is 404. Administrators set passwords directly instead. |
 | `auth.defaultRedirect` | `/account` | Where a completed sign-in lands. Point it at your product when the IdP is bundled beside one. |
 | `admin.adminRoles` | `["admin"]` | Which roles from `roles.jsonc` reach `/admin` and the admin API. |
+| `admin.database` | `disabled` | `read-only` or `read-write` adds `/admin/database`, a schema explorer and SQL console over the IdP's own Postgres. Off means no page, no nav entry and no endpoint. An administrator who can run SQL reads every row at rest, session tokens included. |
 
 If a page you expect is missing, it is almost always one of these two: sign-up
 is off, or e-mail is not configured. That is deliberate — a control that cannot

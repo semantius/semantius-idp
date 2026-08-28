@@ -12,10 +12,15 @@ import { loadConfig } from "@/server/config/loader"
 import { buildUiContext } from "@/server/ui-context"
 import { baseConfig, makeConfigFolder } from "../fixtures/config-files"
 
-function contextFor(site: Record<string, unknown>, baseUrl?: string) {
+function contextFor(
+  site: Record<string, unknown>,
+  baseUrl?: string,
+  overrides: Record<string, unknown> = {}
+) {
   const config: Record<string, unknown> = {
     ...baseConfig(),
     site: { name: "Test IdP", ...site },
+    ...overrides,
   }
   if (baseUrl) config.server = { baseUrl }
   const folder = makeConfigFolder({ config })
@@ -26,6 +31,23 @@ function contextFor(site: Record<string, unknown>, baseUrl?: string) {
   })
   return buildUiContext(loaded.config, "en-US")
 }
+
+describe("buildUiContext capability flags", () => {
+  it("says the database console is off unless it is configured", () => {
+    // FR-ADMIN-7. A boolean, not the tri-state: the *mode* is admin-only
+    // detail and this object reaches every anonymous visitor.
+    expect(contextFor({}).adminDatabaseEnabled).toBe(false)
+  })
+
+  it("says it is on for either live mode", () => {
+    for (const mode of ["read-only", "read-write"]) {
+      expect(
+        contextFor({}, undefined, { admin: { database: mode } })
+          .adminDatabaseEnabled
+      ).toBe(true)
+    }
+  })
+})
 
 describe("buildUiContext branding", () => {
   it("falls back to the icon shipped in the image", () => {

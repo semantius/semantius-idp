@@ -92,6 +92,56 @@ Rejecting takes `{"userId": "…", "notify": true}`. Approval does **not** resum
 whatever authorization request the person abandoned — the e-mail sends them to
 the sign-in page and they start again from the application.
 
+## The database console
+
+Two endpoints, and **only when `admin.database` is not `disabled`** (FR-ADMIN-7,
+**D83**). With the flag off they are not registered at all, so an administrator
+calling them gets a plain `404` — the feature is absent, not refused.
+
+| Method | Path | Does |
+| --- | --- | --- |
+| `GET` | `/idp/database/schema` | Tables, columns, indexes and foreign keys of `database.schema`, plus the deployment's own mode |
+| `POST` | `/idp/database/query` | Runs **one** statement and returns its rows |
+
+```bash
+curl -s -X POST https://idp.example.com/api/auth/idp/database/query \
+     -H "x-api-key: $IDP_API_KEY" \
+     -H "content-type: application/json" \
+     -d '{"query": "select id, email from \"user\" order by \"created_at\" desc limit 5"}'
+```
+
+`mode` is `read` unless you say otherwise. `read` opens a **READ ONLY
+transaction**, so a write is refused by Postgres — `400` with
+`"sqlstate": "25006"` — however it is disguised; a writable CTE fails the same
+way. `mode: "read-write"` is only accepted by a deployment configured
+`read-write`, and anything else answers `400 WRITE_NOT_ALLOWED`.
+
+**One statement per call.** The query goes over the extended protocol, which
+refuses a multi-command string with `400` and `"sqlstate": "42601"` before
+running any of it — so `COMMIT; delete from …` is a syntax error rather than a
+way out of the transaction.
+
+The other limits: 10 s per statement (`57014` on a timeout), 500 rows,
+~10 kB per cell and ~5 MB per response, with `"truncated": true` when any of
+them bit. Every call is audited as `database.queried`, success or not.
+
+A failure is a `400` carrying everything the editor needs to point at it:
+
+```json
+{
+  "code": "QUERY_FAILED",
+  "message": "relation \"users\" does not exist",
+  "sqlstate": "42P01",
+  "line": 1,
+  "column": 15
+}
+```
+
+**This reads everything.** An admin API key that can call this endpoint can
+select password hashes, session tokens and the JWKS rows. That is what the
+console is for; leave `admin.database` at `disabled` if it is not what you
+want.
+
 ## The rest
 
 | Method | Path | Does |

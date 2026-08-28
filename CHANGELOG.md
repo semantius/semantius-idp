@@ -38,6 +38,32 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ### Added
 
+- **`/admin/database` — a schema explorer and a SQL console** over this
+  deployment's own Postgres, behind the new tri-state `admin.database`
+  (`disabled` | `read-only` | `read-write`, default **`disabled`**) —
+  **FR-ADMIN-7**, **D83**. The left column is a searchable tree of tables,
+  columns, indexes and foreign keys; the right is a SQL editor with syntax
+  highlighting, an inline error marker and a results grid.
+- `GET /idp/database/schema` and `POST /idp/database/query`, admin-gated like
+  every other endpoint and reachable with an admin API key (FR-ADMIN-6).
+  **With the flag at `disabled` they are not registered**, so they answer 404
+  rather than 403 — the feature is absent, not switched off, which is what the
+  owner asked for and the shape `apiKeys.enabled: false` already had.
+- `SchemaExplorer` and `SQLRunner` in `packages/ui`, vendored verbatim from
+  ui.neon.com's shadcn registry, plus `styles/neon-supplement.css` — the two
+  custom properties and the one utility class they name. The registry's own
+  `tokens.css` is **not** imported: it redefines the whole palette, including
+  the hand-measured `--destructive` and `--sidebar-*` divergences (**D83**).
+- `database.queried` in the audit trail (SEC-6): one row per execution, success
+  or not, carrying the first 500 characters of the statement, the mode and the
+  outcome.
+- `tests/unit/database-introspect.test.ts`, `tests/integration/database-admin.test.ts`
+  and `e2e/database.spec.ts`; `/admin/database` joins the axe scan.
+- R-1 corrections for the vendored components, in `neon-supplement.css` and
+  scoped to their own `data-slot` roots: the low-alpha `--muted-foreground`
+  and `--destructive` inks (1.97:1 to 3.68:1) go to full opacity, and
+  CodeMirror's own `#888` placeholder (3.54:1) to `--muted-foreground`. All
+  measured beside the rule, none of it a patch to registry output (**D83**).
 - `packages/ui/src/components/{sidebar,sheet,tooltip,skeleton}.tsx` and
   `packages/ui/src/hooks/use-mobile.ts`, from the shadcn registry, used
   verbatim. No new dependency.

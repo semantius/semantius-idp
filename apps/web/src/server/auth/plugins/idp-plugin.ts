@@ -335,4 +335,9 @@ export type AuditAction =
   | "client.deleted"
   | "client.disabled"
   | "keys.rotated"
+  // D83: one row per `/admin/database` execution, success or not. The console
+  // can read everything at rest, so "an administrator ran SQL" is exactly the
+  // kind of event SEC-6 exists to make undeniable -- and the statement itself
+  // (first 500 characters) is the only useful part of the record.
+  | "database.queried"
   | "social.profile_conflict"

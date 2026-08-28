@@ -42,6 +42,12 @@ import { hashClientSecret } from "../oidc/secret-hash"
 import { splitRoles } from "../role-utils"
 import { revision, version } from "../version"
 import type { AdminContext } from "./context"
+import {
+  buildSchemaTables,
+  errorToQueryFailure,
+  introspectSchema,
+  runQuery,
+} from "./database"
 import { requireAdmin } from "./gate"
 
 export interface AdminEndpointDeps {
@@ -53,6 +59,15 @@ export interface AdminEndpointDeps {
   mailer?: Mailer
   /** Filled in by `runtime.ts` as each piece becomes available. */
   context?: AdminContext
+  /**
+   * `/admin/database`'s own connections (FR-ADMIN-7). Absent when
+   * `admin.database` is `disabled`, in which case the two endpoints below are
+   * not built at all. `consoleDirectDb` exists only in a `read-write`
+   * deployment. See `database.ts`'s header for why neither of these is
+   * `database`.
+   */
+  consoleDb?: DbHandle
+  consoleDirectDb?: DbHandle
 }
 
 const NO_DATABASE = "This server is running without a database connection."
@@ -66,6 +81,28 @@ function db(deps: AdminEndpointDeps): DbHandle {
 
 export function buildAdminEndpoints(deps: AdminEndpointDeps) {
   const gate = requireAdmin(deps.config)
+
+  /**
+   * The console's own handles (FR-ADMIN-7).
+   *
+   * Both are `SERVICE_UNAVAILABLE` rather than a fall back to `deps.database`:
+   * silently borrowing the shared pool is the one thing `database.ts`'s header
+   * says must never happen, and a degraded-mode process with no database
+   * connection has nothing for this page to explore anyway.
+   */
+  const consoleDb = (): DbHandle => {
+    if (!deps.consoleDb) {
+      throw new APIError("SERVICE_UNAVAILABLE", { message: NO_DATABASE })
+    }
+    return deps.consoleDb
+  }
+
+  const consoleDirectDb = (): DbHandle => {
+    if (!deps.consoleDirectDb) {
+      throw new APIError("SERVICE_UNAVAILABLE", { message: NO_DATABASE })
+    }
+    return deps.consoleDirectDb
+  }
 
   /**
    * FR-2FA-2: an administrator resets a locked-out user's second factor.
@@ -918,6 +955,140 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
     }
   }
 
+  /**
+   * The schema tree `/admin/database`'s left column draws (FR-ADMIN-7).
+   *
+   * Read-only by construction — four catalog queries and `current_database()`
+   * — but it goes over the console's own handle rather than the shared one for
+   * the same reason the runner does: `runtime.database` is the pool ordinary
+   * traffic borrows from, and this feature's whole premise is that an operator
+   * is typing statements into it.
+   */
+  const databaseSchema = createAuthEndpoint(
+    "/idp/database/schema",
+    { method: "GET", requireHeaders: true, use: [gate] },
+    async (ctx) => {
+      const handle = consoleDb()
+      const raw = await introspectSchema(handle)
+      return ctx.json({
+        schemaName: raw.schemaName,
+        database: raw.database,
+        // The *deployment's* mode, not the request's. The page needs it to
+        // decide whether to render the runner's own read/write toggle at all,
+        // and it is admin-only detail: `UiContext` carries the boolean and
+        // stops there, because it reaches an anonymous visitor.
+        mode: deps.config.file.admin.database,
+        tables: buildSchemaTables(raw),
+      })
+    }
+  )
+
+  /**
+   * Run one statement (FR-ADMIN-7).
+   *
+   * POST, and a POST that is sometimes a pure read — which is the right shape
+   * anyway: the payload is a SQL string that has no business in a URL, in
+   * browser history or in a proxy log, and the audit row is written here
+   * whatever the statement turned out to do.
+   *
+   * Every failure comes back as a 400 carrying `sqlstate`, `detail`, `hint`
+   * and an editor position. That is not error-swallowing: a syntax error, a
+   * read-only violation and a statement timeout are all *the answer* for a
+   * console, and turning them into a 500 would lose the one thing the operator
+   * needs to fix the query. The extra fields ride the `APIError` body, which
+   * this codebase already does for `WRITE_NOT_ALLOWED`'s neighbours.
+   */
+  const databaseQuery = createAuthEndpoint(
+    "/idp/database/query",
+    {
+      method: "POST",
+      requireHeaders: true,
+      body: z.object({
+        query: z.string().min(1).max(100_000),
+        mode: z.enum(["read", "read-write"]).optional(),
+      }),
+      use: [gate],
+    },
+    async (ctx) => {
+      const actor = ctx.context.session.user
+      const requested = ctx.body.mode ?? "read"
+      const configured = deps.config.file.admin.database
+
+      if (requested === "read-write" && configured !== "read-write") {
+        await deps.audit?.record({
+          action: "database.queried",
+          outcome: "denied",
+          actorType: "session",
+          actorUserId: actor.id,
+          // `reason`, not `code`: `redactFields` masks anything called
+          // `code` (SEC-5 -- an OAuth authorization code is one), so the
+          // audit row would have read `[redacted]` and said nothing.
+          metadata: { mode: requested, reason: "WRITE_NOT_ALLOWED" },
+        })
+        throw new APIError("BAD_REQUEST", {
+          code: "WRITE_NOT_ALLOWED",
+          message:
+            "This deployment's database console is read-only. Set `admin.database` to `read-write` to allow writes.",
+        })
+      }
+
+      // `read` on the pooled endpoint, `read-write` on the direct one — the
+      // owner's instruction under D74, and the reason `runtime.ts` builds the
+      // second handle only when the flag calls for it.
+      const handle =
+        requested === "read-write" ? consoleDirectDb() : consoleDb()
+
+      // The statement is recorded whatever happens, capped at 500 characters:
+      // the trail's job is "who ran what", and a 100 kB migration script
+      // pasted into the box would otherwise be 100 kB of audit row. `redactFields`
+      // still runs over it (SEC-5), so a literal that looks like a secret is
+      // masked before storage.
+      const recorded = ctx.body.query.slice(0, 500)
+
+      try {
+        const result = await runQuery(handle, ctx.body.query, requested)
+        await deps.audit?.record({
+          action: "database.queried",
+          outcome: "success",
+          actorType: "session",
+          actorUserId: actor.id,
+          metadata: {
+            query: recorded,
+            mode: requested,
+            durationMs: Math.round(result.durationMs),
+            rowCount: result.rowCount,
+            command: result.command,
+            truncated: result.truncated,
+          },
+        })
+        return ctx.json(result)
+      } catch (error) {
+        const failure = errorToQueryFailure(error, ctx.body.query)
+        await deps.audit?.record({
+          action: "database.queried",
+          outcome: "failure",
+          actorType: "session",
+          actorUserId: actor.id,
+          metadata: {
+            query: recorded,
+            mode: requested,
+            // See the denial above for why this is not called `code`.
+            reason: failure.sqlstate ?? "unknown",
+          },
+        })
+        throw new APIError("BAD_REQUEST", {
+          code: "QUERY_FAILED",
+          message: failure.message,
+          sqlstate: failure.sqlstate,
+          detail: failure.detail,
+          hint: failure.hint,
+          line: failure.line,
+          column: failure.column,
+        })
+      }
+    }
+  )
+
   return {
     resetTwoFactor,
     adminStats,
@@ -929,6 +1100,16 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
     rotateClientSecret,
     deleteClient,
     setClientDisabled,
+    // **Absent, not forbidden** (FR-ADMIN-7, the owner's explicit
+    // requirement). A `disabled` deployment must not have the API either, and
+    // an endpoint Better Auth was never handed answers 404 -- the same way
+    // `apiKeys.enabled: false` removes the api-key plugin rather than making
+    // its routes refuse. A 403 would confirm the feature exists and is merely
+    // switched off, which is a different sentence than "there is no such
+    // thing here".
+    ...(deps.config.file.admin.database !== "disabled"
+      ? { databaseSchema, databaseQuery }
+      : {}),
   }
 }
 

@@ -558,6 +558,12 @@ const adminSchema = z.strictObject({
     .describe(
       "Lets an administrator act as another user, ≤ 1 h, never against another administrator, every action audited (FR-ADMIN-5)."
     ),
+  database: z
+    .enum(["disabled", "read-only", "read-write"])
+    .default("disabled")
+    .describe(
+      "`/admin/database`, a schema explorer and SQL console over this deployment's own Postgres (FR-ADMIN-7). `read-only` runs every statement in a READ ONLY transaction; `read-write` adds a mode toggle and commits when it is set. `disabled` removes the page, the nav entry and both endpoints. One statement per run, 10 s timeout, 500-row cap, every execution audited as `database.queried`. An administrator who can run SQL can read every row at rest — password hashes and session tokens included — so leave it off unless that is intended."
+    ),
 })
 
 const rateLimitSchema = z.strictObject({

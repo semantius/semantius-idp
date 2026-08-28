@@ -107,7 +107,7 @@ function AdminLayout() {
       // `site.name` in `buildUiContext`, so nothing here tests for it.
       brand={ui.adminTitle}
       heading={t.admin.title}
-      items={adminNavItems(t)}
+      items={adminNavItems(ui, t)}
       indexTo="/admin"
       user={{ name: gate.name, email: gate.email }}
       // The way back out. It was a ghost button in the header; it is a menu

@@ -181,6 +181,18 @@ export async function createTestContext(
   resetSetupGate()
 
   const database = createDb(config, { max: 4 })
+  // FR-ADMIN-7's own handles, built the way `runtime.ts` builds them and only
+  // when the flag calls for them -- a suite that shared `database` here would
+  // pass while production's separation was broken. Against a test database
+  // both URLs resolve to the same string (D74's mutual fallback), so the two
+  // handles differ in nothing but which name they were asked for; what they
+  // prove is the wiring.
+  const consoleEnabled = config.file.admin.database !== "disabled"
+  const consoleDb = consoleEnabled ? createDb(config, { max: 1 }) : undefined
+  const consoleDirectDb =
+    config.file.admin.database === "read-write"
+      ? createDb(config, { direct: true, max: 1 })
+      : undefined
   await database.sql.unsafe(
     `drop schema if exists ${quoteIdentifier(schemaName)} cascade`
   )
@@ -204,6 +216,8 @@ export async function createTestContext(
     mailer,
     audit,
     adminContext,
+    consoleDb,
+    consoleDirectDb,
     ...(options.breachFetch ? { breachFetch: options.breachFetch } : {}),
   })
   adminContext.auth = auth
@@ -222,6 +236,10 @@ export async function createTestContext(
     mailer,
     schemaName,
     teardown: async () => {
+      // Before the drop: a console handle still holding a connection to the
+      // schema keeps `drop schema ... cascade` waiting on it.
+      await consoleDb?.close().catch(() => undefined)
+      await consoleDirectDb?.close().catch(() => undefined)
       await database.sql.unsafe(
         `drop schema if exists ${quoteIdentifier(schemaName)} cascade`
       )

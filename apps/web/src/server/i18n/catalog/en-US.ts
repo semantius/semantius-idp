@@ -383,6 +383,7 @@ export const enUS = {
       clients: "Applications",
       roles: "Roles",
       audit: "Audit",
+      database: "Database",
       system: "System",
     },
     dashboard: {
@@ -671,6 +672,30 @@ export const enUS = {
         changePassword: "Change-password well-known URL",
         securityTxt: "security.txt (RFC 9116)",
       },
+    },
+    /**
+     * `/admin/database` (FR-ADMIN-7).
+     *
+     * The two vendored Neon components carry their own English strings --
+     * "Read only", "Run", "Enable writes", the results grid's empty state.
+     * They are registry output and are never hand-patched (AGENTS.md), so that
+     * is a bounded FR-I18N-1 exception, recorded in the spec text beside the
+     * requirement and in D83. Everything the page itself writes is here.
+     */
+    database: {
+      title: "Database",
+      description:
+        "The schema and a SQL console for this deployment's own database. One statement at a time; every run is recorded in the audit trail.",
+      readOnly:
+        "Every statement runs inside a READ ONLY transaction. A write is refused by the database itself, not by the editor.",
+      readWrite:
+        "Switch the editor to “Read + write” to run a statement that changes data. It commits.",
+      explorer: "Schema",
+      runner: "SQL",
+      truncated: (rows: number) =>
+        `Showing the first ${rows} rows. Large cells are cut. Add a LIMIT or narrow the columns to see the rest.`,
+      unavailable:
+        "The database console is not available. Check the server log.",
     },
     refusals: {
       ownRoles: "You cannot change your own roles. Ask another administrator.",

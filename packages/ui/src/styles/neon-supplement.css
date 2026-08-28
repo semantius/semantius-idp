@@ -148,3 +148,63 @@
     --neon-scroll-fade-b: 0px;
   }
 }
+
+/*
+ * R-1 corrections for the two vendored components, scoped to their own roots.
+ *
+ * Both draw several strings in `--muted-foreground` at 50-65 % alpha and the
+ * error code in `--destructive` at 70 %, and every one of those measures under
+ * WCAG AA's 4.5:1 on this project's palette:
+ *
+ *   text-muted-foreground/50   1.97:1 light   2.66:1 dark
+ *   text-muted-foreground/60   2.31:1 light   3.27:1 dark   (2.30 / 3.25 on the
+ *                                                            grid's `bg-muted/10`
+ *                                                            row-number cell)
+ *   text-muted-foreground/65   2.51:1 light   3.61:1 dark
+ *   text-destructive/70        3.68:1 light   3.55:1 dark   (on `bg-destructive/5`)
+ *
+ * At full opacity the same inks measure 4.81:1 / 6.76:1 and 5.06:1 / 5.86:1 --
+ * over the floor in both themes, on both grounds. Composited over `--card`
+ * (and over `--card` plus `--muted` at 10 % for the row-number cell) with the
+ * WCAG 2.x relative-luminance formula.
+ *
+ * **Here rather than in the components**, which are registry output and are
+ * never hand-patched: the next `shadcn add` from ui.neon.com would undo an
+ * edit there and nobody would know why the axe gate started failing. Matched
+ * on the utility class as an attribute substring, which needs no CSS escaping
+ * of the `/` and reads as what it is. Outside `@layer`, so it beats Tailwind's
+ * layered utilities regardless of specificity.
+ *
+ * Scoped to the two `data-slot` roots so nothing else in the application
+ * inherits a decision made for these components.
+ */
+:is([data-slot="sql-runner"], [data-slot="schema-explorer"])
+  [class*="text-muted-foreground/"] {
+  color: var(--muted-foreground);
+}
+
+:is([data-slot="sql-runner"], [data-slot="schema-explorer"])
+  [class*="placeholder:text-muted-foreground/"]::placeholder {
+  color: var(--muted-foreground);
+}
+
+[data-slot="sql-runner"] [class*="text-destructive/"] {
+  color: var(--destructive);
+}
+
+/*
+ * CodeMirror's own placeholder ink is `#888` -- 3.54:1 on `--background` in
+ * the light theme, which the axe scan of /admin/database fails on. It is not
+ * one of the component's Tailwind classes but a `@codemirror/view` base-theme
+ * rule, so there is nothing in `sql-runner.tsx` to have got wrong and nothing
+ * to patch there either. `--muted-foreground` measures 4.81:1 light and
+ * 7.63:1 dark, and is the same ink every other hint on the page uses.
+ *
+ * `.cm-editor` is in the selector for specificity: style-mod mounts
+ * CodeMirror's stylesheet at the top of `<head>`, so this file already wins on
+ * source order at equal specificity -- but that is an implementation detail of
+ * a dependency, and one class more makes it not matter.
+ */
+[data-slot="sql-runner"] .cm-editor .cm-placeholder {
+  color: var(--muted-foreground);
+}

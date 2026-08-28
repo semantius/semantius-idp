@@ -16,6 +16,13 @@
  * A caller who is not an administrator gets `null`, not a 403: the pages turn
  * that into the same "you do not have access" screen an anonymous visitor sees,
  * which keeps the existence of an admin area from being a probe target.
+ *
+ * **One exception to "reads only", and it is deliberate.** `executeDatabaseQuery`
+ * is a POST, because the payload is a SQL string that must not travel in a URL
+ * (FR-ADMIN-7). It is still a read as this file means it: the endpoint behind
+ * it runs a `read` statement inside a READ ONLY transaction, and the audit row,
+ * the mode check and the timeout all live there rather than here -- so a `curl`
+ * holding an admin API key is subject to every rule the page is.
  */
 
 import { createServerFn } from "@tanstack/react-start"
@@ -35,6 +42,11 @@ import {
 
 import type { SQL } from "drizzle-orm"
 
+import type {
+  QueryFailure,
+  QuerySuccess,
+  SchemaTable,
+} from "../admin/database"
 import { claimDraft } from "../http/draft"
 import type { Draft } from "../http/draft"
 import { claim } from "../http/one-shot"
@@ -748,6 +760,124 @@ export const fetchSystemInfo = createServerFn({ method: "GET" }).handler(
     }
   }
 )
+
+export interface AdminDatabaseSchema {
+  schemaName: string
+  /** `current_database()`, which is the label on the runner's header. */
+  database: string
+  /** The *deployment's* setting, which decides whether a write toggle exists. */
+  mode: "read-only" | "read-write"
+  tables: SchemaTable[]
+}
+
+/**
+ * The schema tree for `/admin/database` (FR-ADMIN-7).
+ *
+ * Through the endpoint rather than around it, the same round trip
+ * `fetchSystemInfo` makes and for the same reason: what the page draws and
+ * what `curl -H x-api-key` returns are then the same document, from the same
+ * gate (FR-ADMIN-6). `callAuth` cannot be used -- it is POST-only, and this
+ * one is a GET.
+ */
+export const fetchDatabaseSchema = createServerFn({ method: "GET" }).handler(
+  async (): Promise<AdminDatabaseSchema | null> => {
+    const context = await admin()
+    if (!context) return null
+    const { runtime } = context
+
+    const response = await runtime.auth.handler(
+      new Request(
+        `${runtime.config.base.origin}${runtime.config.base.basePath}/api/auth/idp/database/schema`,
+        { headers: getRequest().headers }
+      )
+    )
+    // 404 when `admin.database` is `disabled` -- the endpoint is not
+    // registered at all. The route already threw `notFound()` before getting
+    // here, so this is the belt to that pair of braces.
+    if (!response.ok) return null
+    return (await response.json()) as AdminDatabaseSchema
+  }
+)
+
+/** What `executeDatabaseQuery` hands back, which is never a thrown error. */
+export type DatabaseQueryOutcome =
+  | ({ ok: true } & QuerySuccess)
+  | { ok: false; error: QueryFailure & { code: string } }
+
+/**
+ * Run one statement (FR-ADMIN-7). **The one POST server function in the tree.**
+ *
+ * A GET would put the SQL in a URL, and a URL is the one place a statement
+ * must not be: browser history, `Referer` on the next outbound request, and
+ * every proxy log in between -- the argument `server/http/one-shot.ts` makes
+ * about a minted API key applies verbatim to `select * from "user"`. The
+ * file's "reads only" rule is about *mutations*, and it still holds: a
+ * `read`-mode query runs inside a READ ONLY transaction, and the endpoint --
+ * not this function -- is where the audit row and the mode check live, so a
+ * `curl` reaches exactly the same rules.
+ *
+ * It returns a discriminated union rather than throwing. Every failure here is
+ * an *answer*: a syntax error, a read-only violation, a timeout. The runner
+ * draws each one as an inline diagnostic beside the offending line, and a
+ * thrown server-function error would arrive at the router's error boundary
+ * instead, replacing the console with an error page and losing the query the
+ * operator was editing.
+ */
+export const executeDatabaseQuery = createServerFn({ method: "POST" })
+  .validator((input: { query: string; mode?: "read" | "read-write" }) => input)
+  .handler(async ({ data }): Promise<DatabaseQueryOutcome | null> => {
+    const context = await admin()
+    if (!context) return null
+    const { runtime } = context
+
+    const request = getRequest()
+    const response = await runtime.auth.handler(
+      new Request(
+        `${runtime.config.base.origin}${runtime.config.base.basePath}/api/auth/idp/database/query`,
+        {
+          method: "POST",
+          headers: withJson(request.headers),
+          body: JSON.stringify(data),
+          // Carries a client disconnect as far as Better Auth. It does **not**
+          // cancel the statement: postgres.js is not listening to it, so an
+          // abandoned query still runs to its own 10 s `statement_timeout`.
+          // That is the ceiling that matters, and it is on the server.
+          signal: request.signal,
+        }
+      )
+    )
+
+    const body = (await response.json().catch(() => ({}))) as Record<
+      string,
+      unknown
+    >
+    if (response.ok) return { ok: true, ...(body as unknown as QuerySuccess) }
+
+    return {
+      ok: false,
+      error: {
+        code: typeof body.code === "string" ? body.code : "QUERY_FAILED",
+        message:
+          typeof body.message === "string"
+            ? body.message
+            : "The query failed. Check the SQL and try again.",
+        sqlstate: typeof body.sqlstate === "string" ? body.sqlstate : undefined,
+        detail: typeof body.detail === "string" ? body.detail : undefined,
+        hint: typeof body.hint === "string" ? body.hint : undefined,
+        line: typeof body.line === "number" ? body.line : undefined,
+        column: typeof body.column === "number" ? body.column : undefined,
+      },
+    }
+  })
+
+/** The caller's headers, re-labelled for the JSON body this builds. */
+function withJson(source: Headers): Headers {
+  const headers = new Headers(source)
+  headers.set("content-type", "application/json")
+  // The server function's own body length no longer applies.
+  headers.delete("content-length")
+  return headers
+}
 
 export interface AdminRolesStatus {
   /**

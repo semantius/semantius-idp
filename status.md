@@ -1,8 +1,8 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-28 · **Branch:** `main` · **Head:** `4323ca6`, last tag **v0.2.0**
+**As of:** 2026-08-28 · **Branch:** `feat/database` · **Head:** `cb8084d`, last tag **v0.2.0**
 **Plan:** `~/.claude/plans/make-the-admin-layout-shiny-unicorn.md` (the sidebar shell)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D82**
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D83**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
 gate.** Every gate green: lint, typecheck, unit (599), integration (243 across
@@ -76,6 +76,87 @@ README quick start against it, and confirming `latest` from outside.
   next boot serves the first-run setup page, which is now the only way an
   administrator is ever created. No credential to recover, and no command that
   changes one.
+
+---
+
+## The database console (2026-08-28, **D83**)
+
+The owner asked for Neon UI's `SchemaExplorer` and `SQLRunner` against the
+IdP's own Postgres, behind a new configuration value, and — asked which shape
+the value should take — chose **one tri-state key** over a boolean plus a
+sub-mode: `admin.database: disabled | read-only | read-write`, default
+`disabled`. The second half of that answer is the load-bearing one: **with the
+flag off the API has to be inactive too, not only the UI.** So the two
+endpoints are conditionally *included* in what `buildAdminEndpoints` returns,
+and Better Auth answers 404 for a route it was never handed — the same shape
+`apiKeys.enabled: false` already produces, and a 403 would have confirmed the
+feature exists and is merely switched off.
+
+`ui.neon.com` is a shadcn registry, so this is vendored React in
+`packages/ui`. No iframe, no runtime call to anybody (SEC-8 holds).
+
+**Five things are load-bearing.**
+
+- **The write barrier is the wire protocol, not a keyword scan.** The first
+  draft ran `tx.unsafe(query)` inside `sql.begin("read only", …)`, and that is
+  not safe: postgres.js picks the **simple** protocol when there are no
+  parameters, and the simple protocol executes a multi-statement string as a
+  script — so `COMMIT; INSERT INTO "user" …` ends the READ ONLY transaction
+  and writes in autocommit. `{ simple: false }` forces the extended protocol,
+  whose Parse step refuses more than one command with `42601` before executing
+  a byte. What is left is one statement, which is the unit the console is for:
+  a writable CTE still dies on `25006`. There are integration tests for
+  `COMMIT; …`, for `SET TRANSACTION READ WRITE; …`, for a bare `select 1;
+  select 2` and for the CTE, each asserting the row count did not move.
+  postgres.js reads that option but does not declare it on
+  `UnsafeQueryOptions`, so the widened shape is declared beside the call — it
+  is the barrier, and a dependency bump that drops it should stop compiling.
+- **The console never touches the shared pool.** `select set_config(
+  'search_path', …, false)` is legal inside a READ ONLY transaction, and on a
+  pooled connection that session state outlives the transaction and reaches
+  the next piece of ordinary traffic. It gets its own `max: 1` handles, built
+  in `runtime.ts` and closed in `shutdown`: `read` over `database.url`,
+  `read-write` over `database.directUrl` (the owner's instruction, per D74).
+  Not the `locking` handle; and `max: 1` is safe here precisely because no
+  advisory lock is involved.
+- **A `read-only` deployment pins the runner to `read-write` and hides the
+  mode fieldset**, which reads backwards and is deliberate. Controlled to
+  `read`, the component's own keyword guard stops a write before it is sent
+  and offers an "Enable writes" button that a controlled prop makes
+  permanently inert — a dead control on every attempt. Pinned the other way
+  the statement is sent, and the answer is Postgres's `25006` on the right
+  line. The pin is a *display* choice and stops at the component: the page
+  sends `mode: "read"` regardless, because the endpoint refuses a requested
+  `read-write` on a `read-only` deployment. Sending the displayed mode made
+  **every** query come back as `WRITE_NOT_ALLOWED`, `select 1` included, and
+  the e2e suite is the only gate that drives the real component and could see
+  it.
+- **`neon-tokens` is not imported.** Both components list it as a registry
+  dependency and `shadcn add` writes its `tokens.css` beside them; it
+  re-imports `shadcn/tailwind.css` and redefines the whole palette in Neon's
+  brand colours — `--primary`, `--destructive` and every `--sidebar-*`
+  included, two of which are the hand-measured R-1 divergences. Deleted;
+  `packages/ui/src/styles/neon-supplement.css` carries the two custom
+  properties and the one utility class the components actually name.
+  `--status-scaling` is darkened from `#d97706` to `#92400e`, measured. The
+  same file holds the R-1 corrections the axe scan asked for — the components
+  draw several strings in `--muted-foreground` at 50-65 % alpha and the error
+  code at 70 %, all between 1.97:1 and 3.68:1, and CodeMirror's own `#888`
+  placeholder is 3.54:1 — each scoped to the two `data-slot` roots, matched on
+  the utility class, and measured in the comment.
+- **The client-bundle ceiling moved, 750 kB → 1185 kB.** CodeMirror is
+  ~410 kB. The route `React.lazy`s both panes so only a visitor to this page
+  downloads them, but the gate sums *all* client JavaScript rather than the
+  entry graph, so lazy loading cannot keep the old total. The markers remain
+  the real gate; the byte cap is the shape of one old incident.
+
+Two smaller notes worth keeping. The audit metadata key is **`reason`, not
+`code`**, because `redactFields` masks anything called `code` (SEC-5 — an
+OAuth authorization code is one) and the row read `[redacted]` until it was
+renamed. And the console **reads everything at rest** — session tokens,
+password hashes, JWKS rows. That is the feature; it is stated in FR-ADMIN-7
+and in the configuration key's own description so a reviewer does not mistake
+it for an accident, and the default is `disabled`.
 
 ---
 

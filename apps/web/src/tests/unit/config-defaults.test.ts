@@ -83,7 +83,11 @@ describe("CFG-4 defaults", () => {
         resources: [],
         reconcile: { prune: false },
       },
-      admin: { adminRoles: ["admin"], allowImpersonation: false },
+      admin: {
+        adminRoles: ["admin"],
+        allowImpersonation: false,
+        database: "disabled",
+      },
       rateLimit: { enabled: true, storage: "database" },
       logging: { level: "info", format: "json" },
       cleanup: { intervalMinutes: 60 },

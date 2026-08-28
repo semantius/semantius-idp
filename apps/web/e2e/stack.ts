@@ -281,6 +281,10 @@ function writeConfig(
           auth: { requireEmailVerification: true },
           twoFactor: { enabled: true },
           apiKeys: { enabled: true },
+          // FR-ADMIN-7. `read-only` suite-wide so `/admin/database` exists for
+          // the a11y scan and the admin walkthrough; the flag's own three
+          // states are driven by a serial block in `admin.spec.ts`.
+          admin: { database: "read-only" },
           jwt: { audience: stack.baseURL },
           // No `admin.bootstrap`: it no longer exists (D52). The first
           // administrator is created by `completeSetup` below, at the page.

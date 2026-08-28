@@ -2,6 +2,7 @@ import type { ReactNode } from "react"
 
 import {
   AppWindow,
+  Database,
   LayoutDashboard,
   ScrollText,
   Settings2,
@@ -22,6 +23,7 @@ import { cn } from "@workspace/ui/lib/utils"
 import type { ShellNavItem } from "@/components/common/sidebar-layout"
 
 import type { Catalog } from "@/server/i18n"
+import type { UiContext } from "@/server/ui-context"
 
 /**
  * The page header `/admin/*` shares (FR-ADMIN-2).
@@ -36,9 +38,13 @@ import type { Catalog } from "@/server/i18n"
  * `adminNavItems` stays here, beside the pages it names, and now carries a
  * lucide icon per entry — the collapsed sidebar is an icon rail, so an entry
  * without one would be a blank button.
+ *
+ * It takes the `UiContext` too, in the shape `accountNavItems` already uses:
+ * with `admin.database` at `disabled` the page 404s (FR-ADMIN-7), so a link to
+ * it would be a link to a dead end.
  */
 
-export function adminNavItems(t: Catalog): ShellNavItem[] {
+export function adminNavItems(ui: UiContext, t: Catalog): ShellNavItem[] {
   return [
     // `exact` on the overview only: every other entry stays lit while a child
     // page (a user's detail) is open.
@@ -52,6 +58,15 @@ export function adminNavItems(t: Catalog): ShellNavItem[] {
     { to: "/admin/clients", label: t.admin.nav.clients, icon: AppWindow },
     { to: "/admin/roles", label: t.admin.nav.roles, icon: ShieldCheck },
     { to: "/admin/audit", label: t.admin.nav.audit, icon: ScrollText },
+    ...(ui.adminDatabaseEnabled
+      ? [
+          {
+            to: "/admin/database",
+            label: t.admin.nav.database,
+            icon: Database,
+          },
+        ]
+      : []),
     { to: "/admin/system", label: t.admin.nav.system, icon: Settings2 },
   ]
 }

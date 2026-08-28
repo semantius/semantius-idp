@@ -73,6 +73,18 @@ export interface AuthDeps {
   /** Writes the SEC-6 trail for the approval endpoints. */
   audit?: Audit
   /**
+   * `/admin/database`'s own connections (FR-ADMIN-7), built in `runtime.ts`
+   * and absent when `admin.database` is `disabled`.
+   *
+   * Never `database`: a single statement can change session state that a
+   * pooled connection then hands to ordinary application traffic. See
+   * `admin/database.ts`'s header. `consoleDb` is the pooled endpoint and
+   * serves `read`; `consoleDirectDb` is the direct one and exists only in a
+   * `read-write` deployment.
+   */
+  consoleDb?: DbHandle
+  consoleDirectDb?: DbHandle
+  /**
    * Schema generation (DM-1), which needs every table a deployment could ever
    * have — so the config-gated plugins stay registered regardless of what the
    * config file says. Never set for a running instance.
@@ -527,6 +539,8 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
           logger: deps.logger,
           mailer: deps.mailer,
           context: deps.adminContext,
+          consoleDb: deps.consoleDb,
+          consoleDirectDb: deps.consoleDirectDb,
         }),
         adminAfterHook: buildAdminAfterHook({
           config,

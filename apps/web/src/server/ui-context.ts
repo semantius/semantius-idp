@@ -82,6 +82,18 @@ export interface UiContext {
    */
   allowImpersonation: boolean
   /**
+   * FR-ADMIN-7: whether `/admin/database` exists at all.
+   *
+   * A boolean, not the tri-state itself. Which of `read-only` and `read-write`
+   * a deployment runs decides whether the console shows a write toggle, and
+   * that is administrator-facing detail -- this object reaches every anonymous
+   * visitor of the sign-in page, so it carries "there is a database console"
+   * and stops there. The mode comes back from `/idp/database/schema`, behind
+   * the admin gate, which is also where the nav entry and the route get their
+   * answer from.
+   */
+  adminDatabaseEnabled: boolean
+  /**
    * `oauth.scopes` — every scope a client may be registered with (FR-OIDC-3).
    *
    * Public information: they are already in the discovery document, and the
@@ -185,6 +197,7 @@ export function buildUiContext(config: IdpConfig, locale: string): UiContext {
     twoFactorTrustDeviceDays: file.twoFactor.trustDeviceDays,
     apiKeysEnabled: file.apiKeys.enabled,
     allowImpersonation: file.admin.allowImpersonation,
+    adminDatabaseEnabled: file.admin.database !== "disabled",
     apiKeyMaxExpiresInDays: Math.max(
       1,
       Math.floor(file.apiKeys.maxExpiresIn / 86_400)

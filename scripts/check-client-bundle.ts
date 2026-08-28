@@ -55,13 +55,22 @@ const SERVER_ONLY_MARKERS = [
  * written with. Update the measured figure here when it moves, so the next
  * person can see the drift.
  *
- * **679 kB today** — the **D80** row-actions menu added ~79 kB of Base UI
- * `Menu`. That is the second ordinary UI addition to spend the headroom, and
- * the next one will be close: at ~70 kB left this is worth a look rather than
- * another raise, since the markers are the real gate and the byte cap is only
- * the shape of the incident.
+ * **1143 kB today**, up from 711 kB. The delta is CodeMirror: **D83** put a
+ * SQL console on `/admin/database` (FR-ADMIN-7), and the editor, its SQL
+ * grammar, its linter and its search are ~410 kB in one chunk
+ * (`sql-runner-*.js`), with another ~14 kB for the schema tree. Both panes are
+ * `React.lazy`-ed by the route, so nobody who does not open that page
+ * downloads any of it — but this gate sums *all* client JavaScript, not the
+ * entry graph, so lazy loading cannot keep the total under the old figure and
+ * the ceiling had to move. Raised to the measured total plus the same ~40 kB
+ * of headroom the previous figure carried.
+ *
+ * The point stands: **the markers above are the real gate.** This number is
+ * the shape of one incident, and re-raising it for a deliberate, chunked,
+ * lazily-loaded addition is what it is for. Re-raising it because "the bundle
+ * grew again" is not — check what grew first.
  */
-const MAX_CLIENT_BYTES = 750_000
+const MAX_CLIENT_BYTES = 1_185_000
 
 function jsFiles(dir: string): string[] {
   let entries: string[]

@@ -111,6 +111,26 @@ export async function buildRuntime(): Promise<Runtime> {
   const database = createDb(config)
   const locking = createDb(config, { direct: true, max: 2 })
 
+  // FR-ADMIN-7. `/admin/database` never touches `database`: one legal
+  // statement inside a READ ONLY transaction -- `select set_config('search_path',
+  // …, false)` is the easy example -- changes session state that a pooled
+  // connection then hands to the next piece of ordinary traffic. Its own
+  // handles contain that to the console. `max: 1` serialises concurrent
+  // queries, which is right for a single-admin console and safe here because
+  // no advisory lock is involved (the AGENTS.md `max: 1` deadlock warning is
+  // about `withAdvisoryLock`, which reserves a connection for the whole
+  // critical section).
+  //
+  // `read` goes over the pooled URL, `read-write` over the direct one. D74's
+  // mutual fallback means a single-endpoint deployment resolves both names to
+  // the same string, so "when configured" needs no extra branch.
+  const consoleEnabled = config.file.admin.database !== "disabled"
+  const consoleDb = consoleEnabled ? createDb(config, { max: 1 }) : undefined
+  const consoleDirectDb =
+    config.file.admin.database === "read-write"
+      ? createDb(config, { direct: true, max: 1 })
+      : undefined
+
   try {
     const migrateStep = await runMigrationPhase({
       config,
@@ -132,6 +152,8 @@ export async function buildRuntime(): Promise<Runtime> {
       mailer,
       audit,
       adminContext,
+      consoleDb,
+      consoleDirectDb,
     })
     adminContext.auth = auth
     // D55: the discovery list on the system page names `security.txt` only
@@ -173,12 +195,16 @@ export async function buildRuntime(): Promise<Runtime> {
         // Stop scheduling before closing anything a sweep would use.
         cleanup.stop()
         await cleanupLocking.close().catch(() => undefined)
+        await consoleDb?.close().catch(() => undefined)
+        await consoleDirectDb?.close().catch(() => undefined)
         await database.close()
         pending = undefined
       },
     }
   } catch (error) {
     await database.close().catch(() => undefined)
+    await consoleDb?.close().catch(() => undefined)
+    await consoleDirectDb?.close().catch(() => undefined)
     throw error
   } finally {
     await locking.close().catch(() => undefined)

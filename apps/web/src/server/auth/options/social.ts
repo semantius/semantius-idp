@@ -1,7 +1,7 @@
 /**
  * Social providers from configuration alone (FR-SOC-1..5).
  *
- * Any Better Auth built-in provider id may appear under `config.json →
+ * Any Better Auth built-in provider id may appear under `config.jsonc →
  * social.<providerId>`; the IdP does not maintain its own list, so enabling a
  * provider is a config change and nothing else. A provider absent from the
  * config renders no button and its callback route is inert, because Better Auth

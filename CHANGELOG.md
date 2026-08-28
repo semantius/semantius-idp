@@ -7,6 +7,36 @@ Notable changes to this project. The format follows
 Decisions that changed a numbered requirement carry their `D` number from
 [spec-v1.md](spec-v1.md) §12, where the reasoning is.
 
+## [0.5.0] — 2026-08-28
+
+### Changed
+
+- **The config files are spelled `.jsonc` everywhere** (**D90**). **D60** made
+  `.jsonc` the canonical extension and stopped there: the loader has resolved
+  it first — falling back to `.json`, refusing a folder holding both — and
+  `config.example/` has shipped it, for eleven months, while the spec still
+  named `config.json`, `oauth_clients.json` and `roles.json` in nineteen
+  places across G2, the glossary, FR-SOC-1, FR-ROLE-1/2, FR-ADMIN-2,
+  FR-OIDC-2/4/6, DOC-1 and four decision rows — files a checkout does not
+  contain. The prose comments through the server, the routes and the config
+  schemas move with them. Two occurrences keep `.json` on purpose: D12's
+  struck-through text, superseded by D52, and §14's spec-v0 traceability
+  table, both of which quote an earlier document. **No requirement changes**:
+  the fallback stays and a deployment written before D60 is still read.
+
+### Fixed
+
+- **No gate had ever booted a container from a `.jsonc` config folder**
+  (**D90**). `apps/web/e2e/stack.ts` and `scripts/smoke-test.ts` each build a
+  folder that stands in for an operator's, and both wrote the legacy `.json`,
+  so D60's canonical path was covered by two unit tests at loader level and by
+  nothing else in the repository — the TST-6 and TST-8 suites, the only gates
+  that read a real deployment, exercised only the fallback. Both write
+  `.jsonc` now. `makeConfigFolder`'s `json` default is deliberately unchanged
+  and its docblock now says why: it is what keeps the fallback exercised by
+  the whole unit suite rather than by one test, and the two harnesses cover
+  opposite paths on purpose.
+
 ## [0.4.0] — 2026-08-28
 
 ### Changed
@@ -962,7 +992,8 @@ were questions, and one was "polish every page".
   says where it came from, so it was sending anyone who inspected it to a
   repository that is not this one.
 
-[Unreleased]: https://github.com/semantius/semantius-idp/compare/v0.4.0...main
+[Unreleased]: https://github.com/semantius/semantius-idp/compare/v0.5.0...main
+[0.5.0]: https://github.com/semantius/semantius-idp/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/semantius/semantius-idp/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/semantius/semantius-idp/compare/v0.2.0...v0.3.1
 [0.2.0]: https://github.com/semantius/semantius-idp/compare/v0.1.0...v0.2.0

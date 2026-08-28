@@ -4,7 +4,7 @@
  * The provider hands the whole authorization request to the page as a signed
  * query string. Reading `client_id` and `scope` out of it is enough to decide
  * what to *show*; the display details — name, icon, terms, privacy policy —
- * come from `oauth_clients.json`, which is the source of truth for clients
+ * come from `oauth_clients.jsonc`, which is the source of truth for clients
  * (FR-OIDC-2) and saves a database read on a page that is already on the
  * critical path of every first authorization.
  *

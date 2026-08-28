@@ -186,7 +186,7 @@ function makeStack(dir: string): { configDir: string; envFile: string } {
   )
 
   writeFileSync(
-    join(configDir, "config.json"),
+    join(configDir, "config.jsonc"),
     JSON.stringify(
       {
         server: {
@@ -220,15 +220,15 @@ function makeStack(dir: string): { configDir: string; envFile: string } {
   // before an operator makes it.
   //
   // No clients: this test signs in at the IdP itself and exchanges the session
-  // for a JWT, which needs none. `roles.json` could be omitted entirely (the
+  // for a JWT, which needs none. `roles.jsonc` could be omitted entirely (the
   // built-in catalog appears), but writing it keeps the generated folder the
   // same shape as a real one.
   writeFileSync(
-    join(configDir, "oauth_clients.json"),
+    join(configDir, "oauth_clients.jsonc"),
     JSON.stringify({ clients: [] }, null, 2)
   )
   writeFileSync(
-    join(configDir, "roles.json"),
+    join(configDir, "roles.jsonc"),
     JSON.stringify(
       {
         roles: [

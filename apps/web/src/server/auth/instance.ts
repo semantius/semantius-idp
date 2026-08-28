@@ -499,7 +499,7 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
         },
 
         // SEC-10 / risk R4: **the same function object** the reconciler
-        // hashes with, so a secret written by `oauth_clients.json` and a
+        // hashes with, so a secret written by `oauth_clients.jsonc` and a
         // secret presented at the token endpoint cannot disagree about how
         // they are compared.
         storeClientSecret: clientSecretStorage,

@@ -19,7 +19,7 @@ import { reconfigure, resetConfig, waitForMail } from "./stack"
  *
  * **Serial, and it reconfigures the stack.** Sign-up on/off and approval
  * on/off are configuration, read once at start-up with no hot reload (CFG-5),
- * so the honest way to drive both is to write a different `config.json` and
+ * so the honest way to drive both is to write a different `config.jsonc` and
  * restart the container — which is also what an operator does. The database
  * survives the restart, so an account registered under one configuration is
  * still there under the next.

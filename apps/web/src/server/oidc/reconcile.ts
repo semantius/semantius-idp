@@ -1,5 +1,5 @@
 /**
- * `oauth_clients.json` is the source of truth; this makes the database agree
+ * `oauth_clients.jsonc` is the source of truth; this makes the database agree
  * (FR-OIDC-2, OPS-2).
  *
  * The file is edited, the container restarts, and the rows follow. That only

@@ -249,7 +249,7 @@ function writeConfig(
   )
 
   writeFileSync(
-    join(configDir, "config.json"),
+    join(configDir, "config.jsonc"),
     JSON.stringify(
       merge(
         {
@@ -302,7 +302,7 @@ function writeConfig(
   )
 
   writeFileSync(
-    join(configDir, "oauth_clients.json"),
+    join(configDir, "oauth_clients.jsonc"),
     JSON.stringify(
       {
         clients: [
@@ -336,7 +336,7 @@ function writeConfig(
   )
 
   writeFileSync(
-    join(configDir, "roles.json"),
+    join(configDir, "roles.jsonc"),
     JSON.stringify(
       {
         roles: [
@@ -443,7 +443,7 @@ async function waitForReady(stack: Stack): Promise<boolean> {
 }
 
 /**
- * Restarts the IdP on a changed `config.json` (CFG-5).
+ * Restarts the IdP on a changed `config.jsonc` (CFG-5).
  *
  * Configuration is read once at start-up and there is no hot reload, so a spec
  * that needs different settings — sign-up off, approval on — has to restart

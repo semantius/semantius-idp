@@ -2,7 +2,7 @@
 
 **As of:** 2026-08-28 · **Branch:** `main` · **Head:** `73469b3`, last tag **v0.4.0**
 **Plan:** `~/.claude/plans/make-the-admin-layout-shiny-unicorn.md` (the sidebar shell)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D89**
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D90**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
 gate.** Every gate green: lint, typecheck, unit (599), integration (243 across
@@ -83,6 +83,55 @@ README quick start against it, and confirming `latest` from outside.
   next boot serves the first-run setup page, which is now the only way an
   administrator is ever created. No credential to recover, and no command that
   changes one.
+
+---
+
+## The config files are spelled `.jsonc` everywhere now (2026-08-28, **D90**)
+
+**D60** made `.jsonc` the canonical extension in September and stopped there.
+The loader has resolved `.jsonc` first — falling back to `.json`, refusing a
+folder that has both — ever since, and `config.example/` has shipped `.jsonc`
+for as long. Nothing else moved with it, so eleven months later three things
+were still on the old spelling:
+
+- **The operator's own folder.** `config/` is gitignored, so the working
+  `config.json`, `oauth_clients.json` and `roles.json` on this machine had
+  simply never been renamed. They are `.jsonc` now, and
+  `idp config validate` reads them: valid, three clients, two roles.
+- **Their `$schema` keys pointed at nothing.** All three said
+  `./config.schema.json`, and the schemas are in `config-schema/`, one level
+  up — so the folder had comments *and* no editor validation, which is the
+  entire pair of things the extension exists to buy. They now match
+  `config.example/`'s `../config-schema/*.schema.json`.
+- **The spec.** Nineteen occurrences across G2, the glossary, FR-SOC-1,
+  FR-ROLE-1/2, FR-ADMIN-2, FR-OIDC-2/4/6, DOC-1 and four decision rows named
+  files a checkout does not contain. D12's struck-through text and §14's
+  spec-v0 traceability table keep `.json` deliberately: both quote an earlier
+  document, and rewriting a quotation makes this one misreport it.
+
+**The part that was a real gap, not a spelling one.** `apps/web/e2e/stack.ts`
+and `scripts/smoke-test.ts` each build a config folder that stands in for an
+operator's, and both wrote `.json`. So the canonical path D60 introduced was
+exercised by two unit tests at loader level **and by nothing else in the
+repository** — no container had ever booted from a `.jsonc` folder, in any
+gate. Both write `.jsonc` now, and the e2e suite's two stacks come up on
+folders that contain no `.json` at all.
+
+`makeConfigFolder`'s `extension` default stays `json`, which is deliberate and
+is now said so in its docblock: it is what keeps the *fallback* exercised by
+the whole unit suite rather than by one test. **The two harnesses must not be
+converged** — they cover opposite paths on purpose.
+
+Left alone as well: the `ConfigFileName` union in
+`server/config/errors.ts`, whose members are still `"config.json"` and
+friends. Its own docblock already explains why — the union is a logical key,
+`ConfigError` substitutes the name the operator actually has from
+`ResolvedFileNames` once, where issues are formatted, and retyping it through
+five modules and two dozen cross-check literals would buy a wide diff and a
+lost exhaustiveness check. Nothing reaches a user through it.
+
+Gates: lint, typecheck, unit (620), `docker:smoke` (19/19) and the full e2e
+suite (**98/98, 9.8 min**) against the built image.
 
 ---
 

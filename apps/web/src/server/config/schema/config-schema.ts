@@ -1,5 +1,5 @@
 /**
- * zod schema for `config.json` — the full CFG-4 key inventory.
+ * zod schema for `config.jsonc` — the full CFG-4 key inventory.
  *
  * Rules that hold across the whole file:
  * - every object is strict (`additionalProperties: false`, CFG-5) except the

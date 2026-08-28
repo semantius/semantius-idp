@@ -1,5 +1,5 @@
 /**
- * zod schema for `roles.json` (FR-ROLE-1).
+ * zod schema for `roles.jsonc` (FR-ROLE-1).
  *
  * Roles are labels for downstream applications — the IdP evaluates no
  * permissions from them. Exactly one entry carries `default: true`; it feeds
@@ -35,7 +35,7 @@ export const rolesFileSchema = z.strictObject({
 export type RoleEntry = z.infer<typeof roleSchema>
 export type RolesFile = z.infer<typeof rolesFileSchema>
 
-/** Catalog used when `roles.json` is absent (FR-ROLE-1). */
+/** Catalog used when `roles.jsonc` is absent (FR-ROLE-1). */
 export const BUILT_IN_ROLES: RoleEntry[] = [
   {
     name: "admin",

@@ -111,7 +111,7 @@ export interface AdminUserDetail extends AdminUserRow {
   events: AdminAuditRow[]
   /** True when this account has ever hit the D24 address collision. */
   profileConflict: boolean
-  /** Roles held that are no longer in `roles.json` (FR-ROLE-2). */
+  /** Roles held that are no longer in `roles.jsonc` (FR-ROLE-2). */
   unknownRoles: string[]
 }
 
@@ -900,7 +900,7 @@ export interface AdminRolesStatus {
    */
   reconciledAt: string
   /**
-   * Roles held by users that `roles.json` does not define (FR-ROLE-2).
+   * Roles held by users that `roles.jsonc` does not define (FR-ROLE-2).
    *
    * Not `runtime.warnings`: those are configuration-load problems, they are
    * already on `/admin` and `/admin/system`, and a third copy in red on a

@@ -1,5 +1,5 @@
 /**
- * `oauth_clients.json` → the `oauth_client` row (FR-OIDC-2/3, spike S5 §1).
+ * `oauth_clients.jsonc` → the `oauth_client` row (FR-OIDC-2/3, spike S5 §1).
  *
  * Pure: no database, no clock, no randomness. Reconciliation is the part that
  * is hard to test against a live schema, so everything that can be decided

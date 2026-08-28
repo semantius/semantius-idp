@@ -52,7 +52,7 @@ const HERE = "/admin/clients"
  * Two kinds of client live in one table, and the difference is visible rather
  * than inferred:
  *
- * - **From the file.** Declared in `oauth_clients.json` and reconciled at
+ * - **From the file.** Declared in `oauth_clients.jsonc` and reconciled at
  *   start-up. Read-only here, and that is the design: a form that edited one
  *   would let an administrator make a change the next restart silently undoes.
  * - **Registered here.** Marked by an owning `userId`, which is exactly the

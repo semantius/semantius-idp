@@ -106,7 +106,7 @@ export const DEFAULT_CAPTURE_DIR = "/tmp/idp-mail"
  * writes every message to disk instead of sending it.
  *
  * **Environment-only, and deliberately not a config-file setting** (CFG-3's
- * env-only class). A `config.json` key would be a durable, copy-pasteable way
+ * env-only class). A `config.jsonc` key would be a durable, copy-pasteable way
  * to turn a production deployment into one that silently swallows every
  * password-reset e-mail and writes it to a file. An environment variable is set
  * per-run by whoever starts the process, which is the blast radius this

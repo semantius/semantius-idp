@@ -7,7 +7,7 @@ import { readSecurityTxt } from "@/server/functions/security-txt"
  *
  * Served **only** when a `security.txt` file exists in the config folder. The
  * spec says the contents come "from config", and the reading taken here is the
- * literal one: an operator drops the file in beside `config.json` and it is
+ * literal one: an operator drops the file in beside `config.jsonc` and it is
  * served verbatim; otherwise the path 404s.
  *
  * The alternative — synthesising a document from `site.supportEmail` — would

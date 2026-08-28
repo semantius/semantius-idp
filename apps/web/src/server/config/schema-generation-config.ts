@@ -3,7 +3,7 @@
  * schema generation (DM-1).
  *
  * The generated schema must depend on the plugin list and nothing else — if it
- * varied with an operator's `config.json`, two deployments would need different
+ * varied with an operator's `config.jsonc`, two deployments would need different
  * migrations and the CI drift gate would be meaningless. So the generator runs
  * against these constants, and every value here is deliberately one that cannot
  * influence a column: enabling e-mail or a social provider changes behaviour,

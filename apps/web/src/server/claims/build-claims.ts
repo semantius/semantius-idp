@@ -15,7 +15,7 @@
  * discarded, which is worse than not writing them.
  *
  * **Roles are catalog-filtered** (FR-ROLE-2): a role that has been removed from
- * `roles.json` stops appearing in tokens, even though the column still holds
+ * `roles.jsonc` stops appearing in tokens, even though the column still holds
  * it. The drop is the point — a resource server authorising on a role the
  * deployment no longer defines is exactly the situation the catalog exists to
  * prevent.

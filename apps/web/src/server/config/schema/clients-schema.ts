@@ -1,5 +1,5 @@
 /**
- * zod schema for `oauth_clients.json` (FR-OIDC-3).
+ * zod schema for `oauth_clients.jsonc` (FR-OIDC-3).
  *
  * The file is the source of truth; startup reconciles it into `oauth_client`
  * (FR-OIDC-2). Unknown fields are rejected. Machine-to-machine clients are not

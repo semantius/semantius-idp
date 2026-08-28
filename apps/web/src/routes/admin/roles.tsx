@@ -25,7 +25,7 @@ import { fetchRoles, fetchRolesStatus } from "@/server/functions/admin"
  * `/admin/roles` — the catalog, and who holds what (FR-ROLE-2).
  *
  * Read-only for the same reason as the clients page: the catalog is
- * `roles.json`. What is *not* in the file — how many people actually hold each
+ * `roles.jsonc`. What is *not* in the file — how many people actually hold each
  * role — is the reason this page exists at all, and it is the number an
  * administrator needs before removing one.
  */

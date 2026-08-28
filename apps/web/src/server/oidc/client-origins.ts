@@ -3,7 +3,7 @@
  * (**D50**, FR-OIDC-17, SEC-4, D46).
  *
  * `clientOrigins()` used to read the configuration file and nothing else, which
- * was correct while `oauth_clients.json` was the only way a client could exist.
+ * was correct while `oauth_clients.jsonc` was the only way a client could exist.
  * It is not any more: an administrator can register one at `/admin/clients`,
  * and a client whose origin is missing from that set fails in a way that is
  * genuinely hard to attribute — the authorization succeeds, the token endpoint

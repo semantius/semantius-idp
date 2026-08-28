@@ -21,8 +21,11 @@ export interface MakeConfigFolderOptions {
   /**
    * Which spelling the folder is written in (**D60**). The default is `json`
    * on purpose: the fallback is the path a folder written before D60 takes,
-   * and leaving the whole suite on it keeps that path exercised by everything
-   * rather than by one test.
+   * and leaving the unit suite on it keeps that path exercised by everything
+   * rather than by one test. The e2e stack and the smoke test write the
+   * canonical `.jsonc` for the same reason from the other side — they build
+   * what an operator's folder actually looks like, and before that nothing
+   * end-to-end read a `.jsonc` at all. Do not converge the two.
    */
   extension?: "json" | "jsonc"
   /** Extra files addressable through `${file:…}` placeholders. */

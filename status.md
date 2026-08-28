@@ -1,6 +1,6 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-28 · **Branch:** `main` · **Head:** `73469b3`, last tag **v0.4.0**
+**As of:** 2026-08-28 · **Branch:** `main` · **Head:** `c11fbd3`, last tag **v0.5.0**
 **Plan:** `~/.claude/plans/make-the-admin-layout-shiny-unicorn.md` (the sidebar shell)
 **Spec:** [spec-v1.md](spec-v1.md) — amended through **D90**
 
@@ -49,13 +49,15 @@ Everything buildable is built. What remains cannot be done from here:
   e-mail instead would silently create a second one.
 - **One real token against a real Neon project** — including a key rotation,
   to see the grace period behave.
-- **Tagging `v1.0.0`.** Four versions are published — **v0.1.0**,
+- **Tagging `v1.0.0`.** Five versions are published — **v0.1.0**,
   **v0.2.0** (2026-08-27, the D78 / D80 / D81 round), **v0.3.1**
   (2026-08-28, the database console's second round, the audit fix and the
-  image-size fix — **D84**, **D85**, **D86**) and **v0.4.0** (2026-08-28,
+  image-size fix — **D84**, **D85**, **D86**), **v0.4.0** (2026-08-28,
   the full-height resizable console, the row count that was a planner
   statistic, and the requirement IDs swept out of every surface a user reads
-  — **D87**, **D88**, **D89**) — because the image was wanted
+  — **D87**, **D88**, **D89**) and **v0.5.0** (2026-08-28, the config files
+  spelled `.jsonc` through the spec and the source, and the two harnesses
+  that had never booted a container from one — **D90**) — because the image was wanted
   before the two manual checks above could be performed. **`v0.3.0` is a tag
   that published nothing**: its release run failed OPS-13's size gate, which
   is what D86 is about; `v0.3.1` carries everything it was going to. `1.0.0` is what

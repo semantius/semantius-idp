@@ -117,12 +117,8 @@ function SessionsPage() {
 
   return (
     <AccountShell
-      ui={ui}
-      t={t}
       title={t.account.sessions.title}
       description={t.account.sessions.description}
-      impersonated={profile.impersonated}
-      isAdmin={profile.isAdmin}
     >
       <NoticeToast
         message={messageForNoticeCode(notice, t)}

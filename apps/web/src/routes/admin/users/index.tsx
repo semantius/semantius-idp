@@ -101,7 +101,6 @@ export const Route = createFileRoute("/admin/users/")({
     }
     return {
       ui: context.ui,
-      gate: context.gate,
       query,
       page: await fetchUsers({ data: query }),
       roles: (await fetchRoles()) ?? [],
@@ -291,20 +290,9 @@ export const Route = createFileRoute("/admin/users/")({
 const STATUSES = ["pending", "active", "rejected"] as const
 
 function UsersPage() {
-  const {
-    ui,
-    gate,
-    query,
-    page,
-    roles,
-    notice,
-    error,
-    inviteLink,
-    subject,
-    draft,
-  } = Route.useLoaderData()
+  const { ui, query, page, roles, notice, error, inviteLink, subject, draft } =
+    Route.useLoaderData()
   const t = getCatalog(ui.locale)
-  const impersonated = gate.admin ? gate.impersonated : false
 
   if (!page) return null
 
@@ -313,10 +301,7 @@ function UsersPage() {
 
   return (
     <AdminShell
-      ui={ui}
-      t={t}
       title={t.admin.users.title}
-      impersonated={impersonated}
       actions={
         <UserCreateDialog
           t={t}

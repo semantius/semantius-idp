@@ -1,8 +1,14 @@
 import type { ReactNode } from "react"
 
-import { Link } from "@tanstack/react-router"
+import {
+  AppWindow,
+  LayoutDashboard,
+  ScrollText,
+  Settings2,
+  ShieldCheck,
+  Users,
+} from "lucide-react"
 
-import { buttonVariants } from "@workspace/ui/components/button"
 import {
   Card,
   CardAction,
@@ -13,149 +19,70 @@ import {
 } from "@workspace/ui/components/card"
 import { cn } from "@workspace/ui/lib/utils"
 
-import { ImpersonationBanner } from "@/components/common/impersonation-banner"
-import { PendingForm, SubmitButton } from "@/components/common/pending-form"
+import type { ShellNavItem } from "@/components/common/sidebar-layout"
 
 import type { Catalog } from "@/server/i18n"
-import type { UiContext } from "@/server/ui-context"
 
 /**
- * The frame `/admin/*` shares (FR-ADMIN-2).
+ * The page header `/admin/*` shares (FR-ADMIN-2).
  *
- * Wider than `AccountShell` and with its own navigation, because these are
- * tables rather than forms — but the same construction: server-rendered, a
- * real `<nav>` with `aria-current`, no client-side state to get out of step
- * with the URL.
+ * Everything around the page — the navigation, the way back out, the sign-out,
+ * the impersonation banner — moved up into `routes/admin.tsx`'s `SidebarLayout`
+ * in **D82**. What is left here is the part that is genuinely per page: its
+ * own heading, its description, and the buttons that belong beside the heading
+ * rather than in the body. The area's `<h1>` is the layout's; this is the
+ * `<h2>` beneath it, which is what it always rendered.
  *
- * The impersonation banner is deliberately duplicated from `AccountShell`
- * rather than shared: FR-ADMIN-5 wants it on *every* page an impersonated
- * session can reach, and the two shells are the two ways to reach one. A
- * shared component would be one import away from being dropped by a future
- * refactor of either.
- *
- * The header carries the way back out — the administrator's own account, and
- * sign out. Without them `/admin` was a room with no door: every page linked
- * to the other admin pages and to nothing else, so the only way to reach
- * `/account` was to type it.
+ * `adminNavItems` stays here, beside the pages it names, and now carries a
+ * lucide icon per entry — the collapsed sidebar is an icon rail, so an entry
+ * without one would be a blank button.
  */
 
-export interface AdminNavItem {
-  to: string
-  label: string
-}
-
-export function adminNavItems(t: Catalog): AdminNavItem[] {
+export function adminNavItems(t: Catalog): ShellNavItem[] {
   return [
-    { to: "/admin", label: t.admin.nav.dashboard },
-    { to: "/admin/users", label: t.admin.nav.users },
-    { to: "/admin/clients", label: t.admin.nav.clients },
-    { to: "/admin/roles", label: t.admin.nav.roles },
-    { to: "/admin/audit", label: t.admin.nav.audit },
-    { to: "/admin/system", label: t.admin.nav.system },
+    // `exact` on the overview only: every other entry stays lit while a child
+    // page (a user's detail) is open.
+    {
+      to: "/admin",
+      label: t.admin.nav.dashboard,
+      icon: LayoutDashboard,
+      exact: true,
+    },
+    { to: "/admin/users", label: t.admin.nav.users, icon: Users },
+    { to: "/admin/clients", label: t.admin.nav.clients, icon: AppWindow },
+    { to: "/admin/roles", label: t.admin.nav.roles, icon: ShieldCheck },
+    { to: "/admin/audit", label: t.admin.nav.audit, icon: ScrollText },
+    { to: "/admin/system", label: t.admin.nav.system, icon: Settings2 },
   ]
 }
 
 export function AdminShell({
-  ui,
-  t,
   title,
   description,
-  impersonated,
   actions,
   children,
 }: {
-  ui: UiContext
-  t: Catalog
   title: string
   description?: ReactNode
-  impersonated?: boolean
   /** Buttons that belong beside the heading rather than in the body. */
   actions?: ReactNode
   children: ReactNode
 }) {
-  const items = adminNavItems(t)
-
   return (
-    <div className="min-h-svh bg-muted/30">
-      {impersonated ? <ImpersonationBanner ui={ui} t={t} /> : null}
-
-      <div className="mx-auto w-full max-w-6xl px-4 py-10">
-        <header className="mb-8 flex flex-wrap items-baseline justify-between gap-3">
-          <div>
-            {/* `site.adminTitle`, falling back to `site.name` (D61). The
-                fallback lives in `buildUiContext`, so this is the whole of
-                the admin area's branding and there is nothing to keep in
-                step across eight routes. */}
-            <p className="text-sm text-muted-foreground">{ui.adminTitle}</p>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              {t.admin.title}
-            </h1>
-          </div>
-          <div className="flex flex-wrap items-baseline gap-4">
-            <nav aria-label={t.admin.title} className="flex flex-wrap gap-1">
-              {items.map((item) => (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  // `exact` on the overview only: every other entry should stay
-                  // highlighted while a child page (a user's detail) is open.
-                  activeOptions={{ exact: item.to === "/admin" }}
-                  activeProps={{
-                    "aria-current": "page",
-                    className: "bg-background shadow-sm",
-                  }}
-                  className={cn(
-                    "rounded-md px-3 py-1.5 text-sm font-medium",
-                    "text-muted-foreground hover:text-foreground"
-                  )}
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
-
-            {/* Three affordances in one row read as three different kinds of
-                control. The nav entries are pill tabs, so the two escapes
-                beside them are ghost buttons at the same size rather than
-                underlined links (owner review round 2, finding 6). */}
-            <div className="flex items-center gap-1">
-              {/* A plain anchor rather than a `<Link>`: `/account` is outside
-                  this route's subtree, and the two shells are separate trees. */}
-              <a
-                href={`${ui.basePath}/account`}
-                className={buttonVariants({ variant: "ghost", size: "sm" })}
-              >
-                {t.account.title}
-              </a>
-              <PendingForm
-                method="post"
-                action={`${ui.basePath}/logout`}
-                busy={t.common.loading}
-              >
-                <SubmitButton variant="ghost" size="sm">
-                  {t.common.signOut}
-                </SubmitButton>
-              </PendingForm>
-            </div>
-          </div>
-        </header>
-
-        <section>
-          <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
-              {description ? (
-                <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-                  {description}
-                </p>
-              ) : null}
-            </div>
-            {actions ? <div className="flex gap-2">{actions}</div> : null}
-          </div>
-          {children}
-        </section>
+    <section>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
+          {description ? (
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+              {description}
+            </p>
+          ) : null}
+        </div>
+        {actions ? <div className="flex gap-2">{actions}</div> : null}
       </div>
-    </div>
+      {children}
+    </section>
   )
 }
 

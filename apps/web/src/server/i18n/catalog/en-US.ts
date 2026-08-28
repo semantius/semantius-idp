@@ -40,6 +40,11 @@ export const enUS = {
     showPassword: "Show password",
     hidePassword: "Hide password",
     loading: "Working…",
+    // The sidebar trigger's accessible name (FR-I18N-1, **D82**). The registry
+    // component ships its own sr-only "Toggle Sidebar"; passing `aria-label`
+    // wins over it, which is how the string comes from the catalog without
+    // patching a generated file.
+    toggleSidebar: "Toggle sidebar",
     required: "Required",
     yes: "Yes",
     no: "No",

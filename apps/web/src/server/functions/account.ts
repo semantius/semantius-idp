@@ -27,6 +27,7 @@ import { getRuntime } from "../runtime"
 import type { Runtime } from "../runtime"
 import { claim } from "../http/one-shot"
 import { readSession } from "../http/session"
+import { readSidebarOpen } from "../http/sidebar-cookie"
 import type { RouteSession } from "../http/session"
 import { effectiveRoles, isAdmin } from "../role-utils"
 
@@ -52,6 +53,11 @@ export interface ProfileView {
   twoFactorEnabled: boolean
   /** True while an administrator is impersonating (FR-ADMIN-5). */
   impersonated: boolean
+  /**
+   * The sidebar's collapse state, read from the browser's cookie so the
+   * server's first paint is already right (**D82**, `http/sidebar-cookie.ts`).
+   */
+  sidebarOpen: boolean
 }
 
 export interface SessionView {
@@ -123,6 +129,7 @@ export const fetchProfile = createServerFn({ method: "GET" }).handler(
       isAdmin: isAdmin(current.user.roles.join(","), runtime.config.adminRoles),
       twoFactorEnabled: current.user.twoFactorEnabled,
       impersonated: current.session.impersonatedBy !== undefined,
+      sidebarOpen: readSidebarOpen(getRequest()),
     }
   }
 )

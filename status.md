@@ -1,16 +1,16 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-27 · **Branch:** `main` · **Head:** `61e733c`, tagged **v0.2.0**
-**Plan:** `~/.claude/plans/1-should-all-users-jolly-lake.md` (owner review round 4)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D81**
+**As of:** 2026-08-28 · **Branch:** `main` · **Head:** `4323ca6`, last tag **v0.2.0**
+**Plan:** `~/.claude/plans/make-the-admin-layout-shiny-unicorn.md` (the sidebar shell)
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D82**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
-gate.** Every gate green: lint, typecheck, unit (600), integration (246 across
+gate.** Every gate green: lint, typecheck, unit (599), integration (243 across
 twenty-four files), coverage thresholds including the 85 % per-module gates,
 schema-drift, config-schema staleness, the configuration-reference and
 example-config gates, dependency pinning, the client-bundle gate, the TST-8
 container smoke test — run against the moved `docker/` layout and now
-completing the first-run wizard — and the TST-6 end-to-end suite: 82 tests in a
+completing the first-run wizard — and the TST-6 end-to-end suite: 86 tests in a
 real browser against the built image, in both deployment shapes.
 
 The `docker/idp-*` lifecycle scripts were exercised end to end as well —
@@ -76,6 +76,113 @@ README quick start against it, and confirming `latest` from outside.
   next boot serves the first-run setup page, which is now the only way an
   administrator is ever created. No credential to recover, and no command that
   changes one.
+
+---
+
+## The sidebar shell for `/admin` and `/account` (2026-08-28, **D82**)
+
+The owner asked for the layout the sibling **semantius-app** has, on both
+areas: a collapsible left sidebar, the signed-in identity and its menu in the
+footer, full-width content, a sheet drawer on a phone. What was there was a
+centred column capped at `max-w-6xl` / `max-w-4xl`, a row of nav pills and two
+ghost buttons.
+
+**The part that is not cosmetic is where the chrome lives.** It used to be
+applied per page — seven `AdminShell` call sites and five `AccountShell` ones.
+It is now one `SidebarLayout` mounted by `routes/admin.tsx` and
+`routes/account.tsx`, because `SidebarProvider` holds the collapse state, the
+mobile sheet's state and a `window` keydown listener, and a layout route's
+component is the only thing here that survives a navigation inside its own
+subtree. Per page, every navigation would have remounted the provider, snapped
+the sidebar open and registered another listener.
+
+Five things fell out of that, all recorded in **D82**:
+
+- **`/admin/*` has a `<main>` landmark for the first time.** `SidebarInset`
+  renders the only one, for both areas. The account pages had one per page;
+  the admin pages had none at all.
+- **The impersonation banner is rendered once.** That supersedes **D66**,
+  which duplicated it across the two shells deliberately so FR-ADMIN-5's
+  "every page" could not be lost by a refactor of either. With one component
+  it holds by construction.
+- **Sign-out is two steps now** — the menu links to `GET /logout`, the branded
+  confirmation page that already existed and carries the POST. A `<form>`
+  inside a Base UI menu is the **D80** problem one layer in: the popup
+  unmounts as the item is activated, taking the form with it. Nothing in the
+  e2e suite clicked the old header button; `signOut` has always driven
+  `/logout` directly.
+- **The collapse state is a cookie the server reads**, `idp_sidebar_state`,
+  scoped to `ui.basePath` so a sub-path deployment and a root one on the same
+  host do not fight (OPS-10). Read after hydration instead, the sidebar would
+  render open and snap shut on every navigation. It is carried on `AdminGate`
+  and `ProfileView`, **not** on `UiContext`, which is process-constant and
+  shared by every request. The registry component writes its own
+  `sidebar_state` at `path=/`, unread; that write is accepted rather than
+  patched out of generated output.
+- **The active entry comes from `useMatchRoute`.** `activeProps` cannot reach
+  it: the highlight is `SidebarMenuButton`'s own `data-active`, and the
+  `<Link>` is inside the button.
+
+Collapsed is an **icon rail with tooltips** — the owner's choice, and a
+divergence from semantius-app, which hides its navigation entirely. The other
+deliberate divergences are a visible `<h1>` in the header row (three e2e specs
+read the area's name off one) and the impersonation banner, which is ours
+alone.
+
+**The brand is the name, with no tile beside it** — the owner's call on
+seeing it, and also what both areas showed before the sidebar existed. The
+header block is hidden on the icon rail rather than shrunk, because without a
+tile a collapsed brand would be an empty 8×8 link: unnamed to a screen reader
+and an axe finding. The drawer keeps its title, because the mobile sheet sets
+no `data-collapsible`.
+
+**One class the reference could not be copied on.** semantius-app's brand and
+avatar squares are `bg-sidebar-primary text-sidebar-primary-foreground`, and
+they are fine, because what sits on them is a white SVG. Ours hold *text* — an
+initial, or the brand's first letter — and that pairing measures **3.07:1** in
+the light theme and **2.12:1** in the dark, under R-1's 4.5:1 and an axe
+finding on every page of both areas. They use the accent surface instead
+(16.04:1 / 14.56:1), which is what `AvatarFallback` would have used anyway,
+and the measurements sit in `nav-user.tsx` beside the class — because
+re-applying a preset resets the tokens, the same trap `--destructive` is
+already annotated for.
+
+**The banner offset needed two goes, and `cn()` is why.** The impersonation
+banner sits full-bleed above the sidebar row, so the fixed sidebar has to be
+pushed down by its height — `--banner-h`, `2.75rem`, which the banner is
+itself pinned to at `md` and up, where the desktop sidebar is the only thing
+that exists. The registry's container is `fixed inset-y-0 h-svh`, and
+tailwind-merge resolves **one** of those two for us: `h-[calc(100svh-…)]`
+replaces `h-svh`, same group; `top-*` does *not* replace `inset-y-0`,
+different groups. So the first version had `top: var(--banner-h)` sitting
+beside `inset-block: 0` and winning only because Tailwind emits longhands
+after shorthands — true, and measured in the built stylesheet, and not
+something a layout should rest on. It is a `mt-` now, which cannot conflict
+with an inset at all. Verified in a real browser against the built stylesheet
+in both themes: banner 44 px, sidebar from 44 to the viewport floor, content
+column beside it, document no taller than the viewport. The plan's documented
+fallback — the banner inside `SidebarInset` — was not needed.
+
+**The e2e suite earned its place again.** The mobile-sheet test failed the
+first time it ran: the drawer is a modal, a client-side navigation does not
+unmount it, and so tapping a nav entry on a phone changed the page
+*underneath* a drawer that was still covering it and still holding the focus
+trap. The URL was right and the heading behind it was `aria-hidden`, which is
+precisely what a phone user would have got. `ShellSidebar` now closes it on
+the route rather than on each link's `onClick` — an entry added later is
+closed by existing, and the back button, which no `onClick` can see, closes it
+too. Nothing else in the suite runs below `md`, and no other gate here has a
+viewport at all.
+
+`e2e/layout.spec.ts` covers the two properties nothing else would notice: the
+collapse surviving a reload on the *first paint*, under both the host-root and
+sub-path projects, and the mobile sheet. It locates the trigger by
+`[data-sidebar="trigger"]`, never by accessible name — `SidebarRail` is a
+second visible button whose registry label matches the catalog's case-
+insensitively, and strict mode would fail the test rather than the
+application.
+
+The client bundle grew **33 kB**, to 712 kB of the 750 kB ceiling.
 
 ---
 

@@ -40,7 +40,6 @@ export const Route = createFileRoute("/account/consents")({
     const search = location.search as Record<string, unknown>
     return {
       ui: context.ui,
-      profile: context.profile,
       consents: (await fetchConsents()) ?? [],
       notice: searchString(search.notice),
       error: searchString(search.error),
@@ -105,17 +104,13 @@ export const Route = createFileRoute("/account/consents")({
 })
 
 function ConsentsPage() {
-  const { ui, profile, consents, notice, error } = Route.useLoaderData()
+  const { ui, consents, notice, error } = Route.useLoaderData()
   const t = getCatalog(ui.locale)
 
   return (
     <AccountShell
-      ui={ui}
-      t={t}
       title={t.account.consents.title}
       description={t.account.consents.description}
-      impersonated={profile.impersonated}
-      isAdmin={profile.isAdmin}
     >
       <NoticeToast message={messageForNoticeCode(notice, t)} />
       <FormAlert>

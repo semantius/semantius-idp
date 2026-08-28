@@ -20,26 +20,19 @@ import { fetchAdminStats } from "@/server/functions/admin"
 export const Route = createFileRoute("/admin/")({
   loader: async ({ context }) => ({
     ui: context.ui,
-    gate: context.gate,
     stats: await fetchAdminStats(),
   }),
   component: Dashboard,
 })
 
 function Dashboard() {
-  const { ui, gate, stats } = Route.useLoaderData()
+  const { ui, stats } = Route.useLoaderData()
   const t = getCatalog(ui.locale)
-  const impersonated = gate.admin ? gate.impersonated : false
 
   if (!stats) return null
 
   return (
-    <AdminShell
-      ui={ui}
-      t={t}
-      title={t.admin.dashboard.title}
-      impersonated={impersonated}
-    >
+    <AdminShell title={t.admin.dashboard.title}>
       {stats.users.pending > 0 ? (
         <Alert className="mb-6">
           <AlertDescription>

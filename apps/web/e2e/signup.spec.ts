@@ -69,7 +69,8 @@ test.describe("signing up", () => {
     // derived from them rather than being a field of its own.
     await expect(page.getByLabel("First name")).toHaveValue("Sam")
     await expect(page.getByLabel("Last name")).toHaveValue("Signup")
-    await expect(page.getByText("Sam Signup")).toBeVisible()
+    // `main`: since **D82** the sidebar footer carries the display name too.
+    await expect(page.locator("main").getByText("Sam Signup")).toBeVisible()
     await signOut(page, app)
   })
 

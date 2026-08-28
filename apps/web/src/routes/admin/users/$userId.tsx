@@ -155,16 +155,12 @@ const BAN_DURATIONS = [
 function UserDetailPage() {
   const { ui, gate, user, roles, notice, error } = Route.useLoaderData()
   const t = getCatalog(ui.locale)
-  const impersonated = gate.admin ? gate.impersonated : false
   const self = gate.admin && gate.email === user.email
 
   return (
     <AdminShell
-      ui={ui}
-      t={t}
       title={user.email}
       description={<UserBadges user={user} t={t} />}
-      impersonated={impersonated}
       actions={
         <Link
           to="/admin/users"

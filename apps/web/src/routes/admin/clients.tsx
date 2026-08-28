@@ -73,7 +73,6 @@ export const Route = createFileRoute("/admin/clients")({
     const search = location.search as Record<string, unknown>
     return {
       ui: context.ui,
-      gate: context.gate,
       clients: (await fetchClients()) ?? [],
       notice: searchString(search.notice),
       error: searchString(search.error),
@@ -147,9 +146,7 @@ export const Route = createFileRoute("/admin/clients")({
             request
           )
           if (!result.ok) {
-            return redirectWithCookies(
-              withError(here, adminErrorCodeFor(result))
-            )
+            return redirectWithCookies(withError(here, adminErrorCodeFor(result)))
           }
           // The same one-shot stash a creation uses, and the same dialog on
           // the way back: a secret that travels in a query string is a secret
@@ -242,8 +239,7 @@ export const Route = createFileRoute("/admin/clients")({
 })
 
 function ClientsPage() {
-  const { ui, gate, clients, notice, error, created, draft } =
-    Route.useLoaderData()
+  const { ui, clients, notice, error, created, draft } = Route.useLoaderData()
   const t = getCatalog(ui.locale)
   // One draft handle, several dialogs that could claim it (**D72**).
   // `action` says which; absent means create, so a draft stashed before edit
@@ -256,11 +252,8 @@ function ClientsPage() {
 
   return (
     <AdminShell
-      ui={ui}
-      t={t}
       title={t.admin.clients.title}
       description={t.admin.clients.description}
-      impersonated={gate.admin ? gate.impersonated : false}
       actions={
         <ClientCreateDialog
           ui={ui}

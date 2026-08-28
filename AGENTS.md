@@ -24,7 +24,7 @@ Four files, in this order. Read them before proposing anything.
 | File | What it is |
 | --- | --- |
 | [status.md](status.md) | The handoff. Done, not-done, and why — the ground truth between sessions. |
-| [spec-v1.md](spec-v1.md) | Signed off, amended through **D81**. Numbered requirements, and §12.1's decision log with the reasoning. |
+| [spec-v1.md](spec-v1.md) | Signed off, amended through **D82**. Numbered requirements, and §12.1's decision log with the reasoning. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | The gates, the style, and how to amend the spec. |
 | [docs/release.md](docs/release.md) | What is left before v1.0.0, and it is the owner's, not yours. |
 
@@ -213,6 +213,49 @@ page with a destructive dialog trigger. Both themes are darkened, with the
 measurements in `globals.css` beside the token. **Re-applying a preset resets
 it**, so re-measure after any `shadcn apply`.
 
+**A preset token that carries an *icon* well may not carry *text* at all.**
+`--sidebar-primary` against `--sidebar-primary-foreground` measures **3.07:1**
+light and **2.12:1** dark. semantius-app's brand and avatar squares use it and
+are fine, because what sits on them is a white SVG. The same classes copied
+onto a square holding an initial would have failed R-1 on every page of both
+signed-in areas; `nav-user.tsx` uses the accent surface instead (16.04:1 /
+14.56:1) and records the numbers beside the class. **Measure before you copy a
+pairing from the reference app**, and re-measure after a preset.
+
+**The sidebar chrome lives in the two layout routes, not in the page shells**
+(**D82**). `SidebarProvider` holds the collapse state, the mobile sheet's state
+and a `window` keydown listener, and only a layout route's component survives a
+navigation inside its own subtree. Put it in a page and every navigation
+remounts the provider, snaps the sidebar open and stacks another listener.
+Three more things about it that are easy to get wrong:
+
+- **`activeProps` cannot light a nav entry.** The highlight is
+  `SidebarMenuButton`'s own `data-active`, and the `<Link>` is *inside* the
+  button, so the prop lands a level too deep. `useMatchRoute()` answers the
+  same question a step earlier — `fuzzy: true` unless the entry is the
+  subtree's index.
+- **Never locate the toggle by its accessible name in a test.** `SidebarRail`
+  is a second visible button whose registry `aria-label` is "Toggle Sidebar",
+  which matches the catalog's "Toggle sidebar" case-insensitively — two
+  matches, and Playwright's strict mode fails the *test*. Use
+  `[data-sidebar="trigger"]`.
+- **The footer puts the signed-in name and address outside `<main>`.** Any
+  existing `page.getByText(email)` — or `getByText("<display name>")` — on a
+  signed-in page now matches twice; scope it to `main`. `SidebarInset` renders
+  the only `<main>` in both areas.
+- **`cn()` does not resolve every pair you assume it does.** The sidebar's
+  fixed container is `inset-y-0 h-svh`. `h-[calc(…)]` replaces `h-svh` — same
+  tailwind-merge group — but `top-*` does **not** replace `inset-y-0`, so both
+  survive and CSS source order decides. Offsetting the sidebar for the
+  impersonation banner therefore uses `mt-`, which cannot conflict with an
+  inset at all. When you override a registry class, check the merge actually
+  happened rather than assuming.
+- **The mobile sheet does not close itself on a navigation.** A client-side
+  navigation does not unmount it, so the page changes underneath an open modal
+  drawer that still holds the focus trap. `ShellSidebar` closes it on the
+  route, in an effect — not on each link, which the next link would forget and
+  which the back button could not reach anyway.
+
 **The integration suite runs against a local Postgres, and must.** It used to
 default to the deployment's own Neon instance in `us-east-2` — **~102 ms per
 round trip** from here — and every context it builds drops a schema and applies
@@ -379,7 +422,26 @@ rule off** in `packages/ui/eslint.config.js` — seven `tanstackConfig` opinions
 are already off there for this reason, most recently
 `import/consistent-type-specifier-style`, which rejects the registry's own
 `import { cva, type VariantProps }`. A patch is undone by the next `add`; the
-rule is the fix and the file never is.
+rule is the fix and the file never is. `sidebar.tsx` added an eighth,
+`no-shadow`, for a `setOpen(open => !open)` inside a closure that already has
+an `open`.
+
+### Adding one: `-c packages/ui`, and answer the overwrite prompt
+
+```bash
+cd packages/ui && yes n | pnpm dlx shadcn@latest add <name> -c .
+```
+
+**Not `-c apps/web`.** Its `components.json` maps `hooks` to `@/hooks`, which
+would split a component's hook (`use-mobile`) from the component; `packages/ui`
+resolves hooks to `@workspace/ui/hooks`, which is already in its exports map.
+
+The CLI **prompts** before overwriting a component that already exists, and a
+non-interactive shell hangs on that prompt and writes nothing at all — no
+error, no files, exit 0. `yes n |` declines them; the run then reports what it
+skipped. Afterwards check `git status`: the only changes should be the new
+files. Nothing under `apps/web`, no `package.json`, and no `globals.css` — if
+the CLI touched the stylesheet, revert any hunk near `--destructive`.
 
 ### Applying a preset
 

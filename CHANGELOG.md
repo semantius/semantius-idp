@@ -9,6 +9,58 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ## [Unreleased]
 
+### Changed
+
+- **`/admin/*` and `/account/*` wear a sidebar shell** (**D82**), the one the
+  sibling `semantius-app` has: a collapsible left sidebar carrying the
+  navigation, the signed-in identity and its menu in the footer, full-width
+  page content, and a sheet drawer below `md`. Collapsed it is an icon rail
+  with tooltips, not a hidden navigation.
+- **The chrome moved up into the two layout routes.** It was applied per page
+  by `AdminShell` (seven pages) and `AccountShell` (five); it now lives in
+  `routes/admin.tsx` and `routes/account.tsx` as one shared `SidebarLayout`,
+  because a layout route's component survives every navigation inside its
+  subtree and the sidebar's state and keyboard shortcut need that. The two
+  shells are a page header apiece now, and the `max-w-6xl` / `max-w-4xl` caps
+  are gone.
+- The sidebar's brand block is **the area's name and nothing else** — no tile
+  beside it, which is what both areas showed before. It is hidden on the icon
+  rail rather than shrunk to an empty square (**D82**).
+- **The way out of each area is in the sidebar's user menu**: the cross-area
+  link — `/admin` for an administrator, `/account` from the admin area — and
+  sign-out, which now goes through the `GET /logout` confirmation page that
+  already existed. Amends FR-ACCT-1's "the header carries a link".
+- **`/admin/*` has a `<main>` landmark**, which it never had: `SidebarInset`
+  renders the only one, for both areas.
+- The impersonation banner is rendered **once**, by the shared layout, which
+  makes FR-ADMIN-5's "every page" true by construction and supersedes
+  **D66**'s deliberate duplication across the two shells.
+
+### Added
+
+- `packages/ui/src/components/{sidebar,sheet,tooltip,skeleton}.tsx` and
+  `packages/ui/src/hooks/use-mobile.ts`, from the shadcn registry, used
+  verbatim. No new dependency.
+- `idp_sidebar_state`, a cookie **scoped to the mount path** (OPS-10) and read
+  on the server (`server/http/sidebar-cookie.ts`), so the collapse state is
+  right on the first paint instead of snapping shut after hydration. The
+  registry component's own root-path `sidebar_state` write is unread and
+  accepted rather than patched out of generated output.
+- `common.toggleSidebar` in the message catalog, which names the trigger
+  (FR-I18N-1); `e2e/layout.spec.ts` and a unit test for the cookie reader.
+
+### Fixed
+
+- **The mobile drawer closes on a navigation.** It is a modal sheet and a
+  client-side navigation does not unmount it, so below `md` a tapped nav entry
+  changed the page underneath a drawer that was still covering it and holding
+  the focus trap. Closed on the route, not on each link (**D82**).
+- The identity tiles in the sidebar use the **accent** surface rather than
+  `--sidebar-primary`, which the reference shell uses for a white icon and
+  which measures 3.07:1 / 2.12:1 behind *text* — under R-1's 4.5:1 floor. The
+  measurements are recorded beside the class, because re-applying a preset
+  resets the tokens (**D82**).
+
 ## [0.2.0] — 2026-08-27
 
 Owner review round 4, and the first release cut after one. Three field

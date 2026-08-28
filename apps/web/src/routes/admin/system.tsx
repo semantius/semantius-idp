@@ -40,7 +40,6 @@ export const Route = createFileRoute("/admin/system")({
     const search = location.search as Record<string, unknown>
     return {
       ui: context.ui,
-      gate: context.gate,
       info: await fetchSystemInfo(),
       rotated: searchString(search.rotated),
       error: searchString(search.error),
@@ -83,18 +82,13 @@ function labelFor(t: Catalog, key: string): string {
 }
 
 function SystemPage() {
-  const { ui, gate, info, rotated, error } = Route.useLoaderData()
+  const { ui, info, rotated, error } = Route.useLoaderData()
   const t = getCatalog(ui.locale)
 
   if (!info) return null
 
   return (
-    <AdminShell
-      ui={ui}
-      t={t}
-      title={t.admin.system.title}
-      impersonated={gate.admin ? gate.impersonated : false}
-    >
+    <AdminShell title={t.admin.system.title}>
       <FormAlert>
         {messageForErrorCode(error, t, ui.passwordMinLength)}
       </FormAlert>

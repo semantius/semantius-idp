@@ -38,6 +38,7 @@ import type { SQL } from "drizzle-orm"
 import { claimDraft } from "../http/draft"
 import type { Draft } from "../http/draft"
 import { claim } from "../http/one-shot"
+import { readSidebarOpen } from "../http/sidebar-cookie"
 import type { DiscoveryUrl } from "../oidc/base-path"
 import { readSession } from "../http/session"
 import type { RouteSession } from "../http/session"
@@ -233,7 +234,16 @@ async function admin(): Promise<
 export type AdminGate =
   | { signedIn: false }
   | { signedIn: true; admin: false }
-  | { signedIn: true; admin: true; email: string; impersonated: boolean }
+  | {
+      signedIn: true
+      admin: true
+      /** Shown in the sidebar's user menu beside the address (**D82**). */
+      name: string
+      email: string
+      impersonated: boolean
+      /** The sidebar's collapse state, so the first paint is already right. */
+      sidebarOpen: boolean
+    }
 
 export const fetchAdminGate = createServerFn({ method: "GET" }).handler(
   async (): Promise<AdminGate> => {
@@ -248,8 +258,10 @@ export const fetchAdminGate = createServerFn({ method: "GET" }).handler(
     return {
       signedIn: true,
       admin: true,
+      name: session.user.name,
       email: session.user.email,
       impersonated: session.session.impersonatedBy !== undefined,
+      sidebarOpen: readSidebarOpen(getRequest()),
     }
   }
 )

@@ -57,7 +57,6 @@ export const Route = createFileRoute("/account/api-keys")({
     const search = location.search as Record<string, unknown>
     return {
       ui: context.ui,
-      profile: context.profile,
       keys: (await fetchApiKeys()) ?? [],
       // Claimed, and therefore consumed: this is the only render that can
       // show it. `undefined` for a handle that is unknown, already claimed or
@@ -165,18 +164,14 @@ export const Route = createFileRoute("/account/api-keys")({
 })
 
 function ApiKeysPage() {
-  const { ui, profile, keys, created, notice, error } = Route.useLoaderData()
+  const { ui, keys, created, notice, error } = Route.useLoaderData()
   const t = getCatalog(ui.locale)
   const maxDays = Math.floor(ui.apiKeyMaxExpiresInDays)
 
   return (
     <AccountShell
-      ui={ui}
-      t={t}
       title={t.account.apiKeys.title}
       description={t.account.apiKeys.description}
-      impersonated={profile.impersonated}
-      isAdmin={profile.isAdmin}
     >
       <NoticeToast message={messageForNoticeCode(notice, t)} />
       <FormAlert>

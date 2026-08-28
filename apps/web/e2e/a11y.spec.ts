@@ -164,6 +164,26 @@ test.describe("accessibility", () => {
 
     const confirm = await openMenuDialog(page, menu, "Remove")
     await submitDialog(page, confirm, "Remove")
+
+    // **D82**: with the sidebar's user menu open, and then with the sidebar
+    // collapsed to its icon rail. The menu is here for the same reason as the
+    // toast and the row menu above — a portalled popup outside the page's
+    // landmarks. The rail is here because collapsing it changes what every
+    // control on the left is: an 8×8 square whose label is clipped rather
+    // than removed, which is the arrangement that would silently lose a
+    // link's accessible name if the markup ever changed.
+    await page.getByRole("button", { name: /e2e-admin@example\.com/ }).click()
+    await scan(page, "/admin/clients with the user menu open")
+    await page.keyboard.press("Escape")
+
+    await page.locator('[data-sidebar="trigger"]').click()
+    await expect(page.locator('[data-slot="sidebar"]')).toHaveAttribute(
+      "data-state",
+      "collapsed"
+    )
+    await scan(page, "/admin/clients with the sidebar collapsed")
+    await page.locator('[data-sidebar="trigger"]').click()
+
     await signOut(page, app)
   })
 })

@@ -31,7 +31,11 @@ test.describe("the account area", () => {
     const user = await createVerifiedUser(page, app, stack, "profile")
     await signIn(page, app, user.email, user.password)
 
-    await expect(page.getByText(user.email)).toBeVisible()
+    // Scoped to `main`, because since **D82** the sidebar's user menu carries
+    // the same address and the same display name in its footer — outside the
+    // main landmark, and an unscoped `getByText` would match both and fail
+    // strict mode rather than the application.
+    await expect(page.locator("main").getByText(user.email)).toBeVisible()
     await expect(page.getByText("Confirmed")).toBeVisible()
 
     // D49: the two parts are the inputs; the display name is derived from
@@ -54,7 +58,7 @@ test.describe("the account area", () => {
       "a reload does not re-announce a save from before it"
     ).toHaveCount(0)
     await expect(page.getByLabel("First name")).toHaveValue("Renamed")
-    await expect(page.getByText("Renamed Person")).toBeVisible()
+    await expect(page.locator("main").getByText("Renamed Person")).toBeVisible()
   })
 
   test("the password changes from the security page and stays on it", async ({

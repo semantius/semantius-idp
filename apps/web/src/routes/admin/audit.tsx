@@ -73,7 +73,6 @@ export const Route = createFileRoute("/admin/audit")({
     }
     return {
       ui: context.ui,
-      gate: context.gate,
       query,
       page: await fetchAuditPage({ data: query }),
     }
@@ -84,18 +83,15 @@ export const Route = createFileRoute("/admin/audit")({
 const OUTCOMES = ["success", "failure", "denied"] as const
 
 function AuditPage() {
-  const { ui, gate, query, page } = Route.useLoaderData()
+  const { ui, query, page } = Route.useLoaderData()
   const t = getCatalog(ui.locale)
 
   if (!page) return null
 
   return (
     <AdminShell
-      ui={ui}
-      t={t}
       title={t.admin.audit.title}
       description={t.admin.audit.description}
-      impersonated={gate.admin ? gate.impersonated : false}
     >
       <PendingForm
         busy={t.common.loading}

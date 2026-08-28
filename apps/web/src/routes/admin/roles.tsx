@@ -32,7 +32,6 @@ import { fetchRoles, fetchRolesStatus } from "@/server/functions/admin"
 export const Route = createFileRoute("/admin/roles")({
   loader: async ({ context }) => ({
     ui: context.ui,
-    gate: context.gate,
     roles: (await fetchRoles()) ?? [],
     // FR-ADMIN-2 asks this page for the last reconcile and the warnings; both
     // were specified and neither was ever rendered.
@@ -42,16 +41,13 @@ export const Route = createFileRoute("/admin/roles")({
 })
 
 function RolesPage() {
-  const { ui, gate, roles, status } = Route.useLoaderData()
+  const { ui, roles, status } = Route.useLoaderData()
   const t = getCatalog(ui.locale)
 
   return (
     <AdminShell
-      ui={ui}
-      t={t}
       title={t.admin.roles.title}
       description={t.admin.roles.description}
-      impersonated={gate.admin ? gate.impersonated : false}
     >
       {status ? (
         <p className="mb-4 text-sm text-muted-foreground">

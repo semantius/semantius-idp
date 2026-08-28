@@ -286,13 +286,7 @@ function SecurityPage() {
   const confirm = usePasswordConfirm(t)
 
   return (
-    <AccountShell
-      ui={ui}
-      t={t}
-      title={t.account.security.title}
-      impersonated={profile.impersonated}
-      isAdmin={profile.isAdmin}
-    >
+    <AccountShell title={t.account.security.title}>
       {/* Every notice here is about this account — except the one that is
           about a *different* address. "Check the new address for a
           confirmation link", with the old address underneath it, reads as a

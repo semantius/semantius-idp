@@ -80,7 +80,8 @@ test.describe("signing in", () => {
 
     await signIn(page, app, user.email, user.password)
     await expect(page).toHaveURL(app.url("/account"))
-    await expect(page.getByText(user.email)).toBeVisible()
+    // `main`, not the page: the sidebar footer carries the address too (D82).
+    await expect(page.locator("main").getByText(user.email)).toBeVisible()
 
     await signOut(page, app)
     await expect(page).toHaveURL(/notice=signed_out/)

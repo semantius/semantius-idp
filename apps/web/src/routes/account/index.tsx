@@ -104,12 +104,8 @@ function ProfilePage() {
 
   return (
     <AccountShell
-      ui={ui}
-      t={t}
       title={t.account.profile.title}
       description={t.account.profile.description}
-      impersonated={profile.impersonated}
-      isAdmin={profile.isAdmin}
     >
       {/* **D78**: whose account. Redundant when it is your own and your own
           only — and not, the moment an administrator is impersonating, which

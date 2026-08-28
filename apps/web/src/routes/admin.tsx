@@ -2,6 +2,9 @@ import { Outlet, createFileRoute, redirect } from "@tanstack/react-router"
 
 import { buttonVariants } from "@workspace/ui/components/button"
 
+import { adminNavItems } from "@/components/admin/admin-shell"
+import { SidebarLayout } from "@/components/common/sidebar-layout"
+
 import { getCatalog } from "@/server/i18n"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { fetchAdminGate } from "@/server/functions/admin"
@@ -96,5 +99,28 @@ function AdminLayout() {
     )
   }
 
-  return <Outlet />
+  return (
+    <SidebarLayout
+      ui={ui}
+      t={t}
+      // D61's one branded surface: `site.adminTitle`, falling back to
+      // `site.name` in `buildUiContext`, so nothing here tests for it.
+      brand={ui.adminTitle}
+      heading={t.admin.title}
+      items={adminNavItems(t)}
+      indexTo="/admin"
+      user={{ name: gate.name, email: gate.email }}
+      // The way back out. It was a ghost button in the header; it is a menu
+      // entry now, and it is still a plain anchor because `/account` is a
+      // different route subtree (FR-ACCT-1, D82).
+      crossLink={{
+        href: `${ui.basePath}${APP_ROUTES.account}`,
+        label: t.account.title,
+      }}
+      impersonated={gate.impersonated}
+      defaultOpen={gate.sidebarOpen}
+    >
+      <Outlet />
+    </SidebarLayout>
+  )
 }

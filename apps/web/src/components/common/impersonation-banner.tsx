@@ -1,3 +1,5 @@
+import { cn } from "@workspace/ui/lib/utils"
+
 import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 import type { Catalog } from "@/server/i18n"
 import type { UiContext } from "@/server/ui-context"
@@ -20,16 +22,25 @@ import type { UiContext } from "@/server/ui-context"
 export function ImpersonationBanner({
   ui,
   t,
+  className,
 }: {
   ui: UiContext
   t: Catalog
+  /**
+   * The layout pins the banner's height to its own `--banner-h` at `md` and
+   * up, because that is the offset the fixed sidebar is positioned by (D82).
+   */
+  className?: string
 }) {
   return (
     <div
       role="status"
-      className="text-destructive-foreground bg-destructive px-4 py-2 text-center text-sm font-medium"
+      className={cn(
+        "text-destructive-foreground bg-destructive flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 py-2 text-center text-sm font-medium",
+        className
+      )}
     >
-      <span className="mr-3">{t.account.impersonationBanner}</span>
+      <span>{t.account.impersonationBanner}</span>
       <PendingForm
         busy={t.common.loading}
         method="post"

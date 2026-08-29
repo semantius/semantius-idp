@@ -40,8 +40,10 @@ export interface BasePaths {
   basePath: string
   /** `https://apps.example.com/idp` — the issuer, byte-for-byte. */
   issuer: string
-  /** Cookie `Path`: `/idp`, or `/` at the host root. */
+  /** Cookie `Path`: `server.cookiePath`, `/` by default (**D97**). */
   cookiePath: string
+  /** Cookie `Domain`: `server.cookieDomain`, absent (host-only) by default (**D97**). */
+  cookieDomain?: string
   /** `Secure` cookies whenever the issuer is https, whatever the internal scheme is. */
   secureCookies: boolean
 
@@ -71,6 +73,7 @@ export function createBasePaths(base: BasePathInfo): BasePaths {
     basePath: base.basePath,
     issuer,
     cookiePath: base.cookiePath,
+    ...(base.cookieDomain ? { cookieDomain: base.cookieDomain } : {}),
     secureCookies: base.secure,
     path,
     url: (relative) => `${base.origin}${path(relative)}`,

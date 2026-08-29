@@ -43,12 +43,30 @@ describe("createBasePaths", () => {
     expect(subPath.url("/login")).toBe("https://apps.example.com/idp/login")
   })
 
-  it("scopes cookies to the mount and secures them by the issuer scheme", () => {
+  it("defaults cookies to the whole host and secures them by the issuer scheme", () => {
+    // **D97**: the mount path no longer narrows the cookie. A sub-path
+    // deployment scopes to `/` like a root one, so a route outside the mount —
+    // an aliased `/gateway` — still receives the session.
     expect(root.cookiePath).toBe("/")
     expect(root.secureCookies).toBe(false)
-    expect(subPath.cookiePath).toBe("/idp")
+    expect(subPath.cookiePath).toBe("/")
+    expect(subPath.cookieDomain).toBeUndefined()
     // https issuer means Secure cookies whatever the internal scheme is.
     expect(subPath.secureCookies).toBe(true)
+  })
+
+  it("carries an explicit cookie path and domain through (**D97**)", () => {
+    const scoped = createBasePaths(
+      parseBasePath("https://apps.example.com/idp", {
+        path: "/idp",
+        domain: ".example.com",
+      })
+    )
+    expect(scoped.cookiePath).toBe("/idp")
+    expect(scoped.cookieDomain).toBe(".example.com")
+    // The mount path is untouched by either — only the cookie moves.
+    expect(scoped.basePath).toBe("/idp")
+    expect(scoped.issuer).toBe("https://apps.example.com/idp")
   })
 
   it("puts Better Auth's own mount under the same prefix", () => {

@@ -1,8 +1,8 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-29 · **Branch:** `main` · **Head:** `c4a76e4`, last tag **v0.6.0**
+**As of:** 2026-08-29 · **Branch:** `main` · **Head:** `562e341`, last tag **v0.6.0**
 **Plan:** `~/.claude/plans/users-has-a-full-binary-meteor.md` (full-page forms)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D96**
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D97**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
 gate; API gateways (FR-GW, **D91**/**D92**) landed on 2026-08-29, and the
@@ -21,6 +21,27 @@ deployment shapes.
 The `docker/idp-*` lifecycle scripts were exercised end to end as well —
 create → status → cli → stop → start → logs → destroy — against a throwaway
 `idp_scripts_check` schema that was dropped afterwards (P0'.2).
+
+**On top of v0.6.0: the session cookie's scope is configuration (D97).** The
+owner hit it through the sibling `semantius` stack, whose Caddy front door
+aliases `/gateway` to the origin root so a gateway URL looks like one. Nothing
+authenticated there and nothing complained, because the cookie's `Path` was the
+mount path — `/idp` — and **D92** makes a refused session fall through to
+anonymous rather than answering 401. The derivation was never a requirement:
+spec-v0 does not mention cookies, and its only sentence about paths asks for the
+opposite. `server.cookiePath` (default `/`, the whole host, which is also Better
+Auth's own default) and `server.cookieDomain` (unset, host-only) replace it.
+
+**This is a breaking change for one shape**: two IdPs on one host at different
+mounts previously had non-colliding session cookies for free and now need
+`server.cookiePath` set. Nothing else changes — `/` is strictly broader than the
+old value, so every path that received the cookie still does.
+
+Gates run for it: lint, typecheck, unit (668), the config-schema and
+configuration-reference `--check` gates. **Not yet run: integration, coverage,
+e2e, the client-bundle gate and the container smoke test** — and the image has
+not been rebuilt or published, which is what a deployment needs before the new
+keys exist for it.
 
 **What is left needs the owner.** Tagging `v1.0.0` and publishing the image are
 the mandatory sign-off gate, and the two checks that cannot be automated are

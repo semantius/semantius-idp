@@ -51,6 +51,17 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 300
+        },
+        "cookiePath": {
+          "default": "/",
+          "description": "`Path` of every session cookie. Defaults to `/`, so the session is sent to the whole host and a first-party app beside a sub-path deployment shares it. Narrow it to the mount path (`/idp`) to keep the cookie off the other apps on that host — at the cost of any route outside it, the `/gateway` proxy included, no longer receiving the session.",
+          "type": "string",
+          "pattern": "^\\/(?:[^\\s;,]*[^\\s;,/])?$"
+        },
+        "cookieDomain": {
+          "description": "`Domain` of every session cookie. Unset by default, which makes the cookie host-only — the safe default, and what FR-OIDC-14's first-party rule assumes. Set it to a registrable domain (`example.com`) to share the session across that domain's subdomains; every host under it can then read and set the session, so set it only across hosts you control.",
+          "type": "string",
+          "pattern": "^\\.?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$"
         }
       },
       "required": [

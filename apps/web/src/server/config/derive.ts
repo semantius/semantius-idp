@@ -23,8 +23,10 @@ export interface BasePathInfo {
   origin: string
   /** Mount path with a leading slash and no trailing slash, `""` at the host root. */
   basePath: string
-  /** Cookie `Path` attribute — the mount path, or `/` at the host root. */
+  /** Cookie `Path` attribute — `server.cookiePath`, `/` unless it is set (**D97**). */
   cookiePath: string
+  /** Cookie `Domain` attribute — `server.cookieDomain`, absent (host-only) unless it is set (**D97**). */
+  cookieDomain?: string
   /** True when `server.baseUrl` uses https, which drives `Secure` cookies (FR-AUTH-5). */
   secure: boolean
 }
@@ -96,14 +98,33 @@ export interface IdpConfig {
   readonly isProduction: boolean
 }
 
-export function parseBasePath(baseUrl: string): BasePathInfo {
+/**
+ * Splits `server.baseUrl` into the origin, the mount path and the cookie
+ * attributes every URL and cookie decision reads.
+ *
+ * **The cookie scope is configuration, not a consequence of the mount path
+ * (D97).** It used to be derived — `Path` was the mount path, so a `/idp`
+ * deployment scoped its session to `/idp`. That is a defensible default for
+ * isolation and the wrong one here: it silently withholds the session from
+ * every route outside the mount, and `/gateway`, which FR-GW-4 reads the
+ * session cookie for, is exactly such a route once it is aliased to the origin
+ * root. A withheld cookie there does not fail loudly — D92 makes a missing
+ * session fall through to anonymous. `/` is the default now, which is also
+ * Better Auth's own; an operator who wants the old isolation sets
+ * `server.cookiePath` to the mount path and gets it back.
+ */
+export function parseBasePath(
+  baseUrl: string,
+  cookies: { path?: string; domain?: string } = {}
+): BasePathInfo {
   const url = new URL(baseUrl)
   const rawPath = url.pathname.replace(/\/+$/, "")
   const basePath = rawPath === "" || rawPath === "/" ? "" : rawPath
   return {
     origin: url.origin,
     basePath,
-    cookiePath: basePath === "" ? "/" : basePath,
+    cookiePath: cookies.path ?? "/",
+    ...(cookies.domain ? { cookieDomain: cookies.domain } : {}),
     secure: url.protocol === "https:",
   }
 }
@@ -184,7 +205,10 @@ export function deriveConfig(
   clients: readonly ClientEntry[],
   roles: readonly RoleEntry[]
 ): IdpConfig {
-  const base = parseBasePath(file.server.baseUrl)
+  const base = parseBasePath(file.server.baseUrl, {
+    path: file.server.cookiePath,
+    domain: file.server.cookieDomain,
+  })
   const emailEnabled = Boolean(file.email.resend.apiKey)
   const defaultAudience = toArray(file.jwt.audience)
 

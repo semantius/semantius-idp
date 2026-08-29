@@ -7,6 +7,35 @@ Notable changes to this project. The format follows
 Decisions that changed a numbered requirement carry their `D` number from
 [spec-v1.md](spec-v1.md) §12, where the reasoning is.
 
+## [Unreleased]
+
+### Added
+
+- **`server.cookiePath` and `server.cookieDomain`** (**D97**, FR-AUTH-5).
+  The session cookie's scope is configuration now instead of a consequence of
+  where the app is mounted. `cookiePath` defaults to `/` — the whole host —
+  and `cookieDomain` is unset, which is what host-only means.
+
+### Changed
+
+- **BREAKING: a sub-path deployment's session cookie is scoped to `/`, not to
+  the mount path** (**D97**, FR-AUTH-5, OPS-10, R3). `Path` used to be derived
+  from `server.baseUrl`, so `https://apps.example.com/idp` scoped its session
+  to `/idp` and withheld it from every route outside the mount. That is how a
+  `/gateway` alias at the origin root came to authenticate as nobody: **D92**
+  makes a refused session fall through to anonymous rather than answering 401,
+  so there was no symptom other than the wrong rows coming back.
+
+  `/` is Better Auth's own default, so this stops narrowing a sane one. Set
+  `server.cookiePath` to the mount path to restore the previous behavior —
+  **two IdPs sharing one host at different mounts now need it**, or their
+  session cookies collide.
+
+  Existing sessions survive the upgrade in place: the browser keeps the old
+  `/idp`-scoped cookie and receives a `/`-scoped one on the next write, and
+  the narrower cookie is the one it stops sending first. A deployment that
+  wants a clean cut can revoke sessions.
+
 ## [0.6.0] — 2026-08-29
 
 ### Added

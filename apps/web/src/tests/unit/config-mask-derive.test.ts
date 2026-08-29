@@ -134,10 +134,27 @@ describe("derive.ts", () => {
   })
 
   it("parses a sub-path base URL (OPS-10)", () => {
+    // The cookie no longer follows the mount (**D97**) — `/idp` mounts the app,
+    // `/` scopes the session.
     expect(parseBasePath("https://apps.example.com/idp")).toEqual({
       origin: "https://apps.example.com",
       basePath: "/idp",
+      cookiePath: "/",
+      secure: true,
+    })
+  })
+
+  it("takes the cookie path and domain from configuration (**D97**)", () => {
+    expect(
+      parseBasePath("https://apps.example.com/idp", {
+        path: "/idp",
+        domain: "example.com",
+      })
+    ).toEqual({
+      origin: "https://apps.example.com",
+      basePath: "/idp",
       cookiePath: "/idp",
+      cookieDomain: "example.com",
       secure: true,
     })
   })

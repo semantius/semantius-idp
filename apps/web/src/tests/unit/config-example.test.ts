@@ -68,7 +68,7 @@ describe("config.example/", () => {
     expect(config.base).toEqual({
       origin: "https://apps.example.com",
       basePath: "/idp",
-      cookiePath: "/idp",
+      cookiePath: "/",
       secure: true,
     })
     const firstParty = config.clients.find((client) => client.firstParty)!

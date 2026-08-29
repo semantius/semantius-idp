@@ -22,6 +22,9 @@ describe("CFG-4 defaults", () => {
         trustProxy: false,
         allowInsecureHttp: false,
         shutdownTimeoutSeconds: 10,
+        // **D97**: the whole host, and host-only. `cookieDomain` has no default
+        // — absent is what makes the cookie host-only — so it is not here.
+        cookiePath: "/",
       },
       secret: expect.any(String),
       database: {

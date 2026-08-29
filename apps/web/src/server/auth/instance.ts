@@ -277,12 +277,26 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
       defaultCookieAttributes: {
         httpOnly: true,
         sameSite: "lax",
-        // Host-only: no `domain`, so only same-host apps share the session,
-        // which is precisely what makes `firstParty` meaningful (FR-OIDC-14).
+        // Both are configuration since **D97**: `Path` defaults to `/` and
+        // `Domain` is absent, which keeps the cookie host-only — and host-only
+        // is what makes `firstParty` meaningful (FR-OIDC-14), so widening it
+        // with `server.cookieDomain` widens that rule to every host under the
+        // domain. Named explicitly rather than left to Better Auth, whose own
+        // defaults these now match, because the value has to agree with
+        // `crossSubDomainCookies` below.
         path: paths.cookiePath,
+        ...(paths.cookieDomain ? { domain: paths.cookieDomain } : {}),
         secure: paths.secureCookies,
       },
-      crossSubDomainCookies: { enabled: false },
+      // Set in lockstep with the `domain` above. Better Auth injects its own
+      // `domain` from this block *before* spreading `defaultCookieAttributes`
+      // (`cookies/index.mjs`), so ours already wins and this is belt and
+      // braces — but leaving the flag off while emitting a `Domain` would be a
+      // deployment whose cookies say one thing and whose framework believes
+      // another, and the next person to read either would be misled.
+      crossSubDomainCookies: paths.cookieDomain
+        ? { enabled: true, domain: paths.cookieDomain }
+        : { enabled: false },
       ipAddress: {
         // SEC-2: only honor forwarded headers when a proxy is trusted.
         disableIpTracking: false,

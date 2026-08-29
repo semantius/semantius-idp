@@ -96,6 +96,36 @@ const trustedOrigin = z.string().superRefine((value, ctx) => {
   }
 })
 
+/**
+ * `server.cookiePath`: the `Path` attribute every session cookie carries.
+ *
+ * A path, not a URL — leading slash, and no trailing one unless it is the bare
+ * root. `;` and `,` are refused because they terminate a cookie attribute and
+ * would let a value split the `Set-Cookie` header.
+ */
+const cookiePath = z
+  .string()
+  .regex(
+    /^\/(?:[^\s;,]*[^\s;,/])?$/,
+    "Expected an absolute path with no trailing slash, e.g. `/` or `/idp`."
+  )
+
+/**
+ * `server.cookieDomain`: the `Domain` attribute, which widens a cookie from
+ * one host to a whole registrable domain.
+ *
+ * A bare hostname, with the optional leading dot RFC 6265 treats as redundant.
+ * No scheme, no port and no path — all three are silently ignored by browsers
+ * inside a `Domain`, so accepting them would mean accepting a value that
+ * cannot work.
+ */
+const cookieDomain = z
+  .string()
+  .regex(
+    /^\.?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+$/,
+    "Expected a bare domain such as `example.com` or `.example.com` — no scheme, port or path."
+  )
+
 const serverSchema = z.strictObject({
   baseUrl: absoluteUrl().describe(
     "Issuer. Scheme + host[:port] + optional path, no trailing slash. Every absolute URL the IdP emits derives from this value only."
@@ -126,6 +156,16 @@ const serverSchema = z.strictObject({
   shutdownTimeoutSeconds: flexInt({ min: 0, max: 300 })
     .default(10)
     .describe("SIGTERM drain budget."),
+  cookiePath: cookiePath
+    .default("/")
+    .describe(
+      "`Path` of every session cookie. Defaults to `/`, so the session is sent to the whole host and a first-party app beside a sub-path deployment shares it. Narrow it to the mount path (`/idp`) to keep the cookie off the other apps on that host — at the cost of any route outside it, the `/gateway` proxy included, no longer receiving the session."
+    ),
+  cookieDomain: cookieDomain
+    .optional()
+    .describe(
+      "`Domain` of every session cookie. Unset by default, which makes the cookie host-only — the safe default, and what FR-OIDC-14's first-party rule assumes. Set it to a registrable domain (`example.com`) to share the session across that domain's subdomains; every host under it can then read and set the session, so set it only across hosts you control."
+    ),
 })
 
 const databaseSchema = z.strictObject({

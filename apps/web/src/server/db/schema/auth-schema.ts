@@ -435,6 +435,24 @@ export function createAuthSchema(schemaName: string) {
     (table) => [index("pendingAuthorization_expiresAt_idx").on(table.expiresAt)]
   )
 
+  const gateway = idpSchema.table(
+    "gateway",
+    {
+      id: text("id").primaryKey(),
+      name: text("name").notNull().unique(),
+      url: text("url").notNull(),
+      requireAuth: boolean("require_auth").default(false),
+      source: text("source").notNull(),
+      enabled: boolean("enabled").default(true),
+      createdAt: timestamp("created_at").defaultNow().notNull(),
+      updatedAt: timestamp("updated_at")
+        .defaultNow()
+        .$onUpdate(() => new Date())
+        .notNull(),
+    },
+    (table) => [index("gateway_source_idx").on(table.source)]
+  )
+
   const rateLimit = idpSchema.table("rate_limit", {
     id: text("id").primaryKey(),
     key: text("key").notNull().unique(),
@@ -460,6 +478,7 @@ export function createAuthSchema(schemaName: string) {
     oauthClientAssertion,
     auditLog,
     pendingAuthorization,
+    gateway,
     rateLimit,
   }
 }
@@ -493,5 +512,6 @@ export const {
   oauthClientAssertion,
   auditLog,
   pendingAuthorization,
+  gateway,
   rateLimit,
 } = canonicalSchema

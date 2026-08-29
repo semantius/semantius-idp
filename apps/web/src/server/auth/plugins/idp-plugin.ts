@@ -25,6 +25,7 @@ import type { Audit } from "../../audit"
 import type { IdpConfig } from "../../config/derive"
 import type { Mailer } from "../../email/mailer"
 import { NOT_AN_ADMIN, requireAdmin } from "../../admin/gate"
+import { gatewaySchema } from "../../gateways/schema"
 
 /**
  * Append-only audit trail (SEC-6). No secrets are ever stored: `metadata`
@@ -250,6 +251,7 @@ export function idpPlugin(options: IdpPluginOptions): BetterAuthPlugin {
     schema: {
       ...auditLogSchema,
       ...pendingAuthorizationSchema,
+      ...gatewaySchema,
     },
     endpoints: {
       approveUser,
@@ -335,6 +337,13 @@ export type AuditAction =
   | "client.deleted"
   | "client.disabled"
   | "keys.rotated"
+  // D91: the API gateways of FR-GW. `reconciled` is the boot sweep (ids and
+  // counts only); the other four are one administrator, one row.
+  | "gateway.reconciled"
+  | "gateway.created"
+  | "gateway.updated"
+  | "gateway.deleted"
+  | "gateway.disabled"
   // D83: one row per `/admin/database` execution, success or not. The console
   // can read everything at rest, so "an administrator ran SQL" is exactly the
   // kind of event SEC-6 exists to make undeniable -- and the statement itself

@@ -503,6 +503,54 @@ test.describe("the admin area", () => {
     ).toHaveCount(0)
   })
 
+  test("a gateway can be added, disabled and removed — and file ones cannot (D91)", async ({
+    page,
+    app,
+  }) => {
+    await signInAsAdmin(page, app)
+    await app.goto("/admin/gateways")
+
+    // FR-GW-2: the config-declared row is labelled and carries no menu at all,
+    // because an edit here is one the next restart would silently undo. The
+    // same assertion D50's client test makes, and for the same reason.
+    const fileRow = page.locator("tbody tr").filter({ hasText: "fromfile" })
+    await expect(fileRow.getByText("From the file")).toBeVisible()
+    await expect(
+      fileRow.getByRole("button", { name: /^Actions for / })
+    ).toHaveCount(0)
+
+    const form = await openDialog(page, "Add a gateway")
+    await form.getByLabel("Name").fill("e2e-gateway")
+    await form.getByLabel("Target URL").fill("http://upstream.invalid:9999")
+    await submitDialog(page, form, "Add a gateway")
+    await expect(page.getByText("The gateway has been added.")).toBeVisible()
+
+    const row = page.locator("tbody tr").filter({ hasText: "e2e-gateway" })
+    await expect(row.getByText("Added here")).toBeVisible()
+    await expect(row.getByText("Enabled")).toBeVisible()
+    // The path a caller configures, shown beside the name — the one thing an
+    // operator has to copy off this page.
+    await expect(row.getByText("/gateway/e2e-gateway")).toBeVisible()
+
+    const menu = await openRowMenu(page, row, "e2e-gateway")
+    await menu.getByRole("menuitem", { name: "Disable" }).click()
+    await expect(
+      page.getByText("The gateway has been disabled.")
+    ).toBeVisible()
+    await expect(row.getByText("Disabled")).toBeVisible()
+
+    const confirm = await openMenuDialog(
+      page,
+      await openRowMenu(page, row, "e2e-gateway"),
+      "Remove"
+    )
+    await submitDialog(page, confirm, "Remove")
+    await expect(page.getByText("The gateway has been removed.")).toBeVisible()
+    await expect(
+      page.locator("tbody tr").filter({ hasText: "e2e-gateway" })
+    ).toHaveCount(0)
+  })
+
   test("roles are read-only, and the system page describes the deployment", async ({
     page,
     app,

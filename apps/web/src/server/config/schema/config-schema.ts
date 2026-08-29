@@ -21,6 +21,10 @@ import {
   flexInt,
   flexRecord,
 } from "../zod-helpers"
+import {
+  checkGatewayUrl,
+  isValidGatewayName,
+} from "../../../lib/gateway-rules"
 
 /**
  * Claim names the IdP owns. `jwt.claims` may not redefine them (FR-OIDC-8):
@@ -547,6 +551,56 @@ const oauthSchema = z.strictObject({
     .prefault({}),
 })
 
+/**
+ * One entry of the `gateways` block (FR-GW-1, **D91**).
+ *
+ * An object rather than a bare URL string, so a per-target option can be added
+ * without a migration of everybody's configuration file — `requireAuth` is the
+ * first of them and arrived in the same change.
+ *
+ * The URL rules are `lib/gateway-rules.ts`, shared with the admin form and
+ * with `/idp/create-gateway`, so the file path and the database path refuse
+ * exactly the same targets (**D62**'s pattern). That is what stops `file://`
+ * from being configurable under either name.
+ */
+export const gatewayTargetSchema = z.strictObject({
+  url: z
+    .string()
+    .superRefine((value, ctx) => {
+      const problem = checkGatewayUrl(value)
+      if (problem === undefined) return
+      ctx.addIssue({ code: "custom", message: gatewayUrlMessage(value, problem) })
+    })
+    .describe(
+      "Absolute http(s) URL of the upstream, with no trailing slash, query or fragment. `/gateway/<name>/<rest>` is forwarded to `<url>/<rest>`."
+    ),
+  requireAuth: flexBoolean()
+    .default(false)
+    .describe(
+      "Refuse a request that carries neither `Authorization` nor `x-api-key` instead of forwarding it anonymously. For an upstream that has no anonymous role of its own." // FR-GW-4
+    ),
+})
+
+export type GatewayTargetConfig = z.infer<typeof gatewayTargetSchema>
+
+/** The operator-facing sentence for each `checkGatewayUrl` code. */
+function gatewayUrlMessage(value: string, problem: string): string {
+  switch (problem) {
+    case "scheme":
+      return `\`${value}\` must use http or https.`
+    case "credentials":
+      return `\`${value}\` must not contain a username or password. Upstream credentials belong in the request, not in the target URL.`
+    case "trailing_slash":
+      return `\`${value}\` must not end with a trailing slash — the sub-path is appended to it.`
+    case "query":
+      return `\`${value}\` must not contain a query string; the caller's own query is forwarded unchanged.`
+    case "fragment":
+      return `\`${value}\` must not contain a fragment.`
+    default:
+      return `\`${value}\` is not an absolute URL.`
+  }
+}
+
 const adminSchema = z.strictObject({
   adminRoles: flexArray(z.string().min(1))
     .default(["admin"])
@@ -616,6 +670,22 @@ export const configFileSchema = z.strictObject({
   apiKeys: apiKeysSchema.prefault({}),
   jwt: jwtSchema,
   oauth: oauthSchema.prefault({}),
+  gateways: z
+    .record(z.string(), gatewayTargetSchema)
+    .prefault({})
+    .superRefine((value, ctx) => {
+      for (const name of Object.keys(value)) {
+        if (isValidGatewayName(name)) continue
+        ctx.addIssue({
+          code: "custom",
+          path: [name],
+          message: `\`${name}\` is not a usable gateway name. Use lower-case letters, digits, \`_\` and \`-\`, starting with a letter or digit, at most 64 characters — the name is a URL path segment.`,
+        })
+      }
+    })
+    .describe(
+      "Authenticating reverse proxies, keyed by name: `/gateway/<name>[/<rest>]` streams every method to `<url>/<rest>`. A request carrying `x-api-key` and no `Authorization` has the key exchanged for a session JWT — the same exchange `GET /api/auth/token` performs, with the same ban re-check and the same `azp` — and the JWT is injected as `Authorization: Bearer`, which is what lets a client holding only an API key reach a resource server that validates JWTs against the JWKS. The result is cached for ten minutes, so a revocation takes up to that long to bite unless it goes through this process's admin API. Entries are reconciled into the `gateway` table at start-up under `oauth.reconcile.prune` semantics; rows added on `/admin/gateways` are never touched by that sweep. Each entry is `{ \"url\": \"https://api.internal\", \"requireAuth\": false }`. An upstream reached over plain http receives the minted bearer token in clear." // FR-GW-1..7, D91
+    ),
   admin: adminSchema.prefault({}),
   rateLimit: rateLimitSchema.prefault({}),
   logging: loggingSchema.prefault({}),

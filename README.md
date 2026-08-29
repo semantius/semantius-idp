@@ -32,6 +32,11 @@ not by clicking around a database.
   sign-up with an approval queue, e-mail verification and reset, TOTP
   two-factor, per-user API keys, and an administration area for the people who
   run it.
+- **An authenticating reverse proxy for your backends.** `/gateway/<name>`
+  forwards to a service you name in `config.jsonc` and turns a caller's API
+  key into a JWT that service can verify — so a script holding one key can
+  reach PostgREST or a Neon Data API that has never heard of API keys
+  ([API gateways](#api-gateways)).
 - **Configured by files.** `config.jsonc`, `oauth_clients.jsonc` and `roles.jsonc`
   are the source of truth; the database is the reconciled operative store.
   Restarting applies changes, and the same folder produces the same deployment.
@@ -362,6 +367,50 @@ claim they expect, and `auth.user_id()` resolves from `sub`.
 [docs/neon.md](docs/neon.md) is the walk-through, including the revocation
 caveat: a JWT already issued stays valid for a stateless verifier until it
 expires, bounded by `oauth.accessTokenTtl` (15 minutes by default).
+
+## API gateways
+
+A resource server behind this IdP validates JWTs against the JWKS. It knows
+nothing about the per-user API keys of `/account/api-keys`, so a script holding
+one cannot call it — the key is not a credential it recognises.
+
+A gateway closes that gap. Name a target in `config.jsonc`:
+
+```jsonc
+"gateways": {
+  "data": { "url": "https://postgrest.internal:3000" }
+}
+```
+
+and `https://idp.example.com/gateway/data/items?select=id` is forwarded to
+`https://postgrest.internal:3000/items?select=id` with the method, headers,
+query and body unchanged. A caller that sends `x-api-key` and no
+`Authorization` has the key **exchanged for a session JWT** — the same
+exchange `GET /api/auth/token` performs, so the ban re-check, the last-used
+accounting and the `azp` claim are identical — and the JWT is injected as
+`Authorization: Bearer`. A caller that brings its own `Authorization` keeps it.
+
+```bash
+curl -H "x-api-key: idp_…" https://idp.example.com/gateway/data/items
+```
+
+Add `"requireAuth": true` to refuse a call carrying neither header instead of
+forwarding it anonymously; leave it off for a target with an anonymous role of
+its own, which is PostgREST's usual shape.
+
+Gateways can also be added on **`/admin/gateways`**, where they survive
+restarts; the ones from the file are shown there read-only, because an edit
+would be a change the next restart undoes. Either way the caller's cookies
+never reach the target, the target's `Set-Cookie` never reaches the browser,
+and every gateway response carries a sandboxing `Content-Security-Policy` —
+the endpoint is same-origin with the issuer, so upstream content must not be
+able to act as though it belongs here.
+
+**One caveat worth knowing.** The key-to-JWT exchange is cached in the process
+for ten minutes. Suspending a user or revoking a key **through this IdP** —
+the admin area or the admin API — clears the cache at once; a change made
+directly in the database takes up to ten minutes to bite. WebSockets are not
+proxied (`501`).
 
 ## Security notes
 

@@ -156,6 +156,10 @@ want.
 | `POST` | `/idp/rotate-client-secret` | Issues a new secret and returns it once (**D72**) |
 | `POST` | `/idp/set-client-disabled` | Switches one off, or back on |
 | `POST` | `/idp/delete-client` | Removes one, with its tokens and consents |
+| `POST` | `/idp/create-gateway` | Adds an API gateway (**D91**) |
+| `POST` | `/idp/update-gateway` | Replaces its target and auth rule, not its name |
+| `POST` | `/idp/set-gateway-disabled` | Switches one off, or back on |
+| `POST` | `/idp/delete-gateway` | Removes one |
 
 The role catalog is **read-only** over HTTP: it comes from `roles.jsonc`, and
 `GET /admin/roles` shows what was reconciled along with any warnings.
@@ -241,6 +245,42 @@ client instead; both of those do revoke. A public client (`spa`, `native`) has
 no secret and is refused with `CLIENT_HAS_NO_SECRET` rather than quietly given
 one — that is an edit, and `/idp/update-client` is where an edit belongs.
 
+## API gateways (**D91**)
+
+A gateway is a named reverse proxy: `/gateway/<name>[/<rest>]` is streamed to
+`<url>/<rest>` with the caller's method, headers, query and body unchanged. A
+caller that sends `x-api-key` and no `Authorization` has the key exchanged for
+a session JWT — the same exchange `GET /api/auth/token` performs, with the same
+ban re-check and the same `azp` — and the JWT is injected as
+`Authorization: Bearer`. That is what lets a client holding only an API key
+reach a resource server which validates this issuer's JWTs and knows nothing
+about API keys.
+
+```bash
+curl -X POST https://idp.example.com/api/auth/idp/create-gateway \
+     -H "x-api-key: $IDP_API_KEY" \
+     -H "content-type: application/json" \
+     -d '{"name": "data", "url": "https://postgrest.internal:3000"}'
+```
+
+Then `curl -H "x-api-key: $USER_KEY" https://idp.example.com/gateway/data/items`.
+
+`requireAuth: true` refuses a call carrying neither `Authorization` nor
+`x-api-key` instead of forwarding it anonymously — leave it off for a target
+with an anonymous role of its own, like PostgREST.
+
+Gateways are **half** read-only, the way clients are. The ones in the
+`gateways` block of `config.jsonc` are reconciled at start-up and refused by
+the four endpoints above with `GATEWAY_MANAGED_BY_FILE`; the ones added
+through the API are stored with `source: "manual"`, which is the value the
+start-up sweep skips, so they survive restarts and can be edited, disabled and
+removed.
+
+**The exchange is cached for ten minutes**, and a cache hit skips the owner
+re-check. A ban or a key revocation made through *this* API clears the cache
+immediately; one made outside the process — `psql`, another replica — takes up
+to the ten minutes. That is the documented trade-off, not a bug.
+
 ## The refusals
 
 Some things are refused however you ask, because they are the ones that lock a
@@ -259,6 +299,10 @@ deployment out of itself:
 | `INVALID_CLIENT_DEFINITION` | The entry does not satisfy the `oauth_clients.jsonc` schema; the message names what. |
 | `SCOPE_NOT_ALLOWED` | A scope outside `oauth.scopes`. |
 | `CLIENT_HAS_NO_SECRET` | A public client has nothing to rotate. Change its type first. |
+| `GATEWAY_MANAGED_BY_FILE` | That gateway comes from `config.jsonc`. Edit the file and restart. |
+| `GATEWAY_ALREADY_EXISTS` | A gateway with that name already exists. |
+| `GATEWAY_NOT_FOUND` | No gateway by that name. |
+| `INVALID_GATEWAY_DEFINITION` | The name is not a usable URL segment, or the target is not an absolute http(s) URL without a trailing slash, query, fragment or userinfo; the message names which. |
 
 The last-administrator rule is checked **before** the self-action rules. When
 both fit, "give another account an admin role first" is the useful answer:

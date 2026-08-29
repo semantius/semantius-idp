@@ -27,6 +27,7 @@ import {
   PUBLIC_CLIENT_TYPES,
   clientSchema,
 } from "../config/schema/clients-schema"
+import { gatewayTargetSchema } from "../config/schema/config-schema"
 import { withAdvisoryLock } from "../db/advisory-lock"
 import { createDb } from "../db/client"
 import type { DbHandle } from "../db/client"
@@ -49,6 +50,8 @@ import {
   listSchemas,
   runQuery,
 } from "./database"
+import { resetGatewayRegistry } from "../gateways/registry"
+import { isValidGatewayName } from "../../lib/gateway-rules"
 import { requireAdmin } from "./gate"
 
 export interface AdminEndpointDeps {
@@ -342,6 +345,10 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
         startup: {
           steps: deps.context?.startup?.steps ?? [],
           reconcile: deps.context?.startup?.reconcile ?? null,
+          // FR-GW-2's sweep, beside the clients' (**D91**). Absent rather
+          // than empty when no gateways are configured, so the page shows
+          // nothing instead of an object full of empty arrays.
+          gateways: deps.context?.startup?.gateways ?? null,
         },
       })
     }
@@ -925,6 +932,300 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
     }
   )
 
+  // ---------------------------------------------------------- gateways --
+  /**
+   * The four API-gateway mutations (FR-GW-7, FR-ADMIN-6, **D91**).
+   *
+   * Deliberately the same shape as their client siblings, because they answer
+   * the same questions and getting a different answer here would be a bug
+   * nobody could see:
+   *
+   *  - **Validated by the schema `config.jsonc` is validated by.** A `file://`
+   *    target, a trailing slash, userinfo in the URL — refused here from the
+   *    one definition in `lib/gateway-rules.ts`, so the database path cannot
+   *    store what the file path would not accept.
+   *  - **Under the reconcile lock, on a direct connection.** A gateway created
+   *    while a container is booting must not race the sweep that decides which
+   *    rows are orphans (D27, S4).
+   *  - **`source: "manual"`.** Everything about how the row survives the next
+   *    restart follows from it, and it is the column the boot sweep skips.
+   *  - **The registry is invalidated before the response returns**, or the
+   *    change is invisible for up to the TTL and the administrator's next act
+   *    is to press the button again.
+   */
+  const createGateway = createAuthEndpoint(
+    "/idp/create-gateway",
+    {
+      method: "POST",
+      body: z.object({
+        name: z.string().min(1),
+        url: z.string().min(1),
+        requireAuth: z.boolean().optional(),
+      }),
+      requireHeaders: true,
+      use: [gate],
+    },
+    async (ctx) => {
+      const handle = db(deps)
+      const actor = ctx.context.session.user
+      const entry = parseGateway(ctx.body)
+
+      const locking = createDb(deps.config, { direct: true, max: 1 })
+      try {
+        await withAdvisoryLock(locking.sql, "reconcileGateways", async () => {
+          await handle.db.transaction(async (tx) => {
+            const [existing] = await tx
+              .select({ name: handle.schema.gateway.name })
+              .from(handle.schema.gateway)
+              .where(eq(handle.schema.gateway.name, entry.name))
+              .limit(1)
+            if (existing) {
+              throw new APIError("CONFLICT", {
+                code: "GATEWAY_ALREADY_EXISTS",
+                message: "A gateway with that name already exists.",
+              })
+            }
+            await tx.insert(handle.schema.gateway).values({
+              id: crypto.randomUUID(),
+              name: entry.name,
+              url: entry.url,
+              requireAuth: entry.requireAuth,
+              // The marker (**D91**). Explicit, unlike the clients' implied
+              // `userId === null`, so the boot sweep is a plain filter.
+              source: "manual",
+              enabled: true,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            })
+          })
+        })
+      } finally {
+        await locking.close().catch(() => undefined)
+      }
+
+      resetGatewayRegistry()
+      await deps.audit?.record({
+        action: "gateway.created",
+        outcome: "success",
+        actorType: "session",
+        actorUserId: actor.id,
+        target: { type: "gateway", id: entry.name },
+        // The name and the flag, never the URL: a target can carry a host an
+        // operator would rather not publish on the audit page (SEC-6).
+        metadata: { requireAuth: entry.requireAuth },
+      })
+      return ctx.json({ name: entry.name })
+    }
+  )
+
+  /**
+   * Editing an admin-added gateway. A **full replace**, like
+   * `/idp/update-client`: the dialog's field set *is* the writable surface, so
+   * a partial patch would need a way to say "unset" that is different from
+   * "did not mention it".
+   *
+   * `enabled` is deliberately not in the body — it has an endpoint of its own,
+   * so an edit cannot silently re-enable a gateway somebody switched off.
+   */
+  const updateGateway = createAuthEndpoint(
+    "/idp/update-gateway",
+    {
+      method: "POST",
+      body: z.object({
+        name: z.string().min(1),
+        url: z.string().min(1),
+        requireAuth: z.boolean().optional(),
+      }),
+      requireHeaders: true,
+      use: [gate],
+    },
+    async (ctx) => {
+      const handle = db(deps)
+      const actor = ctx.context.session.user
+      const entry = parseGateway(ctx.body)
+
+      const locking = createDb(deps.config, { direct: true, max: 1 })
+      try {
+        await withAdvisoryLock(locking.sql, "reconcileGateways", async () => {
+          await handle.db.transaction(async (tx) => {
+            // Re-read inside the lock: what it serialises against is a
+            // reconcile that could have claimed this row for the file, or
+            // swept it away, since the check above.
+            await assertMutableGateway(tx, handle, entry.name)
+            await tx
+              .update(handle.schema.gateway)
+              .set({
+                url: entry.url,
+                requireAuth: entry.requireAuth,
+                updatedAt: new Date(),
+              })
+              .where(eq(handle.schema.gateway.name, entry.name))
+          })
+        })
+      } finally {
+        await locking.close().catch(() => undefined)
+      }
+
+      resetGatewayRegistry()
+      await deps.audit?.record({
+        action: "gateway.updated",
+        outcome: "success",
+        actorType: "session",
+        actorUserId: actor.id,
+        target: { type: "gateway", id: entry.name },
+        metadata: { requireAuth: entry.requireAuth },
+      })
+      return ctx.json({ name: entry.name })
+    }
+  )
+
+  const deleteGateway = createAuthEndpoint(
+    "/idp/delete-gateway",
+    {
+      method: "POST",
+      body: z.object({ name: z.string().min(1) }),
+      requireHeaders: true,
+      use: [gate],
+    },
+    async (ctx) => {
+      const handle = db(deps)
+      const actor = ctx.context.session.user
+
+      const locking = createDb(deps.config, { direct: true, max: 1 })
+      try {
+        await withAdvisoryLock(locking.sql, "reconcileGateways", async () => {
+          await handle.db.transaction(async (tx) => {
+            await assertMutableGateway(tx, handle, ctx.body.name)
+            await tx
+              .delete(handle.schema.gateway)
+              .where(eq(handle.schema.gateway.name, ctx.body.name))
+          })
+        })
+      } finally {
+        await locking.close().catch(() => undefined)
+      }
+
+      resetGatewayRegistry()
+      await deps.audit?.record({
+        action: "gateway.deleted",
+        outcome: "success",
+        actorType: "session",
+        actorUserId: actor.id,
+        target: { type: "gateway", id: ctx.body.name },
+      })
+      return ctx.json({ ok: true })
+    }
+  )
+
+  /**
+   * Switching an admin-added gateway off, and on again.
+   *
+   * No advisory lock, on `set-client-disabled`'s precedent: a single-column
+   * write to one row races nothing the sweep does, and the lock exists to
+   * serialise the sweep that decides which rows are orphans.
+   */
+  const setGatewayDisabled = createAuthEndpoint(
+    "/idp/set-gateway-disabled",
+    {
+      method: "POST",
+      body: z.object({ name: z.string().min(1), disabled: z.boolean() }),
+      requireHeaders: true,
+      use: [gate],
+    },
+    async (ctx) => {
+      const handle = db(deps)
+      const actor = ctx.context.session.user
+
+      await handle.db.transaction(async (tx) => {
+        await assertMutableGateway(tx, handle, ctx.body.name)
+        await tx
+          .update(handle.schema.gateway)
+          .set({ enabled: !ctx.body.disabled, updatedAt: new Date() })
+          .where(eq(handle.schema.gateway.name, ctx.body.name))
+      })
+
+      resetGatewayRegistry()
+      await deps.audit?.record({
+        action: "gateway.disabled",
+        outcome: "success",
+        actorType: "session",
+        actorUserId: actor.id,
+        target: { type: "gateway", id: ctx.body.name },
+        metadata: { disabled: ctx.body.disabled },
+      })
+      return ctx.json({ ok: true })
+    }
+  )
+
+  /**
+   * The name and the target, validated exactly as `config.jsonc` would be.
+   *
+   * The name check is separate from the target schema because in the file the
+   * name is a *key* and the schema validates it in the record's `superRefine`;
+   * here it arrives as a field, and `isValidGatewayName` is the one definition
+   * both of them call.
+   */
+  function parseGateway(body: {
+    name: string
+    url: string
+    requireAuth?: boolean
+  }): { name: string; url: string; requireAuth: boolean } {
+    const name = body.name.trim()
+    if (!isValidGatewayName(name)) {
+      throw new APIError("BAD_REQUEST", {
+        code: "INVALID_GATEWAY_DEFINITION",
+        message:
+          "A gateway name must be lower-case letters, digits, `_` or `-`, starting with a letter or digit — it is a URL path segment.",
+      })
+    }
+    const parsed = gatewayTargetSchema.safeParse({
+      url: body.url.trim(),
+      ...(body.requireAuth === undefined
+        ? {}
+        : { requireAuth: body.requireAuth }),
+    })
+    if (!parsed.success) {
+      throw new APIError("BAD_REQUEST", {
+        code: "INVALID_GATEWAY_DEFINITION",
+        // The zod message already names the offending URL and says why.
+        message: parsed.error.issues.map((issue) => issue.message).join(" "),
+      })
+    }
+    return { name, url: parsed.data.url, requireAuth: parsed.data.requireAuth }
+  }
+
+  /**
+   * Refuses to touch a row the configuration file owns (FR-GW-2).
+   *
+   * The same rule D50 wrote for the clients, with the marker made explicit:
+   * an edit to a `config` row is a change the next restart silently undoes,
+   * which is worse than no control at all.
+   */
+  async function assertMutableGateway(
+    tx: Pick<DbHandle["db"], "select">,
+    handle: DbHandle,
+    name: string
+  ): Promise<void> {
+    const [row] = await tx
+      .select({ source: handle.schema.gateway.source })
+      .from(handle.schema.gateway)
+      .where(eq(handle.schema.gateway.name, name))
+      .limit(1)
+    if (!row) {
+      throw new APIError("NOT_FOUND", {
+        code: "GATEWAY_NOT_FOUND",
+        message: "No such gateway.",
+      })
+    }
+    if (row.source === "config") {
+      throw new APIError("BAD_REQUEST", {
+        code: "GATEWAY_MANAGED_BY_FILE",
+        message:
+          "That gateway comes from config.jsonc. Edit the file and restart.",
+      })
+    }
+  }
+
   /**
    * Refuses to touch a row the configuration file owns.
    *
@@ -1131,6 +1432,10 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
     rotateClientSecret,
     deleteClient,
     setClientDisabled,
+    createGateway,
+    updateGateway,
+    deleteGateway,
+    setGatewayDisabled,
     // **Absent, not forbidden** (FR-ADMIN-7, the owner's explicit
     // requirement). A `disabled` deployment must not have the API either, and
     // an endpoint Better Auth was never handed answers 404 -- the same way

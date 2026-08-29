@@ -38,9 +38,11 @@ import { Route as Oauth2RevokeRouteImport } from './routes/oauth2/revoke'
 import { Route as Oauth2IntrospectRouteImport } from './routes/oauth2/introspect'
 import { Route as Oauth2EndSessionRouteImport } from './routes/oauth2/end-session'
 import { Route as Oauth2AuthorizeRouteImport } from './routes/oauth2/authorize'
+import { Route as GatewayNameRouteImport } from './routes/gateway/$name'
 import { Route as BrandingSplatRouteImport } from './routes/branding.$'
 import { Route as AdminSystemRouteImport } from './routes/admin/system'
 import { Route as AdminRolesRouteImport } from './routes/admin/roles'
+import { Route as AdminGatewaysRouteImport } from './routes/admin/gateways'
 import { Route as AdminDatabaseRouteImport } from './routes/admin/database'
 import { Route as AdminClientsRouteImport } from './routes/admin/clients'
 import { Route as AdminAuditRouteImport } from './routes/admin/audit'
@@ -54,6 +56,7 @@ import { Route as DotwellKnownOauthAuthorizationServerRouteImport } from './rout
 import { Route as DotwellKnownJwksDotjsonRouteImport } from './routes/[.]well-known.jwks[.]json'
 import { Route as DotwellKnownChangePasswordRouteImport } from './routes/[.]well-known.change-password'
 import { Route as AdminUsersIndexRouteImport } from './routes/admin/users/index'
+import { Route as GatewayNameSplatRouteImport } from './routes/gateway/$name.$'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as AdminUsersUserIdRouteImport } from './routes/admin/users/$userId'
 
@@ -202,6 +205,11 @@ const Oauth2AuthorizeRoute = Oauth2AuthorizeRouteImport.update({
   path: '/oauth2/authorize',
   getParentRoute: () => rootRouteImport,
 } as any)
+const GatewayNameRoute = GatewayNameRouteImport.update({
+  id: '/gateway/$name',
+  path: '/gateway/$name',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BrandingSplatRoute = BrandingSplatRouteImport.update({
   id: '/branding/$',
   path: '/branding/$',
@@ -215,6 +223,11 @@ const AdminSystemRoute = AdminSystemRouteImport.update({
 const AdminRolesRoute = AdminRolesRouteImport.update({
   id: '/roles',
   path: '/roles',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminGatewaysRoute = AdminGatewaysRouteImport.update({
+  id: '/gateways',
+  path: '/gateways',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminDatabaseRoute = AdminDatabaseRouteImport.update({
@@ -286,6 +299,11 @@ const AdminUsersIndexRoute = AdminUsersIndexRouteImport.update({
   path: '/users/',
   getParentRoute: () => AdminRoute,
 } as any)
+const GatewayNameSplatRoute = GatewayNameSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
+  getParentRoute: () => GatewayNameRoute,
+} as any)
 const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   id: '/api/auth/$',
   path: '/api/auth/$',
@@ -331,9 +349,11 @@ export interface FileRoutesByFullPath {
   '/admin/audit': typeof AdminAuditRoute
   '/admin/clients': typeof AdminClientsRoute
   '/admin/database': typeof AdminDatabaseRoute
+  '/admin/gateways': typeof AdminGatewaysRoute
   '/admin/roles': typeof AdminRolesRoute
   '/admin/system': typeof AdminSystemRoute
   '/branding/$': typeof BrandingSplatRoute
+  '/gateway/$name': typeof GatewayNameRouteWithChildren
   '/oauth2/authorize': typeof Oauth2AuthorizeRoute
   '/oauth2/end-session': typeof Oauth2EndSessionRoute
   '/oauth2/introspect': typeof Oauth2IntrospectRoute
@@ -344,6 +364,7 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AdminIndexRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/gateway/$name/$': typeof GatewayNameSplatRoute
   '/admin/users/': typeof AdminUsersIndexRoute
 }
 export interface FileRoutesByTo {
@@ -378,9 +399,11 @@ export interface FileRoutesByTo {
   '/admin/audit': typeof AdminAuditRoute
   '/admin/clients': typeof AdminClientsRoute
   '/admin/database': typeof AdminDatabaseRoute
+  '/admin/gateways': typeof AdminGatewaysRoute
   '/admin/roles': typeof AdminRolesRoute
   '/admin/system': typeof AdminSystemRoute
   '/branding/$': typeof BrandingSplatRoute
+  '/gateway/$name': typeof GatewayNameRouteWithChildren
   '/oauth2/authorize': typeof Oauth2AuthorizeRoute
   '/oauth2/end-session': typeof Oauth2EndSessionRoute
   '/oauth2/introspect': typeof Oauth2IntrospectRoute
@@ -391,6 +414,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminIndexRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/gateway/$name/$': typeof GatewayNameSplatRoute
   '/admin/users': typeof AdminUsersIndexRoute
 }
 export interface FileRoutesById {
@@ -428,9 +452,11 @@ export interface FileRoutesById {
   '/admin/audit': typeof AdminAuditRoute
   '/admin/clients': typeof AdminClientsRoute
   '/admin/database': typeof AdminDatabaseRoute
+  '/admin/gateways': typeof AdminGatewaysRoute
   '/admin/roles': typeof AdminRolesRoute
   '/admin/system': typeof AdminSystemRoute
   '/branding/$': typeof BrandingSplatRoute
+  '/gateway/$name': typeof GatewayNameRouteWithChildren
   '/oauth2/authorize': typeof Oauth2AuthorizeRoute
   '/oauth2/end-session': typeof Oauth2EndSessionRoute
   '/oauth2/introspect': typeof Oauth2IntrospectRoute
@@ -441,6 +467,7 @@ export interface FileRoutesById {
   '/admin/': typeof AdminIndexRoute
   '/admin/users/$userId': typeof AdminUsersUserIdRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
+  '/gateway/$name/$': typeof GatewayNameSplatRoute
   '/admin/users/': typeof AdminUsersIndexRoute
 }
 export interface FileRouteTypes {
@@ -479,9 +506,11 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/admin/clients'
     | '/admin/database'
+    | '/admin/gateways'
     | '/admin/roles'
     | '/admin/system'
     | '/branding/$'
+    | '/gateway/$name'
     | '/oauth2/authorize'
     | '/oauth2/end-session'
     | '/oauth2/introspect'
@@ -492,6 +521,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/admin/users/$userId'
     | '/api/auth/$'
+    | '/gateway/$name/$'
     | '/admin/users/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -526,9 +556,11 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/admin/clients'
     | '/admin/database'
+    | '/admin/gateways'
     | '/admin/roles'
     | '/admin/system'
     | '/branding/$'
+    | '/gateway/$name'
     | '/oauth2/authorize'
     | '/oauth2/end-session'
     | '/oauth2/introspect'
@@ -539,6 +571,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/admin/users/$userId'
     | '/api/auth/$'
+    | '/gateway/$name/$'
     | '/admin/users'
   id:
     | '__root__'
@@ -575,9 +608,11 @@ export interface FileRouteTypes {
     | '/admin/audit'
     | '/admin/clients'
     | '/admin/database'
+    | '/admin/gateways'
     | '/admin/roles'
     | '/admin/system'
     | '/branding/$'
+    | '/gateway/$name'
     | '/oauth2/authorize'
     | '/oauth2/end-session'
     | '/oauth2/introspect'
@@ -588,6 +623,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/admin/users/$userId'
     | '/api/auth/$'
+    | '/gateway/$name/$'
     | '/admin/users/'
   fileRoutesById: FileRoutesById
 }
@@ -619,6 +655,7 @@ export interface RootRouteChildren {
   DotwellKnownOpenidConfigurationRoute: typeof DotwellKnownOpenidConfigurationRoute
   DotwellKnownSecurityDottxtRoute: typeof DotwellKnownSecurityDottxtRoute
   BrandingSplatRoute: typeof BrandingSplatRoute
+  GatewayNameRoute: typeof GatewayNameRouteWithChildren
   Oauth2AuthorizeRoute: typeof Oauth2AuthorizeRoute
   Oauth2EndSessionRoute: typeof Oauth2EndSessionRoute
   Oauth2IntrospectRoute: typeof Oauth2IntrospectRoute
@@ -833,6 +870,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Oauth2AuthorizeRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/gateway/$name': {
+      id: '/gateway/$name'
+      path: '/gateway/$name'
+      fullPath: '/gateway/$name'
+      preLoaderRoute: typeof GatewayNameRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/branding/$': {
       id: '/branding/$'
       path: '/branding/$'
@@ -852,6 +896,13 @@ declare module '@tanstack/react-router' {
       path: '/roles'
       fullPath: '/admin/roles'
       preLoaderRoute: typeof AdminRolesRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/gateways': {
+      id: '/admin/gateways'
+      path: '/gateways'
+      fullPath: '/admin/gateways'
+      preLoaderRoute: typeof AdminGatewaysRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/database': {
@@ -945,6 +996,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminUsersIndexRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/gateway/$name/$': {
+      id: '/gateway/$name/$'
+      path: '/$'
+      fullPath: '/gateway/$name/$'
+      preLoaderRoute: typeof GatewayNameSplatRouteImport
+      parentRoute: typeof GatewayNameRoute
+    }
     '/api/auth/$': {
       id: '/api/auth/$'
       path: '/api/auth/$'
@@ -985,6 +1043,7 @@ interface AdminRouteChildren {
   AdminAuditRoute: typeof AdminAuditRoute
   AdminClientsRoute: typeof AdminClientsRoute
   AdminDatabaseRoute: typeof AdminDatabaseRoute
+  AdminGatewaysRoute: typeof AdminGatewaysRoute
   AdminRolesRoute: typeof AdminRolesRoute
   AdminSystemRoute: typeof AdminSystemRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -996,6 +1055,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminAuditRoute: AdminAuditRoute,
   AdminClientsRoute: AdminClientsRoute,
   AdminDatabaseRoute: AdminDatabaseRoute,
+  AdminGatewaysRoute: AdminGatewaysRoute,
   AdminRolesRoute: AdminRolesRoute,
   AdminSystemRoute: AdminSystemRoute,
   AdminIndexRoute: AdminIndexRoute,
@@ -1004,6 +1064,18 @@ const AdminRouteChildren: AdminRouteChildren = {
 }
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
+interface GatewayNameRouteChildren {
+  GatewayNameSplatRoute: typeof GatewayNameSplatRoute
+}
+
+const GatewayNameRouteChildren: GatewayNameRouteChildren = {
+  GatewayNameSplatRoute: GatewayNameSplatRoute,
+}
+
+const GatewayNameRouteWithChildren = GatewayNameRoute._addFileChildren(
+  GatewayNameRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -1034,6 +1106,7 @@ const rootRouteChildren: RootRouteChildren = {
   DotwellKnownOpenidConfigurationRoute: DotwellKnownOpenidConfigurationRoute,
   DotwellKnownSecurityDottxtRoute: DotwellKnownSecurityDottxtRoute,
   BrandingSplatRoute: BrandingSplatRoute,
+  GatewayNameRoute: GatewayNameRouteWithChildren,
   Oauth2AuthorizeRoute: Oauth2AuthorizeRoute,
   Oauth2EndSessionRoute: Oauth2EndSessionRoute,
   Oauth2IntrospectRoute: Oauth2IntrospectRoute,

@@ -131,14 +131,19 @@ export function errorCodeFor(result: AuthCallResult): string {
     case "ONLY_ADMINS_GRANT_ADMIN_ROLES":
     case "IMPERSONATION_DISABLED":
       return code.toLowerCase()
-    // D50: the client endpoints answer with their own codes, each of which
-    // names something the administrator can change.
+    // D50 (clients) and D91 (gateways): both sets of endpoints answer with
+    // their own codes, each of which names something the administrator can
+    // change, so each is echoed through rather than collapsed.
     case "CLIENT_ALREADY_EXISTS":
     case "CLIENT_MANAGED_BY_FILE":
     case "CLIENT_HAS_NO_SECRET":
     case "CLIENT_NOT_FOUND":
     case "INVALID_CLIENT_DEFINITION":
     case "SCOPE_NOT_ALLOWED":
+    case "GATEWAY_ALREADY_EXISTS":
+    case "GATEWAY_MANAGED_BY_FILE":
+    case "GATEWAY_NOT_FOUND":
+    case "INVALID_GATEWAY_DEFINITION":
       return code.toLowerCase()
     // Better Auth spells the duplicate refusal differently depending on which
     // endpoint refuses: `/sign-up/email` says the first, `/admin/create-user`

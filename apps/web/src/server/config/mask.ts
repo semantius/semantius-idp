@@ -24,6 +24,10 @@ const SECRET_POINTERS: readonly RegExp[] = [
   /^\/email\/resend\/apiKey$/,
   /^\/social\/[^/]+\/clientSecret$/,
   /^\/clients\/\d+\/clientSecret$/,
+  // FR-GW-1: a gateway target is not a secret — the host is what an operator
+  // came to this page to read — but userinfo in it would be, so it is masked
+  // password-only, the way a connection string is.
+  /^\/gateways\/[^/]+\/url$/,
 ]
 
 /**
@@ -36,6 +40,16 @@ const CONNECTION_STRING_POINTERS: ReadonlySet<string> = new Set([
   "/database/url",
   "/database/directUrl",
 ])
+
+/**
+ * The same treatment for a family of pointers whose keys the operator chooses.
+ *
+ * `gateways.<name>.url` cannot be listed by name, and it wants exactly what a
+ * connection string wants: the host stays readable, the password does not.
+ */
+const CONNECTION_STRING_PATTERNS: readonly RegExp[] = [
+  /^\/gateways\/[^/]+\/url$/,
+]
 
 export function isSecretPointer(pointer: string): boolean {
   return SECRET_POINTERS.some((pattern) => pattern.test(pointer))
@@ -65,7 +79,10 @@ function maskValue(value: unknown, pointer: string): unknown {
   }
   if (typeof value !== "string") return value
   if (!isSecretPointer(pointer)) return value
-  if (CONNECTION_STRING_POINTERS.has(pointer))
+  if (
+    CONNECTION_STRING_POINTERS.has(pointer) ||
+    CONNECTION_STRING_PATTERNS.some((pattern) => pattern.test(pointer))
+  )
     return maskConnectionString(value)
   return value === "" ? "" : MASK
 }

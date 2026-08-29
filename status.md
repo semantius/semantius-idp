@@ -1,17 +1,18 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-28 · **Branch:** `main` · **Head:** `c11fbd3`, last tag **v0.5.0**
-**Plan:** `~/.claude/plans/make-the-admin-layout-shiny-unicorn.md` (the sidebar shell)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D90**
+**As of:** 2026-08-29 · **Branch:** `main` · **Head:** `59e1be7`, last tag **v0.5.0**
+**Plan:** `~/.claude/plans/backend-systems-validate-the-luminous-backus.md` (API gateways)
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D91**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
-gate.** Every gate green: lint, typecheck, unit (599), integration (243 across
-twenty-four files), coverage thresholds including the 85 % per-module gates,
+gate; API gateways (FR-GW, **D91**) landed on 2026-08-29 on top of them.**
+Every gate green: lint, typecheck, unit (652), integration (293 across
+twenty-eight files), coverage thresholds including the 85 % per-module gates,
 schema-drift, config-schema staleness, the configuration-reference and
 example-config gates, dependency pinning, the client-bundle gate, the TST-8
-container smoke test — run against the moved `docker/` layout and now
-completing the first-run wizard — and the TST-6 end-to-end suite: 86 tests in a
-real browser against the built image, in both deployment shapes.
+container smoke test — run against the moved `docker/` layout and completing
+the first-run wizard — and the TST-6 end-to-end suite: 100 tests in a real
+browser against the built image, in both deployment shapes.
 
 The `docker/idp-*` lifecycle scripts were exercised end to end as well —
 create → status → cli → stop → start → logs → destroy — against a throwaway
@@ -85,6 +86,76 @@ README quick start against it, and confirming `latest` from outside.
   next boot serves the first-run setup page, which is now the only way an
   administrator is ever created. No credential to recover, and no command that
   changes one.
+
+---
+
+## API gateways (2026-08-29, **D91**)
+
+**The gap.** A resource server behind this IdP — PostgREST, a Neon Data API —
+validates JWTs against the JWKS and has never heard of the per-user API keys
+of `/account/api-keys`. So a script holding one key could not call it at all:
+the key is not a credential it recognises, and there was no supported way to
+turn one into a credential it does.
+
+`/gateway/<name>[/<rest>]` closes it. Every method, header, query and body is
+streamed to a configured upstream; a caller presenting `x-api-key` and no
+`Authorization` of their own has the key **exchanged for a session JWT** and
+gets it injected as `Authorization: Bearer`.
+
+**The exchange is not new code.** `GET {authBaseUrl}/token` with `x-api-key`
+already resolves the key, runs the FR-KEY-2 ban/approval re-check, updates
+`lastRequest`/`requestCount` and the per-key limiter, and mints a JWT with
+`azp = apiKeys.tokenClientId`. All of that lives *only* there, so the proxy
+calls that endpoint in-process — the `oidc/protocol-proxy.ts` pattern —
+rather than re-implementing a mint that would be a second chance to forget
+the gate.
+
+**What was built**, in the order it is worth reading:
+
+- `gateways` in `config.jsonc`, reconciled into a `gateway` table at start-up
+  the way `oauth_clients.jsonc` is, under a lock of its own
+  (`LOCK_KEYS.reconcileGateways`) and `oauth.reconcile.prune` semantics. The
+  file-owned marker is an **explicit `source: config | manual` column** rather
+  than the clients' `userId === null` (D50): the sweep is a plain filter and
+  the row says what it is.
+- `server/gateways/registry.ts` — the name → row map the proxy reads instead
+  of querying per request. Write-through invalidation from the reconcile and
+  from every admin mutation, plus a 60 s TTL served **stale-while-revalidate**
+  so the boundary never costs a request a round trip.
+- `server/gateways/proxy.ts` — the hop itself, and where most of the thinking
+  went. Cookies never cross in either direction, the CSP is forced to
+  `sandbox; default-src 'none'`, a cross-origin `Location` is stripped, and
+  `Forwarded`/`X-Real-IP`/`x-forwarded-*` from the caller are discarded before
+  this hop writes its own.
+- `/admin/gateways`, mirroring `/admin/clients`: config rows read-only, manual
+  rows create/edit/disable/delete, four admin endpoints
+  (`/idp/{create,update,delete}-gateway`, `/idp/set-gateway-disabled`), an
+  audit row each, and the registry invalidated before the response returns.
+
+**The trade-off, stated plainly.** The key → JWT result is cached in-process
+for `min(600 s, jwt.sessionToken.ttl − 60 s)`, and **a cache hit skips the ban
+re-check for that long** — this relaxes FR-KEY-2 for up to ten minutes. Two
+things bound it: the TTL never runs into the token's own expiry, and
+`buildAdminAfterHook` clears the cache wholesale on every admin ban, removal
+and API-key revocation, so a revocation made through this process bites on the
+next request. A revocation made *outside* it — `psql`, a second replica —
+takes up to ten minutes. The integration suite pins both directions, so a
+change to either is visible in a diff rather than in an incident.
+
+**One thing the coverage gate taught, again.** The table's Better Auth schema
+declaration started in `idp-plugin.ts` beside `auditLog` and
+`pendingAuthorization`, and dropped that file's function coverage from 90 % to
+69 % — three `defaultValue` thunks the generator turns into `.defaultNow()`
+and no test ever calls. It lives in `server/gateways/schema.ts` now and is
+spread into the plugin from there, which is exactly the reasoning
+`admin/endpoints.ts`'s header already gave for not putting things in that
+file. The generator and the drift gate see no difference.
+
+**Not done, on purpose.** There is no e2e test of the *data path*: it would
+need a live upstream inside the compose stack, and the page half is covered
+end to end while the data path is covered by an integration test that streams
+a 512 KiB body through a real HTTP server. Worth revisiting if PostgREST ever
+joins the e2e stack.
 
 ---
 

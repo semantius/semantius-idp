@@ -285,6 +285,12 @@ function writeConfig(
           // the a11y scan and the admin walkthrough; the flag's own three
           // states are driven by a serial block in `admin.spec.ts`.
           admin: { database: "read-only" },
+          // FR-GW-1. One config-declared gateway, so `/admin/gateways` has a
+          // file-owned row to be read-only about — the half of D50's client
+          // test that a manual row cannot prove. Its target is never called:
+          // the suite drives the page, not the data path, because a data-path
+          // test needs a live upstream in the stack.
+          gateways: { fromfile: { url: "http://upstream.invalid" } },
           jwt: { audience: stack.baseURL },
           // No `admin.bootstrap`: it no longer exists (D52). The first
           // administrator is created by `completeSetup` below, at the page.

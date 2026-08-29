@@ -24,7 +24,7 @@ Four files, in this order. Read them before proposing anything.
 | File | What it is |
 | --- | --- |
 | [status.md](status.md) | The handoff. Done, not-done, and why — the ground truth between sessions. |
-| [spec-v1.md](spec-v1.md) | Signed off, amended through **D90**. Numbered requirements, and §12.1's decision log with the reasoning. |
+| [spec-v1.md](spec-v1.md) | Signed off, amended through **D91**. Numbered requirements, and §12.1's decision log with the reasoning. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | The gates, the style, and how to amend the spec. |
 | [docs/release.md](docs/release.md) | What is left before v1.0.0, and it is the owner's, not yours. |
 
@@ -294,6 +294,31 @@ Three more things about it that are easy to get wrong:
   `fill`; everything else is unchanged, because a page shorter than the
   viewport never scrolls either way.
 
+**A Better Auth plugin's `schema` is not a free place to put a table**
+(**D91**). `idp-plugin.ts` carries an 85 % *function*-coverage gate written
+for the approval workflow, and a table declaration is mostly arrow functions
+no test calls — the `defaultValue: () => new Date()` thunks the generator
+turns into `.defaultNow()`. Adding the `gateway` table there took that gate
+from 90 % to 69 % and failed a run that had nothing to do with approvals. The
+declaration lives in `server/gateways/schema.ts` and is spread into the
+plugin's `schema` from there; `getAuthTables()`, the DM-1 generator and the
+drift gate see no difference. `admin/endpoints.ts`'s header already said this
+about that file — believe it for schemas too.
+
+**`/gateway/*` is same-origin with the issuer, and everything odd about it
+follows from that** (**D91**). It proxies an operator-named upstream on the
+IdP's own hostname, so: cookies are stripped outbound (a browser sends this
+IdP's session cookie to `/gateway/x`), `Set-Cookie` is stripped inbound (an
+upstream would otherwise set one on the issuer's origin and path), the CSP is
+forced to `sandbox; default-src 'none'` — set *explicitly*, so
+`security-headers.ts`'s `setUnlessPresent` leaves it, because the IdP's own
+policy concedes `'unsafe-inline'` — and a `Location` that resolves off the
+upstream's origin is deleted. The key → JWT cache means **a ban is not
+re-checked for up to ten minutes**; `admin/guard.ts` calls
+`resetGatewayTokenCache()` so a revocation made through this process is
+immediate, and anything that ends a user's or a key's access must keep doing
+so.
+
 **The integration suite runs against a local Postgres, and must.** It used to
 default to the deployment's own Neon instance in `us-east-2` — **~102 ms per
 round trip** from here — and every context it builds drops a schema and applies
@@ -561,7 +586,8 @@ changed `baseColor`.
 Plans live outside the repository in `~/.claude/plans/`, in this order:
 `generate-a-plan-to-lovely-teacup.md` → `we-had-…-buzzing-thimble.md` →
 `finish-idp-v1-s3-m6-m14.md` → `review-the-current-implementation-splendid-dragon.md`
-(owner review round 1, 2026-08-25).
+(owner review round 1, 2026-08-25) → `backend-systems-validate-the-luminous-backus.md`
+(API gateways, **D91**, 2026-08-29).
 
 Sessions end on context and hand off through status.md. New owner review
 findings recorded there are **pre-work**: they come before anything still open

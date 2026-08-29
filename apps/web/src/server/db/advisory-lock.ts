@@ -34,6 +34,8 @@ export const LOCK_KEYS = {
   bootstrapAdmin: 4,
   cleanup: 5,
   rotateKeys: 6,
+  /** FR-GW-2: the same discipline `reconcileClients` has, for the gateways. */
+  reconcileGateways: 7,
 } as const
 
 export type LockName = keyof typeof LOCK_KEYS

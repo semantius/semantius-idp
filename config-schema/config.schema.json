@@ -684,6 +684,31 @@
       },
       "additionalProperties": false
     },
+    "gateways": {
+      "description": "Authenticating reverse proxies, keyed by name: `/gateway/<name>[/<rest>]` streams every method to `<url>/<rest>`. A request carrying `x-api-key` and no `Authorization` has the key exchanged for a session JWT — the same exchange `GET /api/auth/token` performs, with the same ban re-check and the same `azp` — and the JWT is injected as `Authorization: Bearer`, which is what lets a client holding only an API key reach a resource server that validates JWTs against the JWKS. The result is cached for ten minutes, so a revocation takes up to that long to bite unless it goes through this process's admin API. Entries are reconciled into the `gateway` table at start-up under `oauth.reconcile.prune` semantics; rows added on `/admin/gateways` are never touched by that sweep. Each entry is `{ \"url\": \"https://api.internal\", \"requireAuth\": false }`. An upstream reached over plain http receives the minted bearer token in clear.",
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Absolute http(s) URL of the upstream, with no trailing slash, query or fragment. `/gateway/<name>/<rest>` is forwarded to `<url>/<rest>`."
+          },
+          "requireAuth": {
+            "description": "Refuse a request that carries neither `Authorization` nor `x-api-key` instead of forwarding it anonymously. For an upstream that has no anonymous role of its own.",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "additionalProperties": false
+      }
+    },
     "admin": {
       "default": {},
       "type": "object",

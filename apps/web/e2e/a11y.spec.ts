@@ -82,6 +82,7 @@ const ADMIN_PAGES = [
   // it is open, not as a route of their own.
   "/admin/users",
   "/admin/clients",
+  "/admin/gateways",
   "/admin/roles",
   "/admin/audit",
   // FR-ADMIN-7. The base stack runs `read-only` so the page is here to scan;

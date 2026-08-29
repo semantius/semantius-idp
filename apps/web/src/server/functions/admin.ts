@@ -47,6 +47,7 @@ import type {
   QuerySuccess,
   SchemaTable,
 } from "../admin/database"
+import { maskConnectionString } from "../config/mask"
 import { claimDraft } from "../http/draft"
 import type { Draft } from "../http/draft"
 import { claim } from "../http/one-shot"
@@ -187,6 +188,27 @@ export interface AdminClientRow {
   managedBy: "file" | "database"
 }
 
+/** A row of `/admin/gateways` (FR-GW-7, **D91**). */
+export interface AdminGatewayRow {
+  name: string
+  /**
+   * Userinfo-masked, the way `/admin/system` masks a connection string.
+   * `lib/gateway-rules.ts` refuses a target that carries any, so in practice
+   * this changes nothing — it is here because a row written before that rule,
+   * or by hand in `psql`, must not put a password on an administrator's
+   * screen.
+   */
+  url: string
+  requireAuth: boolean
+  enabled: boolean
+  /**
+   * Config-owned rows cannot be edited here (FR-GW-2): the next restart would
+   * undo it. Manual ones can. The column says so directly, unlike the clients'
+   * `userId === null` marker (**D91**).
+   */
+  source: "config" | "manual"
+}
+
 export interface AdminRoleRow {
   name: string
   description?: string
@@ -210,7 +232,13 @@ export interface AdminSystemInfo {
     retiring: number
   }
   startup: { steps: { name: string; skipped?: string }[] }
-  /** Pretty-printed JSON; the page shows it in a `<pre>`. */
+  /**
+   * Pretty-printed JSON; the page shows it in a `<pre>`.
+   *
+   * Both sweeps when both ran — the clients' (FR-OIDC-2) and the gateways'
+   * (FR-GW-2) — under one key each, because the page has one "last reconcile"
+   * block and two of them would be two blocks saying the same kind of thing.
+   */
   reconcile: string | null
   /** Pretty-printed **masked** JSON (SEC-5). */
   config: string
@@ -622,6 +650,37 @@ export const fetchClients = createServerFn({ method: "GET" }).handler(
 )
 
 /**
+ * The API gateways, config-owned and admin-added alike (FR-GW-7, **D91**).
+ *
+ * One query: the table is a list an operator typed, so there is no paging and
+ * no filter. The proxy's own registry cache is deliberately **not** read here
+ * — this page is the place an administrator comes to find out what is stored,
+ * and answering from a cache that a stale-while-revalidate cycle may be about
+ * to replace would make the page disagree with the database it is describing.
+ */
+export const fetchGateways = createServerFn({ method: "GET" }).handler(
+  async (): Promise<AdminGatewayRow[] | null> => {
+    const context = await admin()
+    if (!context) return null
+    const { runtime } = context
+    const schema = runtime.database.schema
+
+    const rows = await runtime.database.db
+      .select()
+      .from(schema.gateway)
+      .orderBy(asc(schema.gateway.name))
+
+    return rows.map((row) => ({
+      name: row.name,
+      url: maskConnectionString(row.url),
+      requireAuth: row.requireAuth === true,
+      enabled: row.enabled !== false,
+      source: row.source === "config" ? "config" : "manual",
+    }))
+  }
+)
+
+/**
  * Display names for every user id on a page of audit rows (item 13).
  *
  * **One `IN` query for the whole page**, not one per row: a page of fifty
@@ -752,14 +811,30 @@ export const fetchSystemInfo = createServerFn({ method: "GET" }).handler(
       startup: {
         steps: (startup.steps ?? []) as { name: string; skipped?: string }[],
       },
-      reconcile: startup.reconcile
-        ? JSON.stringify(startup.reconcile, null, 2)
-        : null,
+      reconcile: reconcileSummary(startup),
       config: JSON.stringify(body.config, null, 2),
       warnings: runtime.warnings.map((warning) => warning.message),
     }
   }
 )
+
+/**
+ * What start-up reconciled, as one document or nothing at all.
+ *
+ * `null` rather than `{}` when neither sweep ran: the page renders this in a
+ * `<pre>` and an empty object is a paragraph that says nothing.
+ */
+function reconcileSummary(startup: {
+  reconcile?: unknown
+  gateways?: unknown
+}): string | null {
+  const summary: Record<string, unknown> = {}
+  if (startup.reconcile) summary.clients = startup.reconcile
+  if (startup.gateways) summary.gateways = startup.gateways
+  return Object.keys(summary).length === 0
+    ? null
+    : JSON.stringify(summary, null, 2)
+}
 
 export interface AdminDatabaseSchema {
   schemaName: string

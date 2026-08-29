@@ -34,6 +34,7 @@ import type { AuditAction } from "../auth/plugins/idp-plugin"
 import type { IdpConfig } from "../config/derive"
 import type { DbHandle } from "../db/client"
 import type { Logger } from "../logger"
+import { resetGatewayTokenCache } from "../gateways/proxy"
 import { revokeAllForUser } from "../oidc/revoke-user-tokens"
 import { loadAdmins } from "./admins"
 import {
@@ -118,6 +119,17 @@ const GUARDED = new Set([
 export function isGuardedAdminPath(path: string): boolean {
   return GUARDED.has(path)
 }
+
+/**
+ * Endpoints that end an API key's usefulness without being admin endpoints
+ * (**D91**).
+ *
+ * `/api-key/delete` is the api-key plugin's own, reachable from `/account` and
+ * from `/admin/users/:id` alike, and a revoked key must stop opening a gateway
+ * in this process straight away rather than when the ten-minute cache expires.
+ * `/api-key/update` is here because it is how a key is disabled or re-dated.
+ */
+const ENDS_KEY_ACCESS = new Set(["/api-key/delete", "/api-key/update"])
 
 interface AdminBody {
   userId?: unknown
@@ -261,6 +273,26 @@ export function buildAdminAfterHook(deps: AdminGuardDeps): AuthMiddleware {
   return createAuthMiddleware(async (ctx) => {
     const path = ctx.path
     const isUnban = path === "/admin/unban-user"
+
+    // **D91's punch-through.** The gateway caches a key → JWT exchange for up
+    // to ten minutes, and a cache hit skips the FR-KEY-2 owner re-check — so
+    // without this a suspended user's key would keep opening every gateway
+    // until the entry expired. Cheap (three `Map.clear()`s) and rare, so it is
+    // unconditional rather than scoped to the affected key: this hook does not
+    // know which key belongs to whom, and a targeted invalidation would be a
+    // second place that has to agree about that.
+    //
+    // Here, in the hook, rather than in the route handlers behind the buttons,
+    // for **D67**'s reason: the admin API is a supported interface, so a
+    // `curl` to `/admin/ban-user` has to leave the process in the same state
+    // the UI does.
+    if (
+      (isUnban || isGuardedAdminPath(path) || ENDS_KEY_ACCESS.has(path)) &&
+      !(ctx.context.returned instanceof APIError)
+    ) {
+      resetGatewayTokenCache()
+    }
+
     if (!isUnban && !isGuardedAdminPath(path)) return
 
     // A thrown `APIError` reaches this slot as the returned value; there is

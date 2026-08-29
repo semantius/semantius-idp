@@ -83,6 +83,7 @@ describe("CFG-4 defaults", () => {
         resources: [],
         reconcile: { prune: false },
       },
+      gateways: {},
       admin: {
         adminRoles: ["admin"],
         allowImpersonation: false,

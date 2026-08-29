@@ -8,6 +8,7 @@ import {
   Settings2,
   ShieldCheck,
   Users,
+  Waypoints,
 } from "lucide-react"
 
 import {
@@ -56,6 +57,7 @@ export function adminNavItems(ui: UiContext, t: Catalog): ShellNavItem[] {
     },
     { to: "/admin/users", label: t.admin.nav.users, icon: Users },
     { to: "/admin/clients", label: t.admin.nav.clients, icon: AppWindow },
+    { to: "/admin/gateways", label: t.admin.nav.gateways, icon: Waypoints },
     { to: "/admin/roles", label: t.admin.nav.roles, icon: ShieldCheck },
     { to: "/admin/audit", label: t.admin.nav.audit, icon: ScrollText },
     ...(ui.adminDatabaseEnabled

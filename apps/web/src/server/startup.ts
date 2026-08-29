@@ -20,6 +20,8 @@
  *   what to change.
  */
 
+import { eq } from "drizzle-orm"
+
 import { isSetupPending } from "./admin/first-user"
 import { createAudit } from "./audit"
 import type { IdpConfig } from "./config/derive"
@@ -33,6 +35,8 @@ import { splitRoles } from "./role-utils"
 import { refreshDatabaseClientOrigins } from "./oidc/client-origins"
 import { reconcileClients } from "./oidc/reconcile"
 import type { ReconcileDiff } from "./oidc/reconcile"
+import { reconcileGateways } from "./gateways/reconcile"
+import type { GatewayReconcileDiff } from "./gateways/reconcile"
 
 export interface StartupDeps {
   config: IdpConfig
@@ -49,6 +53,8 @@ export interface StartupResult {
   steps: { name: string; skipped?: string }[]
   /** What the FR-OIDC-2 sync did, for `/admin/system` (M10). */
   reconcile?: ReconcileDiff
+  /** What the FR-GW-2 sync did, for `/admin/system` (**D91**). */
+  gateways?: GatewayReconcileDiff
   /**
    * Roles stored on users that the catalog does not contain (FR-ROLE-2).
    *
@@ -124,6 +130,7 @@ export async function runStartup(
   const steps: StartupResult["steps"] = [...earlier]
   const audit = createAudit(deps.database, logger)
   let lastReconcile: ReconcileDiff | undefined
+  let lastGatewayReconcile: GatewayReconcileDiff | undefined
 
   // -- signing key (FR-OIDC-16, risk R11) ----------------------------------
   await step(steps, "signing key", async () => {
@@ -139,6 +146,27 @@ export async function runStartup(
   } else {
     await step(steps, "reconcile clients", async () => {
       lastReconcile = await reconcileClients({
+        config,
+        database: deps.database,
+        locking,
+        audit,
+        logger,
+      })
+    })
+  }
+
+  // -- gateways (FR-GW-2, **D91**) -----------------------------------------
+  // Skipped only when there is nothing to do *and* nothing to undo: an empty
+  // `gateways` block with rows still in the table is exactly the case the
+  // sweep exists for — a target removed from the file has to stop answering.
+  if (
+    Object.keys(config.file.gateways).length === 0 &&
+    !(await hasConfigGateways(deps.database))
+  ) {
+    steps.push({ name: "reconcile gateways", skipped: "no gateways configured" })
+  } else {
+    await step(steps, "reconcile gateways", async () => {
+      lastGatewayReconcile = await reconcileGateways({
         config,
         database: deps.database,
         locking,
@@ -184,6 +212,7 @@ export async function runStartup(
     roleWarnings,
     completedAt: new Date().toISOString(),
     ...(lastReconcile ? { reconcile: lastReconcile } : {}),
+    ...(lastGatewayReconcile ? { gateways: lastGatewayReconcile } : {}),
   }
 }
 
@@ -256,6 +285,22 @@ async function ensureSigningKey(
  * holds it, so it is warned about at boot and flagged in the admin UI.
  */
 /** Returns what it logged, so `/admin/roles` can show the same thing. */
+/**
+ * Whether the table still holds a file-owned gateway (FR-GW-2).
+ *
+ * The reason the step is not simply skipped on an empty `gateways` block: a
+ * target removed from the file has to *stop answering*, and the sweep that
+ * makes that true is the step that would have been skipped.
+ */
+async function hasConfigGateways(database: DbHandle): Promise<boolean> {
+  const rows = await database.db
+    .select({ id: database.schema.gateway.id })
+    .from(database.schema.gateway)
+    .where(eq(database.schema.gateway.source, "config"))
+    .limit(1)
+  return rows.length > 0
+}
+
 async function warnAboutUnknownRoles(deps: StartupDeps): Promise<string[]> {
   const catalog = new Set(deps.config.roles.map((role) => role.name))
   const rows = await deps.database.db

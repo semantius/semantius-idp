@@ -7,6 +7,49 @@ Notable changes to this project. The format follows
 Decisions that changed a numbered requirement carry their `D` number from
 [spec-v1.md](spec-v1.md) §12, where the reasoning is.
 
+## [Unreleased]
+
+### Added
+
+- **API gateways: `/gateway/<name>` is an authenticating reverse proxy**
+  (**D91**, FR-GW-1..7). A backend resource server — PostgREST, Neon's Data
+  API — validates this IdP's JWTs against the JWKS and has never heard of its
+  per-user API keys, so a client holding only a key could not call one at all.
+  A gateway closes that gap: it streams every method, header, query and body
+  through to a configured upstream and, when the caller presented `x-api-key`
+  and no `Authorization` of their own, exchanges the key for a session JWT and
+  injects it as `Authorization: Bearer`.
+
+  **The exchange rides Better Auth's own token endpoint**, called in-process
+  the way `oidc/protocol-proxy.ts` calls the OAuth ones, because the FR-KEY-2
+  ban re-check, the last-used accounting and `azp = apiKeys.tokenClientId`
+  live only there — a second implementation would be a second chance to forget
+  the ban check.
+
+  Targets are declared in a new `gateways` block of `config.jsonc` and
+  reconciled into a `gateway` table at start-up, the way `oauth_clients.jsonc`
+  is, with an explicit `source: config | manual` column instead of the
+  clients' `userId === null` marker. `/admin/gateways` lists both kinds:
+  config rows are read-only, rows added there survive every restart.
+  `requireAuth: true` refuses an unauthenticated call instead of forwarding it
+  anonymously.
+
+  The key → JWT result is cached for `min(600 s, jwt.sessionToken.ttl − 60 s)`,
+  which is a **security trade-off and not only a performance one**: a cache
+  hit skips the owner re-check for that long. It is bounded by the TTL, by a
+  wholesale clear on every admin ban, removal and API-key revocation in the
+  same process, and by a per-address limiter on cache *misses* so an
+  invalid-key flood cannot amplify into the database. A revocation made
+  outside this process takes up to ten minutes; that is stated in the
+  configuration reference and pinned by a test.
+
+  Gateway responses are hardened for the fact that they are **same-origin with
+  the issuer**: cookies never cross in either direction, the CSP is forced to
+  `sandbox; default-src 'none'` so the IdP's own `'unsafe-inline'` concession
+  cannot apply to upstream HTML, and a `Location` that resolves off the
+  upstream's origin is stripped. `Upgrade` answers 501; an unreachable
+  upstream answers 502; an unknown and a disabled name answer the same 404.
+
 ## [0.5.0] — 2026-08-28
 
 ### Changed

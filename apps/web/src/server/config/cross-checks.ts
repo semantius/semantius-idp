@@ -329,6 +329,22 @@ export function runCrossChecks(input: CrossCheckInput): CrossCheckResult {
     })
   }
 
+  // -------------------------------------------------------- gateways (FR-GW) --
+  // Every refusal a single entry can produce is in the zod schema, which sees
+  // one entry at a time. This is the rule that needs two values: an https
+  // issuer minting a bearer token and forwarding it to a plain-http upstream
+  // puts that token on the wire in clear (**D91**). Loopback is exempt because
+  // a sidecar on the same host is the ordinary shape and there is no wire.
+  for (const [name, target] of Object.entries(config.gateways)) {
+    if (!isProduction) continue
+    if (!target.url.startsWith("http://")) continue
+    if (isLocalhostUrl(target.url)) continue
+    warnings.push({
+      code: "gateway.insecure_upstream",
+      message: `Gateway \`${name}\` forwards to a plain-http upstream (${safeOrigin(target.url) ?? target.url}). The JWT minted from the caller's API key is sent to it in clear, and it is a credential for every resource server that trusts this issuer.`,
+    })
+  }
+
   // -------------------------------------------------------------- warnings --
   if (!emailEnabled) {
     warnings.push({

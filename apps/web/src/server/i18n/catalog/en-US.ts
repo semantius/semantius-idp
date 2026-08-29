@@ -381,6 +381,7 @@ export const enUS = {
       dashboard: "Overview",
       users: "Users",
       clients: "Applications",
+      gateways: "Gateways",
       roles: "Roles",
       audit: "Audit",
       database: "Database",
@@ -596,6 +597,60 @@ export const enUS = {
       endSessionNeedsUri:
         "RP-initiated logout needs at least one post-logout redirect URI. Add one, or turn the option off.",
     },
+    // FR-GW-7, **D91**.
+    gateways: {
+      title: "API gateways",
+      description:
+        "Authenticating reverse proxies. A call to /gateway/<name> is forwarded to the target, and a caller who presents only an API key has it exchanged for a JWT the target can verify. Ones from config.jsonc are reconciled at start-up and cannot be edited here; ones added here survive restarts and can.",
+      empty: "No gateways are configured.",
+      add: "Add a gateway",
+      addHelp:
+        "The name becomes the URL path segment: a gateway called `data` answers on /gateway/data. The target is called with the caller's method, headers, query and body unchanged.",
+      edit: "Edit",
+      editTitle: "Edit the gateway",
+      editHelp:
+        "The target and the authentication rule can be changed. The name cannot — it is the URL callers have already configured.",
+      remove: "Remove",
+      removeConfirm:
+        "Removing the gateway stops /gateway/<name> answering. Anything calling it starts getting 404s immediately.",
+      enable: "Enable",
+      disable: "Disable",
+      // One of these per row, so the name has to say which row (**D80**).
+      actionsFor: (name: string) => `Actions for ${name}`,
+      name: "Name",
+      nameFixed:
+        "The name cannot be changed — it is the URL callers have configured. Remove the gateway and add it again to use a different one.",
+      url: "Target URL",
+      urlHelp:
+        "Absolute http(s), no trailing slash. /gateway/<name>/rest is forwarded to <target>/rest.",
+      requireAuth: "Require authentication",
+      requireAuthHelp:
+        "Refuse a call that carries neither an Authorization header nor an API key, instead of forwarding it anonymously. Leave it off for a target with an anonymous role of its own, such as PostgREST.",
+      auth: "Authentication",
+      authRequired: "Required",
+      authAnonymous: "Anonymous allowed",
+      managedBy: "Managed by",
+      managedFile: "From the file",
+      managedDatabase: "Added here",
+      status: "Status",
+      enabled: "Enabled",
+      disabled: "Disabled",
+      // What the form decides before posting (D62's pattern), worded for the
+      // person typing rather than for an operator reading a startup failure.
+      invalidName:
+        "Use lower-case letters, digits, `_` and `-`, starting with a letter or a digit — the name is a URL path segment.",
+      urlRequired: "A target URL is required.",
+      urlNotAbsolute: (url: string) =>
+        `${url} is not an absolute URL. Include the scheme, as in https://api.internal.`,
+      urlScheme: (url: string) => `${url} must use http or https.`,
+      urlTrailingSlash: (url: string) =>
+        `${url} must not end with a slash — the sub-path is appended to it.`,
+      urlQuery: (url: string) =>
+        `${url} must not contain a query string; the caller's own query is forwarded unchanged.`,
+      urlFragment: (url: string) => `${url} must not contain a "#" fragment.`,
+      urlCredentials: (url: string) =>
+        `${url} must not contain a username or password. Credentials for the target belong in the request, not in its URL.`,
+    },
     roles: {
       title: "Roles",
       description:
@@ -729,6 +784,11 @@ export const enUS = {
       // is not the disclosure SEC-7 guards against on `/signup` — and the
       // sentence it replaced was about a password the dialog never asked for.
       emailExists: "An account with that e-mail address already exists.",
+      gatewayExists: "A gateway with that name already exists.",
+      gatewayFromFile:
+        "That gateway comes from config.jsonc. Edit the file and restart the server.",
+      gatewayInvalid:
+        "The gateway could not be saved. Check the name and the target URL.",
     },
     notices: {
       approved: "Approved.",
@@ -758,6 +818,11 @@ export const enUS = {
         "The application has been updated. It is a public client, so it has no secret — it authenticates with PKCE. Change its type to Web to issue one.",
       clientDisabled: "The application has been disabled.",
       clientEnabled: "The application has been enabled.",
+      gatewayCreated: "The gateway has been added.",
+      gatewayUpdated: "The gateway has been updated.",
+      gatewayDeleted: "The gateway has been removed.",
+      gatewayDisabled: "The gateway has been disabled.",
+      gatewayEnabled: "The gateway has been enabled.",
       created: "The account has been created.",
       // D70: the account exists and the one-time link does not. Says which
       // half succeeded and names both ways back, because the alternative was

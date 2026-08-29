@@ -225,6 +225,33 @@
     "reconcile": { "prune": false }
   },
 
+  // Authenticating reverse proxies (FR-GW). `/gateway/<name>[/<rest>]` is
+  // streamed to `<url>/<rest>` with the method, headers, query and body
+  // unchanged. A caller that sends `x-api-key` and no `Authorization` has the
+  // key exchanged for a session JWT — the same exchange `GET /api/auth/token`
+  // performs, so the ban re-check, the last-used accounting and `azp` are all
+  // identical — and the JWT is injected as `Authorization: Bearer`. That is
+  // what lets a client holding only an API key reach a resource server which
+  // validates this issuer's JWTs against the JWKS and knows nothing about
+  // API keys.
+  //
+  // The exchange is cached in-process for ten minutes, so a key revoked
+  // outside this process keeps working for up to that long (D91).
+  //
+  // The name is a URL path segment: lower-case letters, digits, `_` and `-`.
+  // The target is absolute http(s) with no trailing slash. `requireAuth: true`
+  // refuses an unauthenticated call instead of forwarding it anonymously —
+  // leave it off for a target with an anonymous role of its own, like
+  // PostgREST.
+  //
+  // Entries here are reconciled into the `gateway` table at start-up and
+  // swept when they leave the file, under `oauth.reconcile.prune`. Gateways
+  // added on /admin/gateways are never touched by that sweep.
+  "gateways": {
+    // "data": { "url": "https://postgrest.internal:3000" },
+    // "admin-api": { "url": "https://api.internal", "requireAuth": true }
+  },
+
   "admin": {
     "adminRoles": ["admin"],
 

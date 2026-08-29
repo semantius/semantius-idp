@@ -60,11 +60,45 @@ describe("startup sequence (OPS-2)", () => {
     expect(result.steps.map((step) => step.name)).toEqual([
       "signing key",
       "reconcile clients",
+      // FR-GW-2: beside the client reconcile, under a lock of its own.
+      "reconcile gateways",
       // D50: after the reconcile, because it reads the rows it just wrote.
       "client origins",
       "validate roles",
       "first-run check",
     ])
+  })
+
+  it("skips the gateway sweep only when there is nothing to sweep (FR-GW-2)", async () => {
+    // The skip is a real decision rather than an optimisation: an empty
+    // `gateways` block with rows still in the table is exactly the case the
+    // sweep exists for, so it must not be skipped then.
+    const ctx = await createTestContext("startup-gateways")
+    contexts.push(ctx)
+
+    const skipped = await start(ctx)
+    expect(
+      skipped.result.steps.find((step) => step.name === "reconcile gateways")
+        ?.skipped
+    ).toBe("no gateways configured")
+
+    await ctx.database.db.insert(ctx.database.schema.gateway).values({
+      id: crypto.randomUUID(),
+      name: "left-behind",
+      url: "https://gone.example",
+      requireAuth: false,
+      source: "config",
+      enabled: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+
+    const swept = await start(ctx)
+    expect(
+      swept.result.steps.find((step) => step.name === "reconcile gateways")
+        ?.skipped
+    ).toBeUndefined()
+    expect(swept.result.gateways?.disabled).toEqual(["left-behind"])
   })
 
   it("generates exactly one signing key and reuses it on the next boot (FR-OIDC-16)", async () => {

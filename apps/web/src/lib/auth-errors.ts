@@ -105,6 +105,16 @@ export function messageForErrorCode(
     case "invalid_client_definition":
     case "scope_not_allowed":
       return t.admin.refusals.clientInvalid
+    // FR-GW-7, **D91**: the same three shapes the client endpoints answer
+    // with, for the same three reasons.
+    case "gateway_already_exists":
+      return t.admin.refusals.gatewayExists
+    case "gateway_managed_by_file":
+      return t.admin.refusals.gatewayFromFile
+    case "gateway_not_found":
+      return t.errors.notFound.description
+    case "invalid_gateway_definition":
+      return t.admin.refusals.gatewayInvalid
     case "rate_limited":
       return t.errors.rateLimited.description
     case "server_error":

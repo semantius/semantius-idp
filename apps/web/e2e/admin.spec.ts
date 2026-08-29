@@ -639,6 +639,71 @@ test.describe("the admin area", () => {
     ).toHaveCount(0)
   })
 
+  test("a file-managed row's edit URL lands on the list with a reason (D93)", async ({
+    page,
+    app,
+  }) => {
+    // Not `notFound()`, which is a centered page with no sidebar and no link
+    // out, replying "this does not exist" about a row that is visible on the
+    // list. The write itself must still be impossible — the next restart would
+    // undo it (FR-OIDC-2, FR-GW-2) — so the refusal is a redirect carrying the
+    // reason, which is the shape every other refusal on those pages uses.
+    await signInAsAdmin(page, app)
+
+    await app.goto("/admin/clients/e2e-app/edit")
+    await expect(page).toHaveURL(new RegExp(`${app.basePath}/admin/clients`))
+    await expect(
+      page.getByText(/comes from oauth_clients\.jsonc/)
+    ).toBeVisible()
+
+    await app.goto("/admin/gateways/fromfile/edit")
+    await expect(page).toHaveURL(new RegExp(`${app.basePath}/admin/gateways`))
+    await expect(page.getByText(/comes from config\.jsonc/)).toBeVisible()
+  })
+
+  test("leaving a form with unsaved changes asks first (D93)", async ({
+    page,
+    app,
+  }) => {
+    // The hazard the move to pages makes bigger rather than creates: Escape
+    // already discarded a dialog, but since **D82** the sidebar is permanently
+    // on screen with eight one-click destinations, D93 adds a breadcrumb with
+    // two more, and Back now means something. A redirect-URI list is copied
+    // out of another system, and **D62** built an entire one-shot draft stash
+    // so a *server refusal* would not cost it.
+    await signInAsAdmin(page, app)
+    await app.goto("/admin/clients/new")
+
+    // **Scoped to the sidebar's landmark.** Since **D93** the breadcrumb
+    // carries a link with the same name on this very page — `t.admin.title`
+    // survives exactly here, as the navigation's `aria-label`, so it is what
+    // tells the two apart.
+    const nav = page.getByRole("navigation", { name: "Administration" })
+
+    // A clean form does not ask. Asserted first, because a guard that blocked
+    // everything would pass the interesting half of this test.
+    await nav.getByRole("link", { name: "Applications" }).click()
+    await expect(page).toHaveURL(new RegExp(`${app.basePath}/admin/clients$`))
+
+    await app.goto("/admin/clients/new")
+    await page.getByLabel("Name").fill("Half Typed")
+    await nav.getByRole("link", { name: "Users" }).click()
+
+    const asked = modal(page)
+    await expect(asked).toBeVisible()
+    await expect(asked.getByText(/have not been saved/)).toBeVisible()
+
+    // Cancel opts out: still here, and still holding what was typed.
+    await asked.getByRole("button", { name: "Stay on this page" }).click()
+    await expect(page).toHaveURL(new RegExp(`${app.basePath}/admin/clients/new`))
+    await expect(page.getByLabel("Name")).toHaveValue("Half Typed")
+
+    // …and the other answer really does leave.
+    await nav.getByRole("link", { name: "Users" }).click()
+    await modal(page).getByRole("button", { name: "Discard and leave" }).click()
+    await expect(page).toHaveURL(new RegExp(`${app.basePath}/admin/users`))
+  })
+
   test("roles are read-only, and the system page describes the deployment", async ({
     page,
     app,

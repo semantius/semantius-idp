@@ -95,7 +95,14 @@ export function GuardedForm({
         description={t.common.unsaved.description}
         open={blocker.status === "blocked"}
         onOpenChange={(next) => {
-          if (next || leaving.current) return
+          if (next) return
+          if (leaving.current) {
+            // Cleared as it is read: a blocked navigation that does not
+            // complete would otherwise leave the flag set, and the next
+            // Escape would be taken for a discard.
+            leaving.current = false
+            return
+          }
           blocker.reset?.()
         }}
       >

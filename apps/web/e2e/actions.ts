@@ -187,23 +187,18 @@ export async function openMenuDialog(
   return dialog
 }
 
-export async function openDialog(
-  page: Page,
-  name: string,
-  /**
-   * Where to look for the trigger. `/admin/clients` grew a per-row Edit and a
-   * per-row Rotate secret (**D72**), so "the first button called Edit" stopped
-   * being a useful answer — it is whichever application happens to sort first.
-   * Absent means the page, which is what every caller before this wanted.
-   */
-  within?: Locator
-): Promise<Locator> {
+/**
+ * Presses a control that opens a dialog, and returns the dialog.
+ *
+ * The `within` parameter this used to take is gone with **D93**: it existed
+ * because `/admin/clients` grew a per-row Edit whose trigger could not be
+ * found by name alone, and Edit is a page now. Every remaining caller opens a
+ * dialog from a control that is unique on its page — a confirmation.
+ */
+export async function openDialog(page: Page, name: string): Promise<Locator> {
   // Before the click the dialog is not in the DOM at all (Base UI portals on
   // open), so the trigger is the only thing this can match.
-  await (within ?? page)
-    .getByRole("button", { name, exact: true })
-    .first()
-    .click()
+  await page.getByRole("button", { name, exact: true }).first().click()
   const dialog = modal(page)
   await expect(dialog).toBeVisible()
   return dialog

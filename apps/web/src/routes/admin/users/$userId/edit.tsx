@@ -23,7 +23,11 @@ import {
 } from "@/server/functions/admin"
 import { getCatalog } from "@/server/i18n"
 import { runAdminAction } from "@/server/http/admin-actions"
-import { readFormMulti, redirectWithCookies } from "@/server/http/auth-proxy"
+import {
+  readFormMulti,
+  redirectWithCookies,
+  withError,
+} from "@/server/http/auth-proxy"
 import { stashDraft, withDraft } from "@/server/http/draft"
 import { requireSession } from "@/server/http/require-session"
 import { getRuntime } from "@/server/runtime"
@@ -127,7 +131,7 @@ export const Route = createFileRoute("/admin/users/$userId/edit")({
             roles: valuesOf("roles"),
           })
           return redirectWithCookies(
-            `${withDraft(here, draft)}${draft ? "&" : "?"}error=${profile.error}`
+            withError(withDraft(here, draft), profile.error)
           )
         }
 

@@ -2,7 +2,7 @@
 
 **As of:** 2026-08-29 · **Branch:** `main` · **Head:** `144b9e5`, last tag **v0.6.1**
 **Plan:** `~/.claude/plans/users-has-a-full-binary-meteor.md` (full-page forms)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D97**
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D98**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
 gate; API gateways (FR-GW, **D91**/**D92**) landed on 2026-08-29, and the
@@ -126,6 +126,71 @@ README quick start against it, and confirming `latest` from outside.
   changes one.
 
 ---
+
+## The axe scan runs once (2026-08-29, **D98**)
+
+The owner asked why the end-to-end suite takes nine and a half minutes, and
+then why everything in it runs twice. Both questions have the same answer and
+one of them has a defect in it.
+
+**Nothing overlaps.** `playwright.config.ts` sets `workers: 1` and
+`fullyParallel: false`, and the sub-path project declares
+`dependencies: ["host-root"]`, so wall clock is the sum of the tests: 519 s of
+test time plus about 50 s bringing the two stacks up and down. Where it goes,
+from the run that gated v0.6.0 — the v0.6.1 run was the same shape at 499 s:
+
+| spec | total | tests | per test |
+| --- | --- | --- | --- |
+| admin | 194 s | 34 | 5.7 s |
+| **a11y** | **131 s** | **6** | **21.8 s** |
+| database | 43 s | 12 | 3.6 s |
+| account | 36 s | 8 | 4.6 s |
+| signup | 27 s | 6 | 4.5 s |
+| the other six specs | 88 s | 38 | 2.3 s |
+
+There is no padding in it — not one `waitForTimeout` in the suite. The five
+seconds a typical test costs is `createVerifiedUser`: register, poll the
+captured-mail directory on a 250 ms tick, follow the verification link, sign
+in, each step a real round trip through the container with scrypt at the end
+of it.
+
+**The a11y file is the one place the doubling buys nothing**, and it is a
+quarter of the suite. What axe measures — contrast, labels, roles, accessible
+names — is read off the rendered DOM, and the mount path changes only the URLs
+in it. The one way the two shapes could produce different results is a
+stylesheet that 404s under the mount, moving every computed contrast at once,
+and `rendering.spec.ts` asserts that directly in both projects and far more
+precisely: no request that failed, no sub-resource answering 4xx, and CSS
+**rules actually parsed** rather than a `<link>` that appears in
+`document.styleSheets` with none. It is `testIgnore: "**/a11y.spec.ts"` on the
+sub-path project, so the reason sits beside the two project definitions.
+
+**The asymmetry is the part worth keeping.** A wrong prefix under the sub-path
+shape does not land on a broken page — it lands on `Caddyfile.subpath`'s own
+`respond "Not found" 404`, a body with nothing in it to violate. The duplicate
+scan was more likely to pass falsely than to catch anything.
+
+**Measured, and a warning about how not to measure it.** The three sub-path
+scans cost **54 s** in the run that gated v0.6.1 — 10.6 + 10.6 + 33.0 — and
+the suite is 104 tests down to 101. The verification run afterwards reported
+*more* wall clock, 10.2 minutes against 9.2, because `lint` and `typecheck`
+were running beside it: `lint` alone took 2 m 49 s against its usual ~25 s,
+and every test in the suite is a round trip through a container competing for
+the same cores. **Nothing in this suite can be timed while something else is
+building.** Compare the per-test sums from two quiet runs, or compare
+nothing.
+
+**What is still doubled, and the argument against trusting it.** The other 49
+tests still run in both shapes, and **D97** is the reason to be careful about
+thinning them further: the one sub-path-only defect this repository has
+shipped — the session cookie scoped to the mount — went straight through a
+project that runs the whole suite in that shape, because every test drives
+URLs *under* the mount, where the narrow cookie worked. More runs of the same
+shape is not more coverage. The test that would have caught it does not exist
+yet: **a session used at a route outside the mount**. Tagging the genuinely
+URL-sensitive tests and running only those in the sub-path project is the
+change that follows this one, and it should arrive with that test rather than
+before it.
 
 ## The form fields were invisible (2026-08-29, **D96**)
 

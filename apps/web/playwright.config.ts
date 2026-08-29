@@ -89,6 +89,23 @@ export default defineConfig({
       // while the first is still signing people in only makes failures
       // harder to read.
       dependencies: ["host-root"],
+      // **The axe scan runs once, at the host root** (**D98**). It was 131 s
+      // of a 519 s suite — a quarter of it — for three tests that scan ~25
+      // page states each, and the second pass could not disagree with the
+      // first: axe reads contrast, labels, roles and accessible names off the
+      // DOM, and the mount path changes only the URLs in it. The one way the
+      // two shapes could differ is a stylesheet that 404s under the mount,
+      // which would move every computed contrast — and `rendering.spec.ts`
+      // asserts exactly that, in both projects, far more precisely: no failed
+      // request, no 4xx sub-resource, and rules actually parsed out of the
+      // sheet rather than a `<link>` that merely appears in
+      // `document.styleSheets`.
+      //
+      // The asymmetry is worth knowing before this is reverted: a wrong
+      // prefix lands on `Caddyfile.subpath`'s own `respond "Not found" 404`,
+      // a body with nothing in it to violate — so the duplicate scan was more
+      // likely to pass falsely than to catch anything.
+      testIgnore: "**/a11y.spec.ts",
     },
   ],
 })

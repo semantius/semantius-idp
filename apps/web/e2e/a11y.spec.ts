@@ -28,6 +28,12 @@ import type { Page } from "@playwright/test"
  * says anything useful. The manual half stays in the release checklist. What
  * this catches is the regression nobody would otherwise notice — a field that
  * loses its `<label>` in a refactor.
+ *
+ * **This file runs in the host-root project only** (**D98**) — see the
+ * `testIgnore` on the sub-path project in `playwright.config.ts`, which
+ * carries the reasoning. In short: what axe measures is read off the DOM, and
+ * the mount path changes only the URLs in it, so the second pass cost a
+ * quarter of the suite's running time and could not disagree with the first.
  */
 
 async function scan(page: Page, where: string): Promise<void> {

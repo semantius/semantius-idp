@@ -39,7 +39,8 @@ test.describe("the account area", () => {
     await expect(page.getByText("Confirmed")).toBeVisible()
 
     // D49: the two parts are the inputs; the display name is derived from
-    // them and shown read-only, so there is nothing here to type it into.
+    // them, so there is nothing here to type it into — and since **D95** it is
+    // not on the form at all, because the shell's footer already carries it.
     await page.getByLabel("First name").fill("Renamed")
     await page.getByLabel("Last name").fill("Person")
     await submit(page, "Save")
@@ -58,7 +59,12 @@ test.describe("the account area", () => {
       "a reload does not re-announce a save from before it"
     ).toHaveCount(0)
     await expect(page.getByLabel("First name")).toHaveValue("Renamed")
-    await expect(page.locator("main").getByText("Renamed Person")).toBeVisible()
+    // The derived name, in the one place that still shows it (**D95**). The
+    // footer is outside `<main>`, which is why this is the one assertion in
+    // the file that must *not* be scoped to it.
+    await expect(
+      page.locator('[data-slot="sidebar-footer"]').getByText("Renamed Person")
+    ).toBeVisible()
   })
 
   test("the password changes from the security page and stays on it", async ({

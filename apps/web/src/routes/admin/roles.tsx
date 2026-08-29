@@ -55,6 +55,7 @@ function RolesPage() {
     <AdminShell
       title={t.admin.roles.title}
       description={t.admin.roles.description}
+      wideDescription
     >
       {status ? (
         <p className="mb-4 text-sm text-muted-foreground">

@@ -112,6 +112,31 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ### Changed
 
+- **The display name leaves the `/account` form, and the gateways list says
+  less** (**D95**, FR-ACCT-1, FR-GW-7). The derived name was a read-only row
+  directly under the two fields it is built from, with a sentence beneath it
+  explaining the derivation — three lines saying what "First name" and "Last
+  name" say by sitting above them, on the one page where the value is also on
+  screen anyway: since **D82** the shell's footer carries it, and it re-renders
+  with the save because `/update-user` re-mints the session cookie. Nothing
+  about how the name is derived changed (**D49**). `/admin/gateways`'
+  description was 296 characters against the applications list's 151, and its
+  middle sentence repeated what the Target URL, Authentication and Managed by
+  columns show; it takes the sibling page's exact two-sentence shape, and the
+  API-key-to-JWT exchange moves to the page where you add a gateway. Shortened
+  it still wrapped onto two lines with half the row empty beside it, so the
+  `max-w-2xl` measure comes off the description on all four list pages: the
+  subtitle takes the width of the page's own body, which **D87** had already
+  concluded for `/admin/database` alone. The form pages keep the cap, because
+  their body is `max-w-3xl` and a wider subtitle overhangs it.
+
+- **The "Users" button is off the user detail page** (**D95**). It was the way
+  back to the list before there was a breadcrumb; since **D93** the trail ends
+  `User Manager › Users › <address>` in a row that is always on screen, so the
+  button beside the heading was a second copy of its own middle crumb. The
+  `actions` slot is for what a page does, which is how every other page uses
+  it.
+
 - **US spelling throughout** (**D94**, FR-I18N-1). The repository was written
   in British English — 139 files, ~250 occurrences — while its own message
   catalog is named `en-US.ts`. Four of them were text a person reads: the D57
@@ -182,6 +207,30 @@ Decisions that changed a numbered requirement carry their `D` number from
   the row menu is how to get another.
 
 ### Fixed
+
+- **Two scrollbars on every signed-in page** (**D95**). The shell was `h-svh`
+  *in* the document's flow: a box exactly as tall as the viewport, in a
+  document then exactly as tall as the viewport, and one rounding away from
+  being a hair taller. Windows display scaling makes the viewport's height in
+  CSS pixels fractional — 1417 device pixels at 125 % is 1133.6 — and `100svh`
+  keeps the fraction where `clientHeight` does not, so the document scrolled by
+  half a pixel: a permanent full-height scrollbar with a full-height thumb,
+  beside the content container's real one. A shell that owns the viewport
+  should not be in the flow at all, so it is `fixed inset-x-0 top-0 h-svh` and
+  the document has nothing to scroll. Not `inset-0`, which resolves against the
+  *large* viewport and would leave the bottom of the shell behind a phone's
+  retracted toolbar. The wrapper is a flex column now, so the content's height
+  is the remainder rather than a `calc()` subtracting an assumed banner height
+  — which below `md`, where the banner wraps to two lines, it was not.
+
+- **Two fields in one card had no space between them** (**D95**). The
+  registry's `CardContent` is `px-(--card-spacing)` and nothing else, and
+  preflight zeroes every margin, so on `/admin/clients/$id/edit` the "One per
+  line" description under the redirect URIs ran into the "Post-logout redirect
+  URIs" label a line below it — and all four form pages had it. `AdminCard`'s
+  body is a `grid gap-6`, the gap the kit's own `FieldGroup` uses for stacked
+  fields and twice `Field`'s internal `gap-3`. A card with one child, which is
+  most of them, is unchanged.
 
 - **A client ID of `.` or `..` was accepted and broke its own edit link**
   (**D93**). Both pass `CLIENT_ID_PATTERN` and neither is usable as a path

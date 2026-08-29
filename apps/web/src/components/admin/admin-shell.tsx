@@ -88,14 +88,22 @@ export function AdminShell({
   title: string
   description?: ReactNode
   /**
-   * Drop the `max-w-2xl` measure from the description (**D87**).
+   * Drop the `max-w-2xl` measure from the description (**D87**, **D95**).
    *
-   * The cap is right for a paragraph — 65-odd characters is where prose stops
-   * being comfortable to read — and wrong for a page whose body is a
-   * full-width console: `/admin/database`'s two sentences wrapped onto a
-   * second line while the panel beneath them was twice as wide, which reads
-   * as a paragraph rather than as the subtitle it is. Shortening the sentence
-   * was the alternative and it costs the half that says every run is audited.
+   * **The subtitle takes the width of the page's own body.** The cap is right
+   * for a paragraph — 65-odd characters is where prose stops being
+   * comfortable to read — and right for the form pages, whose body is
+   * `max-w-3xl` and under which a wider subtitle would overhang. It is wrong
+   * for every page whose body is a full-width table or console: two short
+   * lines in a narrow column under a panel twice as wide, which reads as a
+   * paragraph rather than as the subtitle it is.
+   *
+   * D87 found that on `/admin/database` and fixed the one page; the owner
+   * found it again on `/admin/gateways` after **D95** had already shortened
+   * that sentence to the length of its sibling's, which is the answer to
+   * "shorten it" — a subtitle that fits on one line is not helped by a
+   * measure, and the measure is what was putting it on two. All four list
+   * pages with a description pass this now.
    */
   wideDescription?: boolean
   /** Buttons that belong beside the heading rather than in the body. */
@@ -138,6 +146,21 @@ export function AdminShell({
  * padding and in whether the heading sat inside the panel or above it. The
  * heading is a real `<h3>`: the axe pass and several e2e selectors go through
  * heading roles, so the element cannot become a styled `<div>`.
+ *
+ * **The body spaces its own children** (**D95**). The registry's `CardContent`
+ * is `px-(--card-spacing)` and nothing else — a plain block, and preflight
+ * zeroes every margin — so two fields in one card sat flush against each
+ * other: on `/admin/clients/$id/edit` the "One per line" description under the
+ * redirect URIs ran straight into the "Post-logout redirect URIs" label above
+ * the next textarea, one line's leading apart, and all four form pages
+ * (clients, gateways, users new and edit) had it. `gap-6`, which is what
+ * the kit's own `FieldGroup` uses for stacked fields, and twice `Field`'s
+ * internal `gap-3` so the two rhythms cannot be confused for each other.
+ *
+ * **`grid`, not `flex`**: a card holding a table holds it inside an
+ * `overflow-x-auto` container, and a flex item is free to be squashed by a
+ * sibling in a way a grid row is not. A card with one child is unchanged
+ * either way, which is most of them.
  */
 export function AdminCard({
   title,
@@ -171,7 +194,7 @@ export function AdminCard({
           {action ? <CardAction>{action}</CardAction> : null}
         </CardHeader>
       ) : null}
-      <CardContent>{children}</CardContent>
+      <CardContent className="grid gap-6">{children}</CardContent>
     </Card>
   )
 }

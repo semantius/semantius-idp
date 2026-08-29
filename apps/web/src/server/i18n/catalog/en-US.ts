@@ -289,8 +289,6 @@ export const enUS = {
       title: "Profile",
       saved: "Profile updated.",
       description: "Your name as it appears to applications you sign in to.",
-      nameDerived:
-        "Built from your first and last name. Change those and it follows.",
       submit: "Save",
       roles: "Roles",
       noRoles: "No roles.",
@@ -650,12 +648,17 @@ export const enUS = {
     // FR-GW-7, **D91**.
     gateways: {
       title: "API gateways",
+      // **D95**: the same two-sentence shape as the applications list, whose
+      // second sentence this is word for word. What a gateway *does* moved to
+      // `addHelp`, on the page where you decide to make one: three sentences
+      // under a heading is a paragraph, and the mechanics were repeating what
+      // the Target URL, Authentication and Managed by columns already show.
       description:
-        "Authenticating reverse proxies. A call to /gateway/<name> is forwarded to the target, and a caller who presents only an API key has it exchanged for a JWT the target can verify. Ones from config.jsonc are reconciled at start-up and cannot be edited here; ones added here survive restarts and can.",
+        "Authenticating reverse proxies. Ones from config.jsonc are reconciled at start-up and cannot be edited here; ones added here survive restarts and can.",
       empty: "No gateways are configured.",
       add: "Add a gateway",
       addHelp:
-        "The name becomes the URL path segment: a gateway called `data` answers on /gateway/data. The target is called with the caller's method, headers, query and body unchanged.",
+        "The name becomes the URL path segment: a gateway called `data` answers on /gateway/data. The target is called with the caller's method, headers, query and body unchanged, and a caller who presents only an API key has it exchanged for a JWT the target can verify.",
       edit: "Edit",
       editTitle: "Edit the gateway",
       editHelp:

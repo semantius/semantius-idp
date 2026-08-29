@@ -2,7 +2,7 @@
 
 **As of:** 2026-08-29 · **Branch:** `main` · **Head:** `2687f72`, last tag **v0.5.0**
 **Plan:** `~/.claude/plans/users-has-a-full-binary-meteor.md` (full-page forms)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D94**
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D95**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
 gate; API gateways (FR-GW, **D91**/**D92**) landed on 2026-08-29, and the
@@ -90,6 +90,87 @@ README quick start against it, and confirming `latest` from outside.
   changes one.
 
 ---
+
+## Four owner notes on the D93 pages (2026-08-29, **D95**)
+
+Visual feedback on the pages D93 built, from the owner running the app. None of
+the four was reachable by any gate in this repository: three are spacing and
+flow, which nothing here asserts, and the fourth is a paragraph that is correct
+and too long.
+
+**1. The read-only display name is off `/account`.** It was a row directly under
+the two fields it is derived from, with a sentence beneath it explaining the
+derivation — three lines saying what "First name" and "Last name" say by sitting
+above them. And on that page the derived value is on screen anyway: since
+**D82** the shell's footer carries it, updated by the same response, because
+`/update-user` re-mints the session cookie and the proxy replays it. FR-ACCT-1
+said "shown **read-only**", so it is amended rather than quietly reinterpreted,
+and `e2e/account.spec.ts`'s assertion moves from `main` to
+`[data-slot="sidebar-footer"]` — the same D82 note that file already carries
+about the address, from the other side. How the name is derived is untouched
+(**D49**).
+
+**2. Two fields in one card had no space between them.** The registry's
+`CardContent` is `px-(--card-spacing)` and nothing else — a plain block, and
+preflight zeroes every margin — so on `/admin/clients/$id/edit` the "One per
+line" description under the redirect URIs ran into the "Post-logout redirect
+URIs" label a line below it. All four form pages had it. `AdminCard`'s body is
+a `grid gap-6` now: the gap the kit's own `FieldGroup` uses for stacked fields,
+twice `Field`'s internal `gap-3` so the two rhythms cannot be read as one, and
+`grid` rather than `flex` because a card can hold a table and a grid row cannot
+be squashed by a sibling. A card with one child is unchanged, which is most of
+them; the two on `/admin/system` that were spacing themselves with `mt-4` stop
+doing it, and its startup card's fragment becomes one item so the heading stays
+against its `<pre>`.
+
+**3. Two scrollbars, and the useless one was the outer one.** The shell was
+`h-svh` *in* the document's flow: a box exactly as tall as the viewport, inside
+a document then exactly as tall as the viewport, and one rounding away from
+being a hair taller. Windows display scaling makes the viewport's height in CSS
+pixels fractional — 1417 device pixels at 125 % is 1133.6 — and `100svh` keeps
+the fraction where `clientHeight` does not, so the document scrolled by half a
+pixel and drew a full-height scrollbar with a full-height thumb beside the
+content container's real one. **A shell that owns the viewport should not be in
+the flow at all**: `fixed inset-x-0 top-0 h-svh`, and there is nothing for the
+document to scroll whatever the rounding. Not `inset-0`, which resolves against
+the *large* viewport and would leave the bottom of the shell behind a phone's
+retracted toolbar. The wrapper is a flex column, so the provider is
+`min-h-0 flex-1` instead of `h-svh` plus a `calc()` subtracting `--banner-h`,
+and the content can no longer disagree with the impersonation banner's real
+height — which below `md`, where it wraps to two lines, it did. D87's
+requirement is met by the flex chain: a resolved flex length is definite in the
+way `min-h-svh` was not, which is what `/admin/database`'s panel groups need.
+
+**4. `/admin/gateways` says less.** Its description was 296 characters against
+the applications list's 151 — three sentences under a heading, the middle of
+which repeated what the Target URL, Authentication and Managed by columns
+already show. It takes the sibling page's exact two-sentence shape; the
+API-key-to-JWT exchange moved into `addHelp`, on the page where you decide to
+make one.
+
+That was half the answer, and the owner said so: shortened, it still wrapped
+onto two lines with half the row empty to the right of it, because
+`PageHeader` caps every description at `max-w-2xl`. **The subtitle takes the
+width of the page's own body** — the cap is right for the form pages, whose
+body is `max-w-3xl` and under which a wider subtitle overhangs the form it
+introduces, and wrong for a page whose body is a full-width table. That is
+what D87 concluded for `/admin/database` and fixed for that page alone; all
+four list pages with a description — applications, gateways, roles, audit —
+pass `wideDescription` now. Shortening the sentence was worth doing on its own
+merits; it was never going to fix the wrap.
+
+**5. The "Users" button is off `/admin/users/$id`.** The same D93 leftover from
+the other end: it was the way back to the list before there was a breadcrumb,
+and the trail now ends `User Manager › Users › <address>` in a row that is
+always on screen — so the button beside the heading was a second copy of its
+own middle crumb. The `actions` slot is for what a page *does*, which is how
+every other page uses it.
+
+Green after: lint, typecheck, the 666 unit tests. **The three visual ones are
+not provable from here** — the axe scans assert contrast and roles, not
+spacing, and no gate in this repository looks at a scrollbar. `/admin/database`
+is the page to re-check first, because it is the one that depends on the height
+chain item 3 rewrote.
 
 ## Full-page create and edit, and a breadcrumb header (2026-08-29, **D93**)
 

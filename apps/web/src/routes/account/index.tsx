@@ -30,9 +30,17 @@ import { PendingForm, SubmitButton } from "@/components/common/pending-form"
  * with the rest of them; changing a first name does not.
  *
  * **The display name is not one of them** (**D49**). It is derived from the
- * first and last name in `site.nameFormat` order and shown read-only, so a
- * deployment's user list sorts and reads one way rather than however each
- * person happened to type their own name in. Saving recomputes it.
+ * first and last name in `site.nameFormat` order, so a deployment's user list
+ * sorts and reads one way rather than however each person happened to type
+ * their own name in. Saving recomputes it.
+ *
+ * **And it is not shown here either** (**D95**). It used to be, as a read-only
+ * row directly under the two fields it is built from, with a sentence
+ * underneath explaining the derivation — three lines saying what "First name"
+ * and "Last name" say by sitting above them, on the one page where the derived
+ * value is also on screen anyway: since **D82** the shell's footer carries it
+ * on every page of both signed-in areas, and it updates with the rest of the
+ * page when a save re-mints the session cookie.
  */
 export const Route = createFileRoute("/account/")({
   loader: ({ context, location }) => {
@@ -141,17 +149,6 @@ function ProfilePage() {
               autoComplete="family-name"
               required={false}
             />
-          </div>
-          {/* Read-only, and recomputed on save. Not a disabled input: a
-              greyed-out field invites people to try to type in it. */}
-          <div className="grid gap-1.5">
-            <p className="text-sm font-medium">{t.common.name}</p>
-            <p className="text-sm text-muted-foreground">
-              {profile.name || profile.email}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {t.account.profile.nameDerived}
-            </p>
           </div>
           <div>
             <SubmitButton>{t.account.profile.submit}</SubmitButton>

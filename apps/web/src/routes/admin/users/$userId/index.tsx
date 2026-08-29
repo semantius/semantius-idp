@@ -180,17 +180,17 @@ function UserDetailPage() {
   const self = gate.admin && gate.email === user.email
 
   return (
+    /*
+     * No "Users" button beside the heading (**D95**). It was the way back to
+     * the list before there was a breadcrumb; since **D93** the trail above
+     * this page ends `User Manager › Users › <address>` and its middle crumb
+     * is that link — in a row that is always on screen, because the header
+     * sits outside the scroll container. The `actions` slot is for what a
+     * page *does*, which is how every other page uses it.
+     */
     <AdminShell
       title={user.email}
       description={<UserBadges user={user} t={t} />}
-      actions={
-        <Link
-          to="/admin/users"
-          className={buttonVariants({ variant: "outline", size: "sm" })}
-        >
-          {t.admin.users.title}
-        </Link>
-      }
     >
       <FormRefusal>
         {messageForErrorCode(error, t, ui.passwordMinLength)}

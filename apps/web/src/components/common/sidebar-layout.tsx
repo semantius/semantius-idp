@@ -330,15 +330,48 @@ export function SidebarLayout({
   useRouteChangeFocus()
 
   return (
-    // `--banner-h` is what the fixed sidebar is offset by, and it is only ever
-    // right because the desktop sidebar exists at `md` and up (the registry's
-    // container is `hidden … md:flex`), where the banner is one line: `py-2`
-    // twice around a `size="sm"` button, which is `h-7`. The banner is pinned
-    // to the same variable at that breakpoint so the two cannot drift; below
-    // it the sidebar is an overlay sheet and nothing depends on the height.
-    <div style={{ "--banner-h": "2.75rem" } as React.CSSProperties}>
+    /**
+     * **The shell is out of the document's flow** (**D95**).
+     *
+     * It was `h-svh` *in* the flow, which is a box exactly as tall as the
+     * viewport sitting inside a document that is then exactly as tall as the
+     * viewport — and one rounding away from being a hair taller. On Windows
+     * display scaling the viewport's height in CSS pixels is fractional
+     * (1417 device pixels at 125 % is 1133.6), `100svh` keeps the fraction and
+     * the client height does not, so the document scrolled by half a pixel:
+     * a full-height scrollbar with a full-height thumb, permanently, beside
+     * the content container's own. Two scrollbars, and the useless one was
+     * the outer one. Fixed, the shell contributes nothing to the document's
+     * scrollable area — a fixed box cannot make the viewport scroll — so
+     * there is exactly one scrollbar on every page of both areas, and it is
+     * the one D87 put there.
+     *
+     * `inset-x-0 top-0 h-svh` rather than `inset-0`: `inset-0` would resolve
+     * against the *large* viewport, so on a phone the bottom of the shell
+     * would sit behind a retracted toolbar. `h-svh` is what it has always
+     * been and stays the small one.
+     *
+     * `--banner-h` is what the fixed sidebar is offset by, and it is only ever
+     * right because the desktop sidebar exists at `md` and up (the registry's
+     * container is `hidden … md:flex`), where the banner is one line: `py-2`
+     * twice around a `size="sm"` button, which is `h-7`. The banner is pinned
+     * to the same variable at that breakpoint so the two cannot drift; below
+     * it the sidebar is an overlay sheet and nothing depends on the height.
+     * **The content no longer depends on that variable at all** — it is a
+     * flex column now, so a banner that wraps to two lines on a narrow
+     * viewport takes the room from the shell rather than pushing its last
+     * 44 pixels off the bottom.
+     */
+    <div
+      className="fixed inset-x-0 top-0 flex h-svh flex-col overflow-hidden"
+      style={{ "--banner-h": "2.75rem" } as React.CSSProperties}
+    >
       {impersonated ? (
-        <ImpersonationBanner ui={ui} t={t} className="md:h-(--banner-h)" />
+        <ImpersonationBanner
+          ui={ui}
+          t={t}
+          className="shrink-0 md:h-(--banner-h)"
+        />
       ) : null}
 
       <ScopedSidebarProvider
@@ -347,22 +380,22 @@ export function SidebarLayout({
         // `overflow-x-hidden` is semantius-app's own guard: the admin tables
         // are wider than the viewport and would otherwise push the whole shell
         // sideways instead of scrolling inside their own container.
-        // **`h-svh`, not only the registry's `min-h-svh`** (**D87**). A
-        // minimum height leaves the box *indefinite*, and a percentage
-        // height resolves against nothing — which is exactly what a page
-        // that wants to fill the window needs. `/admin/database`'s panel
-        // groups set `height: 100%` on themselves; against `min-h-svh` alone
-        // that computed to `auto`, so the schema tree grew to eighteen
-        // tables, the document scrolled, and the SQL editor — two panes with
-        // `flex-basis: 0` inside a group with no height — rendered at zero
-        // and disappeared. Both classes are kept: they are different
-        // tailwind-merge groups, and the minimum is still right for the
-        // pages that do not fill.
-        className={cn(
-          "h-svh overflow-x-hidden",
-          impersonated &&
-            "h-[calc(100svh-var(--banner-h))] min-h-[calc(100svh-var(--banner-h))]"
-        )}
+        //
+        // **A definite height, not a minimum** (**D87**). A minimum leaves the
+        // box *indefinite*, and a percentage height resolves against nothing.
+        // `/admin/database`'s panel groups set `height: 100%` on themselves;
+        // against the registry's `min-h-svh` alone that computed to `auto`, so
+        // the schema tree grew to eighteen tables, the document scrolled, and
+        // the SQL editor — two panes with `flex-basis: 0` inside a group with
+        // no height — rendered at zero and disappeared. It used to be spelled
+        // `h-svh` here, twice, with a `calc()` subtracting the banner. Since
+        // **D95** it is the remainder of a flex column whose height is the
+        // viewport, which is definite in the same way and cannot disagree with
+        // the banner's actual height. `min-h-0` is load-bearing and replaces
+        // the registry's `min-h-svh`: a flex item's automatic minimum size is
+        // its content, so without it the shell grows past the viewport instead
+        // of the content scrolling inside it.
+        className="min-h-0 flex-1 overflow-x-hidden"
       >
         {/* The registry says to wrap the app in this, and semantius-app wraps
             its root in it. Here rather than in `__root.tsx`, because the only

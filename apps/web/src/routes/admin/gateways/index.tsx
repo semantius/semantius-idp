@@ -150,6 +150,7 @@ function GatewaysPage() {
     <AdminShell
       title={t.admin.gateways.title}
       description={t.admin.gateways.description}
+      wideDescription
       actions={
         // A link, not a dialog trigger (**D93**). `new` is a static segment
         // and `$name` a dynamic one, and `isValidGatewayName` admits `new` —

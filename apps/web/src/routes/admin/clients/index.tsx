@@ -181,6 +181,7 @@ function ClientsPage() {
     <AdminShell
       title={t.admin.clients.title}
       description={t.admin.clients.description}
+      wideDescription
       actions={
         // A link, not a dialog trigger (**D93**). `/admin/clients/new` is
         // static and `$clientId` dynamic, so it can never be shadowed by an

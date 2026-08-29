@@ -99,6 +99,7 @@ function AuditPage() {
     <AdminShell
       title={t.admin.audit.title}
       description={t.admin.audit.description}
+      wideDescription
     >
       <PendingForm
         busy={t.common.loading}

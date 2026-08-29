@@ -171,10 +171,12 @@ function SystemPage() {
             {info.signingKeys.published}
           </DetailRow>
         </dl>
+        {/* No `mt-` of its own: since **D95** the card's body spaces its own
+            children, and a margin on top of that gap is two spacings. */}
         <PendingForm
           busy={t.common.loading}
           method="post"
-          className="mt-4 grid gap-2"
+          className="grid gap-2"
         >
           <p className="text-xs text-muted-foreground">
             {t.admin.system.rotateHelp}
@@ -196,15 +198,16 @@ function SystemPage() {
             </li>
           ))}
         </ul>
+        {/* One grid item, not two: a fragment's children are the card body's
+            own children, and the heading belongs against its block rather
+            than a body gap away from it (**D95**). */}
         {info.reconcile ? (
-          <>
-            <h4 className="mt-4 mb-1 text-sm font-medium">
-              {t.admin.system.reconcile}
-            </h4>
+          <div className="grid gap-1">
+            <h4 className="text-sm font-medium">{t.admin.system.reconcile}</h4>
             <pre className="overflow-x-auto rounded bg-muted p-2 text-xs">
               {info.reconcile}
             </pre>
-          </>
+          </div>
         ) : null}
       </AdminCard>
 

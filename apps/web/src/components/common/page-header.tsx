@@ -36,7 +36,12 @@ export function PageHeader({
 }: {
   title: string
   description?: ReactNode
-  /** Drop the `max-w-2xl` measure — see `AdminShell` (**D87**). */
+  /**
+   * Drop the `max-w-2xl` measure — see `AdminShell` (**D87**, **D95**). Set
+   * by every page whose body is full width, which is all four list pages and
+   * the database console; the form pages keep it, because their body is
+   * `max-w-3xl` and a subtitle wider than the form it introduces overhangs it.
+   */
   wideDescription?: boolean
   /** Buttons that belong beside the heading rather than in the body. */
   actions?: ReactNode

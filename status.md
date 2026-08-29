@@ -32,9 +32,11 @@ spec-v0 does not mention cookies, and its only sentence about paths asks for the
 opposite. `server.cookiePath` (default `/`, the whole host, which is also Better
 Auth's own default) and `server.cookieDomain` (unset, host-only) replace it.
 
-**This is a breaking change for one shape**: two IdPs on one host at different
-mounts previously had non-colliding session cookies for free and now need
-`server.cookiePath` set. Nothing else changes — `/` is strictly broader than the
+**It is a fix, not a change of direction** — the derivation it removes was
+never a requirement, and `/` is the library's own default. **One shape needs a
+setting it did not before**: two IdPs on one host at different mounts had
+non-colliding session cookies for free and now say so with
+`server.cookiePath`. Nothing else changes — `/` is strictly broader than the
 old value, so every path that received the cookie still does.
 
 Gates run for it: lint, typecheck, unit (668), the config-schema and

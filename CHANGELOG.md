@@ -7,7 +7,7 @@ Notable changes to this project. The format follows
 Decisions that changed a numbered requirement carry their `D` number from
 [spec-v1.md](spec-v1.md) §12, where the reasoning is.
 
-## [Unreleased]
+## [0.6.1] — 2026-08-29
 
 ### Added
 
@@ -16,25 +16,31 @@ Decisions that changed a numbered requirement carry their `D` number from
   where the app is mounted. `cookiePath` defaults to `/` — the whole host —
   and `cookieDomain` is unset, which is what host-only means.
 
-### Changed
+### Fixed
 
-- **BREAKING: a sub-path deployment's session cookie is scoped to `/`, not to
-  the mount path** (**D97**, FR-AUTH-5, OPS-10, R3). `Path` used to be derived
+- **A sub-path deployment's session cookie was withheld from every route
+  outside the mount** (**D97**, FR-AUTH-5, OPS-10, R3). `Path` was derived
   from `server.baseUrl`, so `https://apps.example.com/idp` scoped its session
-  to `/idp` and withheld it from every route outside the mount. That is how a
-  `/gateway` alias at the origin root came to authenticate as nobody: **D92**
-  makes a refused session fall through to anonymous rather than answering 401,
-  so there was no symptom other than the wrong rows coming back.
+  to `/idp`. Nothing ever asked for that — spec-v0 does not mention cookies,
+  and its one sentence about paths asks for the opposite; the derivation
+  arrived with OPS-10 and was written into the requirements as though it were
+  one of them. That is how a `/gateway` alias at the origin root came to
+  authenticate as nobody: **D92** makes a refused session fall through to
+  anonymous rather than answering 401, so there was no symptom other than the
+  wrong rows coming back.
 
-  `/` is Better Auth's own default, so this stops narrowing a sane one. Set
-  `server.cookiePath` to the mount path to restore the previous behavior —
-  **two IdPs sharing one host at different mounts now need it**, or their
-  session cookies collide.
+  The default is `/` now, which is Better Auth's own — this stops overriding a
+  sane default rather than replacing one. `Path` was never the security
+  boundary it looked like either: it keeps a cookie off a sibling path by
+  accident of scope, not by policy.
 
   Existing sessions survive the upgrade in place: the browser keeps the old
   `/idp`-scoped cookie and receives a `/`-scoped one on the next write, and
-  the narrower cookie is the one it stops sending first. A deployment that
-  wants a clean cut can revoke sessions.
+  the narrower cookie is the one it stops sending first. `/` is strictly
+  broader than the old value, so every path that received the cookie still
+  does. **Two IdPs sharing one host at different mounts** should set
+  `server.cookiePath` to their own mount: they had non-colliding cookies for
+  free before and now need to say so.
 
 ## [0.6.0] — 2026-08-29
 
@@ -1295,7 +1301,8 @@ were questions, and one was "polish every page".
   says where it came from, so it was sending anyone who inspected it to a
   repository that is not this one.
 
-[Unreleased]: https://github.com/semantius/semantius-idp/compare/v0.6.0...main
+[Unreleased]: https://github.com/semantius/semantius-idp/compare/v0.6.1...main
+[0.6.1]: https://github.com/semantius/semantius-idp/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/semantius/semantius-idp/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/semantius/semantius-idp/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/semantius/semantius-idp/compare/v0.3.1...v0.4.0

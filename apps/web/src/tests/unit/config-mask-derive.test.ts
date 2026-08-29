@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest"
 
 import { deriveConfig, parseBasePath } from "@/server/config/derive"
-import { maskConfig, maskConnectionString } from "@/server/config/mask"
+import {
+  maskConfig,
+  maskConnectionString,
+  maskGatewayTarget,
+} from "@/server/config/mask"
 import { configFileSchema } from "@/server/config/schema/config-schema"
 import { BUILT_IN_ROLES } from "@/server/config/schema/roles-schema"
 import { baseConfig, VALID_SECRET } from "@/tests/fixtures/config-files"
@@ -49,6 +53,48 @@ describe("mask.ts (CFG-5, SEC-5)", () => {
     // …and the operationally useful parts survive.
     expect(masked).toContain("db.example.com")
     expect(masked).toContain("sslmode=verify-full")
+  })
+
+  /**
+   * The bug this function exists for (**D93**). `maskConnectionString` ends in
+   * `url.toString()`, and `URL` supplies the empty path — so every bare-origin
+   * gateway target came back with a trailing slash, `checkGatewayUrl` answered
+   * `trailing_slash`, and the edit form refused a save that changed only a
+   * checkbox.
+   */
+  it("returns a gateway target byte for byte", () => {
+    for (const target of [
+      "https://api.example.com",
+      "http://upstream.internal:9999",
+      "https://api.example.com/v1",
+      "https://api.example.com/v1/deep",
+    ]) {
+      expect(maskGatewayTarget(target)).toEqual({ url: target, masked: false })
+    }
+  })
+
+  it("masks a gateway target that carries a password, and says it did", () => {
+    // Only reachable for a row written by hand: `checkGatewayUrl` refuses
+    // userinfo on every write path. The flag is what stops the edit page
+    // prefilling a lossy value into a full-replace endpoint.
+    const masked = maskGatewayTarget("https://svc:hunter2@api.example.com")
+    expect(masked.masked).toBe(true)
+    expect(masked.url).not.toContain("hunter2")
+    expect(masked.url).toContain("api.example.com")
+
+    // A username alone is not a secret and is left where it is — but the
+    // string still round-trips unchanged, which is the property that matters.
+    expect(maskGatewayTarget("https://svc@api.example.com")).toEqual({
+      url: "https://svc@api.example.com",
+      masked: false,
+    })
+  })
+
+  it("refuses to promise anything about a target it cannot parse", () => {
+    expect(maskGatewayTarget("not a url")).toEqual({
+      url: "***",
+      masked: true,
+    })
   })
 
   it("masks database.url in place", () => {

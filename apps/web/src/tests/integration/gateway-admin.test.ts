@@ -15,7 +15,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { createLocalAccountIssuer } from "@better-auth/core/db"
 import { eq } from "drizzle-orm"
 
+import { checkGatewayUrl } from "@/lib/gateway-rules"
 import { createUserWithoutRequest } from "@/server/auth/provisioning"
+import { maskGatewayTarget } from "@/server/config/mask"
 import { reconcileGateways } from "@/server/gateways/reconcile"
 import {
   gatewayRegistry,
@@ -152,6 +154,35 @@ describe("the gateway admin endpoints", () => {
     )
     expect(updated.status).toBe(200)
     expect((await gatewayRow("edge"))?.trustProxy).toBe(false)
+  })
+
+  /**
+   * The round trip `/admin/gateways`'s Edit makes, end to end (**D93**).
+   *
+   * A bare origin is the *common* target shape — the path is optional — and
+   * the list page used to run every row through `maskConnectionString`, which
+   * normalizes: `new URL("https://api.example.com").toString()` supplies the
+   * empty path. `checkGatewayUrl` answers `trailing_slash` for that, so the
+   * edit dialog refused a save that changed nothing but a checkbox, naming a
+   * slash the operator never typed. Asserted against the row *and* against the
+   * projection the page renders, because the endpoint was never the half that
+   * was wrong.
+   */
+  it("keeps a bare-origin target byte-identical on the way back out", async () => {
+    const cookie = await adminCookie()
+    const target = "https://api.example.com"
+    expect(
+      (await post("/idp/create-gateway", { name: "bare", url: target }, cookie))
+        .status
+    ).toBe(200)
+
+    expect((await gatewayRow("bare"))?.url).toBe(target)
+    expect(maskGatewayTarget((await gatewayRow("bare"))!.url)).toEqual({
+      url: target,
+      masked: false,
+    })
+    // And the rule the form applies to what it was handed agrees.
+    expect(checkGatewayUrl((await gatewayRow("bare"))!.url)).toBeUndefined()
   })
 
   it("refuses a duplicate name", async () => {

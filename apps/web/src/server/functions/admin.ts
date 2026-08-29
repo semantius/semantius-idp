@@ -47,7 +47,7 @@ import type {
   QuerySuccess,
   SchemaTable,
 } from "../admin/database"
-import { maskConnectionString } from "../config/mask"
+import { maskGatewayTarget } from "../config/mask"
 import { claimDraft } from "../http/draft"
 import type { Draft } from "../http/draft"
 import { claim } from "../http/one-shot"
@@ -192,13 +192,22 @@ export interface AdminClientRow {
 export interface AdminGatewayRow {
   name: string
   /**
-   * Userinfo-masked, the way `/admin/system` masks a connection string.
-   * `lib/gateway-rules.ts` refuses a target that carries any, so in practice
-   * this changes nothing — it is here because a row written before that rule,
-   * or by hand in `psql`, must not put a password on an administrator's
-   * screen.
+   * The stored target, **verbatim** unless it carries a password.
+   *
+   * It used to go through `maskConnectionString`, which normalizes — and
+   * `new URL("https://api.example.com").toString()` is
+   * `"https://api.example.com/"`, which `checkGatewayUrl` then refuses as a
+   * trailing slash. Opening Edit on a bare-origin target and changing nothing
+   * but a checkbox was refused for a slash the operator never typed.
+   * `maskGatewayTarget` masks password-only and touches nothing else.
    */
   url: string
+  /**
+   * The target above is a lossy projection and must not be prefilled into a
+   * form (**D93**). Only reachable for a row written by hand in `psql`:
+   * `lib/gateway-rules.ts` refuses userinfo on every write path.
+   */
+  urlMasked: boolean
   requireAuth: boolean
   /** Pass the edge's `X-Forwarded-*` through rather than this hop's (**D92**). */
   trustProxy: boolean
@@ -659,6 +668,11 @@ export const fetchClients = createServerFn({ method: "GET" }).handler(
  * — this page is the place an administrator comes to find out what is stored,
  * and answering from a cache that a stale-while-revalidate cycle may be about
  * to replace would make the page disagree with the database it is describing.
+ *
+ * The target is returned **byte for byte** unless it carries a password
+ * (**D93**). It used to go through `maskConnectionString`, which normalizes as
+ * well as masks — and the normalization is what the edit form then refused, for
+ * a trailing slash the operator never typed. See `maskGatewayTarget`.
  */
 export const fetchGateways = createServerFn({ method: "GET" }).handler(
   async (): Promise<AdminGatewayRow[] | null> => {
@@ -672,14 +686,21 @@ export const fetchGateways = createServerFn({ method: "GET" }).handler(
       .from(schema.gateway)
       .orderBy(asc(schema.gateway.name))
 
-    return rows.map((row) => ({
-      name: row.name,
-      url: maskConnectionString(row.url),
-      requireAuth: row.requireAuth === true,
-      trustProxy: row.trustProxy === true,
-      enabled: row.enabled !== false,
-      source: row.source === "config" ? "config" : "manual",
-    }))
+    return rows.map((row) => {
+      // Not `maskConnectionString`: a gateway target is not a connection
+      // string, and that function normalizes on the way out. See
+      // `maskGatewayTarget`.
+      const target = maskGatewayTarget(row.url)
+      return {
+        name: row.name,
+        url: target.url,
+        urlMasked: target.masked,
+        requireAuth: row.requireAuth === true,
+        trustProxy: row.trustProxy === true,
+        enabled: row.enabled !== false,
+        source: row.source === "config" ? "config" : ("manual" as const),
+      }
+    })
   }
 )
 

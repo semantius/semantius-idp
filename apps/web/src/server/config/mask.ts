@@ -114,6 +114,41 @@ export function maskConnectionString(value: string): string {
   }
 }
 
+/**
+ * A gateway target on its way to `/admin/gateways`, and **not normalized**.
+ *
+ * A gateway target is not a connection string, and passing one through
+ * {@link maskConnectionString} was a bug rather than a shortcut: that function
+ * ends in `url.toString()`, and `new URL("https://api.example.com").toString()`
+ * is `"https://api.example.com/"`. `checkGatewayUrl` answers `trailing_slash`
+ * for exactly that, so opening Edit on any gateway whose target is a bare
+ * origin — the common shape, since the path is optional — and changing only a
+ * checkbox produced a refusal about a slash the operator never typed.
+ *
+ * So the stored string is returned **verbatim** unless it actually carries a
+ * password, which `checkGatewayUrl` refuses on write and can therefore only
+ * reach the table by hand in `psql`. `masked` says which happened, because a
+ * masked value is a lossy projection and `/idp/update-gateway` is a full
+ * replace: the edit page refuses to prefill one rather than offering to store
+ * `***` as the target.
+ */
+export function maskGatewayTarget(value: string): {
+  url: string
+  masked: boolean
+} {
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    // Unparseable, so nothing can be promised about it — the same answer
+    // `maskConnectionString` gives, and for the same reason.
+    return { url: MASK, masked: true }
+  }
+  if (url.password === "") return { url: value, masked: false }
+  url.password = MASK
+  return { url: url.toString(), masked: true }
+}
+
 function escapeSegment(segment: string): string {
   return segment.replace(/~/g, "~0").replace(/\//g, "~1")
 }

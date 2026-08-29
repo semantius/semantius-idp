@@ -101,6 +101,20 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ### Fixed
 
+- **A gateway whose target is a bare origin could not be saved from Edit.**
+  `fetchGateways` ran every row through `maskConnectionString`, which does not
+  only mask — it ends in `url.toString()`, and
+  `new URL("https://api.example.com").toString()` is
+  `"https://api.example.com/"`. `checkGatewayUrl` answers `trailing_slash` for
+  that, so opening Edit on the commonest target shape and changing nothing but
+  the "Require authentication" checkbox was refused, naming a slash the
+  operator never typed — and the same projection would have offered `***` back
+  to a full-replace update for a row that really did carry a password. A
+  gateway target is not a connection string: `maskGatewayTarget` returns the
+  stored string byte for byte unless it carries a password, and
+  `AdminGatewayRow.urlMasked` says which happened so a lossy value is never
+  prefilled into a form.
+
 - **No gate had ever booted a container from a `.jsonc` config folder**
   (**D90**). `apps/web/e2e/stack.ts` and `scripts/smoke-test.ts` each build a
   folder that stands in for an operator's, and both wrote the legacy `.json`,

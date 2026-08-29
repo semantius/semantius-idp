@@ -18,17 +18,17 @@ import type { Catalog } from "@/server/i18n"
 
 /**
  * The four fields a gateway is described by, shared by the create and edit
- * dialogs (FR-GW-7, **D91**, **D92**).
+ * **pages** (FR-GW-7, **D91**, **D92**, **D93**).
  *
  * Shared for the reason `client-form-fields.tsx` sets out at length:
  * `/idp/update-gateway` is a **full replace**, so a field the edit form does
- * not render is a field every edit silently resets. One markup, two dialogs,
+ * not render is a field every edit silently resets. One markup, two callers,
  * and that failure mode becomes impossible rather than merely unlikely.
  *
- * **Every id is generated** (`useId`). `name` is unique in a form and
- * emphatically not in a document, and an edit dialog is rendered once per row
- * — a hard-coded `id="name"` would put one id on as many controls as there are
- * gateways, and every `<label for>` on the page would resolve to the first.
+ * **Every id is still generated** (`useId`). There is one of these per page
+ * now rather than one per row, and the rule is unchanged: `name` is unique in
+ * a form and emphatically not in a document, and this is shared markup that
+ * must not care which page mounted it.
  */
 export interface GatewayFormValues {
   name: string
@@ -66,17 +66,31 @@ export function GatewayFormFields({
   values,
   errors,
   fixedName = false,
+  urlMasked = false,
 }: {
   t: Catalog
   values: GatewayFormValues
   errors: GatewayFormErrors
   /**
-   * The edit dialog. The name is the URL segment callers have configured, so
-   * it is shown and not editable — as text plus a hidden input, because a
-   * `disabled` input contributes no name/value pair and the handler would not
-   * know which gateway it was told to change.
+   * The edit page. The name is the URL segment callers have configured, so it
+   * is shown and not editable — as text plus a **hidden input**.
+   *
+   * The hidden input is not what tells the handler which gateway to change:
+   * that comes from the path (**D93**), so the two cannot disagree. It is what
+   * `useGatewayForm` reads. Removing it was tried, and
+   * `validateGatewayForm({ name: "" })` then answered `invalid` and
+   * `preventDefault()`d every save on the edit page — a form that silently
+   * refused to submit, which only the e2e suite could see.
    */
   fixedName?: boolean
+  /**
+   * The stored target carries a password and is therefore **not** prefilled
+   * (**D93**). Saving is a full replace, so offering the masked projection
+   * back would store `***`; the field is empty and says to retype it. Only
+   * reachable for a row written by hand in `psql` — `checkGatewayUrl` refuses
+   * userinfo on every write path.
+   */
+  urlMasked?: boolean
 }) {
   const id = useId()
   const field = (name: string) => `${id}-${name}`
@@ -137,7 +151,7 @@ export function GatewayFormFields({
           }
         />
         <FieldDescription id={field("url-help")}>
-          {t.admin.gateways.urlHelp}
+          {urlMasked ? t.admin.gateways.urlMasked : t.admin.gateways.urlHelp}
         </FieldDescription>
         <FieldError id={field("url-error")}>
           {urlMessage(t, errors.url)}

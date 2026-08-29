@@ -53,6 +53,18 @@ export const enUS = {
     required: "Required",
     yes: "Yes",
     no: "No",
+    // **D93**: a create and an edit are pages now, and a page can be left by a
+    // sidebar entry, a breadcrumb, the back button or a reload. D62 built a
+    // whole one-shot draft stash so a *server* refusal would not cost a
+    // twelve-field form; losing the same form to a stray click would be
+    // incoherent.
+    unsaved: {
+      title: "Leave without saving?",
+      description:
+        "The changes on this page have not been saved. Leaving now discards them.",
+      leave: "Discard and leave",
+      stay: "Stay on this page",
+    },
   },
 
   auth: {
@@ -430,6 +442,12 @@ export const enUS = {
       previous: "Previous",
       next: "Next",
       pageSize: "Per page",
+      // **D93**: the `<h1>` of `/admin/users/$id/edit`. The trail already ends
+      // at the account, so the heading names the *operation* — a bare "Edit"
+      // is a verb with no object as a tab title and a focus target.
+      editTitle: "Edit the account",
+      editHelp:
+        "The display name is built from the first and last name; it is not typed. Everything here is saved together.",
     },
     status: {
       pending: "Pending",
@@ -480,6 +498,12 @@ export const enUS = {
         "They will have to choose a new one the next time they sign in.",
       setRoles: "Roles",
       setRolesHelp: "Tick the roles this account should hold.",
+      // **D93**: on your own account the whole fieldset is disabled, and a
+      // disabled control with no reason beside it reads as a bug. The server
+      // refuses it too (`admin_cannot_change_own_roles`); this is the earlier
+      // of the two gates, and the only one that explains itself in advance.
+      setRolesSelf:
+        "You cannot change your own roles. Ask another administrator to do it.",
       editProfile: "Edit profile",
       emailVerifiedLabel: "E-mail address is confirmed",
       editProfileHelp:
@@ -559,8 +583,23 @@ export const enUS = {
         "Only a Web application keeps a client secret. Changing an application to Web issues one and shows it once; changing it away from Web destroys it and revokes its tokens.",
       onePerLine: "One per line. Matched exactly, so no wildcards.",
       secretTitle: "The client secret",
+      // **D93**: it names the recovery. The dialog is `defaultOpen` with no
+      // confirm-before-close, so Escape destroys the only copy — and nothing
+      // on it said that rotating from the row menu is how to get another.
       secretHelp:
-        "Copy it now — it is stored as a hash and cannot be shown again.",
+        "Copy it now — it is stored as a hash and cannot be shown again. If you lose it, rotate the secret from the application's row to issue a new one.",
+      // **D93**: the twelve fields are one page in three cards. One column of
+      // twelve controls is one column of twelve controls however wide it is,
+      // so grouping — not width — is the fix for "hard to scroll".
+      groupIdentity: "Identity",
+      groupIdentityHelp:
+        "What the application is called and how it identifies itself at the token endpoint.",
+      groupRedirects: "Redirects",
+      groupRedirectsHelp:
+        "Where the authorization code is sent back to, and where a logout may return to.",
+      groupPermissions: "Permissions",
+      groupPermissionsHelp:
+        "What the application may ask for, and what the user is asked to agree to.",
       // **D78**: the consequence, not only the OAuth term. "Public" is what
       // the specification calls it; "no client secret" is the thing an
       // operator was looking for when they registered an application, saw no
@@ -587,6 +626,12 @@ export const enUS = {
       // than for the operator reading a startup failure.
       invalidClientId:
         "Use letters, digits and `. _ ~ -` only — this is what the application sends at the token endpoint.",
+      // **D93**: `.` and `..` pass the character rule and are not usable as a
+      // path segment — a browser resolves `/admin/clients/../edit` to
+      // `/admin/edit` before the request leaves it. Dots in general are fine;
+      // `com.example.app` is an ordinary client id.
+      reservedClientId:
+        "“.” and “..” cannot be used as a client ID — the ID is part of this application's own address here. Any other combination of those characters is fine.",
       nameRequired: "Give the application a name; it is what users are asked to trust.",
       redirectRequired:
         "At least one redirect URI is required — every application here uses the authorization-code flow.",
@@ -652,6 +697,11 @@ export const enUS = {
       invalidName:
         "Use lower-case letters, digits, `_` and `-`, starting with a letter or a digit — the name is a URL path segment.",
       urlRequired: "A target URL is required.",
+      // **D93**: only reachable for a row written by hand in `psql`, because
+      // `checkGatewayUrl` refuses userinfo on every write path. Saving is a
+      // full replace, so prefilling the masked value would store `***`.
+      urlMasked:
+        "The stored target contains a password, so it is not shown here. Type the target again, without credentials in the URL, to save this gateway.",
       urlNotAbsolute: (url: string) =>
         `${url} is not an absolute URL. Include the scheme, as in https://api.internal.`,
       urlScheme: (url: string) => `${url} must use http or https.`,
@@ -816,6 +866,13 @@ export const enUS = {
         "A temporary password is set. They must change it at the next sign-in.",
       keyRevoked: "The API key has been revoked.",
       profileSaved: "Profile updated.",
+      // **D93**: one form, one Save, so one confirmation. The page writes the
+      // profile and the roles in that order.
+      accountSaved: "The account has been updated.",
+      // …and the D70 shape when the second half fails after the first has
+      // already been written: say which half, and where to finish the job.
+      accountSavedRolesFailed:
+        "The profile was saved, but the roles were not changed. Open Edit again to set them.",
       clientCreated: "The application has been registered.",
       // **D78**: the same event, for a client that has no secret to show. It
       // used to be reported with the sentence above and nothing else, so an

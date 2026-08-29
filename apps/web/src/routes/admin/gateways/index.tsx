@@ -1,6 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router"
+import { Link, createFileRoute } from "@tanstack/react-router"
 
 import { Badge } from "@workspace/ui/components/badge"
+import { buttonVariants } from "@workspace/ui/components/button"
 import { Card } from "@workspace/ui/components/card"
 import {
   Empty,
@@ -17,7 +18,6 @@ import {
 } from "@workspace/ui/components/table"
 
 import { AdminShell } from "@/components/admin/admin-shell"
-import { GatewayCreateDialog } from "@/components/admin/gateway-create-dialog"
 import { GatewayRowActions } from "@/components/admin/gateway-row-actions"
 import { FormRefusal } from "@/components/auth/form-parts"
 import { NoticeToast } from "@/components/common/notice-toast"
@@ -26,7 +26,7 @@ import { messageForErrorCode, messageForNoticeCode } from "@/lib/auth-errors"
 import { adminHead } from "@/lib/page-title"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
-import { claimAdminDraft, fetchGateways } from "@/server/functions/admin"
+import { fetchGateways } from "@/server/functions/admin"
 import {
   adminErrorCodeFor,
   callAuth,
@@ -34,8 +34,6 @@ import {
   redirectWithCookies,
   withError,
 } from "@/server/http/auth-proxy"
-import { stashDraft, withDraft } from "@/server/http/draft"
-import type { Draft } from "@/server/http/draft"
 import { requireSession } from "@/server/http/require-session"
 import { getRuntime } from "@/server/runtime"
 
@@ -62,9 +60,16 @@ const HERE = "/admin/gateways"
  *
  * Nothing secret is ever shown here, which is why there is no one-shot stash:
  * a gateway holds a URL and two flags, and the URL is masked password-only on
- * the way out in case a row written by hand carries userinfo.
+ * the way out in case a row written by hand carries userinfo — and otherwise
+ * returned byte for byte, which it was not until D93's first commit.
+ *
+ * **Create and edit are pages** (**D93**): `/admin/gateways/new` and
+ * `/admin/gateways/$name/edit`, each owning the POST it used to send here.
+ * What is left is enable/disable and remove — confirmations, which stay
+ * modals — and the list itself. A manually-added gateway's name links to its
+ * edit page; a config-owned one is plain text beside its badge.
  */
-export const Route = createFileRoute("/admin/gateways")({
+export const Route = createFileRoute("/admin/gateways/")({
   loader: async ({ context, location }) => {
     const search = location.search as Record<string, unknown>
     return {
@@ -75,12 +80,6 @@ export const Route = createFileRoute("/admin/gateways")({
       gateways: (await fetchGateways()) ?? [],
       notice: searchString(search.notice),
       error: searchString(search.error),
-      // The refused submission, so the dialog can reopen with what was typed
-      // rather than empty (D62). Claimed, so a reload shows the form the
-      // administrator is already looking at rather than an older one.
-      draft:
-        (await claimAdminDraft({ data: searchString(search.draft) ?? "" })) ??
-        undefined,
     }
   },
   head: ({ loaderData }) =>
@@ -93,9 +92,10 @@ export const Route = createFileRoute("/admin/gateways")({
         const base = runtime.config.base.basePath
         const here = `${base}${HERE}`
 
-        // Read before the gate, which D63 established and **D81** kept: a
-        // refusal that arrives with the body already in hand can stash the
-        // draft, and the error path below does.
+        // Read before the gate, which D63 established and **D81** kept.
+        // Nothing left here stashes a draft — create and edit are pages of
+        // their own (**D93**) — but the order is the house one, and a handler
+        // that reads after the gate is the one that has to remember why.
         const form = await readForm(request)
 
         const signedIn = await requireSession(runtime, request, HERE)
@@ -133,83 +133,39 @@ export const Route = createFileRoute("/admin/gateways")({
           )
         }
 
-        // Create and update marshal identically — `/idp/update-gateway` takes
-        // create's body, because a full replace *is* a create against a row
-        // that already exists (D72's shape).
-        const updating = form.action === "update"
-        const result = await callAuth(
-          runtime,
-          updating ? "/idp/update-gateway" : "/idp/create-gateway",
-          {
-            name: form.name ?? "",
-            url: form.url ?? "",
-            requireAuth: form.requireAuth === "on",
-            trustProxy: form.trustProxy === "on",
-          },
-          request
-        )
-        if (!result.ok) {
-          // What is left for the server to refuse is a duplicate name, a
-          // file-managed collision or a lost race — none of which the form
-          // could have known (D62). The fields come back rather than being
-          // retyped; nothing password-shaped is in there.
-          const draft = await stashDraft(runtime, {
-            // Which dialog reopens. An edit dialog exists per row, so the name
-            // is what tells them apart — without it, every row's dialog would
-            // reopen carrying one row's rejected values (D72).
-            action: form.action,
-            name: form.name,
-            url: form.url,
-            requireAuth: form.requireAuth,
-            trustProxy: form.trustProxy,
-          })
-          return redirectWithCookies(
-            withError(withDraft(here, draft), adminErrorCodeFor(result))
-          )
-        }
-
-        return redirectWithCookies(
-          `${here}?notice=${updating ? "gatewayUpdated" : "gatewayCreated"}`
-        )
+        // Anything else is a field somebody hand-posted: this route answers
+        // for the two confirmations above, and create and update moved to
+        // their own pages (**D93**).
+        return redirectWithCookies(withError(here, "invalid_request"))
       },
     },
   },
 })
 
 function GatewaysPage() {
-  const { ui, gateways, notice, error, draft } = Route.useLoaderData()
+  const { ui, gateways, notice, error } = Route.useLoaderData()
   const t = getCatalog(ui.locale)
-  // One draft handle, several dialogs that could claim it (**D72**'s rule).
-  // `action` says which; absent means create.
-  const createDraft = draft?.action === "update" ? undefined : draft
-  const editDraftFor = (name: string): Draft | undefined =>
-    draft?.action === "update" && draft.name === name ? draft : undefined
 
   return (
     <AdminShell
       title={t.admin.gateways.title}
       description={t.admin.gateways.description}
       actions={
-        <GatewayCreateDialog
-          t={t}
-          draft={createDraft}
-          // Reopened when there is a restored form to come back to, with the
-          // refusal inside it: a modal covers the page-level alert.
-          reopen={createDraft !== undefined}
-          error={
-            createDraft !== undefined
-              ? messageForErrorCode(error, t, ui.passwordMinLength)
-              : undefined
-          }
-        />
+        // A link, not a dialog trigger (**D93**). `new` is a static segment
+        // and `$name` a dynamic one, and `isValidGatewayName` admits `new` —
+        // so the static segment winning is what keeps a gateway called `new`
+        // editable rather than shadowed.
+        <Link
+          to="/admin/gateways/new"
+          className={buttonVariants({ size: "sm" })}
+        >
+          {t.admin.gateways.add}
+        </Link>
       }
     >
       <NoticeToast message={messageForNoticeCode(notice, t)} />
-      {/* Not when the dialog is reopening with it — the modal would cover it. */}
       <FormRefusal>
-        {draft === undefined
-          ? messageForErrorCode(error, t, ui.passwordMinLength)
-          : undefined}
+        {messageForErrorCode(error, t, ui.passwordMinLength)}
       </FormRefusal>
 
       {gateways.length === 0 ? (
@@ -249,24 +205,26 @@ function GatewaysPage() {
                         menu of things it may not do: an edit here is one the
                         next restart would silently undo (FR-GW-2). */}
                     {gateway.source === "manual" ? (
-                      <GatewayRowActions
-                        t={t}
-                        gateway={gateway}
-                        draft={editDraftFor(gateway.name)}
-                        error={
-                          editDraftFor(gateway.name) !== undefined
-                            ? messageForErrorCode(
-                                error,
-                                t,
-                                ui.passwordMinLength
-                              )
-                            : undefined
-                        }
-                      />
+                      <GatewayRowActions t={t} gateway={gateway} />
                     ) : null}
                   </TableCell>
                   <TableCell>
-                    <span className="font-medium">{gateway.name}</span>
+                    {/* **D93**: the name is the way in, for the reason
+                        `/admin/clients` gives — Edit lived only inside the
+                        per-row menu, which is the first, pinned column. A
+                        config-owned name stays plain text: there is nothing
+                        to open. */}
+                    {gateway.source === "manual" ? (
+                      <Link
+                        to="/admin/gateways/$name/edit"
+                        params={{ name: gateway.name }}
+                        className="font-medium underline underline-offset-4"
+                      >
+                        {gateway.name}
+                      </Link>
+                    ) : (
+                      <span className="font-medium">{gateway.name}</span>
+                    )}
                     <code className="block text-xs text-muted-foreground">
                       /gateway/{gateway.name}
                     </code>

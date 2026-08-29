@@ -10,7 +10,12 @@
 import { z } from "zod"
 
 import { absoluteUrl, flexArray, flexBoolean } from "../zod-helpers"
-import { CLIENT_TYPES, PUBLIC_CLIENT_TYPES, checkRedirectUri } from "@/lib/client-rules"
+import {
+  CLIENT_TYPES,
+  PUBLIC_CLIENT_TYPES,
+  checkRedirectUri,
+  isReservedClientId,
+} from "@/lib/client-rules"
 import type { ClientType } from "@/lib/client-rules"
 
 // The rules themselves live in `lib/client-rules.ts`, because `/admin/clients`
@@ -38,6 +43,13 @@ const clientIdSchema = z
     /^[A-Za-z0-9._~-]+$/,
     "clientId may only contain letters, digits and `. _ ~ -`."
   )
+  // **D93**: `.` and `..` pass the character rule and are not usable as a
+  // path segment — `/admin/clients/<id>/edit` is the row's own address, and a
+  // browser resolves `/admin/clients/../edit` before the request leaves it.
+  // Two exact values, not a rule about dots: `com.example.app` is ordinary.
+  .refine((value) => !isReservedClientId(value), {
+    message: "clientId may not be `.` or `..`.",
+  })
 
 const clientTypeSchema = z.string().superRefine((value, ctx) => {
   if ((CLIENT_TYPES as readonly string[]).includes(value)) return

@@ -1,5 +1,7 @@
 import { useId, useState } from "react"
 
+import { Link } from "@tanstack/react-router"
+
 import { MoreHorizontal } from "lucide-react"
 
 import { Button } from "@workspace/ui/components/button"
@@ -13,25 +15,23 @@ import {
 } from "@workspace/ui/components/dropdown-menu"
 
 import { ActionDialog } from "@/components/common/dialogs"
-import { GatewayEditDialog } from "@/components/admin/gateway-edit-dialog"
 import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 import type { AdminGatewayRow } from "@/server/functions/admin"
-import type { Draft } from "@/server/http/draft"
 import type { Catalog } from "@/server/i18n"
 
 /** Which of the row's dialogs is on screen, if any. */
-type OpenDialog = "edit" | "remove" | null
+type OpenDialog = "remove" | null
 
 /**
  * Everything that can be done to one gateway, behind one control (FR-GW-7,
  * **D91**).
  *
- * Built on `ClientRowActions`, and the three mechanics that file documents are
- * load-bearing here too: the dialogs are controlled from one piece of state
- * because a `menuitem` has ceased to exist by the time its dialog should
- * appear; a refused edit reopens itself by seeding that state; and
+ * Built on `ClientRowActions`, and the mechanics that file documents are
+ * load-bearing here too: the remaining dialog is controlled because a
+ * `menuitem` has ceased to exist by the time its dialog should appear, and
  * Enable/Disable stays a real form post whose `<form>` lives in the row rather
- * than in the portalled popup.
+ * than in the portalled popup. **Edit is a `<Link>` since D93**, and so is the
+ * gateway's name in the row beside it.
  *
  * The trigger's accessible name **names the gateway**, because there is one of
  * these per row.
@@ -39,17 +39,11 @@ type OpenDialog = "edit" | "remove" | null
 export function GatewayRowActions({
   t,
   gateway,
-  draft,
-  error,
 }: {
   t: Catalog
   gateway: AdminGatewayRow
-  /** The refused edit, claimed by the loader — only if it was this row's. */
-  draft?: Draft
-  /** The refusal that came back with it. */
-  error?: string
 }) {
-  const [open, setOpen] = useState<OpenDialog>(draft ? "edit" : null)
+  const [open, setOpen] = useState<OpenDialog>(null)
   // The form is submitted from a control outside it, and `form=` takes an id,
   // so this one has to be unique in the document rather than in the row.
   const toggleForm = useId()
@@ -84,9 +78,12 @@ export function GatewayRowActions({
         <DropdownMenuContent align="start" className="w-auto min-w-44">
           <DropdownMenuGroup>
             <DropdownMenuItem
-              onClick={() => {
-                setOpen("edit")
-              }}
+              render={
+                <Link
+                  to="/admin/gateways/$name/edit"
+                  params={{ name: gateway.name }}
+                />
+              }
             >
               {t.admin.gateways.edit}
             </DropdownMenuItem>
@@ -111,17 +108,6 @@ export function GatewayRowActions({
           </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
-
-      <GatewayEditDialog
-        t={t}
-        gateway={gateway}
-        draft={draft}
-        open={open === "edit"}
-        onOpenChange={(next) => {
-          if (!next) close()
-        }}
-        error={error}
-      />
 
       <ActionDialog
         label={t.admin.gateways.remove}

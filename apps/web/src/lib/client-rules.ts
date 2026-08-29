@@ -69,10 +69,32 @@ export function checkRedirectUri(
 /** `clientId` may only contain letters, digits and `. _ ~ -` (FR-OIDC-3). */
 export const CLIENT_ID_PATTERN = "[A-Za-z0-9._~\\-]+"
 
+/**
+ * The two ids that are legal characters and unusable as a path segment
+ * (**D93**).
+ *
+ * The client id is part of this application's own address for the row —
+ * `/admin/clients/<id>/edit` — and a browser resolves `/admin/clients/../edit`
+ * to `/admin/edit` before the request ever leaves it, so a client called `..`
+ * has an edit link that goes somewhere else entirely. `gateway-rules.ts` gives
+ * exactly this reasoning for gateway names and bans dots outright; a client id
+ * cannot afford that, because `com.example.app` is an ordinary one. **Two
+ * exact values, not a rule about dots.**
+ *
+ * In `isValidClientId`, so `oauth_clients.jsonc` cannot declare one either —
+ * that row would be just as unroutable.
+ */
+export const RESERVED_CLIENT_IDS: readonly string[] = [".", ".."]
+
+export function isReservedClientId(value: string): boolean {
+  return RESERVED_CLIENT_IDS.includes(value)
+}
+
 export function isValidClientId(value: string): boolean {
   return (
     value.length > 0 &&
     value.length <= 128 &&
+    !isReservedClientId(value) &&
     new RegExp(`^${CLIENT_ID_PATTERN}$`).test(value)
   )
 }
@@ -132,7 +154,14 @@ export function validateClientForm(values: ClientFormValues): ClientFormErrors {
       : "spa"
   ) as ClientType
 
-  if (!isValidClientId(values.clientId)) errors.clientId = "invalid"
+  if (isReservedClientId(values.clientId)) {
+    // Named separately from `invalid`: "use letters, digits and `. _ ~ -`" is
+    // exactly what `.` already is, so the generic message would be a refusal
+    // that describes the value as acceptable.
+    errors.clientId = "reserved"
+  } else if (!isValidClientId(values.clientId)) {
+    errors.clientId = "invalid"
+  }
   if (values.name.trim() === "") errors.name = "required"
 
   const redirects = uriLines(values.redirectUris)

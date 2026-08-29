@@ -62,6 +62,15 @@ describe("clientId", () => {
     expect(isValidClientId("")).toBe(false)
     expect(isValidClientId("has space")).toBe(false)
     expect(isValidClientId("a".repeat(129))).toBe(false)
+    // **D93**: legal characters, unusable as a path segment. The id is part
+    // of the row's own address (`/admin/clients/<id>/edit`) and a browser
+    // resolves `..` away before the request leaves it.
+    expect(isValidClientId(".")).toBe(false)
+    expect(isValidClientId("..")).toBe(false)
+    // …and dots in general are still fine: this is two exact values, not a
+    // rule about dots. `com.example.app` is an ordinary client id.
+    expect(isValidClientId("com.example.app")).toBe(true)
+    expect(isValidClientId("...")).toBe(true)
   })
 })
 

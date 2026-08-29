@@ -12,6 +12,7 @@ import {
   FieldLabel,
 } from "@workspace/ui/components/field"
 
+import { AdminCard } from "@/components/admin/admin-shell"
 import { FieldError } from "@/components/auth/form-parts"
 import { CLIENT_ID_PATTERN, validateClientForm } from "@/lib/client-rules"
 import type { ClientFormErrors } from "@/lib/client-rules"
@@ -21,21 +22,27 @@ import type { UiContext } from "@/server/ui-context"
 
 /**
  * The twelve fields an OAuth client is described by, shared by the create and
- * edit dialogs (**D50**, **D62**, **D72**).
+ * edit **pages** (**D50**, **D62**, **D72**, **D93**).
  *
  * It was inline in `ClientCreateDialog` until editing arrived. Two forms
  * describing the same row from two field lists is how one of them ends up
  * missing a column, and `/idp/update-client` is a **full replace** — a field
  * the edit form does not render is a field every edit silently resets to its
  * schema default. Sharing the markup is what makes that impossible rather than
- * merely unlikely.
+ * merely unlikely, and it is why **D93** moved both callers to routes without
+ * touching this file's field list.
  *
- * **Every id is generated** (`useId`), which is not decoration. `name` is
- * unique in a form and emphatically not in a document, and the edit dialog is
- * rendered once per row — so hard-coded `id="name"` would put one id on as
- * many controls as there are applications, and every `<label for>` on the page
- * would resolve to the first of them. `name` still decides what is submitted;
- * only the id is generated.
+ * **Three cards, and that — not width — is the fix for "hard to scroll"**
+ * (**D93**). One column of twelve controls is one column of twelve controls at
+ * any measure; `max-w-3xl` is a good line length for the URI textareas and a
+ * poor one for stacked single-line inputs, which is what the Identity card's
+ * two-column grid is for.
+ *
+ * **Every id is still generated** (`useId`). The reason changed and the rule
+ * did not: there is one of these per page now rather than one per row, but
+ * `name` is unique in a *form* and emphatically not in a document, and this is
+ * shared markup that must not care which page mounted it. `name` still decides
+ * what is submitted; only the id is generated.
  */
 export interface ClientFormValues {
   name: string
@@ -99,7 +106,7 @@ export function ClientFormFields({
   values: ClientFormValues
   errors: ClientFormErrors
   /**
-   * The edit dialog. The client id is the natural key four other tables
+   * The edit page. The client id is the natural key four other tables
    * reference, so it is shown and not editable — as text plus a hidden input,
    * because a `disabled` input contributes no name/value pair and the handler
    * would not know which application it was told to change.
@@ -111,163 +118,192 @@ export function ClientFormFields({
 
   return (
     <>
-      <Field>
-        <FieldLabel htmlFor={field("name")}>{t.admin.clients.name}</FieldLabel>
-        <Input
-          id={field("name")}
-          name="name"
-          required
-          defaultValue={values.name}
-          aria-invalid={errors.name ? true : undefined}
-          aria-describedby={errors.name ? field("name-error") : undefined}
-        />
-        <FieldError id={field("name-error")}>
-          {errors.name ? t.admin.clients.nameRequired : undefined}
-        </FieldError>
-      </Field>
-      <Field>
-        <FieldLabel htmlFor={field("clientId")}>
-          {t.admin.clients.clientId}
-        </FieldLabel>
-        {fixedClientId ? (
-          <>
-            <input type="hidden" name="clientId" value={values.clientId} />
-            <code
-              id={field("clientId")}
-              className="block rounded-md border bg-muted px-3 py-2 font-mono text-xs break-all"
-            >
-              {values.clientId}
-            </code>
-            <FieldDescription id={field("clientId-help")}>
-              {t.admin.clients.clientIdFixed}
-            </FieldDescription>
-          </>
-        ) : (
-          <>
+      <AdminCard
+        title={t.admin.clients.groupIdentity}
+        description={t.admin.clients.groupIdentityHelp}
+        className="gap-4"
+      >
+        {/* Two columns from `sm` up: the name and the client id are short
+            single-line values, and stacking them is what made twelve controls
+            read as a wall (**D93**). The textareas below stay full width,
+            because a URI is long. */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field>
+            <FieldLabel htmlFor={field("name")}>
+              {t.admin.clients.name}
+            </FieldLabel>
             <Input
-              id={field("clientId")}
-              name="clientId"
+              id={field("name")}
+              name="name"
               required
-              autoComplete="off"
-              pattern={CLIENT_ID_PATTERN}
-              defaultValue={values.clientId}
-              aria-invalid={errors.clientId ? true : undefined}
-              aria-describedby={
-                errors.clientId ? field("clientId-error") : undefined
-              }
+              defaultValue={values.name}
+              aria-invalid={errors.name ? true : undefined}
+              aria-describedby={errors.name ? field("name-error") : undefined}
             />
-            <FieldError id={field("clientId-error")}>
-              {errors.clientId ? t.admin.clients.invalidClientId : undefined}
+            <FieldError id={field("name-error")}>
+              {errors.name ? t.admin.clients.nameRequired : undefined}
             </FieldError>
-          </>
-        )}
-      </Field>
-      <Field>
-        <FieldLabel htmlFor={field("type")}>{t.admin.clients.type}</FieldLabel>
-        {/* SPA first and by default: a browser application is what an
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={field("clientId")}>
+              {t.admin.clients.clientId}
+            </FieldLabel>
+            {fixedClientId ? (
+              <>
+                <input type="hidden" name="clientId" value={values.clientId} />
+                <code
+                  id={field("clientId")}
+                  className="block rounded-md border bg-muted px-3 py-2 font-mono text-xs break-all"
+                >
+                  {values.clientId}
+                </code>
+                <FieldDescription id={field("clientId-help")}>
+                  {t.admin.clients.clientIdFixed}
+                </FieldDescription>
+              </>
+            ) : (
+              <>
+                <Input
+                  id={field("clientId")}
+                  name="clientId"
+                  required
+                  autoComplete="off"
+                  pattern={CLIENT_ID_PATTERN}
+                  defaultValue={values.clientId}
+                  aria-invalid={errors.clientId ? true : undefined}
+                  aria-describedby={
+                    errors.clientId ? field("clientId-error") : undefined
+                  }
+                />
+                <FieldError id={field("clientId-error")}>
+                  {clientIdMessage(t, errors.clientId)}
+                </FieldError>
+              </>
+            )}
+          </Field>
+        </div>
+        <Field>
+          <FieldLabel htmlFor={field("type")}>
+            {t.admin.clients.type}
+          </FieldLabel>
+          {/* SPA first and by default: a browser application is what an
             operator adds here, and PKCE is mandatory in this provider
             either way (FR-OIDC-1), so "web" only buys a secret that a
             single-page app cannot keep. */}
-        <NativeSelect
-          id={field("type")}
-          name="type"
-          defaultValue={values.type}
-          className="w-full"
-          aria-describedby={field("type-help")}
-        >
-          <option value="spa">{t.admin.clients.typeSpa}</option>
-          <option value="web">{t.admin.clients.typeWeb}</option>
-          <option value="native">{t.admin.clients.typeNative}</option>
-        </NativeSelect>
-        {/* **D78**: this control is the only thing that decides whether the
-            application has a secret, and — in the edit dialog — the only way
+          <NativeSelect
+            id={field("type")}
+            name="type"
+            defaultValue={values.type}
+            className="w-full"
+            aria-describedby={field("type-help")}
+          >
+            <option value="spa">{t.admin.clients.typeSpa}</option>
+            <option value="web">{t.admin.clients.typeWeb}</option>
+            <option value="native">{t.admin.clients.typeNative}</option>
+          </NativeSelect>
+          {/* **D78**: this control is the only thing that decides whether the
+            application has a secret, and — on the edit page — the only way
             to give one to an application that has none. Neither was said
             anywhere, so registering the default type produced no secret, no
             rotate control on the row, and no explanation for either. The
             option labels carry the fact; this carries the consequence, and it
-            is the same sentence in both dialogs because the transition it
+            is the same sentence on both pages because the transition it
             describes runs both ways. */}
-        <FieldDescription id={field("type-help")}>
-          {t.admin.clients.typeHelp}
-        </FieldDescription>
-      </Field>
-      <Field>
-        <FieldLabel htmlFor={field("redirectUris")}>
-          {t.admin.clients.redirectUris}
-        </FieldLabel>
-        <Textarea
-          id={field("redirectUris")}
-          name="redirectUris"
-          required
-          rows={3}
-          className="font-mono text-xs"
-          defaultValue={values.redirectUris}
-          aria-describedby={
-            errors.redirectUris
-              ? field("redirectUris-error")
-              : field("redirect-help")
-          }
-          aria-invalid={errors.redirectUris ? true : undefined}
-        />
-        <FieldDescription id={field("redirect-help")}>
-          {t.admin.clients.onePerLine}
-        </FieldDescription>
-        <FieldError id={field("redirectUris-error")}>
-          {uriMessage(t, errors.redirectUris)}
-        </FieldError>
-      </Field>
-      <Field>
-        <FieldLabel htmlFor={field("postLogoutRedirectUris")}>
-          {t.admin.clients.postLogoutRedirectUris}
-        </FieldLabel>
-        {/* Read by the handler since D50 and never rendered, so every
+          <FieldDescription id={field("type-help")}>
+            {t.admin.clients.typeHelp}
+          </FieldDescription>
+        </Field>
+      </AdminCard>
+
+      <AdminCard
+        title={t.admin.clients.groupRedirects}
+        description={t.admin.clients.groupRedirectsHelp}
+        className="gap-4"
+      >
+        <Field>
+          <FieldLabel htmlFor={field("redirectUris")}>
+            {t.admin.clients.redirectUris}
+          </FieldLabel>
+          <Textarea
+            id={field("redirectUris")}
+            name="redirectUris"
+            required
+            rows={3}
+            className="font-mono text-xs"
+            defaultValue={values.redirectUris}
+            aria-describedby={
+              errors.redirectUris
+                ? field("redirectUris-error")
+                : field("redirect-help")
+            }
+            aria-invalid={errors.redirectUris ? true : undefined}
+          />
+          <FieldDescription id={field("redirect-help")}>
+            {t.admin.clients.onePerLine}
+          </FieldDescription>
+          <FieldError id={field("redirectUris-error")}>
+            {uriMessage(t, errors.redirectUris)}
+          </FieldError>
+        </Field>
+        <Field>
+          <FieldLabel htmlFor={field("postLogoutRedirectUris")}>
+            {t.admin.clients.postLogoutRedirectUris}
+          </FieldLabel>
+          {/* Read by the handler since D50 and never rendered, so every
             client created here got an empty list. */}
-        <Textarea
-          id={field("postLogoutRedirectUris")}
-          name="postLogoutRedirectUris"
-          rows={2}
-          className="font-mono text-xs"
-          defaultValue={values.postLogoutRedirectUris}
-          aria-describedby={
-            errors.postLogoutRedirectUris
-              ? field("postLogoutRedirectUris-error")
-              : field("post-logout-help")
-          }
-          aria-invalid={errors.postLogoutRedirectUris ? true : undefined}
-        />
-        <FieldDescription id={field("post-logout-help")}>
-          {t.admin.clients.onePerLine}
-        </FieldDescription>
-        <FieldError id={field("postLogoutRedirectUris-error")}>
-          {uriMessage(t, errors.postLogoutRedirectUris)}
-        </FieldError>
-      </Field>
-      <fieldset className="grid gap-2">
-        <legend className="mb-1 text-sm font-medium">
-          {t.admin.clients.scopes}
-        </legend>
-        {ui.oauthScopes.map((scope) => (
-          <Label
-            key={scope}
-            className="flex items-center gap-2 text-sm font-normal"
-          >
-            {/* The wrapping label is Base UI's documented pattern and
+          <Textarea
+            id={field("postLogoutRedirectUris")}
+            name="postLogoutRedirectUris"
+            rows={2}
+            className="font-mono text-xs"
+            defaultValue={values.postLogoutRedirectUris}
+            aria-describedby={
+              errors.postLogoutRedirectUris
+                ? field("postLogoutRedirectUris-error")
+                : field("post-logout-help")
+            }
+            aria-invalid={errors.postLogoutRedirectUris ? true : undefined}
+          />
+          <FieldDescription id={field("post-logout-help")}>
+            {t.admin.clients.onePerLine}
+          </FieldDescription>
+          <FieldError id={field("postLogoutRedirectUris-error")}>
+            {uriMessage(t, errors.postLogoutRedirectUris)}
+          </FieldError>
+        </Field>
+      </AdminCard>
+
+      <AdminCard
+        title={t.admin.clients.groupPermissions}
+        description={t.admin.clients.groupPermissionsHelp}
+        className="gap-4"
+      >
+        <fieldset className="grid gap-2">
+          <legend className="mb-1 text-sm font-medium">
+            {t.admin.clients.scopes}
+          </legend>
+          {ui.oauthScopes.map((scope) => (
+            <Label
+              key={scope}
+              className="flex items-center gap-2 text-sm font-normal"
+            >
+              {/* The wrapping label is Base UI's documented pattern and
                 is what makes the text a click target; `aria-label` is
                 belt-and-braces, because the control the user operates is
                 a `role="checkbox"` span rather than a labelable element,
                 and only labelable elements are named by a wrapping
                 `<label>` per HTML-AAM. */}
-            <Checkbox
-              name="scopes"
-              value={scope}
-              defaultChecked={values.scopes.includes(scope)}
-              aria-label={scope}
-            />
-            {scope}
-          </Label>
-        ))}
-      </fieldset>
-      {/* Asked the way round an administrator thinks about it (round 3,
+              <Checkbox
+                name="scopes"
+                value={scope}
+                defaultChecked={values.scopes.includes(scope)}
+                aria-label={scope}
+              />
+              {scope}
+            </Label>
+          ))}
+        </fieldset>
+        {/* Asked the way round an administrator thinks about it (round 3,
           finding 10): *does this application ask the user?* The wire field
           is still `skipConsent`, inverted once in `skipConsentFromForm`,
           which has a test on it — this is a real triple negative in the
@@ -280,49 +316,50 @@ export function ClientFormFields({
           field to send them from, so a *defined* `false` overrode the
           schema default every time and every admin-registered client
           wrongly asked for consent. */}
-      <Label className="flex items-start gap-2 text-sm font-normal">
-        {/* `aria-describedby`, not just visible text: the control is a
+        <Label className="flex items-start gap-2 text-sm font-normal">
+          {/* `aria-describedby`, not just visible text: the control is a
             `role="checkbox"` span, so neither the wrapping label nor the
             help underneath it reaches a screen reader on its own. */}
-        <Checkbox
-          name="requireConsent"
-          value="on"
-          defaultChecked={values.requireConsent}
-          aria-label={t.admin.clients.requireConsentLabel}
-          aria-describedby={field("require-consent-help")}
-        />
-        <span>
-          {t.admin.clients.requireConsentLabel}
-          <span
-            id={field("require-consent-help")}
-            className="block text-xs text-muted-foreground"
-          >
-            {t.admin.clients.requireConsentHelp}
+          <Checkbox
+            name="requireConsent"
+            value="on"
+            defaultChecked={values.requireConsent}
+            aria-label={t.admin.clients.requireConsentLabel}
+            aria-describedby={field("require-consent-help")}
+          />
+          <span>
+            {t.admin.clients.requireConsentLabel}
+            <span
+              id={field("require-consent-help")}
+              className="block text-xs text-muted-foreground"
+            >
+              {t.admin.clients.requireConsentHelp}
+            </span>
           </span>
-        </span>
-      </Label>
-      {/* Unchecked, unlike `skipConsent`: `clients-schema.ts` refuses
+        </Label>
+        {/* Unchecked, unlike `skipConsent`: `clients-schema.ts` refuses
           `enableEndSession: true` with no post-logout URI, so defaulting
           it on would fail every plain create. The old always-false bug
           was accidentally load-bearing. */}
-      <Label className="flex items-start gap-2 text-sm font-normal">
-        <Checkbox
-          name="enableEndSession"
-          value="on"
-          defaultChecked={values.enableEndSession}
-          aria-label={t.admin.clients.enableEndSession}
-          aria-describedby={field("end-session-help")}
-        />
-        <span>
-          {t.admin.clients.enableEndSession}
-          <span
-            id={field("end-session-help")}
-            className="block text-xs text-muted-foreground"
-          >
-            {t.admin.clients.enableEndSessionHelp}
+        <Label className="flex items-start gap-2 text-sm font-normal">
+          <Checkbox
+            name="enableEndSession"
+            value="on"
+            defaultChecked={values.enableEndSession}
+            aria-label={t.admin.clients.enableEndSession}
+            aria-describedby={field("end-session-help")}
+          />
+          <span>
+            {t.admin.clients.enableEndSession}
+            <span
+              id={field("end-session-help")}
+              className="block text-xs text-muted-foreground"
+            >
+              {t.admin.clients.enableEndSessionHelp}
+            </span>
           </span>
-        </span>
-      </Label>
+        </Label>
+      </AdminCard>
     </>
   )
 }
@@ -393,6 +430,20 @@ export function useClientForm(): {
   }, [])
 
   return { onSubmit, errors }
+}
+
+/**
+ * `invalid` and `reserved` are different refusals (**D93**).
+ *
+ * "Use letters, digits and `. _ ~ -`" is exactly what `.` and `..` already
+ * are, so the generic message would be a refusal describing the value as
+ * acceptable — which is how a reader concludes the form is broken.
+ */
+function clientIdMessage(t: Catalog, code: string | undefined) {
+  if (!code) return undefined
+  return code === "reserved"
+    ? t.admin.clients.reservedClientId
+    : t.admin.clients.invalidClientId
 }
 
 /**

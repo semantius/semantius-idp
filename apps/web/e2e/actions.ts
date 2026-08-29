@@ -149,6 +149,27 @@ export async function openRowMenu(
 }
 
 /**
+ * Follows a **link** in a row's actions menu (**D93**).
+ *
+ * Edit is a `<Link>` now, not a dialog trigger: the form is a page. The menu
+ * item is still a `menuitem` — Base UI renders the anchor *as* one through
+ * `render` — so it is found by role like every other entry, and what changes
+ * is that activating it navigates rather than opening a modal. Waiting on the
+ * URL is the honest signal, exactly as {@link submit} does.
+ */
+export async function openRowLink(
+  page: Page,
+  row: Locator,
+  name: string,
+  item: string
+): Promise<void> {
+  const before = page.url()
+  const menu = await openRowMenu(page, row, name)
+  await menu.getByRole("menuitem", { name: item, exact: true }).click()
+  await page.waitForURL((url) => url.href !== before)
+}
+
+/**
  * {@link openDialog}, for a dialog a row-menu item opens.
  *
  * The menu closes as the item is activated, which is exactly why those dialogs

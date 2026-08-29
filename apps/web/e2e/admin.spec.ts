@@ -5,6 +5,7 @@ import {
   onLogin,
   openDialog,
   openMenuDialog,
+  openRowLink,
   openRowMenu,
   signIn,
   signInAsAdmin,
@@ -24,10 +25,14 @@ import { waitForMail } from "./stack"
  * (D52) through the sign-in form, which also means the gate on `/admin/*` is
  * exercised on every one of them rather than in a test of its own.
  *
- * The per-user actions are dialogs now (item 11), so anything after the trigger
- * is scoped to the dialog: the trigger and the submit inside it usually share a
- * name, and an unscoped match would find whichever the DOM happened to order
- * first.
+ * The per-user *confirmations* are dialogs (item 11), so anything after one of
+ * those triggers is scoped to the dialog: the trigger and the submit inside it
+ * usually share a name, and an unscoped match would find whichever the DOM
+ * happened to order first.
+ *
+ * **Creates and edits are pages** (**D93**), so those flows navigate and then
+ * fill the page. That is the difference the specs are asserting as much as the
+ * outcome: an address that can be linked to, reloaded and come back to.
  */
 
 test.describe("the admin area", () => {
@@ -145,18 +150,21 @@ test.describe("the admin area", () => {
     const email = uniqueEmail("created")
 
     await app.goto("/admin/users")
-    // D64: the form is a dialog on the list, not a page of its own — both
-    // outcomes of the action now live where the account does.
-    const form = await openDialog(page, "Create a user")
+    // **D93**: the form is a page again, with one address to look at, link to
+    // and bookmark. D64's actual finding is untouched and asserted below —
+    // both outcomes of the action still land on the list.
+    await page.getByRole("link", { name: "Create a user" }).click()
+    await expect(page).toHaveURL(new RegExp(`${app.basePath}/admin/users/new`))
     // FR-SIGNUP-5 / D49: two parts, never a free-text display name.
-    await form.getByLabel("First name").fill("Created")
-    await form.getByLabel("Last name").fill("Person")
-    await form.getByLabel("E-mail address").fill(email)
-    // D64: the default role arrives ticked, because an unticked form got it
-    // anyway — the server falls back to `defaultRole`. Asserted rather than
-    // clicked: clicking it now *un*-ticks it.
-    await expect(form.getByRole("checkbox", { name: "user" })).toBeChecked()
-    await submitDialog(page, form, "Create")
+    await page.getByLabel("First name").fill("Created")
+    await page.getByLabel("Last name").fill("Person")
+    await page.getByLabel("E-mail address").fill(email)
+    // D64's *other* half, which D93 does not reverse: the default role arrives
+    // ticked, because an unticked form got it anyway — the server falls back
+    // to `defaultRole`. Asserted rather than clicked: clicking it now
+    // *un*-ticks it.
+    await expect(page.getByRole("checkbox", { name: "user" })).toBeChecked()
+    await submit(page, "Create")
 
     // Item 10: both outcomes land on the list the account was created for.
     await expect(page).toHaveURL(new RegExp(`${app.basePath}/admin/users`))
@@ -193,29 +201,39 @@ test.describe("the admin area", () => {
     app,
     stack,
   }) => {
-    // The field report, driven end to end: the dialog has no password field,
+    // The field report, driven end to end: the form has no password field,
     // and it used to answer that the e-mail and password combination was
     // wrong. Only a browser can assert that, because the whole defect is what
-    // the reopened dialog says.
+    // the refused form says.
     const user = await createVerifiedUser(page, app, stack, "duplicate")
     await signInAsAdmin(page, app)
 
-    await app.goto("/admin/users")
-    const form = await openDialog(page, "Create a user")
-    await form.getByLabel("First name").fill("Second")
-    await form.getByLabel("Last name").fill("Attempt")
-    await form.getByLabel("E-mail address").fill(user.email)
-    await submitDialog(page, form, "Create")
+    await app.goto("/admin/users/new")
+    await page.getByLabel("First name").fill("Second")
+    await page.getByLabel("Last name").fill("Attempt")
+    await page.getByLabel("E-mail address").fill(user.email)
+    await submit(page, "Create")
 
-    // D62: the dialog comes back open with what was typed still in it.
-    const reopened = modal(page)
-    await expect(reopened).toBeVisible()
-    await expect(reopened.getByLabel("E-mail address")).toHaveValue(user.email)
+    // D62: the form comes back with what was typed still in it — at its own
+    // address now (**D93**), rather than as a dialog reopened over the list.
+    await expect(page).toHaveURL(new RegExp(`${app.basePath}/admin/users/new`))
+    await expect(page.getByLabel("E-mail address")).toHaveValue(user.email)
     await expect(
       page.getByText("An account with that e-mail address already exists.")
     ).toBeVisible()
     await expect(
       page.getByText(/e-mail address and password combination/i)
+    ).toHaveCount(0)
+
+    // **D93**: and a reload shows a clean, empty form rather than the same
+    // message over fields whose values are gone. The draft is single-use, so
+    // leaving `?error=` and `?draft=` in the address bar was the D71 defect
+    // one parameter over: they are stripped once the loader has claimed them.
+    await expect(page).not.toHaveURL(/error=|draft=/)
+    await page.reload()
+    await expect(page.getByLabel("E-mail address")).toHaveValue("")
+    await expect(
+      page.getByText("An account with that e-mail address already exists.")
     ).toHaveCount(0)
   })
 
@@ -230,12 +248,21 @@ test.describe("the admin area", () => {
     await app.goto(`/admin/users?q=${encodeURIComponent(user.email)}`)
     await page.getByRole("link", { name: user.email }).click()
 
-    const dialog = await openDialog(page, "Edit profile")
-    await dialog.getByLabel("First name").fill("Corrected")
-    await dialog.getByLabel("Last name").fill("Name")
-    await submitDialog(page, dialog, "Save")
+    // **D93**: Edit profile is a link to a page, and the page holds the roles
+    // as well — one record, one form, one Save.
+    await page.getByRole("link", { name: "Edit profile" }).click()
+    await expect(page).toHaveURL(/\/edit$/)
+    await page.getByLabel("First name").fill("Corrected")
+    await page.getByLabel("Last name").fill("Name")
+    await submit(page, "Save")
 
-    await expect(page.getByText("Profile updated.")).toBeVisible()
+    // Back on the record, because that is what was edited.
+    await expect(page.getByText("The account has been updated.")).toBeVisible()
+    await expect(page.getByText("Corrected Name")).toBeVisible()
+
+    // Bookmarkable, which is the premise of the whole change: the edit URL
+    // opens the form again, prefilled from the row.
+    await page.reload()
     await expect(page.getByText("Corrected Name")).toBeVisible()
   })
 
@@ -251,12 +278,24 @@ test.describe("the admin area", () => {
     await page.getByRole("link", { name: user.email }).click()
 
     // Item 11b: one checkbox per catalog role rather than a comma-separated
-    // field an administrator has to spell from memory.
-    const roles = await openDialog(page, "Roles")
-    await roles.getByRole("checkbox", { name: "admin" }).click()
-    await expect(roles.getByRole("checkbox", { name: "user" })).toBeChecked()
-    await submitDialog(page, roles, "Save")
-    await expect(page.getByText("Roles updated.")).toBeVisible()
+    // field an administrator has to spell from memory. On the edit page since
+    // **D93**, beside the profile fields and under the same Save.
+    await page.getByRole("link", { name: "Edit profile" }).click()
+    await page.getByRole("checkbox", { name: "admin" }).click()
+    await expect(page.getByRole("checkbox", { name: "user" })).toBeChecked()
+    await submit(page, "Save")
+    await expect(page.getByText("The account has been updated.")).toBeVisible()
+
+    // **D93**: *both* roles survive one save. The join that turns the repeated
+    // checkbox field into what `/admin/set-role` takes used to live in the
+    // route rather than in the dispatcher, so a second route dispatching
+    // `set-roles` without it would have stored one role of two — a silent
+    // privilege reduction under a success toast.
+    const held = page.locator("main").getByText("admin", { exact: true })
+    await expect(held).toBeVisible()
+    await expect(
+      page.locator("main").getByText("user", { exact: true })
+    ).toBeVisible()
 
     await signOut(page, app)
     await signIn(page, app, user.email, user.password)
@@ -337,6 +376,20 @@ test.describe("the admin area", () => {
     // The confirmation is the dialog's own text, not a sentence above a bare
     // button that fires on the first click.
     await expect(remove.getByText("This cannot be undone.")).toBeVisible()
+    await page.keyboard.press("Escape")
+
+    // **D93**: on your own edit page the roles fieldset is disabled and says
+    // why, while the profile half still saves. The guard is on the fieldset
+    // and not on the Save, because there is one Save now and disabling it
+    // would stop an administrator fixing their own name — which FR-ADMIN-3
+    // does not refuse. There was no assertion on any of this before.
+    await page.getByRole("link", { name: "Edit profile" }).click()
+    await expect(page.getByRole("checkbox", { name: "admin" })).toBeDisabled()
+    await expect(
+      page.getByText(/You cannot change your own roles/)
+    ).toBeVisible()
+    await submit(page, "Save")
+    await expect(page.getByText("The account has been updated.")).toBeVisible()
   })
 
   test("a client can be registered, disabled and removed — and file ones cannot (D50)", async ({
@@ -358,21 +411,25 @@ test.describe("the admin area", () => {
       fileRow.getByRole("button", { name: /^Actions for / })
     ).toHaveCount(0)
 
-    // Registering one: the secret is generated here and shown once, in a
-    // dialog, and never in the address bar.
-    const form = await openDialog(page, "Add an application")
-    await form.getByLabel("Name").fill("Registered Here")
-    await form.getByLabel("Client ID").fill("e2e-registered")
-    // Explicitly confidential: the dialog defaults to a single-page app now
+    // Registering one: a page since **D93**, and the secret is still
+    // generated by the server and shown once in a dialog on the list — never
+    // in the address bar.
+    await page.getByRole("link", { name: "Add an application" }).click()
+    await expect(page).toHaveURL(
+      new RegExp(`${app.basePath}/admin/clients/new`)
+    )
+    await page.getByLabel("Name").fill("Registered Here")
+    await page.getByLabel("Client ID").fill("e2e-registered")
+    // Explicitly confidential: the form defaults to a single-page app now
     // (round 2, finding 10), and a public client has no secret to show — which
     // is the whole subject of the next twenty lines.
-    await form.getByLabel("Type").selectOption("web")
+    await page.getByLabel("Type").selectOption("web")
     // `exact`: "Post-logout redirect URIs" contains this label as a substring,
     // and Playwright's `getByLabel` is a substring match by default.
-    await form
+    await page
       .getByLabel("Redirect URIs", { exact: true })
       .fill("http://127.0.0.1:4599/callback")
-    await submitDialog(page, form, "Add an application")
+    await submit(page, "Add an application")
 
     const secretDialog = modal(page)
     await expect(secretDialog).toBeVisible()
@@ -425,14 +482,14 @@ test.describe("the admin area", () => {
     await signInAsAdmin(page, app)
     await app.goto("/admin/clients")
 
-    const form = await openDialog(page, "Add an application")
-    await form.getByLabel("Name").fill("Editable App")
-    await form.getByLabel("Client ID").fill("e2e-editable")
-    await form.getByLabel("Type").selectOption("web")
-    await form
+    await page.getByRole("link", { name: "Add an application" }).click()
+    await page.getByLabel("Name").fill("Editable App")
+    await page.getByLabel("Client ID").fill("e2e-editable")
+    await page.getByLabel("Type").selectOption("web")
+    await page
       .getByLabel("Redirect URIs", { exact: true })
       .fill("http://127.0.0.1:4601/callback")
-    await submitDialog(page, form, "Add an application")
+    await submit(page, "Add an application")
 
     const created = (
       await modal(page).locator('[data-slot="one-shot-value"]').innerText()
@@ -441,29 +498,34 @@ test.describe("the admin area", () => {
 
     const row = page.locator("tbody tr").filter({ hasText: "e2e-editable" })
 
-    // The edit dialog arrives **prefilled**, which is the half a unit test
+    // **D93**: the row's *name* is the way in, not only the menu. That is the
+    // whole point of an addressable record — Edit used to exist solely inside
+    // the per-row menu, which is the first, pinned column.
+    await row.getByRole("link", { name: "Editable App" }).click()
+    await expect(page).toHaveURL(/\/admin\/clients\/e2e-editable\/edit$/)
+
+    // The edit page arrives **prefilled**, which is the half a unit test
     // cannot see and the half that matters: `/idp/update-client` is a full
     // replace, so a field that came back blank would be a field that saving
     // clears.
-    const edit = await openMenuDialog(
-      page,
-      await openRowMenu(page, row, "Editable App"),
-      "Edit"
-    )
-    await expect(edit.getByLabel("Name")).toHaveValue("Editable App")
-    await expect(edit.getByLabel("Redirect URIs", { exact: true })).toHaveValue(
-      "http://127.0.0.1:4601/callback"
-    )
+    await expect(page.getByLabel("Name")).toHaveValue("Editable App")
+    await expect(
+      page.getByLabel("Redirect URIs", { exact: true })
+    ).toHaveValue("http://127.0.0.1:4601/callback")
     // Shown and not editable: the id is the natural key four other tables
     // reference, so changing it is removing this application and adding a
     // different one.
-    await expect(edit.getByText("e2e-editable")).toBeVisible()
+    await expect(page.locator("main").getByText("e2e-editable")).toBeVisible()
 
-    await edit.getByLabel("Name").fill("Edited App")
-    await edit
+    // …and it survives a reload and a Back, which is what "one address" buys.
+    await page.reload()
+    await expect(page.getByLabel("Name")).toHaveValue("Editable App")
+
+    await page.getByLabel("Name").fill("Edited App")
+    await page
       .getByLabel("Redirect URIs", { exact: true })
       .fill("http://127.0.0.1:4601/moved")
-    await submitDialog(page, edit, "Save")
+    await submit(page, "Save")
 
     await expect(
       page.getByText("The application has been updated.")
@@ -523,10 +585,17 @@ test.describe("the admin area", () => {
     // so — the one place an operator can check what an upstream is told.
     await expect(fileRow.getByText("From the proxy")).toBeVisible()
 
-    const form = await openDialog(page, "Add a gateway")
-    await form.getByLabel("Name").fill("e2e-gateway")
-    await form.getByLabel("Target URL").fill("http://upstream.invalid:9999")
-    await submitDialog(page, form, "Add a gateway")
+    await page.getByRole("link", { name: "Add a gateway" }).click()
+    await expect(page).toHaveURL(
+      new RegExp(`${app.basePath}/admin/gateways/new`)
+    )
+    await page.getByLabel("Name").fill("e2e-gateway")
+    // A **bare origin**, which is the common shape and the one the first
+    // commit of this series fixed: the list used to normalize it to
+    // `http://upstream.invalid:9999/` on the way out, and Edit then refused a
+    // save for a trailing slash the operator never typed.
+    await page.getByLabel("Target URL").fill("http://upstream.invalid:9999")
+    await submit(page, "Add a gateway")
     await expect(page.getByText("The gateway has been added.")).toBeVisible()
 
     const row = page.locator("tbody tr").filter({ hasText: "e2e-gateway" })
@@ -538,6 +607,18 @@ test.describe("the admin area", () => {
     // The path a caller configures, shown beside the name — the one thing an
     // operator has to copy off this page.
     await expect(row.getByText("/gateway/e2e-gateway")).toBeVisible()
+
+    // Commit 1, end to end: the target reads back byte-identical, so Edit
+    // opens with no trailing slash and a save that changes only a checkbox is
+    // accepted rather than refused for a slash nobody typed.
+    await openRowLink(page, row, "e2e-gateway", "Edit")
+    await expect(page.getByLabel("Target URL")).toHaveValue(
+      "http://upstream.invalid:9999"
+    )
+    await page.getByRole("checkbox", { name: "Require authentication" }).click()
+    await submit(page, "Save")
+    await expect(page.getByText("The gateway has been updated.")).toBeVisible()
+    await expect(row.getByText("Required")).toBeVisible()
 
     const menu = await openRowMenu(page, row, "e2e-gateway")
     await menu.getByRole("menuitem", { name: "Disable" }).click()
@@ -684,25 +765,25 @@ test.describe("the admin area", () => {
     await signInAsAdmin(page, app)
     await app.goto("/admin/clients")
 
-    const form = await openDialog(page, "Add an application")
+    await page.getByRole("link", { name: "Add an application" }).click()
     // The type is the only control that decides whether a secret exists, and
-    // — in the edit dialog — the only way to give one to an application that
+    // — on the edit page — the only way to give one to an application that
     // has none. Neither was said anywhere.
     await expect(
-      form.getByText(/Only a Web application keeps a client secret/)
+      page.getByText(/Only a Web application keeps a client secret/)
     ).toBeVisible()
 
-    await form.getByLabel("Name").fill("Public Only")
-    await form.getByLabel("Client ID").fill("e2e-public")
+    await page.getByLabel("Name").fill("Public Only")
+    await page.getByLabel("Client ID").fill("e2e-public")
     // **The default type, left alone.** This is the registration an operator
     // actually makes, and the one that produced a bare "The application has
     // been registered.", no secret dialog and no rotate control, with nothing
     // anywhere connecting the three.
-    await expect(form.getByLabel("Type")).toHaveValue("spa")
-    await form
+    await expect(page.getByLabel("Type")).toHaveValue("spa")
+    await page
       .getByLabel("Redirect URIs", { exact: true })
       .fill("https://example.test/callback")
-    await submitDialog(page, form, "Add an application")
+    await submit(page, "Add an application")
 
     await expect(
       page.getByText(/It is a public client, so it has no secret/)
@@ -718,12 +799,19 @@ test.describe("the admin area", () => {
       publicMenu.getByRole("menuitem", { name: "Rotate secret" })
     ).toHaveCount(0)
 
+    await page.keyboard.press("Escape")
+
     // The way out, which is the answer to "the option to change the secret is
     // missing": the type change mints one and shows it once, and the row
     // grows the rotate control it did not have.
-    const edit = await openMenuDialog(page, publicMenu, "Edit")
-    await edit.getByLabel("Type").selectOption("web")
-    await submitDialog(page, edit, "Save")
+    await openRowLink(page, row, "Public Only", "Edit")
+    // Scoped to `main`: the creation's confirmation toast is still on screen
+    // for ten seconds (**D71**), its accessible name is the whole sentence,
+    // and "Change its **type** to Web to issue one" makes `getByLabel("Type")`
+    // match the toast as well as the field. The toast is portalled outside
+    // `<main>`; the form is not.
+    await page.locator("main").getByLabel("Type").selectOption("web")
+    await submit(page, "Save")
 
     const issued = modal(page)
     await expect(issued).toBeVisible()

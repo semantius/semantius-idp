@@ -2,7 +2,6 @@ import AxeBuilder from "@axe-core/playwright"
 
 import {
   createVerifiedUser,
-  openDialog,
   openMenuDialog,
   openRowMenu,
   signIn,
@@ -77,12 +76,17 @@ const ACCOUNT_PAGES = [
 
 const ADMIN_PAGES = [
   "/admin",
-  // `/admin/users/new` is gone (D64) — creating a user is a dialog on
-  // `/admin/users`, and the dialog's contents are scanned with that page once
-  // it is open, not as a route of their own.
   "/admin/users",
+  // **D93**: the three **static** create routes belong here. The three
+  // `$id/edit` routes do not — this array is `app.goto(path)` over fixed
+  // paths, scanned deliberately "before any spec creates one", so an edit page
+  // has no record to open. Those are scanned in the imperative block below,
+  // against the row it creates and removes.
+  "/admin/users/new",
   "/admin/clients",
+  "/admin/clients/new",
   "/admin/gateways",
+  "/admin/gateways/new",
   "/admin/roles",
   "/admin/audit",
   // FR-ADMIN-7. The base stack runs `read-only` so the page is here to scan;
@@ -148,26 +152,44 @@ test.describe("accessibility", () => {
     await page.getByRole("link", { name: "e2e-admin@example.com" }).click()
     await scan(page, "/admin/users/:id")
 
-    // **D80**: with a row's actions menu open. Only a database-registered
-    // client has one, and the pages above are scanned before any spec creates
-    // one — so the row is made here and removed again. Worth the six lines
-    // for the same reason D71 scanned the toast: it is a portalled widget
-    // outside the page's landmarks, and its trigger's accessible name is this
-    // application's rather than the registry's.
-    await app.goto("/admin/clients")
-    const form = await openDialog(page, "Add an application")
-    await form.getByLabel("Name").fill("Axe Scanned")
-    await form.getByLabel("Client ID").fill("a11y-client")
-    await form
+    // **D80**: with a row's actions menu open, and — since **D93** — the two
+    // edit pages that need a record to exist. Only a database-registered
+    // client has a menu, and the static pages above are scanned before any
+    // spec creates one, so the row is made here and removed again. Worth the
+    // lines for the same reason D71 scanned the toast: a portalled widget
+    // outside the page's landmarks, and a trigger whose accessible name is
+    // this application's rather than the registry's.
+    await app.goto("/admin/clients/new")
+    await page.getByLabel("Name").fill("Axe Scanned")
+    await page.getByLabel("Client ID").fill("a11y-client")
+    await page
       .getByLabel("Redirect URIs", { exact: true })
       .fill("https://example.test/callback")
-    await submitDialog(page, form, "Add an application")
+    await submit(page, "Add an application")
 
     const row = page.locator("tbody tr").filter({ hasText: "a11y-client" })
-    const menu = await openRowMenu(page, row, "Axe Scanned")
+    await openRowMenu(page, row, "Axe Scanned")
     await scan(page, "/admin/clients with a row menu open")
+    await page.keyboard.press("Escape")
 
-    const confirm = await openMenuDialog(page, menu, "Remove")
+    // The edit page for that row: three cards, a fixed client id rendered as
+    // text with a hidden input behind it, and a scope fieldset.
+    await app.goto("/admin/clients/a11y-client/edit")
+    await scan(page, "/admin/clients/:id/edit")
+
+    // …and the account edit page, where a disabled fieldset carries the
+    // reason it is disabled — the arrangement most likely to lose a label.
+    await app.goto("/admin/users?q=e2e-admin@example.com")
+    await page.getByRole("link", { name: "e2e-admin@example.com" }).click()
+    await page.getByRole("link", { name: "Edit profile" }).click()
+    await scan(page, "/admin/users/:id/edit")
+
+    await app.goto("/admin/clients")
+    const confirm = await openMenuDialog(
+      page,
+      await openRowMenu(page, row, "Axe Scanned"),
+      "Remove"
+    )
     await submitDialog(page, confirm, "Remove")
 
     // **D82**: with the sidebar's user menu open, and then with the sidebar

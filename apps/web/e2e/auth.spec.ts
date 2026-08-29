@@ -50,7 +50,11 @@ test.describe("signing in", () => {
     // using it — so this is an ordinary sign-in and nothing interposes.
     await signInAsAdmin(page, app)
     await expect(
-      page.getByRole("heading", { name: "Your account" })
+      // **D93**: the page's own name, not the area's. "Your account" was the
+      // chrome's `<h1>`; the breadcrumb has that row now, and it is the trail's
+      // root crumb rather than a heading. `level: 1` because the page's own
+      // Profile card is an `<h3>` with the same text.
+      page.getByRole("heading", { name: "Profile", level: 1 })
     ).toBeVisible()
   })
 

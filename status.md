@@ -1,8 +1,8 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-29 · **Branch:** `main` · **Head:** `993f2e4`, last tag **v0.5.0**
-**Plan:** `~/.claude/plans/backend-systems-validate-the-luminous-backus.md` (API gateways)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D92**
+**As of:** 2026-08-29 · **Branch:** `main` · **Head:** `8159671`, last tag **v0.5.0**
+**Plan:** `~/.claude/plans/users-has-a-full-binary-meteor.md` (full-page forms)
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D93**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
 gate; API gateways (FR-GW, **D91**/**D92**) landed on 2026-08-29 on top of
@@ -86,6 +86,112 @@ README quick start against it, and confirming `latest` from outside.
   next boot serves the first-run setup page, which is now the only way an
   administrator is ever created. No credential to recover, and no command that
   changes one.
+
+---
+
+## Full-page create and edit, and a breadcrumb header (2026-08-29, **D93**)
+
+**The gap.** `/admin/clients` and `/admin/gateways` did create *and* edit
+inside a `DialogContent` capped at `sm:max-w-md` — 28 rem — with an inner
+scroller. The client form is twelve fields including two textareas and a scope
+fieldset. It could not be linked to, bookmarked, reloaded, or reached with the
+back button. Neither area had a breadcrumb, and the area's name was the `<h1>`
+while the page's name was an `<h2>` beneath it.
+
+That shape is **D64**'s, over-generalized. D64's *finding* was real and is
+kept: `/admin/users/new` was a page whose only outcome was to send you back to
+the list, while the other outcome of the same action — the one-time
+set-password link — opened as a dialog *on* the list, so one action had two
+outcomes on two surfaces. Both outcomes still land on the list. What
+over-reached was its conclusion, "an action is a dialog on the page that lists
+what it acts on, never a route of its own".
+
+**The rule now**: *every create and every edit is a page, because there has to
+be one address to look at, link to and bookmark; every confirmation stays a
+modal.* **Size is not the test** — that is why the five-field create-user form
+moved too.
+
+**Four commits, in this order.**
+
+1. **A live bug, found while planning.** `fetchGateways` returned
+   `maskConnectionString(row.url)` for every row, and that function does not
+   only mask: it ends in `url.toString()`, so
+   `new URL("https://api.example.com").toString()` is
+   `"https://api.example.com/"`. `checkGatewayUrl` answers `trailing_slash`
+   for that and `useGatewayForm` `preventDefault()`s — so opening Edit on any
+   gateway whose target is a bare origin, the *common* shape, and changing
+   only the "Require authentication" checkbox was refused for a slash the
+   operator never typed. `maskGatewayTarget` returns the stored string byte
+   for byte unless it carries a password; `AdminGatewayRow.urlMasked` says
+   which happened, so a lossy projection is never prefilled into a
+   full-replace form. No spec change: the spec never said the URL was masked.
+
+2. **The breadcrumb header.** In the *chrome* row, not in the page — the
+   stronger of two reasons being **D87**: that row sits outside the scroll
+   container while the page body is inside it, so a trail in the body scrolls
+   away exactly when a long form makes you want it. Composed from the route
+   matches: each route declares its crumbs on its loader's return, so the file
+   that owns a path owns its trail. `PageHeader` gives the page the `<h1>`,
+   and `SidebarLayout` focuses it on every route change but the first —
+   because from this change an Edit is a `<Link>` inside a menu item, and
+   activating one unmounts the focused element. Every admin page carries its
+   own `<title>`. `FormRefusal` focuses a refusal that arrived with the page,
+   because a live region does not announce content present at first paint.
+
+3. **The routes.** Nine where there were three:
+   `clients/{index,new,$clientId/edit}`, `gateways/{index,new,$name/edit}`,
+   `users/{new,$userId/index,$userId/edit}`. Each page owns the POST it used to
+   send to the list, otherwise unchanged.
+
+4. **US spelling throughout** (**D94**) — kept separate so a ~250-occurrence
+   spelling diff does not bury the routing change.
+
+**Three symptoms of the over-generalization went with the dialogs**, each of
+which had been patched rather than diagnosed: the `max-h` override in
+`dialogs.tsx`, added because the client-create dialog's submit button became
+unclickable the moment it grew two checkboxes and a second textarea; one whole
+twelve-field form rendered **per table row**; and the `action`+`clientId`
+discriminator in `stashDraft` that existed only to decide which row's dialog
+reopened after a refusal.
+
+**`/admin/users/:id/edit` is one form with one Save**, and that was the worst
+thing the adversarial review of the first draft found. Two cards with two Saves
+means an administrator corrects an address *and* grants a role, presses the
+Profile save, gets "Profile updated." in a toast, and the role grant is gone
+with no signal — silently, on the authorization surface, confirmed by a success
+message. No new composite server action was needed: the handler calls
+`runAdminAction("edit-profile", …)` then `runAdminAction("set-roles", …)` and
+composes the outcomes, which is exactly what **D70** is the pattern for.
+
+**The plan's premise about the roles guard was wrong, and the fix is better for
+it.** It held that `admin/guard.ts` protects only the last administrator, so
+the disabled Save was all that stopped an administrator unchecking their own
+`admin` role. In fact `assertAdminInvariants` refuses `set-role` on self
+unconditionally (`admin_cannot_change_own_roles`). So the guard moved to the
+roles **fieldset**, with a `FieldDescription` saying why — one Save must not
+stop an administrator fixing their own name — **and the handler skips the
+`set-roles` call for self**, because a disabled fieldset submits nothing and
+dispatching it anyway would ask the server to set the empty role list and be
+refused, turning every self-edit of a first name into a partial failure.
+
+**Two more things the move needed.** `?error=` and `?draft=` are stripped once
+the loader has claimed them: `claimAdminDraft` is single-use, so reloading a
+refused form — the state where a reload is most tempting — rendered twelve
+*empty* fields under a live message about values that were gone. That is
+**D71**'s defect on the parameters D71 deliberately left alone, and it reuses
+D71's mechanism. And unsaved changes are guarded, by `useBlocker` plus the same
+blocker's `enableBeforeUnload`, off one `onInput` on the form.
+
+**Smaller things in the same change.** A row's *name* links to its edit page,
+so an addressable record is reachable without opening a menu first — the users
+list has linked its e-mail column all along. A file-managed row's edit URL
+redirects to the list with a reason rather than rendering `notFound()`, which
+is a centred page with no sidebar replying "this does not exist" about a row
+that was on the previous screen. A client id of `.` or `..` is refused, because
+a browser resolves `/admin/clients/../edit` to `/admin/edit` before the request
+leaves it — two exact values, not a rule about dots. And `SecretDialog` names
+the recovery, because Escape destroys the only copy of a client secret and
+nothing said that rotating from the row menu is how to get another.
 
 ---
 

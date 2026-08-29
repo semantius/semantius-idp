@@ -11,23 +11,38 @@ import { Label } from "@workspace/ui/components/label"
  * is already on the page, so it may as well be the control.
  *
  * The field name repeats, once per ticked box, so the handler reads it with
- * `readFormMulti` and joins — `set-roles` has always taken a comma string and
- * its dispatcher is unchanged.
+ * `readFormMulti` — and the list reaches `/admin/set-role` through
+ * `runAdminAction`, which is where the reassembly lives since **D93**. It used
+ * to be three lines in the route, and a second route naming the reader without
+ * them would have stored one role of two under a success toast.
  */
 export function RoleCheckboxes({
   roles,
   legend,
   checked,
+  disabled = false,
 }: {
   roles: { name: string }[]
   legend: string
   /** Role names to tick. Absent on a creation, where nothing is held yet. */
   checked?: readonly string[]
+  /**
+   * Your own account (**D93**, FR-ADMIN-3).
+   *
+   * **On each `Checkbox`, not only on the `<fieldset>`.** A disabled fieldset
+   * disables the *form controls* inside it, and the control a user operates
+   * here is a `<span role="checkbox">` with a hidden input behind it — so the
+   * fieldset alone left the span enabled, focusable and announced as
+   * available, while silently dropping the value from the submission. The
+   * fieldset is disabled as well, because that is what actually guarantees
+   * nothing is submitted.
+   */
+  disabled?: boolean
 }) {
   const held = new Set(checked ?? [])
 
   return (
-    <fieldset className="grid gap-2">
+    <fieldset disabled={disabled} className="grid gap-2">
       <legend className="mb-1 text-sm font-medium">{legend}</legend>
       {roles.map((role) => (
         <Label
@@ -44,6 +59,7 @@ export function RoleCheckboxes({
             value={role.name}
             aria-label={role.name}
             defaultChecked={held.has(role.name)}
+            disabled={disabled}
           />
           {role.name}
         </Label>

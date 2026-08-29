@@ -1,5 +1,7 @@
 import { useId, useState } from "react"
 
+import { Link } from "@tanstack/react-router"
+
 import { MoreHorizontal } from "lucide-react"
 
 import { Button } from "@workspace/ui/components/button"
@@ -13,15 +15,12 @@ import {
 } from "@workspace/ui/components/dropdown-menu"
 
 import { ActionDialog } from "@/components/common/dialogs"
-import { ClientEditDialog } from "@/components/admin/client-edit-dialog"
 import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 import type { AdminClientRow } from "@/server/functions/admin"
-import type { Draft } from "@/server/http/draft"
 import type { Catalog } from "@/server/i18n"
-import type { UiContext } from "@/server/ui-context"
 
 /** Which of the row's dialogs is on screen, if any. */
-type OpenDialog = "edit" | "rotate" | "remove" | null
+type OpenDialog = "rotate" | "remove" | null
 
 /**
  * Everything that can be done to one registered application, behind one
@@ -33,22 +32,23 @@ type OpenDialog = "edit" | "rotate" | "remove" | null
  * column headed "Status" whose contents were mostly not status. Reported by
  * the owner as "showing actions below Status is ugly".
  *
- * Three things about the mechanism are load-bearing, and each is a way to get
- * a menu-plus-dialog wrong:
+ * **Edit is a `<Link>` now** (**D93**): the form is a page, so the menu entry
+ * navigates to it rather than opening a twelve-field dialog rendered once per
+ * row. The row's *name* links to the same address, which is the affordance
+ * that matters — this menu keeps the entry because the redundancy is correct,
+ * not because it is the way in.
+ *
+ * What is left behind the menu is confirmations, and two things about that
+ * mechanism are load-bearing:
  *
  * 1. **The dialogs are controlled, and there is one piece of state for all of
  *    them.** A `menuitem` closes its popup when it is activated, so the
  *    trigger a `DialogTrigger` would need has ceased to exist by the moment
  *    the dialog should appear — `ActionDialog`'s uncontrolled form cannot work
- *    from inside a menu. One `OpenDialog` value rather than three booleans
- *    also makes "never two of these at once" true by construction.
+ *    from inside a menu. One `OpenDialog` value rather than two booleans also
+ *    makes "never two of these at once" true by construction.
  *
- * 2. **A refused edit still reopens itself** (**D62**, **D72**). That used to
- *    be `defaultOpen`, which is meaningless without a trigger; the same fact
- *    seeds this state instead, so a rejected save comes back with the fields
- *    restored and the refusal inside the dialog exactly as before.
- *
- * 3. **Enable/Disable stays a real form post**, and the form lives in the row
+ * 2. **Enable/Disable stays a real form post**, and the form lives in the row
  *    rather than in the popup. The menu item is its submitter by `form=`, so
  *    the form is never unmounted by the menu closing underneath its own
  *    submission — which is what nesting the `<form>` inside the portalled
@@ -56,27 +56,25 @@ type OpenDialog = "edit" | "rotate" | "remove" | null
  *    spinner it would otherwise show is moot, because the menu is gone by
  *    then.
  *
+ * The third mechanic this file used to document — a refused edit seeding the
+ * menu's state so its dialog reopened — went with the dialog. A refused edit
+ * comes back to its own address now, which is the whole point of D93 and is
+ * also why `stashDraft` no longer needs an `action`/`clientId` discriminator
+ * to work out which of several dialogs the draft belonged to.
+ *
  * The trigger's accessible name **names the application** rather than saying
  * "Actions", because there is one of these per row: an unnamed one would give
  * a screen-reader user a list of identical controls, and Playwright's strict
  * mode a locator that matches every row.
  */
 export function ClientRowActions({
-  ui,
   t,
   client,
-  draft,
-  error,
 }: {
-  ui: UiContext
   t: Catalog
   client: AdminClientRow
-  /** The refused edit, claimed by the loader — only if it was this row's. */
-  draft?: Draft
-  /** The refusal that came back with it. */
-  error?: string
 }) {
-  const [open, setOpen] = useState<OpenDialog>(draft ? "edit" : null)
+  const [open, setOpen] = useState<OpenDialog>(null)
   // The form is submitted from a control that is not inside it (mechanic 3),
   // and `form=` takes an id, so this one has to be unique in the document
   // rather than merely in the row.
@@ -120,9 +118,12 @@ export function ClientRowActions({
         <DropdownMenuContent align="start" className="w-auto min-w-44">
           <DropdownMenuGroup>
             <DropdownMenuItem
-              onClick={() => {
-                setOpen("edit")
-              }}
+              render={
+                <Link
+                  to="/admin/clients/$clientId/edit"
+                  params={{ clientId: client.clientId }}
+                />
+              }
             >
               {t.admin.clients.edit}
             </DropdownMenuItem>
@@ -161,18 +162,6 @@ export function ClientRowActions({
           </DropdownMenuGroup>
         </DropdownMenuContent>
       </DropdownMenu>
-
-      <ClientEditDialog
-        ui={ui}
-        t={t}
-        client={client}
-        draft={draft}
-        open={open === "edit"}
-        onOpenChange={(next) => {
-          if (!next) close()
-        }}
-        error={error}
-      />
 
       {client.isPublic ? null : (
         <ActionDialog

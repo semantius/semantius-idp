@@ -23,7 +23,6 @@ import {
 import { AdminShell } from "@/components/admin/admin-shell"
 import { SecretDialog } from "@/components/common/dialogs"
 import { UserBadges } from "@/components/admin/user-badges"
-import { UserCreateDialog } from "@/components/admin/user-create-dialog"
 import { FormRefusal } from "@/components/auth/form-parts"
 import { NoticeToast, SUBJECT_PARAM } from "@/components/common/notice-toast"
 import { crumbTrail } from "@/components/common/breadcrumbs"
@@ -33,24 +32,10 @@ import { parseInviteLink } from "@/lib/invite-link"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
 import {
-  claimAdminDraft,
   claimAdminSecret,
   fetchRoles,
   fetchUsers,
 } from "@/server/functions/admin"
-import {
-  adminErrorCodeFor,
-  callAuth,
-  readFormMulti,
-  redirectWithCookies,
-  withError,
-} from "@/server/http/auth-proxy"
-import { stashDraft, withDraft } from "@/server/http/draft"
-import { requireSession } from "@/server/http/require-session"
-import { stash } from "@/server/http/one-shot"
-import { createResetLink } from "@/server/auth/reset-link"
-import { displayName } from "@/server/display-name"
-import { getRuntime } from "@/server/runtime"
 import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 import { LocalTime } from "@/components/common/local-time"
 
@@ -65,14 +50,11 @@ const HERE = "/admin/users"
  * in the app — "the pending accounts" is a link an administrator sends to a
  * colleague.
  *
- * It is also where a creation happens and where it lands (**D64**, item 10).
- * The form was `/admin/users/new`, a page whose only outcome was to come back
- * here — while the *other* outcome of the same action, the one-time
- * set-password link when e-mail is off, already opened as a dialog on this
- * page. One action, two outcomes, two surfaces. Both are here now, and the
- * POST handler came with the form.
- *
- * With e-mail on a creation is a notice; with e-mail off the one-time
+ * It is where a creation **lands**, which is D64's actual finding and is not
+ * reversed: one action must not have two outcomes on two surfaces. The form
+ * itself is `/admin/users/new` again since **D93**, because the test is
+ * addressability rather than size — but both of its outcomes still arrive
+ * here. With e-mail on a creation is a notice; with e-mail off the one-time
  * set-password link opens in a dialog, claimed from a server-side stash rather
  * than read out of the query string — a link that grants a password reset does
  * not belong in browser history.
@@ -127,177 +109,17 @@ export const Route = createFileRoute("/admin/users/")({
         (await claimAdminSecret({
           data: searchString(search[SUBJECT_PARAM]) ?? "",
         })) ?? undefined,
-      // A refused creation, so the dialog reopens with what was typed (D62).
-      draft:
-        (await claimAdminDraft({ data: searchString(search.draft) ?? "" })) ??
-        undefined,
     }
   },
   head: ({ loaderData }) =>
     adminHead(loaderData?.ui, (t) => t.admin.users.title),
   component: UsersPage,
-  server: {
-    handlers: {
-      /**
-       * Create an account on someone's behalf (FR-ADMIN-2, **D64**).
-       *
-       * Created **approved and confirmed**: an administrator typing the
-       * address is the vouching that the approval queue and the verification
-       * e-mail exist to obtain, and making them then approve their own
-       * creation would be a step that teaches people to click through steps.
-       *
-       * The password is never chosen here. With e-mail on they get a
-       * `setPassword` link; with e-mail off (FR-MAIL-2) the same one-time link
-       * is handed over on screen *once*, because a server that cannot send
-       * mail still has to be able to onboard somebody — and an administrator
-       * typing a password into a form is a password that exists in two heads
-       * and a browser history. The link is stashed server-side and the
-       * redirect carries a handle: a one-time password-setting URL in a query
-       * string is one in browser history and in every proxy log on the way.
-       */
-      POST: async ({ request }) => {
-        const runtime = await getRuntime()
-        const list = `${runtime.config.base.basePath}${HERE}`
-
-        // Roles are checkboxes, so the field repeats; `readForm` keeps only
-        // the last value of a repeated key, which would silently drop every
-        // role but one. Read before the gate (D63), so a session that went
-        // stale while the dialog was open does not cost the form.
-        const { fields: form, list: valuesOf } = await readFormMulti(request)
-        const email = (form.email ?? "").trim()
-        const firstName = form.firstName ?? ""
-        const lastName = form.lastName ?? ""
-        const roles = valuesOf("roles")
-        const submitted = {
-          email: form.email,
-          firstName: form.firstName,
-          lastName: form.lastName,
-          roles,
-        }
-
-        const signedIn = await requireSession(runtime, request, HERE)
-        if (!signedIn.ok) return signedIn.response
-
-        /**
-         * Back to the list, saying which account it is about (**D78**).
-         *
-         * The address travels as a **one-shot handle**, not as itself:
-         * `safeUrlForLog` keeps the query string of every path outside
-         * `/oauth2/*` and `/api/auth/*`, so `?subject=jane@example.com` would
-         * write the address into the request log of a codebase that
-         * anonymises IP addresses for exactly that reason (SEC-5). Two
-         * minutes is a redirect's worth of life, and the claim consumes it.
-         */
-        const landOnList = async (notice: string) =>
-          redirectWithCookies(
-            `${list}?notice=${notice}&${SUBJECT_PARAM}=${await stash(
-              runtime,
-              email,
-              { ttlSeconds: 120 }
-            )}`
-          )
-
-        const created = await callAuth(
-          runtime,
-          "/admin/create-user",
-          {
-            email,
-            // D49: derived from the parts, never typed. FR-SIGNUP-5 asks for
-            // first and last name everywhere an account is made, and this was
-            // the one place still asking for a single free-text `name`.
-            name:
-              displayName(
-                firstName,
-                lastName,
-                runtime.config.file.site.nameFormat
-              ) || email,
-            // A random password nobody will ever use: the account is reached
-            // through the set-password link, and a null password would make it
-            // a social-only account, which is not what was asked for.
-            password: crypto.randomUUID() + crypto.randomUUID(),
-            ...(roles.length ? { role: roles } : {}),
-            data: {
-              status: "active",
-              emailVerified: true,
-              ...(firstName ? { firstName } : {}),
-              ...(lastName ? { lastName } : {}),
-            },
-          },
-          request
-        )
-        if (!created.ok) {
-          const draft = await stashDraft(runtime, submitted)
-          return redirectWithCookies(
-            withError(withDraft(list, draft), adminErrorCodeFor(created))
-          )
-        }
-
-        const user = created.body.user as { id?: string } | undefined
-        // The `user.created` row is the guard's, written from its hook on
-        // `/admin/create-user` so that a direct API call leaves the same trail
-        // (**D66**). It used to be written here, as `signup.created` with
-        // `by: "admin"` — three different events under one action name, on a
-        // page whose filter lists action names.
-
-        // **D70**: everything from here on runs *after the account exists*, so
-        // nothing below may throw its way to an error page. It did: an
-        // unhandled failure in the link tail produced a 500, the
-        // administrator's natural response was to submit the same form again,
-        // and the second attempt met the duplicate refusal — which, unmapped,
-        // said the e-mail and password combination was wrong. One field report,
-        // two bugs, and this is the half that manufactures the retry. The
-        // recovery is named rather than implied: both ways to give this account
-        // a password live on its own page.
-        if (typeof user?.id !== "string" || user.id === "") {
-          // Better Auth answered `ok` without a user id. Nothing sensible can
-          // be minted from `""` — the old code did, and produced a link that
-          // resolved to no account at all.
-          runtime.logger.error("create-user succeeded without a user id", {
-            email,
-          })
-          return landOnList("createdLinkFailed")
-        }
-
-        try {
-          // `welcome=1`: the same page, told to say "an administrator created
-          // an account for you" rather than "choose a new password", and to
-          // leave out the promise about other devices (D65).
-          const reset = await createResetLink(runtime, user.id, {
-            welcome: true,
-          })
-
-          if (runtime.mailer.enabled) {
-            await runtime.mailer.send("setPassword", email, { url: reset.url })
-            return landOnList("created")
-          }
-
-          // FR-MAIL-2: nothing can be sent, so the link is handed over on
-          // screen — once, in a dialog on this page, and never in the address
-          // bar.
-          const handle = await stash(
-            runtime,
-            JSON.stringify({ url: reset.url, email }),
-            { ttlSeconds: 600 }
-          )
-          return redirectWithCookies(`${list}?created=${handle}`)
-        } catch (error) {
-          runtime.logger.error("created the account but not its set-password link", {
-            email,
-            userId: user.id,
-            error: error instanceof Error ? error.message : String(error),
-          })
-          return landOnList("createdLinkFailed")
-        }
-      },
-    },
-  },
 })
-
 
 const STATUSES = ["pending", "active", "rejected"] as const
 
 function UsersPage() {
-  const { ui, query, page, roles, notice, error, inviteLink, subject, draft } =
+  const { ui, query, page, roles, notice, error, inviteLink, subject } =
     Route.useLoaderData()
   const t = getCatalog(ui.locale)
 
@@ -310,25 +132,15 @@ function UsersPage() {
     <AdminShell
       title={t.admin.users.title}
       actions={
-        <UserCreateDialog
-          t={t}
-          roles={roles}
-          draft={draft}
-          reopen={draft !== undefined}
-          error={
-            draft !== undefined
-              ? messageForErrorCode(error, t, ui.passwordMinLength)
-              : undefined
-          }
-        />
+        // A link, not a dialog trigger (**D93**).
+        <Link to="/admin/users/new" className={buttonVariants({ size: "sm" })}>
+          {t.admin.users.create}
+        </Link>
       }
     >
       <NoticeToast message={messageForNoticeCode(notice, t)} subject={subject} />
-      {/* Not when the dialog is reopening with it — the modal would cover it. */}
       <FormRefusal>
-        {draft === undefined
-          ? messageForErrorCode(error, t, ui.passwordMinLength)
-          : undefined}
+        {messageForErrorCode(error, t, ui.passwordMinLength)}
       </FormRefusal>
 
       {inviteLink ? (

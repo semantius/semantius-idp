@@ -293,6 +293,58 @@ Three more things about it that are easy to get wrong:
   document. A page that wants to fill the window asks `AdminShell` for
   `fill`; everything else is unchanged, because a page shorter than the
   viewport never scrolls either way.
+- **The header row is the breadcrumb's, and the `<h1>` is the page's**
+  (**D93**). The area's name used to be the chrome's `<h1>` with the page's
+  name as an `<h2>` beneath it; both moved. The trail goes in the chrome and
+  **not** in the page for the reason above it: that row sits *outside* the
+  scroll container, so a breadcrumb in the body scrolls away exactly when a
+  long form makes you want it. It also means the breadcrumb's `<ol>` of `<li>`
+  is inside `<main>` — a bare `main li` locator counts it, which is what broke
+  `/account/sessions`'s session count in the e2e suite. `t.admin.title`
+  ("Administration") now survives only as the navigation's `aria-label`, so no
+  page carries that string.
+- **A route declares its own crumbs, on its loader's return.** `SidebarLayout`
+  is above every page in its subtree and cannot receive data from them, so the
+  trail is concatenated from `useMatches()` — the file that owns a path owns
+  its crumbs, and the trail cannot go out of sync with the URL. **Not
+  `staticData`**: augmenting `StaticDataRouteOption` means
+  `declare module "@tanstack/router-core"`, and that package is not resolvable
+  from `apps/web` — `@tanstack/react-router` only re-exports the type, so an
+  augmentation there collides with the re-export instead of merging with it.
+  `crumbTrail(context.ui, (t) => [...])` keeps the wording in the catalog and
+  puts only strings on the wire. Every crumb carries a `to`; the last one is
+  the page and ignores it.
+
+**Every create and every edit is a page; every confirmation is a modal**
+(**D93**). The test is not size — it is whether there is one address to look
+at, link to and bookmark. Four things that bite:
+
+- **A refusal that arrives with the page is silent.** `FormAlert` is an
+  `aria-live` region, and a live region does not announce content that is
+  present at first paint — so after a 303 the page looks identical and the one
+  new sentence on it says nothing. The obvious fix, `role="alert"`,
+  typechecks, runs and changes nothing, because that is a live region too.
+  `FormRefusal` moves focus into it. Same class as the `setResponseStatus`
+  trap above.
+- **A one-shot draft must not outlive its render.** `claimAdminDraft` is
+  single-use, so `?error=` and `?draft=` left in the address bar make a reload
+  render an *empty* form under a live error about values that are gone.
+  `ClaimedParams` strips them with D71's own `history.replaceState` +
+  `hrefWithoutParam`; read `notice-toast.tsx`'s mechanics 1 and 2 first —
+  `router.navigate` would re-claim the sibling handles.
+- **One `onInput` on a `<form>` catches the Base UI checkboxes.** Not obvious:
+  the control the user operates is a `role="checkbox"` span, and a React state
+  change on the hidden input would fire nothing. Its click handler dispatches a
+  real click on that input, and a native click on a checkbox fires `input` and
+  `change`, both of which bubble. That is what `GuardedForm`'s dirty tracking
+  rests on, and the flag is a **ref**: `beforeunload` fires before React has
+  re-rendered, so a `useState` cleared on submit is still `true` when the guard
+  reads it.
+- **A file-managed row's edit URL redirects, never `notFound()`.**
+  `notFound()` is a centred page with no sidebar and no link out, replying
+  "this does not exist" about a row that was visible on the previous screen.
+  Redirect to the list with `?error=<code>` that `messageForErrorCode`
+  resolves.
 
 **A Better Auth plugin's `schema` is not a free place to put a table**
 (**D91**). `idp-plugin.ts` carries an 85 % *function*-coverage gate written

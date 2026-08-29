@@ -29,7 +29,6 @@ import {
   AdminShell,
   DetailRow,
 } from "@/components/admin/admin-shell"
-import { RoleCheckboxes } from "@/components/admin/role-checkboxes"
 import { ActionDialog } from "@/components/common/dialogs"
 import { UserBadges } from "@/components/admin/user-badges"
 import { FormRefusal } from "@/components/auth/form-parts"
@@ -43,7 +42,7 @@ import { runAdminAction } from "@/server/http/admin-actions"
 import { readFormMulti, redirectWithCookies } from "@/server/http/auth-proxy"
 import { requireSession } from "@/server/http/require-session"
 import { stash } from "@/server/http/one-shot"
-import { fetchRoles, fetchUserDetail } from "@/server/functions/admin"
+import { fetchUserDetail } from "@/server/functions/admin"
 import { getRuntime } from "@/server/runtime"
 import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 import { LocalTime } from "@/components/common/local-time"
@@ -70,8 +69,22 @@ import { LocalTime } from "@/components/common/local-time"
  * bare button with a sentence above it. Each is now a named control that opens
  * the form it has always had; the POST bodies, the `action` values and the
  * dispatcher underneath them are unchanged.
+ *
+ * **Two of them became one link** (**D93**). Edit profile and Roles are two
+ * halves of one record, not two actions, and they are `/admin/users/$userId/
+ * edit` now — one form with one Save. Everything else on this page is a
+ * confirmation with at most two inputs and stays exactly where it is: the
+ * rule is *every create and every edit is a page, every confirmation is a
+ * modal*, and "sign out everywhere" is not an edit.
+ *
+ * **The nine surviving forms still post to this URL with no `action`
+ * attribute** — `/admin/users/<id>`, un-slashed — while this file now
+ * generates the route `/admin/users/$userId/`. That works for the same reason
+ * `/admin/users`'s own handler always has: an index route answers the
+ * un-slashed path. It is worth knowing, because the failure mode would have
+ * been a silent 404 on nine admin actions.
  */
-export const Route = createFileRoute("/admin/users/$userId")({
+export const Route = createFileRoute("/admin/users/$userId/")({
   loader: async ({ context, params, location }) => {
     const user = await fetchUserDetail({ data: params.userId })
     if (!user) throw notFound()
@@ -87,9 +100,8 @@ export const Route = createFileRoute("/admin/users/$userId")({
         { label: user.email },
       ]),
       user,
-      // The catalog, so roles are checkboxes rather than a comma-separated
-      // field an administrator has to spell from memory (item 11b).
-      roles: (await fetchRoles()) ?? [],
+      // The role catalog went with the form (**D93**): the checkboxes are on
+      // `$userId/edit` now, and this page shows the roles it holds as badges.
       notice: searchString(search.notice),
       error: searchString(search.error),
     }
@@ -108,18 +120,17 @@ export const Route = createFileRoute("/admin/users/$userId")({
         const signedIn = await requireSession(runtime, request, here)
         if (!signedIn.ok) return signedIn.response
 
-        // `readFormMulti`, because the roles control repeats its field and
-        // the plain reader keeps only the last ticked box.
+        // `readFormMulti`, because a checkbox group repeats its field and the
+        // plain reader keeps only the last ticked box. The **join moved into
+        // the dispatcher** (**D93**): it used to be three lines here, and a
+        // second route dispatching `set-roles` without them would have stored
+        // one role of several under a success toast.
         const { fields: form, list: valuesOf } = await readFormMulti(request)
-        if (form.action === "set-roles") {
-          // `set-roles` has always split a comma string; joining here keeps
-          // the dispatcher and its tests untouched by the UI change.
-          form.roles = valuesOf("roles").join(",")
-        }
         const outcome = await runAdminAction(form.action ?? "", {
           runtime,
           request,
           form,
+          list: valuesOf,
           userId,
           actorId: signedIn.session.user.id,
         })
@@ -164,7 +175,7 @@ const BAN_DURATIONS = [
 ]
 
 function UserDetailPage() {
-  const { ui, gate, user, roles, notice, error } = Route.useLoaderData()
+  const { ui, gate, user, notice, error } = Route.useLoaderData()
   const t = getCatalog(ui.locale)
   const self = gate.admin && gate.email === user.email
 
@@ -408,83 +419,24 @@ function UserDetailPage() {
                   <Separator className="my-1" />
                 </>
               ) : null}
-              <ActionDialog
-                label={t.admin.actions.editProfile}
-                description={t.admin.actions.editProfileHelp}
-                className="w-full justify-start"
+              {/* **D93**: Edit profile and Roles were two dialogs with two
+                  Saves over two halves of one record. An administrator who
+                  corrected an address *and* granted a role, then pressed the
+                  Profile save, got "Profile updated." in a toast and lost the
+                  role grant with no signal at all — silently, on the
+                  authorization surface, confirmed by a success message. One
+                  link, one form, one Save. */}
+              <Link
+                to="/admin/users/$userId/edit"
+                params={{ userId: user.id }}
+                className={buttonVariants({
+                  variant: "outline",
+                  size: "sm",
+                  className: "w-full justify-start",
+                })}
               >
-                <PendingForm
-                  busy={t.common.loading}
-                  method="post"
-                  className="grid gap-4"
-                >
-                  <input type="hidden" name="action" value="edit-profile" />
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Field>
-                      <FieldLabel htmlFor="firstName">
-                        {t.common.firstName}
-                      </FieldLabel>
-                      <Input
-                        id="firstName"
-                        name="firstName"
-                        defaultValue={user.firstName}
-                        autoComplete="off"
-                      />
-                    </Field>
-                    <Field>
-                      <FieldLabel htmlFor="lastName">
-                        {t.common.lastName}
-                      </FieldLabel>
-                      <Input
-                        id="lastName"
-                        name="lastName"
-                        defaultValue={user.lastName}
-                        autoComplete="off"
-                      />
-                    </Field>
-                  </div>
-                  <Field>
-                    <FieldLabel htmlFor="email">{t.common.email}</FieldLabel>
-                    <Input
-                      id="email"
-                      name="email"
-                      type="email"
-                      defaultValue={user.email}
-                      autoComplete="off"
-                    />
-                  </Field>
-                  <Label className="group/field-label flex items-center gap-2 text-sm font-normal">
-                    <Checkbox
-                      name="emailVerified"
-                      aria-label={t.admin.actions.emailVerifiedLabel}
-                      defaultChecked={user.emailVerified}
-                    />
-                    {t.admin.actions.emailVerifiedLabel}
-                  </Label>
-                  <SubmitButton>{t.admin.actions.save}</SubmitButton>
-                </PendingForm>
-              </ActionDialog>
-              <ActionDialog
-                label={t.admin.actions.setRoles}
-                description={t.admin.actions.setRolesHelp}
-                className="w-full justify-start"
-              >
-                <PendingForm
-                  busy={t.common.loading}
-                  method="post"
-                  className="grid gap-4"
-                >
-                  <input type="hidden" name="action" value="set-roles" />
-                  <RoleCheckboxes
-                    roles={roles}
-                    legend={t.admin.actions.setRoles}
-                    checked={user.roles}
-                  />
-                  <SubmitButton variant="outline" disabled={self}>
-                    {t.admin.actions.save}
-                  </SubmitButton>
-                </PendingForm>
-              </ActionDialog>
+                {t.admin.actions.editProfile}
+              </Link>
               <Separator className="my-1" />
               {ui.emailEnabled ? (
                 <ActionDialog

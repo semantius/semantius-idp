@@ -224,7 +224,7 @@ own organisation registered is a click that teaches them to click. Set it to
 ```
 
 The same applies to clients registered from `/admin/clients`, where the
-question is asked the other way round: the create dialog has a **"Require
+question is asked the other way round: the create form has a **"Require
 consent"** checkbox, unticked by default, and the list has a **"Consent
 required"** column. Both name the decision rather than the field, and the field
 on the wire and in the API is `skipConsent` either way. Until the round-2 review

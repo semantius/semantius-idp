@@ -25,6 +25,19 @@ export interface AdminActionInput {
   runtime: Runtime
   request: Request
   form: Record<string, string>
+  /**
+   * The repeated fields, as `readFormMulti` reads them (**D93**).
+   *
+   * One field needs it — `roles`, which is a checkbox group — and the join
+   * used to live in the route: `$userId.tsx` did `readFormMulti` *and*
+   * `form.roles = valuesOf("roles").join(",")` before dispatching, because
+   * `set-roles` splits a comma string while `readForm` keeps only the last
+   * value of a repeated key. Naming the reader without the join means ticking
+   * `admin` and `billing` stores `billing` alone — a silent privilege
+   * reduction under a success toast. It is here now so the next route to
+   * dispatch this cannot forget it.
+   */
+  list: (name: string) => string[]
   /** The user being acted on. */
   userId: string
   /** The administrator doing it, for the audit rows this file writes itself. */
@@ -254,8 +267,11 @@ export async function runAdminAction(
     }
 
     case "set-roles": {
-      const roles = (input.form.roles ?? "")
-        .split(",")
+      // The checkbox group, read as a list rather than reassembled from a
+      // string the caller had to remember to build (**D93**). `/admin/set-role`
+      // takes an array, so nothing is joined at all any more.
+      const roles = input
+        .list("roles")
         .map((role) => role.trim())
         .filter((role) => role !== "")
       const result = await callAuth(

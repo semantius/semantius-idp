@@ -42,9 +42,7 @@ import { Route as GatewayNameRouteImport } from './routes/gateway/$name'
 import { Route as BrandingSplatRouteImport } from './routes/branding.$'
 import { Route as AdminSystemRouteImport } from './routes/admin/system'
 import { Route as AdminRolesRouteImport } from './routes/admin/roles'
-import { Route as AdminGatewaysRouteImport } from './routes/admin/gateways'
 import { Route as AdminDatabaseRouteImport } from './routes/admin/database'
-import { Route as AdminClientsRouteImport } from './routes/admin/clients'
 import { Route as AdminAuditRouteImport } from './routes/admin/audit'
 import { Route as AccountSessionsRouteImport } from './routes/account/sessions'
 import { Route as AccountSecurityRouteImport } from './routes/account/security'
@@ -56,9 +54,17 @@ import { Route as DotwellKnownOauthAuthorizationServerRouteImport } from './rout
 import { Route as DotwellKnownJwksDotjsonRouteImport } from './routes/[.]well-known.jwks[.]json'
 import { Route as DotwellKnownChangePasswordRouteImport } from './routes/[.]well-known.change-password'
 import { Route as AdminUsersIndexRouteImport } from './routes/admin/users/index'
+import { Route as AdminGatewaysIndexRouteImport } from './routes/admin/gateways/index'
+import { Route as AdminClientsIndexRouteImport } from './routes/admin/clients/index'
 import { Route as GatewayNameSplatRouteImport } from './routes/gateway/$name.$'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
-import { Route as AdminUsersUserIdRouteImport } from './routes/admin/users/$userId'
+import { Route as AdminUsersNewRouteImport } from './routes/admin/users/new'
+import { Route as AdminGatewaysNewRouteImport } from './routes/admin/gateways/new'
+import { Route as AdminClientsNewRouteImport } from './routes/admin/clients/new'
+import { Route as AdminUsersUserIdIndexRouteImport } from './routes/admin/users/$userId/index'
+import { Route as AdminUsersUserIdEditRouteImport } from './routes/admin/users/$userId/edit'
+import { Route as AdminGatewaysNameEditRouteImport } from './routes/admin/gateways/$name/edit'
+import { Route as AdminClientsClientIdEditRouteImport } from './routes/admin/clients/$clientId/edit'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
@@ -225,19 +231,9 @@ const AdminRolesRoute = AdminRolesRouteImport.update({
   path: '/roles',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminGatewaysRoute = AdminGatewaysRouteImport.update({
-  id: '/gateways',
-  path: '/gateways',
-  getParentRoute: () => AdminRoute,
-} as any)
 const AdminDatabaseRoute = AdminDatabaseRouteImport.update({
   id: '/database',
   path: '/database',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AdminClientsRoute = AdminClientsRouteImport.update({
-  id: '/clients',
-  path: '/clients',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminAuditRoute = AdminAuditRouteImport.update({
@@ -299,6 +295,16 @@ const AdminUsersIndexRoute = AdminUsersIndexRouteImport.update({
   path: '/users/',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminGatewaysIndexRoute = AdminGatewaysIndexRouteImport.update({
+  id: '/gateways/',
+  path: '/gateways/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminClientsIndexRoute = AdminClientsIndexRouteImport.update({
+  id: '/clients/',
+  path: '/clients/',
+  getParentRoute: () => AdminRoute,
+} as any)
 const GatewayNameSplatRoute = GatewayNameSplatRouteImport.update({
   id: '/$',
   path: '/$',
@@ -309,11 +315,42 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
   path: '/api/auth/$',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminUsersUserIdRoute = AdminUsersUserIdRouteImport.update({
-  id: '/users/$userId',
-  path: '/users/$userId',
+const AdminUsersNewRoute = AdminUsersNewRouteImport.update({
+  id: '/users/new',
+  path: '/users/new',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminGatewaysNewRoute = AdminGatewaysNewRouteImport.update({
+  id: '/gateways/new',
+  path: '/gateways/new',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminClientsNewRoute = AdminClientsNewRouteImport.update({
+  id: '/clients/new',
+  path: '/clients/new',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminUsersUserIdIndexRoute = AdminUsersUserIdIndexRouteImport.update({
+  id: '/users/$userId/',
+  path: '/users/$userId/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminUsersUserIdEditRoute = AdminUsersUserIdEditRouteImport.update({
+  id: '/users/$userId/edit',
+  path: '/users/$userId/edit',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminGatewaysNameEditRoute = AdminGatewaysNameEditRouteImport.update({
+  id: '/gateways/$name/edit',
+  path: '/gateways/$name/edit',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminClientsClientIdEditRoute =
+  AdminClientsClientIdEditRouteImport.update({
+    id: '/clients/$clientId/edit',
+    path: '/clients/$clientId/edit',
+    getParentRoute: () => AdminRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -347,9 +384,7 @@ export interface FileRoutesByFullPath {
   '/account/security': typeof AccountSecurityRoute
   '/account/sessions': typeof AccountSessionsRoute
   '/admin/audit': typeof AdminAuditRoute
-  '/admin/clients': typeof AdminClientsRoute
   '/admin/database': typeof AdminDatabaseRoute
-  '/admin/gateways': typeof AdminGatewaysRoute
   '/admin/roles': typeof AdminRolesRoute
   '/admin/system': typeof AdminSystemRoute
   '/branding/$': typeof BrandingSplatRoute
@@ -362,10 +397,18 @@ export interface FileRoutesByFullPath {
   '/oauth2/userinfo': typeof Oauth2UserinfoRoute
   '/account/': typeof AccountIndexRoute
   '/admin/': typeof AdminIndexRoute
-  '/admin/users/$userId': typeof AdminUsersUserIdRoute
+  '/admin/clients/new': typeof AdminClientsNewRoute
+  '/admin/gateways/new': typeof AdminGatewaysNewRoute
+  '/admin/users/new': typeof AdminUsersNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/gateway/$name/$': typeof GatewayNameSplatRoute
+  '/admin/clients/': typeof AdminClientsIndexRoute
+  '/admin/gateways/': typeof AdminGatewaysIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
+  '/admin/clients/$clientId/edit': typeof AdminClientsClientIdEditRoute
+  '/admin/gateways/$name/edit': typeof AdminGatewaysNameEditRoute
+  '/admin/users/$userId/edit': typeof AdminUsersUserIdEditRoute
+  '/admin/users/$userId/': typeof AdminUsersUserIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -397,9 +440,7 @@ export interface FileRoutesByTo {
   '/account/security': typeof AccountSecurityRoute
   '/account/sessions': typeof AccountSessionsRoute
   '/admin/audit': typeof AdminAuditRoute
-  '/admin/clients': typeof AdminClientsRoute
   '/admin/database': typeof AdminDatabaseRoute
-  '/admin/gateways': typeof AdminGatewaysRoute
   '/admin/roles': typeof AdminRolesRoute
   '/admin/system': typeof AdminSystemRoute
   '/branding/$': typeof BrandingSplatRoute
@@ -412,10 +453,18 @@ export interface FileRoutesByTo {
   '/oauth2/userinfo': typeof Oauth2UserinfoRoute
   '/account': typeof AccountIndexRoute
   '/admin': typeof AdminIndexRoute
-  '/admin/users/$userId': typeof AdminUsersUserIdRoute
+  '/admin/clients/new': typeof AdminClientsNewRoute
+  '/admin/gateways/new': typeof AdminGatewaysNewRoute
+  '/admin/users/new': typeof AdminUsersNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/gateway/$name/$': typeof GatewayNameSplatRoute
+  '/admin/clients': typeof AdminClientsIndexRoute
+  '/admin/gateways': typeof AdminGatewaysIndexRoute
   '/admin/users': typeof AdminUsersIndexRoute
+  '/admin/clients/$clientId/edit': typeof AdminClientsClientIdEditRoute
+  '/admin/gateways/$name/edit': typeof AdminGatewaysNameEditRoute
+  '/admin/users/$userId/edit': typeof AdminUsersUserIdEditRoute
+  '/admin/users/$userId': typeof AdminUsersUserIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -450,9 +499,7 @@ export interface FileRoutesById {
   '/account/security': typeof AccountSecurityRoute
   '/account/sessions': typeof AccountSessionsRoute
   '/admin/audit': typeof AdminAuditRoute
-  '/admin/clients': typeof AdminClientsRoute
   '/admin/database': typeof AdminDatabaseRoute
-  '/admin/gateways': typeof AdminGatewaysRoute
   '/admin/roles': typeof AdminRolesRoute
   '/admin/system': typeof AdminSystemRoute
   '/branding/$': typeof BrandingSplatRoute
@@ -465,10 +512,18 @@ export interface FileRoutesById {
   '/oauth2/userinfo': typeof Oauth2UserinfoRoute
   '/account/': typeof AccountIndexRoute
   '/admin/': typeof AdminIndexRoute
-  '/admin/users/$userId': typeof AdminUsersUserIdRoute
+  '/admin/clients/new': typeof AdminClientsNewRoute
+  '/admin/gateways/new': typeof AdminGatewaysNewRoute
+  '/admin/users/new': typeof AdminUsersNewRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/gateway/$name/$': typeof GatewayNameSplatRoute
+  '/admin/clients/': typeof AdminClientsIndexRoute
+  '/admin/gateways/': typeof AdminGatewaysIndexRoute
   '/admin/users/': typeof AdminUsersIndexRoute
+  '/admin/clients/$clientId/edit': typeof AdminClientsClientIdEditRoute
+  '/admin/gateways/$name/edit': typeof AdminGatewaysNameEditRoute
+  '/admin/users/$userId/edit': typeof AdminUsersUserIdEditRoute
+  '/admin/users/$userId/': typeof AdminUsersUserIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -504,9 +559,7 @@ export interface FileRouteTypes {
     | '/account/security'
     | '/account/sessions'
     | '/admin/audit'
-    | '/admin/clients'
     | '/admin/database'
-    | '/admin/gateways'
     | '/admin/roles'
     | '/admin/system'
     | '/branding/$'
@@ -519,10 +572,18 @@ export interface FileRouteTypes {
     | '/oauth2/userinfo'
     | '/account/'
     | '/admin/'
-    | '/admin/users/$userId'
+    | '/admin/clients/new'
+    | '/admin/gateways/new'
+    | '/admin/users/new'
     | '/api/auth/$'
     | '/gateway/$name/$'
+    | '/admin/clients/'
+    | '/admin/gateways/'
     | '/admin/users/'
+    | '/admin/clients/$clientId/edit'
+    | '/admin/gateways/$name/edit'
+    | '/admin/users/$userId/edit'
+    | '/admin/users/$userId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -554,9 +615,7 @@ export interface FileRouteTypes {
     | '/account/security'
     | '/account/sessions'
     | '/admin/audit'
-    | '/admin/clients'
     | '/admin/database'
-    | '/admin/gateways'
     | '/admin/roles'
     | '/admin/system'
     | '/branding/$'
@@ -569,10 +628,18 @@ export interface FileRouteTypes {
     | '/oauth2/userinfo'
     | '/account'
     | '/admin'
-    | '/admin/users/$userId'
+    | '/admin/clients/new'
+    | '/admin/gateways/new'
+    | '/admin/users/new'
     | '/api/auth/$'
     | '/gateway/$name/$'
+    | '/admin/clients'
+    | '/admin/gateways'
     | '/admin/users'
+    | '/admin/clients/$clientId/edit'
+    | '/admin/gateways/$name/edit'
+    | '/admin/users/$userId/edit'
+    | '/admin/users/$userId'
   id:
     | '__root__'
     | '/'
@@ -606,9 +673,7 @@ export interface FileRouteTypes {
     | '/account/security'
     | '/account/sessions'
     | '/admin/audit'
-    | '/admin/clients'
     | '/admin/database'
-    | '/admin/gateways'
     | '/admin/roles'
     | '/admin/system'
     | '/branding/$'
@@ -621,10 +686,18 @@ export interface FileRouteTypes {
     | '/oauth2/userinfo'
     | '/account/'
     | '/admin/'
-    | '/admin/users/$userId'
+    | '/admin/clients/new'
+    | '/admin/gateways/new'
+    | '/admin/users/new'
     | '/api/auth/$'
     | '/gateway/$name/$'
+    | '/admin/clients/'
+    | '/admin/gateways/'
     | '/admin/users/'
+    | '/admin/clients/$clientId/edit'
+    | '/admin/gateways/$name/edit'
+    | '/admin/users/$userId/edit'
+    | '/admin/users/$userId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -898,25 +971,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRolesRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/admin/gateways': {
-      id: '/admin/gateways'
-      path: '/gateways'
-      fullPath: '/admin/gateways'
-      preLoaderRoute: typeof AdminGatewaysRouteImport
-      parentRoute: typeof AdminRoute
-    }
     '/admin/database': {
       id: '/admin/database'
       path: '/database'
       fullPath: '/admin/database'
       preLoaderRoute: typeof AdminDatabaseRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/admin/clients': {
-      id: '/admin/clients'
-      path: '/clients'
-      fullPath: '/admin/clients'
-      preLoaderRoute: typeof AdminClientsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/admin/audit': {
@@ -996,6 +1055,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminUsersIndexRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/admin/gateways/': {
+      id: '/admin/gateways/'
+      path: '/gateways'
+      fullPath: '/admin/gateways/'
+      preLoaderRoute: typeof AdminGatewaysIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/clients/': {
+      id: '/admin/clients/'
+      path: '/clients'
+      fullPath: '/admin/clients/'
+      preLoaderRoute: typeof AdminClientsIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/gateway/$name/$': {
       id: '/gateway/$name/$'
       path: '/$'
@@ -1010,11 +1083,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/users/$userId': {
-      id: '/admin/users/$userId'
+    '/admin/users/new': {
+      id: '/admin/users/new'
+      path: '/users/new'
+      fullPath: '/admin/users/new'
+      preLoaderRoute: typeof AdminUsersNewRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/gateways/new': {
+      id: '/admin/gateways/new'
+      path: '/gateways/new'
+      fullPath: '/admin/gateways/new'
+      preLoaderRoute: typeof AdminGatewaysNewRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/clients/new': {
+      id: '/admin/clients/new'
+      path: '/clients/new'
+      fullPath: '/admin/clients/new'
+      preLoaderRoute: typeof AdminClientsNewRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/users/$userId/': {
+      id: '/admin/users/$userId/'
       path: '/users/$userId'
-      fullPath: '/admin/users/$userId'
-      preLoaderRoute: typeof AdminUsersUserIdRouteImport
+      fullPath: '/admin/users/$userId/'
+      preLoaderRoute: typeof AdminUsersUserIdIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/users/$userId/edit': {
+      id: '/admin/users/$userId/edit'
+      path: '/users/$userId/edit'
+      fullPath: '/admin/users/$userId/edit'
+      preLoaderRoute: typeof AdminUsersUserIdEditRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/gateways/$name/edit': {
+      id: '/admin/gateways/$name/edit'
+      path: '/gateways/$name/edit'
+      fullPath: '/admin/gateways/$name/edit'
+      preLoaderRoute: typeof AdminGatewaysNameEditRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/clients/$clientId/edit': {
+      id: '/admin/clients/$clientId/edit'
+      path: '/clients/$clientId/edit'
+      fullPath: '/admin/clients/$clientId/edit'
+      preLoaderRoute: typeof AdminClientsClientIdEditRouteImport
       parentRoute: typeof AdminRoute
     }
   }
@@ -1041,26 +1156,38 @@ const AccountRouteWithChildren =
 
 interface AdminRouteChildren {
   AdminAuditRoute: typeof AdminAuditRoute
-  AdminClientsRoute: typeof AdminClientsRoute
   AdminDatabaseRoute: typeof AdminDatabaseRoute
-  AdminGatewaysRoute: typeof AdminGatewaysRoute
   AdminRolesRoute: typeof AdminRolesRoute
   AdminSystemRoute: typeof AdminSystemRoute
   AdminIndexRoute: typeof AdminIndexRoute
-  AdminUsersUserIdRoute: typeof AdminUsersUserIdRoute
+  AdminClientsNewRoute: typeof AdminClientsNewRoute
+  AdminGatewaysNewRoute: typeof AdminGatewaysNewRoute
+  AdminUsersNewRoute: typeof AdminUsersNewRoute
+  AdminClientsIndexRoute: typeof AdminClientsIndexRoute
+  AdminGatewaysIndexRoute: typeof AdminGatewaysIndexRoute
   AdminUsersIndexRoute: typeof AdminUsersIndexRoute
+  AdminClientsClientIdEditRoute: typeof AdminClientsClientIdEditRoute
+  AdminGatewaysNameEditRoute: typeof AdminGatewaysNameEditRoute
+  AdminUsersUserIdEditRoute: typeof AdminUsersUserIdEditRoute
+  AdminUsersUserIdIndexRoute: typeof AdminUsersUserIdIndexRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
   AdminAuditRoute: AdminAuditRoute,
-  AdminClientsRoute: AdminClientsRoute,
   AdminDatabaseRoute: AdminDatabaseRoute,
-  AdminGatewaysRoute: AdminGatewaysRoute,
   AdminRolesRoute: AdminRolesRoute,
   AdminSystemRoute: AdminSystemRoute,
   AdminIndexRoute: AdminIndexRoute,
-  AdminUsersUserIdRoute: AdminUsersUserIdRoute,
+  AdminClientsNewRoute: AdminClientsNewRoute,
+  AdminGatewaysNewRoute: AdminGatewaysNewRoute,
+  AdminUsersNewRoute: AdminUsersNewRoute,
+  AdminClientsIndexRoute: AdminClientsIndexRoute,
+  AdminGatewaysIndexRoute: AdminGatewaysIndexRoute,
   AdminUsersIndexRoute: AdminUsersIndexRoute,
+  AdminClientsClientIdEditRoute: AdminClientsClientIdEditRoute,
+  AdminGatewaysNameEditRoute: AdminGatewaysNameEditRoute,
+  AdminUsersUserIdEditRoute: AdminUsersUserIdEditRoute,
+  AdminUsersUserIdIndexRoute: AdminUsersUserIdIndexRoute,
 }
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)

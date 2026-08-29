@@ -110,6 +110,88 @@ Decisions that changed a numbered requirement carry their `D` number from
   upstream's origin is stripped. `Upgrade` answers 501; an unreachable
   upstream answers 502; an unknown and a disabled name answer the same 404.
 
+### Changed
+
+- **Every create and every edit is a page; every confirmation stays a modal**
+  (**D93**, FR-ADMIN-2, FR-OIDC-2, FR-GW-7, FR-ROLE-2). `/admin/clients` and
+  `/admin/gateways` did create and edit inside a `DialogContent` capped at
+  28 rem with an inner scroller — the client form is twelve fields including
+  two textareas and a scope fieldset — and none of it could be linked to,
+  bookmarked, reloaded or reached with the back button.
+
+  Nine routes where there were three: `clients/{index,new,$clientId/edit}`,
+  `gateways/{index,new,$name/edit}`, `users/{new,$userId/index,$userId/edit}`.
+  Each new page owns the POST it used to send to the list, unchanged — the same
+  read-before-`requireSession` order (**D63**/**D81**), the same `callAuth`,
+  the same `adminErrorCodeFor` (**D70**), the same 303. Success lands on the
+  list; a refusal comes back to the form's own address with the draft.
+
+  The rule is about **addressability, not size**: it moves the five-field
+  create-user form as well. **D64**'s finding is kept — one action must not
+  have two outcomes on two surfaces, and both outcomes of a creation still land
+  on the list — while its conclusion, "an action is a dialog on the page that
+  lists what it acts on, never a route of its own", is what over-reached. Three
+  symptoms of that were already in the tree and are gone with it: the `max-h`
+  patch in `dialogs.tsx`, one twelve-field form rendered *per table row*, and
+  the `action`+`clientId` discriminator that existed only to decide which row's
+  dialog reopened after a refusal.
+
+  **`/admin/users/:id/edit` is one form with one Save.** Profile and roles were
+  two dialogs with two Saves over two halves of one record: an administrator
+  who corrected an address *and* granted a role, then pressed the Profile save,
+  got "Profile updated." and lost the role grant with no signal — silently, on
+  the authorization surface, under a success message. The handler composes
+  `edit-profile` and `set-roles`, which is what **D70** is the pattern for. The
+  roles fieldset is disabled on your own account and the `set-roles` call is
+  skipped, because FR-ADMIN-3 refuses it server-side; the profile half still
+  saves. The roles join moved into `runAdminAction`, so the next route to
+  dispatch `set-roles` cannot store one role of two under a success toast.
+
+  **Unsaved changes are guarded** — a `useBlocker` with the same blocker's
+  `enableBeforeUnload`, off one `onInput`. Not a new hazard, a bigger one:
+  since **D82** the sidebar is permanently on screen with eight one-click
+  destinations, D93 adds a breadcrumb with two more, and Back now means
+  something.
+
+  **`?error=` and `?draft=` are stripped once the loader has claimed them.**
+  `claimAdminDraft` is single-use, so reloading a refused form — the state
+  where a reload is most tempting — rendered twelve *empty* fields under a live
+  message about values that were gone. That is **D71**'s defect on the
+  parameters D71 left alone, and it reuses D71's mechanism.
+
+  Also: a row's **name** is a link to its edit page, so an addressable record
+  is reachable without opening a menu first; a file-managed name stays plain
+  text. A file-managed row's edit URL redirects to the list with a reason
+  rather than rendering `notFound()`, which is a centred page with no sidebar
+  and no way out. `SecretDialog` now names the recovery, because Escape
+  destroys the only copy of a client secret and nothing said that rotating from
+  the row menu is how to get another.
+
+### Fixed
+
+- **A client ID of `.` or `..` was accepted and broke its own edit link**
+  (**D93**). Both pass `CLIENT_ID_PATTERN` and neither is usable as a path
+  segment: a browser resolves `/admin/clients/../edit` to `/admin/edit` before
+  the request leaves it. `isValidClientId` refuses those two exact values — not
+  dots in general, because `com.example.app` is an ordinary client ID — so
+  `oauth_clients.jsonc` cannot declare one either. `lib/gateway-rules.ts` has
+  had this reasoning for gateway names since **D91**; the client rule never got
+  it.
+
+- **A gateway whose target is a bare origin could not be saved from Edit.**
+  `fetchGateways` ran every row through `maskConnectionString`, which does not
+  only mask — it ends in `url.toString()`, and
+  `new URL("https://api.example.com").toString()` is
+  `"https://api.example.com/"`. `checkGatewayUrl` answers `trailing_slash` for
+  that, so opening Edit on the commonest target shape and changing nothing but
+  the "Require authentication" checkbox was refused, naming a slash the
+  operator never typed — and the same projection would have offered `***` back
+  to a full-replace update for a row that really did carry a password. A
+  gateway target is not a connection string: `maskGatewayTarget` returns the
+  stored string byte for byte unless it carries a password, and
+  `AdminGatewayRow.urlMasked` says which happened so a lossy value is never
+  prefilled into a form.
+
 ## [0.5.0] — 2026-08-28
 
 ### Changed
@@ -128,20 +210,6 @@ Decisions that changed a numbered requirement carry their `D` number from
   the fallback stays and a deployment written before D60 is still read.
 
 ### Fixed
-
-- **A gateway whose target is a bare origin could not be saved from Edit.**
-  `fetchGateways` ran every row through `maskConnectionString`, which does not
-  only mask — it ends in `url.toString()`, and
-  `new URL("https://api.example.com").toString()` is
-  `"https://api.example.com/"`. `checkGatewayUrl` answers `trailing_slash` for
-  that, so opening Edit on the commonest target shape and changing nothing but
-  the "Require authentication" checkbox was refused, naming a slash the
-  operator never typed — and the same projection would have offered `***` back
-  to a full-replace update for a row that really did carry a password. A
-  gateway target is not a connection string: `maskGatewayTarget` returns the
-  stored string byte for byte unless it carries a password, and
-  `AdminGatewayRow.urlMasked` says which happened so a lossy value is never
-  prefilled into a form.
 
 - **No gate had ever booted a container from a `.jsonc` config folder**
   (**D90**). `apps/web/e2e/stack.ts` and `scripts/smoke-test.ts` each build a

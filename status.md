@@ -1,6 +1,6 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-29 · **Branch:** `main` · **Head:** `562e341`, last tag **v0.6.0**
+**As of:** 2026-08-29 · **Branch:** `main` · **Head:** `144b9e5`, last tag **v0.6.1**
 **Plan:** `~/.claude/plans/users-has-a-full-binary-meteor.md` (full-page forms)
 **Spec:** [spec-v1.md](spec-v1.md) — amended through **D97**
 
@@ -39,11 +39,18 @@ non-colliding session cookies for free and now say so with
 `server.cookiePath`. Nothing else changes — `/` is strictly broader than the
 old value, so every path that received the cookie still does.
 
-Gates run for it: lint, typecheck, unit (668), the config-schema and
-configuration-reference `--check` gates. **Not yet run: integration, coverage,
-e2e, the client-bundle gate and the container smoke test** — and the image has
-not been rebuilt or published, which is what a deployment needs before the new
-keys exist for it.
+**Published as v0.6.1** (2026-08-29), so the new keys exist for a deployment
+that pulls it. Every gate was run on the tagged tree first: lint, typecheck,
+unit (668), unit + integration with coverage thresholds (967 across 85 files),
+pinned deps, the Bun pin, the config-schema, configuration-reference and
+schema-drift `--check` gates, the build and client-bundle gate, the TST-8
+container smoke test, and 104 end-to-end tests against the built image in both
+deployment shapes.
+
+**It is a patch on the owner's call, and the changelog entry is under Fixed.**
+The first draft called it BREAKING; the derivation it removes was never a
+requirement, so restoring Better Auth's own `/` is a fix rather than a change
+of direction, and `:0.6`, `:0` and `:latest` all move to it.
 
 **What is left needs the owner.** Tagging `v1.0.0` and publishing the image are
 the mandatory sign-off gate, and the two checks that cannot be automated are
@@ -77,7 +84,7 @@ Everything buildable is built. What remains cannot be done from here:
   e-mail instead would silently create a second one.
 - **One real token against a real Neon project** — including a key rotation,
   to see the grace period behave.
-- **Tagging `v1.0.0`.** Six versions are published — **v0.1.0**,
+- **Tagging `v1.0.0`.** Seven versions are published — **v0.1.0**,
   **v0.2.0** (2026-08-27, the D78 / D80 / D81 round), **v0.3.1**
   (2026-08-28, the database console's second round, the audit fix and the
   image-size fix — **D84**, **D85**, **D86**), **v0.4.0** (2026-08-28,
@@ -87,8 +94,9 @@ Everything buildable is built. What remains cannot be done from here:
   spelled `.jsonc` through the spec and the source, and the two harnesses
   that had never booted a container from one — **D90**) and **v0.6.0**
   (2026-08-29, the API gateways and the two owner rounds that followed the
-  full-page forms — **D91**, **D92**, **D93**, **D94**, **D95**, **D96**)
-  — because the image was wanted
+  full-page forms — **D91**, **D92**, **D93**, **D94**, **D95**, **D96**) and
+  **v0.6.1** (2026-08-29, the session cookie's `Path` and `Domain` as
+  configuration — **D97**) — because the image was wanted
   before the two manual checks above could be performed. **`v0.3.0` is a tag
   that published nothing**: its release run failed OPS-13's size gate, which
   is what D86 is about; `v0.3.1` carries everything it was going to. `1.0.0` is what

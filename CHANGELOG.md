@@ -7,69 +7,9 @@ Notable changes to this project. The format follows
 Decisions that changed a numbered requirement carry their `D` number from
 [spec-v1.md](spec-v1.md) §12, where the reasoning is.
 
-## [Unreleased]
+## [0.6.0] — 2026-08-29
 
 ### Added
-
-- **A breadcrumb header for both signed-in areas** (**D93**, FR-ADMIN-2,
-  FR-ACCT-1). There was no trail anywhere, and the area's name — "Administration"
-  — was the `<h1>` while the page's own name was an `<h2>` beneath it.
-
-  The trail sits in the chrome header row rather than in the page, which is a
-  deliberate divergence from semantius-app for a reason specific to this app:
-  that row is **outside** the scroll container (**D87**), so a breadcrumb in
-  the page body scrolls away exactly when a long form makes you want it. It is
-  composed from the route matches — each route declares the crumbs it adds on
-  its loader's return — so it cannot disagree with the URL.
-
-  **The `<h1>` is the page's now.** `PageHeader` replaces both shells' `<h2>`,
-  and `SidebarLayout` focuses it on every route change but the first: from
-  D93 an Edit is a `<Link>` inside a menu item, and activating one unmounts the
-  focused element, leaving focus on `<body>` and a screen reader with nothing
-  to announce. `t.admin.title` survives only as the navigation's `aria-label`.
-
-  **Every admin page carries its own `<title>`.** `routes/admin.tsx`'s `head()`
-  named the whole subtree `site.adminTitle`, so every bookmark of every admin
-  page read "User Manager".
-
-  **A refusal that arrives with the page is announced.** `FormAlert` is an
-  `aria-live` region, and a live region does not announce content that is
-  present at first paint — so after a 303 the page looked identical and the one
-  new sentence on it was silent. `FormRefusal` moves focus into it; swapping
-  `aria-live` for `role="alert"` would have typechecked, run and changed
-  nothing.
-
-- **A gateway can pass the reverse proxy's `X-Forwarded-*` through, and a
-  session cookie is a gateway credential** (**D92**, FR-GW-1/3/4/5). Two gaps
-  **D91** left, found by reading it back the next day.
-
-  `gateways.<name>.trustProxy` (default `false`) forwards the
-  `X-Forwarded-For` / `-Host` / `-Proto` — and `Forwarded` / `X-Real-IP` — that
-  an edge set, instead of replacing them with what this hop can see. Behind the
-  shipped Caddyfile with `server.trustProxy: false`, "what this hop can see" is
-  Caddy's address on the compose network and the internal `http` scheme, so an
-  upstream was being told the caller was `172.18.0.3` over plain http. It is
-  per gateway and independent of `server.trustProxy`, which decides whether the
-  IdP *believes* those headers for its own rate limits and audit trail rather
-  than whether it relays them; it is off by default, because turning it on
-  makes the upstream believe headers this IdP did not write.
-
-  **A signed-in browser can now reach a gateway as itself.** The session cookie
-  `/gateway/*` already received — it is same-origin with the issuer — is
-  exchanged for a JWT through the same `GET /api/auth/token` the API-key path
-  uses, and is still never forwarded. `azp` tells an upstream which kind of
-  caller it has: `apiKeys.tokenClientId` for a key, the IdP's own id for a
-  session. A refused session falls through to anonymous rather than answering
-  401, because the browser attached the cookie without being asked.
-
-  **The cookie is only honored when `Sec-Fetch-Site` is absent, `same-origin`
-  or `none`.** Cookie authentication on a same-origin proxy is the ambient
-  authority CSRF exploits, and `SameSite=Lax` still carries the cookie on a
-  top-level cross-site GET — so a link to `…/gateway/<name>/…` would otherwise
-  have the IdP mint a JWT for whoever clicked it. The check blocks nothing that
-  would have worked: a cross-site `fetch` never carries the cookie under Lax.
-  Signing out and revoking a session now clear the token cache too, alongside
-  D91's ban and key-revocation paths.
 
 - **API gateways: `/gateway/<name>` is an authenticating reverse proxy**
   (**D91**, FR-GW-1..7). A backend resource server — PostgREST, Neon's Data
@@ -109,6 +49,66 @@ Decisions that changed a numbered requirement carry their `D` number from
   cannot apply to upstream HTML, and a `Location` that resolves off the
   upstream's origin is stripped. `Upgrade` answers 501; an unreachable
   upstream answers 502; an unknown and a disabled name answer the same 404.
+
+- **A gateway can pass the reverse proxy's `X-Forwarded-*` through, and a
+  session cookie is a gateway credential** (**D92**, FR-GW-1/3/4/5). Two gaps
+  **D91** left, found by reading it back the next day.
+
+  `gateways.<name>.trustProxy` (default `false`) forwards the
+  `X-Forwarded-For` / `-Host` / `-Proto` — and `Forwarded` / `X-Real-IP` — that
+  an edge set, instead of replacing them with what this hop can see. Behind the
+  shipped Caddyfile with `server.trustProxy: false`, "what this hop can see" is
+  Caddy's address on the compose network and the internal `http` scheme, so an
+  upstream was being told the caller was `172.18.0.3` over plain http. It is
+  per gateway and independent of `server.trustProxy`, which decides whether the
+  IdP *believes* those headers for its own rate limits and audit trail rather
+  than whether it relays them; it is off by default, because turning it on
+  makes the upstream believe headers this IdP did not write.
+
+  **A signed-in browser can now reach a gateway as itself.** The session cookie
+  `/gateway/*` already received — it is same-origin with the issuer — is
+  exchanged for a JWT through the same `GET /api/auth/token` the API-key path
+  uses, and is still never forwarded. `azp` tells an upstream which kind of
+  caller it has: `apiKeys.tokenClientId` for a key, the IdP's own id for a
+  session. A refused session falls through to anonymous rather than answering
+  401, because the browser attached the cookie without being asked.
+
+  **The cookie is only honored when `Sec-Fetch-Site` is absent, `same-origin`
+  or `none`.** Cookie authentication on a same-origin proxy is the ambient
+  authority CSRF exploits, and `SameSite=Lax` still carries the cookie on a
+  top-level cross-site GET — so a link to `…/gateway/<name>/…` would otherwise
+  have the IdP mint a JWT for whoever clicked it. The check blocks nothing that
+  would have worked: a cross-site `fetch` never carries the cookie under Lax.
+  Signing out and revoking a session now clear the token cache too, alongside
+  D91's ban and key-revocation paths.
+
+- **A breadcrumb header for both signed-in areas** (**D93**, FR-ADMIN-2,
+  FR-ACCT-1). There was no trail anywhere, and the area's name — "Administration"
+  — was the `<h1>` while the page's own name was an `<h2>` beneath it.
+
+  The trail sits in the chrome header row rather than in the page, which is a
+  deliberate divergence from semantius-app for a reason specific to this app:
+  that row is **outside** the scroll container (**D87**), so a breadcrumb in
+  the page body scrolls away exactly when a long form makes you want it. It is
+  composed from the route matches — each route declares the crumbs it adds on
+  its loader's return — so it cannot disagree with the URL.
+
+  **The `<h1>` is the page's now.** `PageHeader` replaces both shells' `<h2>`,
+  and `SidebarLayout` focuses it on every route change but the first: from
+  D93 an Edit is a `<Link>` inside a menu item, and activating one unmounts the
+  focused element, leaving focus on `<body>` and a screen reader with nothing
+  to announce. `t.admin.title` survives only as the navigation's `aria-label`.
+
+  **Every admin page carries its own `<title>`.** `routes/admin.tsx`'s `head()`
+  named the whole subtree `site.adminTitle`, so every bookmark of every admin
+  page read "User Manager".
+
+  **A refusal that arrives with the page is announced.** `FormAlert` is an
+  `aria-live` region, and a live region does not announce content that is
+  present at first paint — so after a 303 the page looked identical and the one
+  new sentence on it was silent. `FormRefusal` moves focus into it; swapping
+  `aria-live` for `role="alert"` would have typechecked, run and changed
+  nothing.
 
 ### Changed
 
@@ -1266,7 +1266,8 @@ were questions, and one was "polish every page".
   says where it came from, so it was sending anyone who inspected it to a
   repository that is not this one.
 
-[Unreleased]: https://github.com/semantius/semantius-idp/compare/v0.5.0...main
+[Unreleased]: https://github.com/semantius/semantius-idp/compare/v0.6.0...main
+[0.6.0]: https://github.com/semantius/semantius-idp/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/semantius/semantius-idp/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/semantius/semantius-idp/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/semantius/semantius-idp/compare/v0.2.0...v0.3.1

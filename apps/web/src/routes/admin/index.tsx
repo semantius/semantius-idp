@@ -3,6 +3,7 @@ import { Link, createFileRoute } from "@tanstack/react-router"
 import { Alert, AlertDescription } from "@workspace/ui/components/alert"
 
 import { AdminCard, AdminShell, Stat } from "@/components/admin/admin-shell"
+import { adminHead } from "@/lib/page-title"
 import { getCatalog } from "@/server/i18n"
 import { fetchAdminStats } from "@/server/functions/admin"
 
@@ -20,8 +21,13 @@ import { fetchAdminStats } from "@/server/functions/admin"
 export const Route = createFileRoute("/admin/")({
   loader: async ({ context }) => ({
     ui: context.ui,
+    // The area index: the brand crumb the layout prepends already names it,
+    // so this page adds nothing to the trail (**D93**).
+    crumbs: [],
     stats: await fetchAdminStats(),
   }),
+  head: ({ loaderData }) =>
+    adminHead(loaderData?.ui, (t) => t.admin.dashboard.title),
   component: Dashboard,
 })
 

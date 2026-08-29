@@ -24,6 +24,8 @@ import {
 import { TooltipProvider } from "@workspace/ui/components/tooltip"
 import { cn } from "@workspace/ui/lib/utils"
 
+import { ShellBreadcrumb, useCrumbs } from "@/components/common/breadcrumbs"
+import type { Crumb } from "@/components/common/breadcrumbs"
 import { ImpersonationBanner } from "@/components/common/impersonation-banner"
 import { NavUser } from "@/components/common/nav-user"
 import type { NavUserCrossLink } from "@/components/common/nav-user"
@@ -251,6 +253,44 @@ function ShellSidebar({
   )
 }
 
+/**
+ * Focus the page heading on every route change but the first (**D93**).
+ *
+ * Until D93 every admin action opened a dialog and Base UI focused into it.
+ * The moment Edit becomes a `<Link>` inside a `DropdownMenuItem`, activating it
+ * unmounts the focused element: focus falls to `<body>`, and a screen reader
+ * announces nothing at all — on every one of the new routes at once.
+ *
+ * Three things about it:
+ *
+ * - **Here, not in the page shells**, so `/account/*` gets it without a second
+ *   copy — and so it survives the navigation, which a per-page effect in a
+ *   remounting component would not be trusted to.
+ * - **The first pathname is skipped**, through a ref. Focusing on the initial
+ *   paint would steal focus from wherever the browser put it — the address
+ *   bar, or a restored scroll position — for a navigation the user did not
+ *   make.
+ * - **`PageHeader`'s `<h1>` is the target**, found by `data-page-title` rather
+ *   than by `main h1`: the element has to be the same one in both areas and
+ *   findable without knowing which shell rendered it. It carries
+ *   `tabIndex={-1}` for exactly this.
+ */
+function useRouteChangeFocus(): void {
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  })
+  const first = React.useRef(true)
+
+  React.useEffect(() => {
+    if (first.current) {
+      first.current = false
+      return
+    }
+    const heading = document.querySelector("[data-page-title]")
+    if (heading instanceof HTMLElement) heading.focus()
+  }, [pathname])
+}
+
 export function SidebarLayout({
   ui,
   t,
@@ -281,6 +321,14 @@ export function SidebarLayout({
   defaultOpen: boolean
   children: React.ReactNode
 }) {
+  // The brand is the trail's root in both areas, matching the reference app —
+  // and it *is* a third copy of one string, after the sidebar header and the
+  // document title. Kept deliberately: "identical to semantius-app" was the
+  // ask and this is the visible half of it (**D93**).
+  const declared = useCrumbs()
+  const crumbs: Crumb[] = [{ label: brand, to: indexTo }, ...declared]
+  useRouteChangeFocus()
+
   return (
     // `--banner-h` is what the fixed sidebar is offset by, and it is only ever
     // right because the desktop sidebar exists at `md` and up (the registry's
@@ -339,6 +387,15 @@ export function SidebarLayout({
             finally gets one — it had no main landmark at all. `min-w-0` so a
             wide table shrinks the flex item instead of the shell. */}
           <SidebarInset className="min-w-0">
+            {/* **The breadcrumb goes here, not in the page** (**D93**).
+                Removing the area's `<h1>` from this row — so the page can own
+                it — would otherwise leave one 28-pixel button in a 64-pixel
+                bar. The stronger reason is D87: this header sits *outside* the
+                scroll container below it, so a trail rendered in the page body
+                scrolls away exactly when a long form makes you want it. This
+                is also what the registry's own sidebar blocks do, and it is a
+                deliberate divergence from semantius-app, whose breadcrumb is
+                in the page and whose pages do not fill the window. */}
             <header className="flex h-16 shrink-0 items-center gap-2 px-4 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
               {/* The catalog string wins over the registry component's own
                 sr-only "Toggle Sidebar" (FR-I18N-1). */}
@@ -347,12 +404,7 @@ export function SidebarLayout({
                 orientation="vertical"
                 className="mr-2 data-[orientation=vertical]:h-4"
               />
-              {/* semantius-app's header row carries no title; this one does,
-                because three e2e specs read the area's name off a visible
-                heading — and a page with no `<h1>` is an axe finding. */}
-              <h1 className="text-base font-semibold tracking-tight">
-                {heading}
-              </h1>
+              <ShellBreadcrumb label={t.common.breadcrumb} crumbs={crumbs} />
             </header>
             {/* **The scroll container is here, not the document** (D87).
                 With the shell pinned to the viewport, a page taller than it

@@ -20,9 +20,11 @@ import { AdminShell } from "@/components/admin/admin-shell"
 import { ClientCreateDialog } from "@/components/admin/client-create-dialog"
 import { ClientRowActions } from "@/components/admin/client-row-actions"
 import { SecretDialog } from "@/components/common/dialogs"
-import { FormAlert } from "@/components/auth/form-parts"
+import { FormRefusal } from "@/components/auth/form-parts"
 import { NoticeToast } from "@/components/common/notice-toast"
+import { crumbTrail } from "@/components/common/breadcrumbs"
 import { messageForErrorCode, messageForNoticeCode } from "@/lib/auth-errors"
+import { adminHead } from "@/lib/page-title"
 import { skipConsentFromForm, uriLines } from "@/lib/client-rules"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
@@ -73,6 +75,9 @@ export const Route = createFileRoute("/admin/clients")({
     const search = location.search as Record<string, unknown>
     return {
       ui: context.ui,
+      crumbs: crumbTrail(context.ui, (t) => [
+        { label: t.admin.nav.clients, to: HERE },
+      ]),
       clients: (await fetchClients()) ?? [],
       notice: searchString(search.notice),
       error: searchString(search.error),
@@ -89,6 +94,8 @@ export const Route = createFileRoute("/admin/clients")({
         undefined,
     }
   },
+  head: ({ loaderData }) =>
+    adminHead(loaderData?.ui, (t) => t.admin.clients.title),
   component: ClientsPage,
   server: {
     handlers: {
@@ -272,11 +279,11 @@ function ClientsPage() {
     >
       <NoticeToast message={messageForNoticeCode(notice, t)} />
       {/* Not when the dialog is reopening with it — the modal would cover it. */}
-      <FormAlert>
+      <FormRefusal>
         {draft === undefined
           ? messageForErrorCode(error, t, ui.passwordMinLength)
           : undefined}
-      </FormAlert>
+      </FormRefusal>
 
       {created ? (
         <SecretDialog

@@ -18,6 +18,8 @@ import {
 
 import { AdminShell } from "@/components/admin/admin-shell"
 import { LocalTime } from "@/components/common/local-time"
+import { crumbTrail } from "@/components/common/breadcrumbs"
+import { adminHead } from "@/lib/page-title"
 import { getCatalog } from "@/server/i18n"
 import { fetchRoles, fetchRolesStatus } from "@/server/functions/admin"
 
@@ -32,11 +34,16 @@ import { fetchRoles, fetchRolesStatus } from "@/server/functions/admin"
 export const Route = createFileRoute("/admin/roles")({
   loader: async ({ context }) => ({
     ui: context.ui,
+    crumbs: crumbTrail(context.ui, (t) => [
+      { label: t.admin.nav.roles, to: "/admin/roles" },
+    ]),
     roles: (await fetchRoles()) ?? [],
     // FR-ADMIN-2 asks this page for the last reconcile and the warnings; both
     // were specified and neither was ever rendered.
     status: await fetchRolesStatus(),
   }),
+  head: ({ loaderData }) =>
+    adminHead(loaderData?.ui, (t) => t.admin.roles.title),
   component: RolesPage,
 })
 

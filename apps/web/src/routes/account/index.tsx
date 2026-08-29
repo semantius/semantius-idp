@@ -39,6 +39,8 @@ export const Route = createFileRoute("/account/")({
     const search = location.search as Record<string, unknown>
     return {
       ui: context.ui,
+      // The area index: the brand crumb the layout prepends already names it.
+      crumbs: [],
       profile: context.profile,
       notice: searchString(search.notice),
       error: searchString(search.error),

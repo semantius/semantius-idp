@@ -18,6 +18,8 @@ import type {
 } from "@workspace/ui/components/sql-runner"
 
 import { AdminShell } from "@/components/admin/admin-shell"
+import { crumbTrail } from "@/components/common/breadcrumbs"
+import { adminHead } from "@/lib/page-title"
 import { getCatalog } from "@/server/i18n"
 import type { AdminDatabaseSchema } from "@/server/functions/admin"
 import {
@@ -45,8 +47,16 @@ export const Route = createFileRoute("/admin/database")({
   loader: async ({ context }) => {
     // FR-ADMIN-7: with the console off there is no page, not a hidden panel.
     if (!context.ui.adminDatabaseEnabled) throw notFound()
-    return { ui: context.ui, schema: await fetchDatabaseSchema({ data: {} }) }
+    return {
+      ui: context.ui,
+      crumbs: crumbTrail(context.ui, (t) => [
+        { label: t.admin.nav.database, to: "/admin/database" },
+      ]),
+      schema: await fetchDatabaseSchema({ data: {} }),
+    }
   },
+  head: ({ loaderData }) =>
+    adminHead(loaderData?.ui, (t) => t.admin.database.title),
   component: DatabasePage,
 })
 

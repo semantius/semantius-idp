@@ -24,9 +24,11 @@ import { AdminShell } from "@/components/admin/admin-shell"
 import { SecretDialog } from "@/components/common/dialogs"
 import { UserBadges } from "@/components/admin/user-badges"
 import { UserCreateDialog } from "@/components/admin/user-create-dialog"
-import { FormAlert } from "@/components/auth/form-parts"
+import { FormRefusal } from "@/components/auth/form-parts"
 import { NoticeToast, SUBJECT_PARAM } from "@/components/common/notice-toast"
+import { crumbTrail } from "@/components/common/breadcrumbs"
 import { messageForErrorCode, messageForNoticeCode } from "@/lib/auth-errors"
+import { adminHead } from "@/lib/page-title"
 import { parseInviteLink } from "@/lib/invite-link"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
@@ -101,6 +103,9 @@ export const Route = createFileRoute("/admin/users/")({
     }
     return {
       ui: context.ui,
+      crumbs: crumbTrail(context.ui, (t) => [
+        { label: t.admin.nav.users, to: HERE },
+      ]),
       query,
       page: await fetchUsers({ data: query }),
       roles: (await fetchRoles()) ?? [],
@@ -128,6 +133,8 @@ export const Route = createFileRoute("/admin/users/")({
         undefined,
     }
   },
+  head: ({ loaderData }) =>
+    adminHead(loaderData?.ui, (t) => t.admin.users.title),
   component: UsersPage,
   server: {
     handlers: {
@@ -318,11 +325,11 @@ function UsersPage() {
     >
       <NoticeToast message={messageForNoticeCode(notice, t)} subject={subject} />
       {/* Not when the dialog is reopening with it — the modal would cover it. */}
-      <FormAlert>
+      <FormRefusal>
         {draft === undefined
           ? messageForErrorCode(error, t, ui.passwordMinLength)
           : undefined}
-      </FormAlert>
+      </FormRefusal>
 
       {inviteLink ? (
         <SecretDialog

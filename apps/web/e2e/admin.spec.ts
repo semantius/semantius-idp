@@ -63,9 +63,10 @@ test.describe("the admin area", () => {
     await signInAsAdmin(page, app)
 
     await app.goto("/admin")
-    await expect(
-      page.getByRole("heading", { name: "Administration" })
-    ).toBeVisible()
+    // **D93**: the page's own name, not the area's. "Administration" was the
+    // chrome's `<h1>`; the breadcrumb has that row now and no page carries
+    // that string — `t.admin.title` survives only as the nav's `aria-label`.
+    await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible()
     await expect(page.getByText("Live sessions")).toBeVisible()
 
     await app.goto("/admin/users")
@@ -264,11 +265,10 @@ test.describe("the admin area", () => {
     // comes back as "admin, user", and a downstream application reading the
     // `roles` claim gets a stable order.
     await expect(page.getByText("admin, user")).toBeVisible()
-    // And the role is real: the admin area now opens.
+    // And the role is real: the admin area now opens. The dashboard's own
+    // heading, not the area's — see D93 above.
     await app.goto("/admin")
-    await expect(
-      page.getByRole("heading", { name: "Administration" })
-    ).toBeVisible()
+    await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible()
   })
 
   test("suspending an account stops the sign-in and says so (FR-ADMIN-4)", async ({

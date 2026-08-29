@@ -111,14 +111,19 @@ test.describe("the account area", () => {
     await app.goto("/account/sessions")
     await expect(page.getByText("This device")).toBeVisible()
     // Two sessions, and exactly one of them is this browser.
-    const rows = page.locator("main li")
+    //
+    // `[data-slot="session-list"] li`, not `main li`: since **D93** the
+    // breadcrumb is an `<ol>` of `<li>` inside the same `<main>`, so the loose
+    // locator counted the trail as well — five elements where there are two
+    // sessions. The list has a hook of its own for that reason.
+    const rows = page.locator('[data-slot="session-list"] li')
     await expect(rows).toHaveCount(2)
 
     await submit(page, "Sign out everywhere else")
     await expect(
       page.getByText("That session has been signed out.")
     ).toBeVisible()
-    await expect(page.locator("main li")).toHaveCount(1)
+    await expect(rows).toHaveCount(1)
 
     // The other browser really is out, not merely absent from a list.
     await otherPage.goto(app.url("/account"))

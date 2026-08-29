@@ -8,6 +8,7 @@ import { ActionDialog, SecretDialog } from "@/components/common/dialogs"
 import { FormAlert, TextField } from "@/components/auth/form-parts"
 import { NoticeToast } from "@/components/common/notice-toast"
 import { messageForErrorCode, messageForNoticeCode } from "@/lib/auth-errors"
+import { crumbTrail } from "@/components/common/breadcrumbs"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
 import {
@@ -57,6 +58,9 @@ export const Route = createFileRoute("/account/api-keys")({
     const search = location.search as Record<string, unknown>
     return {
       ui: context.ui,
+      crumbs: crumbTrail(context.ui, (t) => [
+        { label: t.account.nav.apiKeys, to: "/account/api-keys" },
+      ]),
       keys: (await fetchApiKeys()) ?? [],
       // Claimed, and therefore consumed: this is the only render that can
       // show it. `undefined` for a handle that is unknown, already claimed or

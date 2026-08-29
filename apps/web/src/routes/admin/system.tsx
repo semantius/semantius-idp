@@ -5,10 +5,12 @@ import {
   AdminShell,
   DetailRow,
 } from "@/components/admin/admin-shell"
-import { FormAlert } from "@/components/auth/form-parts"
+import { FormRefusal } from "@/components/auth/form-parts"
 import { NoticeToast } from "@/components/common/notice-toast"
 import { messageForErrorCode } from "@/lib/auth-errors"
 import { searchString } from "@/lib/search-params"
+import { crumbTrail } from "@/components/common/breadcrumbs"
+import { adminHead } from "@/lib/page-title"
 import { getCatalog } from "@/server/i18n"
 import type { Catalog } from "@/server/i18n"
 import {
@@ -40,11 +42,16 @@ export const Route = createFileRoute("/admin/system")({
     const search = location.search as Record<string, unknown>
     return {
       ui: context.ui,
+      crumbs: crumbTrail(context.ui, (t) => [
+        { label: t.admin.nav.system, to: "/admin/system" },
+      ]),
       info: await fetchSystemInfo(),
       rotated: searchString(search.rotated),
       error: searchString(search.error),
     }
   },
+  head: ({ loaderData }) =>
+    adminHead(loaderData?.ui, (t) => t.admin.system.title),
   component: SystemPage,
   server: {
     handlers: {
@@ -89,9 +96,9 @@ function SystemPage() {
 
   return (
     <AdminShell title={t.admin.system.title}>
-      <FormAlert>
+      <FormRefusal>
         {messageForErrorCode(error, t, ui.passwordMinLength)}
-      </FormAlert>
+      </FormRefusal>
       {/* `rotated`, not `notice`: this page's one confirmation carries the
           successor key id, so the parameter it is stripped from is its own. */}
       <NoticeToast

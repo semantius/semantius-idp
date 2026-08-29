@@ -45,6 +45,11 @@ export const enUS = {
     // wins over it, which is how the string comes from the catalog without
     // patching a generated file.
     toggleSidebar: "Toggle sidebar",
+    // **D93**: same trick as the line above. The registry's `Breadcrumb`
+    // hard-codes `aria-label="breadcrumb"`; a passed `aria-label` wins over it,
+    // so the name of the only other landmark in the chrome comes from the
+    // catalog without patching a generated file (FR-I18N-1).
+    breadcrumb: "Breadcrumb",
     required: "Required",
     yes: "Yes",
     no: "No",

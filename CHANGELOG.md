@@ -11,6 +11,34 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ### Added
 
+- **A breadcrumb header for both signed-in areas** (**D93**, FR-ADMIN-2,
+  FR-ACCT-1). There was no trail anywhere, and the area's name — "Administration"
+  — was the `<h1>` while the page's own name was an `<h2>` beneath it.
+
+  The trail sits in the chrome header row rather than in the page, which is a
+  deliberate divergence from semantius-app for a reason specific to this app:
+  that row is **outside** the scroll container (**D87**), so a breadcrumb in
+  the page body scrolls away exactly when a long form makes you want it. It is
+  composed from the route matches — each route declares the crumbs it adds on
+  its loader's return — so it cannot disagree with the URL.
+
+  **The `<h1>` is the page's now.** `PageHeader` replaces both shells' `<h2>`,
+  and `SidebarLayout` focuses it on every route change but the first: from
+  D93 an Edit is a `<Link>` inside a menu item, and activating one unmounts the
+  focused element, leaving focus on `<body>` and a screen reader with nothing
+  to announce. `t.admin.title` survives only as the navigation's `aria-label`.
+
+  **Every admin page carries its own `<title>`.** `routes/admin.tsx`'s `head()`
+  named the whole subtree `site.adminTitle`, so every bookmark of every admin
+  page read "User Manager".
+
+  **A refusal that arrives with the page is announced.** `FormAlert` is an
+  `aria-live` region, and a live region does not announce content that is
+  present at first paint — so after a 303 the page looked identical and the one
+  new sentence on it was silent. `FormRefusal` moves focus into it; swapping
+  `aria-live` for `role="alert"` would have typechecked, run and changed
+  nothing.
+
 - **A gateway can pass the reverse proxy's `X-Forwarded-*` through, and a
   session cookie is a gateway credential** (**D92**, FR-GW-1/3/4/5). Two gaps
   **D91** left, found by reading it back the next day.

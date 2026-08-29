@@ -19,9 +19,11 @@ import {
 import { AdminShell } from "@/components/admin/admin-shell"
 import { GatewayCreateDialog } from "@/components/admin/gateway-create-dialog"
 import { GatewayRowActions } from "@/components/admin/gateway-row-actions"
-import { FormAlert } from "@/components/auth/form-parts"
+import { FormRefusal } from "@/components/auth/form-parts"
 import { NoticeToast } from "@/components/common/notice-toast"
+import { crumbTrail } from "@/components/common/breadcrumbs"
 import { messageForErrorCode, messageForNoticeCode } from "@/lib/auth-errors"
+import { adminHead } from "@/lib/page-title"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
 import { claimAdminDraft, fetchGateways } from "@/server/functions/admin"
@@ -67,6 +69,9 @@ export const Route = createFileRoute("/admin/gateways")({
     const search = location.search as Record<string, unknown>
     return {
       ui: context.ui,
+      crumbs: crumbTrail(context.ui, (t) => [
+        { label: t.admin.nav.gateways, to: HERE },
+      ]),
       gateways: (await fetchGateways()) ?? [],
       notice: searchString(search.notice),
       error: searchString(search.error),
@@ -78,6 +83,8 @@ export const Route = createFileRoute("/admin/gateways")({
         undefined,
     }
   },
+  head: ({ loaderData }) =>
+    adminHead(loaderData?.ui, (t) => t.admin.gateways.title),
   component: GatewaysPage,
   server: {
     handlers: {
@@ -199,11 +206,11 @@ function GatewaysPage() {
     >
       <NoticeToast message={messageForNoticeCode(notice, t)} />
       {/* Not when the dialog is reopening with it — the modal would cover it. */}
-      <FormAlert>
+      <FormRefusal>
         {draft === undefined
           ? messageForErrorCode(error, t, ui.passwordMinLength)
           : undefined}
-      </FormAlert>
+      </FormRefusal>
 
       {gateways.length === 0 ? (
         <Empty>

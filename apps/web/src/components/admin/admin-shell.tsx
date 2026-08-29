@@ -21,6 +21,7 @@ import {
 } from "@workspace/ui/components/card"
 import { cn } from "@workspace/ui/lib/utils"
 
+import { PageHeader } from "@/components/common/page-header"
 import type { ShellNavItem } from "@/components/common/sidebar-layout"
 
 import type { Catalog } from "@/server/i18n"
@@ -33,8 +34,11 @@ import type { UiContext } from "@/server/ui-context"
  * the impersonation banner — moved up into `routes/admin.tsx`'s `SidebarLayout`
  * in **D82**. What is left here is the part that is genuinely per page: its
  * own heading, its description, and the buttons that belong beside the heading
- * rather than in the body. The area's `<h1>` is the layout's; this is the
- * `<h2>` beneath it, which is what it always rendered.
+ * rather than in the body, all of which are `PageHeader` since **D93**.
+ *
+ * **The heading is an `<h1>` now.** The area's name used to be the chrome's
+ * `<h1>` and this the `<h2>` under it; the breadcrumb took that row, and
+ * "Administration" was never what a document is about anyway.
  *
  * `adminNavItems` stays here, beside the pages it names, and now carries a
  * lucide icon per entry — the collapsed sidebar is an icon rail, so an entry
@@ -114,27 +118,13 @@ export function AdminShell({
 }) {
   return (
     <section className={cn(fill && "flex min-h-0 flex-1 flex-col")}>
-      <div
-        className={cn(
-          "flex flex-wrap items-start justify-between gap-3",
-          fill ? "mb-4 shrink-0" : "mb-6"
-        )}
-      >
-        <div>
-          <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
-          {description ? (
-            <p
-              className={cn(
-                "mt-1 text-sm text-muted-foreground",
-                wideDescription ? undefined : "max-w-2xl"
-              )}
-            >
-              {description}
-            </p>
-          ) : null}
-        </div>
-        {actions ? <div className="flex gap-2">{actions}</div> : null}
-      </div>
+      <PageHeader
+        title={title}
+        description={description}
+        wideDescription={wideDescription}
+        actions={actions}
+        fill={fill}
+      />
       {children}
     </section>
   )

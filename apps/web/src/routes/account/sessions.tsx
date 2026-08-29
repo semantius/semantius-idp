@@ -8,6 +8,7 @@ import {
 import { FormAlert } from "@/components/auth/form-parts"
 import { NoticeToast } from "@/components/common/notice-toast"
 import { messageForErrorCode, messageForNoticeCode } from "@/lib/auth-errors"
+import { crumbTrail } from "@/components/common/breadcrumbs"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
 import {
@@ -42,6 +43,9 @@ export const Route = createFileRoute("/account/sessions")({
     const search = location.search as Record<string, unknown>
     return {
       ui: context.ui,
+      crumbs: crumbTrail(context.ui, (t) => [
+        { label: t.account.nav.sessions, to: "/account/sessions" },
+      ]),
       profile: context.profile,
       sessions: (await fetchSessions()) ?? [],
       notice: searchString(search.notice),
@@ -134,7 +138,10 @@ function SessionsPage() {
             {t.account.sessions.empty}
           </p>
         ) : (
-          <ul className="grid gap-3">
+          // A hook of its own, because `main li` is no longer only these:
+          // the breadcrumb is an `<ol>` of `<li>` inside the same `<main>`
+          // (**D93**), the way the sidebar footer is inside the same page.
+          <ul data-slot="session-list" className="grid gap-3">
             {sessions.map((session) => (
               <li
                 key={session.id}

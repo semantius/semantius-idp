@@ -78,10 +78,10 @@ test.describe("the sidebar shell", () => {
     await signInAsAdmin(page, app)
     await app.goto("/admin")
 
-    // The heading is the page; the navigation is not on it yet.
-    await expect(
-      page.getByRole("heading", { name: "Administration" })
-    ).toBeVisible()
+    // The heading is the page; the navigation is not on it yet. Since **D93**
+    // that heading is the page's own name — the chrome row is the
+    // breadcrumb's, and nothing renders "Administration" any more.
+    await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible()
     await expect(page.getByRole("link", { name: "Users" })).toBeHidden()
 
     await page.locator(TRIGGER).click()

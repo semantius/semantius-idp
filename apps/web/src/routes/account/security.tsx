@@ -14,6 +14,7 @@ import { usePasswordConfirm } from "@/components/auth/confirmed-password"
 import { ActionDialog } from "@/components/common/dialogs"
 import { NoticeToast } from "@/components/common/notice-toast"
 import { messageForErrorCode, messageForNoticeCode } from "@/lib/auth-errors"
+import { crumbTrail } from "@/components/common/breadcrumbs"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
 import {
@@ -67,6 +68,9 @@ export const Route = createFileRoute("/account/security")({
     const search = location.search as Record<string, unknown>
     return {
       ui: context.ui,
+      crumbs: crumbTrail(context.ui, (t) => [
+        { label: t.account.nav.security, to: "/account/security" },
+      ]),
       profile: context.profile,
       enrolment: await claimEnrolment({
         data: searchString(search.enrolling) ?? "",

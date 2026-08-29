@@ -16,6 +16,7 @@ import {
   CardTitle,
 } from "@workspace/ui/components/card"
 
+import { PageHeader } from "@/components/common/page-header"
 import type { ShellNavItem } from "@/components/common/sidebar-layout"
 
 import type { Catalog } from "@/server/i18n"
@@ -27,7 +28,8 @@ import type { UiContext } from "@/server/ui-context"
  * The navigation, the sign-out and the administrator's way into `/admin` moved
  * up into `routes/account.tsx`'s `SidebarLayout` in **D82**; so did the
  * `<main>` landmark, which `SidebarInset` now renders once for the whole
- * subtree. What is left is the page's own heading and description.
+ * subtree. What is left is the page's own heading and description — an `<h1>`
+ * since **D93**, because the chrome's row is the breadcrumb's now.
  *
  * Which nav entries exist still follows the capability flags — with e-mail off
  * there is nothing to change an address to, and with API keys off the page
@@ -72,11 +74,11 @@ export function AccountShell({
 }) {
   return (
     <section>
-      <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
-      {description ? (
-        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
-      ) : null}
-      <div className="mt-6 grid gap-6">{children}</div>
+      {/* `PageHeader`, the same one `/admin/*` uses (**D93**): the `<h1>` is
+          the page's since the breadcrumb took the chrome's header row, and the
+          route-change focus target has to be the same element in both areas. */}
+      <PageHeader title={title} description={description} />
+      <div className="grid gap-6">{children}</div>
     </section>
   )
 }

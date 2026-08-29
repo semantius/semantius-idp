@@ -1,4 +1,4 @@
-import { useId } from "react"
+import { useEffect, useId, useRef } from "react"
 import type { ReactNode } from "react"
 
 import { Eye, EyeOff } from "lucide-react"
@@ -63,6 +63,41 @@ export function FormAlert({
       {/* Announced immediately: a sign-in failure is the whole point of the page. */}
       <AlertDescription aria-live="polite">{children}</AlertDescription>
     </Alert>
+  )
+}
+
+/**
+ * A refusal that arrives with the page, focused so it is heard (**D93**).
+ *
+ * `FormAlert` is an `<AlertDescription aria-live="polite">`, and **a live
+ * region does not announce content that is already there on the first paint**.
+ * That was fine while every refusal reopened a dialog, which Base UI focuses
+ * into. It is not fine for a create or an edit *page*: after the 303 the page
+ * looks identical to the one that was submitted, and the one new sentence on
+ * it is silent.
+ *
+ * This is the same class as the `setResponseStatus` trap in AGENTS.md — the
+ * obvious fix, swapping `aria-live` for `role="alert"`, typechecks, runs and
+ * changes nothing, because `alert` is a live region too and has the same rule
+ * about initial content. What does work is moving focus into it, which is why
+ * the wrapper is a `tabIndex={-1}` container with a mount effect rather than
+ * an attribute.
+ *
+ * Renders nothing when there is nothing to say, so on a page that was not
+ * refused the effect finds no element and moves no focus.
+ */
+export function FormRefusal({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    ref.current?.focus()
+  }, [])
+
+  if (!children) return null
+  return (
+    <div ref={ref} tabIndex={-1} className="outline-none">
+      <FormAlert>{children}</FormAlert>
+    </div>
   )
 }
 

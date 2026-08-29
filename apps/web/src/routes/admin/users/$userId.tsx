@@ -32,9 +32,11 @@ import {
 import { RoleCheckboxes } from "@/components/admin/role-checkboxes"
 import { ActionDialog } from "@/components/common/dialogs"
 import { UserBadges } from "@/components/admin/user-badges"
-import { FormAlert } from "@/components/auth/form-parts"
+import { FormRefusal } from "@/components/auth/form-parts"
 import { NoticeToast, SUBJECT_PARAM } from "@/components/common/notice-toast"
+import { crumbTrail } from "@/components/common/breadcrumbs"
 import { messageForErrorCode, messageForNoticeCode } from "@/lib/auth-errors"
+import { adminHead } from "@/lib/page-title"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
 import { runAdminAction } from "@/server/http/admin-actions"
@@ -77,6 +79,13 @@ export const Route = createFileRoute("/admin/users/$userId")({
     return {
       ui: context.ui,
       gate: context.gate,
+      // The trail ends at the account, and its label is the address — which is
+      // also this page's `<h1>` (**D93**). The list crumb above it is what a
+      // route nested one level deeper cannot supply for itself.
+      crumbs: crumbTrail(context.ui, (t) => [
+        { label: t.admin.nav.users, to: "/admin/users" },
+        { label: user.email },
+      ]),
       user,
       // The catalog, so roles are checkboxes rather than a comma-separated
       // field an administrator has to spell from memory (item 11b).
@@ -85,6 +94,8 @@ export const Route = createFileRoute("/admin/users/$userId")({
       error: searchString(search.error),
     }
   },
+  head: ({ loaderData }) =>
+    adminHead(loaderData?.ui, () => loaderData?.user.email ?? ""),
   component: UserDetailPage,
   server: {
     handlers: {
@@ -170,9 +181,9 @@ function UserDetailPage() {
         </Link>
       }
     >
-      <FormAlert>
+      <FormRefusal>
         {messageForErrorCode(error, t, ui.passwordMinLength)}
-      </FormAlert>
+      </FormRefusal>
       {/* **D78**: which account, taken straight from the loader — every
           action on this page comes back to this page, so there is nothing to
           carry across a redirect. `delete` is the exception and lands on the

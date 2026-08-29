@@ -20,6 +20,8 @@ import {
 
 import { AdminShell } from "@/components/admin/admin-shell"
 import { searchString } from "@/lib/search-params"
+import { crumbTrail } from "@/components/common/breadcrumbs"
+import { adminHead } from "@/lib/page-title"
 import { getCatalog } from "@/server/i18n"
 import type { Catalog } from "@/server/i18n"
 import { fetchAuditPage } from "@/server/functions/admin"
@@ -73,10 +75,15 @@ export const Route = createFileRoute("/admin/audit")({
     }
     return {
       ui: context.ui,
+      crumbs: crumbTrail(context.ui, (t) => [
+        { label: t.admin.nav.audit, to: "/admin/audit" },
+      ]),
       query,
       page: await fetchAuditPage({ data: query }),
     }
   },
+  head: ({ loaderData }) =>
+    adminHead(loaderData?.ui, (t) => t.admin.audit.title),
   component: AuditPage,
 })
 

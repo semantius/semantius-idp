@@ -1,13 +1,15 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-29 · **Branch:** `main` · **Head:** `2687f72`, last tag **v0.5.0**
+**As of:** 2026-08-29 · **Branch:** `main` · **Head:** `c4a76e4`, last tag **v0.6.0**
 **Plan:** `~/.claude/plans/users-has-a-full-binary-meteor.md` (full-page forms)
 **Spec:** [spec-v1.md](spec-v1.md) — amended through **D96**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
 gate; API gateways (FR-GW, **D91**/**D92**) landed on 2026-08-29, and the
-full-page create/edit forms with their breadcrumb header (**D93**) and the US
-spelling sweep (**D94**) on top of them.** Every gate green: lint, typecheck,
+full-page create/edit forms with their breadcrumb header (**D93**), the US
+spelling sweep (**D94**) and the two owner rounds on top of them (**D95**,
+**D96**) followed the same day — all of it published as **v0.6.0**, whose
+headline is the reverse proxy.** Every gate green: lint, typecheck,
 unit (666), integration (299 across twenty-eight files), coverage thresholds
 including the 85 % per-module gates, schema-drift, config-schema staleness,
 the configuration-reference and example-config gates, dependency pinning, the
@@ -52,7 +54,7 @@ Everything buildable is built. What remains cannot be done from here:
   e-mail instead would silently create a second one.
 - **One real token against a real Neon project** — including a key rotation,
   to see the grace period behave.
-- **Tagging `v1.0.0`.** Five versions are published — **v0.1.0**,
+- **Tagging `v1.0.0`.** Six versions are published — **v0.1.0**,
   **v0.2.0** (2026-08-27, the D78 / D80 / D81 round), **v0.3.1**
   (2026-08-28, the database console's second round, the audit fix and the
   image-size fix — **D84**, **D85**, **D86**), **v0.4.0** (2026-08-28,
@@ -60,7 +62,10 @@ Everything buildable is built. What remains cannot be done from here:
   statistic, and the requirement IDs swept out of every surface a user reads
   — **D87**, **D88**, **D89**) and **v0.5.0** (2026-08-28, the config files
   spelled `.jsonc` through the spec and the source, and the two harnesses
-  that had never booted a container from one — **D90**) — because the image was wanted
+  that had never booted a container from one — **D90**) and **v0.6.0**
+  (2026-08-29, the API gateways and the two owner rounds that followed the
+  full-page forms — **D91**, **D92**, **D93**, **D94**, **D95**, **D96**)
+  — because the image was wanted
   before the two manual checks above could be performed. **`v0.3.0` is a tag
   that published nothing**: its release run failed OPS-13's size gate, which
   is what D86 is about; `v0.3.1` carries everything it was going to. `1.0.0` is what

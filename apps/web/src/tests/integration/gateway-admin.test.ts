@@ -129,6 +129,31 @@ describe("the gateway admin endpoints", () => {
     expect(await auditActions()).toContain("gateway.created")
   })
 
+  it("stores trustProxy, and the registry sees it (**D92**)", async () => {
+    const cookie = await adminCookie()
+    const response = await post(
+      "/idp/create-gateway",
+      { name: "edge", url: "https://edge.example", trustProxy: true },
+      cookie
+    )
+    expect(response.status).toBe(200)
+    expect((await gatewayRow("edge"))?.trustProxy).toBe(true)
+    expect(
+      (await gatewayRegistry({ database: ctx.database })).get("edge")
+        ?.trustProxy
+    ).toBe(true)
+
+    // Off by default, and an update is a full replace — so omitting it turns
+    // it back off rather than leaving it as it was.
+    const updated = await post(
+      "/idp/update-gateway",
+      { name: "edge", url: "https://edge.example" },
+      cookie
+    )
+    expect(updated.status).toBe(200)
+    expect((await gatewayRow("edge"))?.trustProxy).toBe(false)
+  })
+
   it("refuses a duplicate name", async () => {
     const cookie = await adminCookie()
     await post(

@@ -34,9 +34,9 @@ not by clicking around a database.
   run it.
 - **An authenticating reverse proxy for your backends.** `/gateway/<name>`
   forwards to a service you name in `config.jsonc` and turns a caller's API
-  key into a JWT that service can verify — so a script holding one key can
-  reach PostgREST or a Neon Data API that has never heard of API keys
-  ([API gateways](#api-gateways)).
+  key — or their browser session — into a JWT that service can verify, so a
+  script or a first-party page can reach PostgREST or a Neon Data API that has
+  never heard of either ([API gateways](#api-gateways)).
 - **Configured by files.** `config.jsonc`, `oauth_clients.jsonc` and `roles.jsonc`
   are the source of truth; the database is the reconciled operative store.
   Restarting applies changes, and the same folder produces the same deployment.
@@ -384,19 +384,34 @@ A gateway closes that gap. Name a target in `config.jsonc`:
 
 and `https://idp.example.com/gateway/data/items?select=id` is forwarded to
 `https://postgrest.internal:3000/items?select=id` with the method, headers,
-query and body unchanged. A caller that sends `x-api-key` and no
-`Authorization` has the key **exchanged for a session JWT** — the same
-exchange `GET /api/auth/token` performs, so the ban re-check, the last-used
-accounting and the `azp` claim are identical — and the JWT is injected as
-`Authorization: Bearer`. A caller that brings its own `Authorization` keeps it.
+query and body unchanged. Three credentials are recognised, in order:
+
+1. **`Authorization`** — forwarded untouched. You said what to present.
+2. **`x-api-key`** — **exchanged for a JWT**, through the same
+   `GET /api/auth/token` you could call yourself, so the ban re-check, the
+   last-used accounting and the `azp` claim are identical.
+3. **A signed-in session cookie** — exchanged the same way, and never
+   forwarded. This is what lets a page in your own front-end call a gateway as
+   the person using it.
 
 ```bash
 curl -H "x-api-key: idp_…" https://idp.example.com/gateway/data/items
 ```
 
-Add `"requireAuth": true` to refuse a call carrying neither header instead of
-forwarding it anonymously; leave it off for a target with an anonymous role of
-its own, which is PostgREST's usual shape.
+The upstream can tell which it got: `azp` is `apiKeys.tokenClientId` for a key
+and the IdP's own id for a browser session. Anything else — no header, no
+cookie, an expired session — is forwarded anonymously.
+
+Add `"requireAuth": true` to refuse a call carrying no credential at all
+instead of forwarding it anonymously; leave it off for a target with an
+anonymous role of its own, which is PostgREST's usual shape.
+
+Add `"trustProxy": true` when a reverse proxy in front of this IdP sets
+`X-Forwarded-For` / `-Host` / `-Proto` — the shipped Caddyfile does — and the
+target needs the browser's address and public URL rather than the container's
+view of them. **Only when something in front actually sets them:** with the IdP
+exposed directly it would let a caller tell the target whatever they like about
+themselves.
 
 Gateways can also be added on **`/admin/gateways`**, where they survive
 restarts; the ones from the file are shown there read-only, because an edit
@@ -406,11 +421,14 @@ and every gateway response carries a sandboxing `Content-Security-Policy` —
 the endpoint is same-origin with the issuer, so upstream content must not be
 able to act as though it belongs here.
 
-**One caveat worth knowing.** The key-to-JWT exchange is cached in the process
-for ten minutes. Suspending a user or revoking a key **through this IdP** —
-the admin area or the admin API — clears the cache at once; a change made
-directly in the database takes up to ten minutes to bite. WebSockets are not
-proxied (`501`).
+**Two caveats worth knowing.** The credential-to-JWT exchange is cached in the
+process for ten minutes. Suspending a user, revoking a key or signing out
+**through this IdP** — the admin area, the admin API, or the sign-out button —
+clears the cache at once; a change made directly in the database takes up to
+ten minutes to bite. And the session cookie is only honoured when the request
+is **not cross-site**: a browser following a link from somewhere else reaches
+the gateway anonymously, which is what stops a link being a way to act as
+whoever clicks it. WebSockets are not proxied (`501`).
 
 ## Security notes
 

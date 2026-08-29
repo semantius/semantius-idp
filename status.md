@@ -2,11 +2,11 @@
 
 **As of:** 2026-08-29 · **Branch:** `main` · **Head:** `993f2e4`, last tag **v0.5.0**
 **Plan:** `~/.claude/plans/backend-systems-validate-the-luminous-backus.md` (API gateways)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D91**
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D92**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
-gate; API gateways (FR-GW, **D91**) landed on 2026-08-29 on top of them.**
-Every gate green: lint, typecheck, unit (652), integration (293 across
+gate; API gateways (FR-GW, **D91**/**D92**) landed on 2026-08-29 on top of
+them.** Every gate green: lint, typecheck, unit (663), integration (298 across
 twenty-eight files), coverage thresholds including the 85 % per-module gates,
 schema-drift, config-schema staleness, the configuration-reference and
 example-config gates, dependency pinning, the client-bundle gate, the TST-8
@@ -156,6 +156,53 @@ need a live upstream inside the compose stack, and the page half is covered
 end to end while the data path is covered by an integration test that streams
 a 512 KiB body through a real HTTP server. Worth revisiting if PostgREST ever
 joins the e2e stack.
+
+### The two gaps the owner found the next day (**D92**)
+
+Both were read out of D91 rather than hit in use, and both were real.
+
+**An upstream was being told the wrong thing about the caller.** FR-GW-3 built
+`X-Forwarded-For` / `-Host` / `-Proto` from what *this hop* could see, which is
+right in principle and useless behind the shipped Caddyfile with
+`server.trustProxy: false` — the default. What this hop can see there is
+**Caddy's address on the compose network** and the **internal `http` scheme**,
+so a service behind the gateway was told the caller was `172.18.0.3` over plain
+http. Neither is a lie about what the process observed; both are worthless to
+the service. `gateways.<name>.trustProxy` forwards the edge's own headers
+instead — `Forwarded` and `X-Real-IP` with them — filling in only what the edge
+did not send, so a trusting gateway with nothing in front still says
+*something*. **Per gateway, and independent of `server.trustProxy`**: that
+setting decides whether the IdP *believes* the edge for its own rate limits and
+audit trail; this decides whether it *relays* the edge's account to a service
+behind it. Off by default, because turning it on makes the upstream believe
+headers this IdP did not write.
+
+**A signed-in browser could not use a gateway as itself.** The session cookie
+that `/gateway/*` already receives — it is same-origin with the issuer — was
+read only to be thrown away, so the obvious case (a first-party page in front
+of PostgREST) had no path at all. It is exchanged now, through the same
+`GET {authBaseUrl}/token` the key path uses, and still never forwarded; `azp`
+is what tells an upstream which kind of caller it has.
+
+**The half that had to be built rather than decided** is the CSRF guard. Cookie
+authentication on a same-origin proxy is exactly the ambient authority CSRF
+exploits, and Better Auth's own origin check cannot help: the mint is a
+synthetic in-process request, so whatever it checks it would be checking
+against a request this module wrote. The cookies are `SameSite=Lax` and
+host-only, which rules out every cross-site *subresource* — but Lax still
+carries them on a **top-level GET navigation**, so a link to
+`…/gateway/data/rpc/something` would otherwise have the IdP mint a JWT for
+whoever clicked it. The cookie is therefore used only when `Sec-Fetch-Site` is
+absent, `same-origin` or `none`. **It blocks nothing that would have worked** —
+a cross-site `fetch` never carries the cookie under Lax — which is the argument
+for it being this cheap. A refused session also falls through to *anonymous*
+rather than 401, unlike a refused key: the browser attached the cookie without
+being asked, and a stale one must not turn a working anonymous call into a
+failure.
+
+`ENDS_CREDENTIAL_ACCESS` in `admin/guard.ts` grew the four session-ending paths
+with it, or signing out would leave the JWT that session was exchanged for
+opening gateways for the rest of the ten-minute window.
 
 ---
 

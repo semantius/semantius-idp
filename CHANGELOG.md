@@ -11,6 +11,38 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ### Added
 
+- **A gateway can pass the reverse proxy's `X-Forwarded-*` through, and a
+  session cookie is a gateway credential** (**D92**, FR-GW-1/3/4/5). Two gaps
+  **D91** left, found by reading it back the next day.
+
+  `gateways.<name>.trustProxy` (default `false`) forwards the
+  `X-Forwarded-For` / `-Host` / `-Proto` — and `Forwarded` / `X-Real-IP` — that
+  an edge set, instead of replacing them with what this hop can see. Behind the
+  shipped Caddyfile with `server.trustProxy: false`, "what this hop can see" is
+  Caddy's address on the compose network and the internal `http` scheme, so an
+  upstream was being told the caller was `172.18.0.3` over plain http. It is
+  per gateway and independent of `server.trustProxy`, which decides whether the
+  IdP *believes* those headers for its own rate limits and audit trail rather
+  than whether it relays them; it is off by default, because turning it on
+  makes the upstream believe headers this IdP did not write.
+
+  **A signed-in browser can now reach a gateway as itself.** The session cookie
+  `/gateway/*` already received — it is same-origin with the issuer — is
+  exchanged for a JWT through the same `GET /api/auth/token` the API-key path
+  uses, and is still never forwarded. `azp` tells an upstream which kind of
+  caller it has: `apiKeys.tokenClientId` for a key, the IdP's own id for a
+  session. A refused session falls through to anonymous rather than answering
+  401, because the browser attached the cookie without being asked.
+
+  **The cookie is only honoured when `Sec-Fetch-Site` is absent, `same-origin`
+  or `none`.** Cookie authentication on a same-origin proxy is the ambient
+  authority CSRF exploits, and `SameSite=Lax` still carries the cookie on a
+  top-level cross-site GET — so a link to `…/gateway/<name>/…` would otherwise
+  have the IdP mint a JWT for whoever clicked it. The check blocks nothing that
+  would have worked: a cross-site `fetch` never carries the cookie under Lax.
+  Signing out and revoking a session now clear the token cache too, alongside
+  D91's ban and key-revocation paths.
+
 - **API gateways: `/gateway/<name>` is an authenticating reverse proxy**
   (**D91**, FR-GW-1..7). A backend resource server — PostgREST, Neon's Data
   API — validates this IdP's JWTs against the JWKS and has never heard of its

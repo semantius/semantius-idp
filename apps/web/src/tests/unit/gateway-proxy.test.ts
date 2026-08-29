@@ -40,6 +40,7 @@ interface Row {
   name: string
   url: string
   requireAuth: boolean | null
+  trustProxy: boolean | null
   source: string
   enabled: boolean | null
 }
@@ -50,6 +51,7 @@ function row(overrides: Partial<Row> = {}): Row {
     name: "data",
     url: "https://upstream.example",
     requireAuth: false,
+    trustProxy: false,
     source: "manual",
     enabled: true,
     ...overrides,
@@ -279,6 +281,145 @@ describe("auth translation (FR-GW-4)", () => {
     expect(minted.headers.get("x-forwarded-for")).toBe("198.51.100.4")
   })
 
+  it("exchanges a session cookie for a bearer token and drops the cookie", async () => {
+    const h = harness({ token: tokenResponse("jwt-session") })
+    const response = await h.call(
+      get("/gateway/data", {
+        headers: {
+          cookie: "idp.session_token=abc.def; idp.sidebar=1",
+          "sec-fetch-site": "same-origin",
+        },
+      })
+    )
+
+    expect(response.status).toBe(200)
+    expect(h.sent().get("authorization")).toBe("Bearer jwt-session")
+    // Read as a credential, never passed on: the upstream must not receive
+    // this IdP's session cookie (**D92**).
+    expect(h.sent().has("cookie")).toBe(false)
+
+    // The mint carries the cookie so Better Auth validates the session — the
+    // same endpoint the key path uses, which is what makes `azp` differ.
+    const minted = h.handler.mock.calls[0]![0]
+    expect(minted.headers.get("cookie")).toContain("idp.session_token=abc.def")
+    expect(minted.headers.has("x-api-key")).toBe(false)
+  })
+
+  it("finds the session cookie under either cookie prefix", async () => {
+    // `cookiePrefix` is `__Secure-idp` when the issuer is https, so the name
+    // is matched by suffix rather than spelled out.
+    const h = harness({ token: tokenResponse("jwt-secure") })
+    await h.call(
+      get("/gateway/data", {
+        headers: { cookie: "__Secure-idp.session_token=xyz" },
+      })
+    )
+    expect(h.sent().get("authorization")).toBe("Bearer jwt-secure")
+  })
+
+  it("ignores the session-data cookie, which is not a credential", async () => {
+    const h = harness({ token: tokenResponse() })
+    const response = await h.call(
+      get("/gateway/data", { headers: { cookie: "idp.session_data=cached" } })
+    )
+    expect(h.handler, "nothing to exchange").not.toHaveBeenCalled()
+    expect(response.status).toBe(200)
+    expect(h.sent().has("authorization")).toBe(false)
+  })
+
+  it("ignores a session cookie on a cross-site request", async () => {
+    // The CSRF guard (**D92**). `SameSite=Lax` still sends the cookie on a
+    // top-level GET navigation, so a link to /gateway/... from anywhere would
+    // otherwise have the IdP mint a JWT for whoever clicked it.
+    for (const site of ["cross-site", "same-site"]) {
+      resetGatewayRegistry()
+      resetGatewayTokenCache()
+      const h = harness({ token: tokenResponse() })
+      const response = await h.call(
+        get("/gateway/data", {
+          headers: {
+            cookie: "idp.session_token=abc.def",
+            "sec-fetch-site": site,
+          },
+        })
+      )
+      expect(h.handler, site).not.toHaveBeenCalled()
+      // Anonymous, not refused: the browser attached the cookie by itself.
+      expect(response.status, site).toBe(200)
+      expect(h.sent().has("authorization")).toBe(false)
+    }
+  })
+
+  it("accepts a session cookie on a same-origin or top-level request", async () => {
+    for (const site of ["same-origin", "none"]) {
+      resetGatewayRegistry()
+      resetGatewayTokenCache()
+      const h = harness({ token: tokenResponse("jwt-ok") })
+      await h.call(
+        get("/gateway/data", {
+          headers: {
+            cookie: "idp.session_token=abc.def",
+            "sec-fetch-site": site,
+          },
+        })
+      )
+      expect(h.sent().get("authorization"), site).toBe("Bearer jwt-ok")
+    }
+  })
+
+  it("prefers an API key over a session cookie", async () => {
+    const h = harness({ token: tokenResponse("jwt-key") })
+    await h.call(
+      get("/gateway/data", {
+        headers: {
+          "x-api-key": "idp_key",
+          cookie: "idp.session_token=abc.def",
+        },
+      })
+    )
+    const minted = h.handler.mock.calls[0]![0]
+    expect(minted.headers.get("x-api-key")).toBe("idp_key")
+    expect(minted.headers.has("cookie")).toBe(false)
+  })
+
+  it("falls through to anonymous when the session is refused", async () => {
+    // Unlike a key: the caller did not choose to present this, so a stale
+    // cookie must not turn a working anonymous call into a 401 (**D92**).
+    const h = harness()
+    const response = await h.call(
+      get("/gateway/data", { headers: { cookie: "idp.session_token=stale" } })
+    )
+    expect(response.status).toBe(200)
+    expect(h.sent().has("authorization")).toBe(false)
+  })
+
+  it("refuses a refused session on a requireAuth gateway", async () => {
+    const h = harness({ rows: [row({ requireAuth: true })] })
+    const response = await h.call(
+      get("/gateway/data", { headers: { cookie: "idp.session_token=stale" } })
+    )
+    expect(response.status).toBe(401)
+    expect(await response.json()).toEqual({ error: "auth_required" })
+  })
+
+  it("caches a session exchange under its own key", async () => {
+    // The `kind:` prefix in the cache key: a key and a cookie carrying the
+    // same bytes must not share an entry.
+    const h = harness({ token: tokenResponse("jwt-1") })
+    const request = () =>
+      h.call(
+        get("/gateway/data", { headers: { cookie: "idp.session_token=same" } })
+      )
+    await request()
+    await request()
+    expect(h.handler).toHaveBeenCalledTimes(1)
+
+    await h.call(
+      get("/gateway/data", { headers: { "x-api-key": "same" } })
+    )
+    expect(h.handler, "a key with the same bytes is a separate entry").toHaveBeenCalledTimes(2)
+  })
+
   it("answers 401 for a refused key and remembers it for ten seconds", async () => {
     let clock = 1_000_000
     const h = harness({ now: () => clock })
@@ -448,6 +589,51 @@ describe("outbound headers (FR-GW-3)", () => {
     expect(sent.get("x-forwarded-for")).toBe("198.51.100.4")
     expect(sent.get("x-forwarded-host")).toBe("apps.example.com")
     expect(sent.get("x-forwarded-proto")).toBe("https")
+  })
+
+  it("passes the edge's own X-Forwarded-* through when the gateway trusts it", async () => {
+    // **D92.** Behind Caddy with `server.trustProxy: false` — the default —
+    // this hop's honest view is Caddy's address over the internal scheme,
+    // which is useless to the upstream. `trustProxy` on the gateway is what
+    // lets the edge's account of the request reach it.
+    const h = harness({ rows: [row({ trustProxy: true })] })
+    await h.call(
+      get("/gateway/data", {
+        headers: {
+          "x-forwarded-for": "203.0.113.9",
+          "x-forwarded-host": "idp.example.com",
+          "x-forwarded-proto": "https",
+          forwarded: "for=203.0.113.9;proto=https",
+          "x-real-ip": "203.0.113.9",
+          [SOCKET_ADDRESS_HEADER]: "172.18.0.3",
+        },
+      })
+    )
+
+    const sent = h.sent()
+    expect(sent.get("x-forwarded-for")).toBe("203.0.113.9")
+    expect(sent.get("x-forwarded-host")).toBe("idp.example.com")
+    expect(sent.get("x-forwarded-proto")).toBe("https")
+    // RFC 7239 and the nginx spelling ride along, for an upstream that reads
+    // one of those instead.
+    expect(sent.get("forwarded")).toBe("for=203.0.113.9;proto=https")
+    expect(sent.get("x-real-ip")).toBe("203.0.113.9")
+  })
+
+  it("still writes its own when a trusting gateway has no proxy in front", async () => {
+    // The fallback matters: an upstream told nothing is worse than an
+    // upstream told what this hop can actually see.
+    const h = harness({ rows: [row({ trustProxy: true })] })
+    await h.call(
+      get("/gateway/data", {
+        headers: { [SOCKET_ADDRESS_HEADER]: "198.51.100.7" },
+      })
+    )
+
+    const sent = h.sent()
+    expect(sent.get("x-forwarded-for")).toBe("198.51.100.7")
+    expect(sent.get("x-forwarded-host")).toBe("localhost:3000")
+    expect(sent.get("x-forwarded-proto")).toBe("http")
   })
 
   it("passes accept-encoding through and never recodes the bytes", async () => {

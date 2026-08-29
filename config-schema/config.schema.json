@@ -699,7 +699,11 @@
             "description": "Absolute http(s) URL of the upstream, with no trailing slash, query or fragment. `/gateway/<name>/<rest>` is forwarded to `<url>/<rest>`."
           },
           "requireAuth": {
-            "description": "Refuse a request that carries neither `Authorization` nor `x-api-key` instead of forwarding it anonymously. For an upstream that has no anonymous role of its own.",
+            "description": "Refuse a request that carries neither `Authorization`, `x-api-key` nor a session cookie instead of forwarding it anonymously. For an upstream that has no anonymous role of its own.",
+            "type": "boolean"
+          },
+          "trustProxy": {
+            "description": "Pass the edge's own `X-Forwarded-For` / `-Host` / `-Proto` through to this upstream instead of replacing them with what this hop can see. Turn it on behind a reverse proxy that sets them — the shipped Caddyfile does — when the upstream needs the browser's address and public URL rather than the container's view of them. **It makes the upstream believe headers this IdP did not write**, so only turn it on when something in front of the IdP overwrites them.",
             "type": "boolean"
           }
         },

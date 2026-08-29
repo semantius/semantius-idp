@@ -124,6 +124,7 @@ beforeAll(async () => {
       name: "data",
       url: upstreamOrigin,
       requireAuth: false,
+      trustProxy: false,
       source: "manual",
       enabled: true,
       createdAt: new Date(),
@@ -134,6 +135,7 @@ beforeAll(async () => {
       name: "off",
       url: upstreamOrigin,
       requireAuth: false,
+      trustProxy: false,
       source: "manual",
       enabled: false,
       createdAt: new Date(),
@@ -150,8 +152,19 @@ afterAll(async () => {
 afterEach(() => {
   resetGatewayTokenCache()
   resetGatewayRegistry()
-  lastRequest = undefined
+  forgetUpstream()
 })
+
+/**
+ * Forgets the last upstream request, so an assertion can prove none arrived.
+ *
+ * A function rather than an inline `lastRequest = undefined`, because the
+ * assignment narrows the module-level `let` to `undefined` for the rest of the
+ * block and every later `lastRequest?.…` then reads as `never`.
+ */
+function forgetUpstream(): void {
+  lastRequest = undefined
+}
 
 function deps() {
   return {
@@ -404,6 +417,84 @@ describe("the key → JWT exchange (FR-GW-4, FR-KEY-3)", () => {
       new Request(`${ISSUER}/gateway/data`, { headers: { "x-api-key": key } })
     )
     expect(after.status).toBe(401)
+  })
+})
+
+describe("the session cookie as a credential (FR-GW-4, **D92**)", () => {
+  it("exchanges it for a JWT the upstream can verify, and never forwards it", async () => {
+    const response = await proxy(
+      new Request(`${ISSUER}/gateway/data/me`, {
+        headers: { cookie, "sec-fetch-site": "same-origin" },
+      }),
+      "data",
+      "me"
+    )
+    expect(response.status).toBe(200)
+
+    const authorization = lastRequest?.headers.authorization ?? ""
+    const jwt = authorization.slice("Bearer ".length)
+    await expect(
+      jwtVerify(jwt, await jwks(), { issuer: ISSUER })
+    ).resolves.toBeTruthy()
+
+    const payload = decodeJwt(jwt)
+    expect(payload.sub).toBe(userId)
+    // **The discriminator.** A browser session says the IdP is presenting the
+    // token; a key exchange says `apiKeys.tokenClientId`. An upstream that
+    // cares which one it is talking to reads `azp`.
+    expect(payload.azp).toBe("idp")
+    expect(payload.azp).not.toBe("api-key-client")
+
+    expect(lastRequest?.headers.cookie).toBeUndefined()
+  })
+
+  it("ignores it on a cross-site request", async () => {
+    // `SameSite=Lax` still sends the cookie on a top-level GET navigation, so
+    // without the Fetch-Metadata check a link would be a CSRF against every
+    // upstream.
+    const response = await proxy(
+      new Request(`${ISSUER}/gateway/data`, {
+        headers: { cookie, "sec-fetch-site": "cross-site" },
+      })
+    )
+    expect(response.status).toBe(200)
+    expect(lastRequest?.headers.authorization).toBeUndefined()
+  })
+
+  it("stops working the moment the browser signs out", async () => {
+    const theirs = await createOrdinaryUser("gateway-signout@example.com")
+    expect(
+      (
+        await proxy(
+          new Request(`${ISSUER}/gateway/data`, {
+            headers: { cookie: theirs.cookie },
+          })
+        )
+      ).status
+    ).toBe(200)
+    expect(lastRequest?.headers.authorization).toBeTruthy()
+
+    const out = await ctx.auth.handler(
+      authRequest("/sign-out", {
+        headers: { cookie: theirs.cookie },
+        json: {},
+      })
+    )
+    expect(out.status).toBe(200)
+
+    // Without `/sign-out` in `ENDS_CREDENTIAL_ACCESS` this is still a 200 for
+    // the next ten minutes, on a session that no longer exists (**D92**).
+    forgetUpstream()
+    const after = await proxy(
+      new Request(`${ISSUER}/gateway/data`, {
+        headers: { cookie: theirs.cookie },
+      })
+    )
+    expect(after.status).toBe(200)
+    expect(
+      lastRequest?.headers.authorization,
+      "a signed-out session is not a credential"
+    ).toBeUndefined()
   })
 })
 

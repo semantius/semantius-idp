@@ -80,7 +80,12 @@ export async function reconcileGateways(
 }
 
 /** The columns reconciliation owns; anything else on the row is not ours. */
-const OWNED_COLUMNS = ["url", "requireAuth", "enabled"] as const
+const OWNED_COLUMNS = [
+  "url",
+  "requireAuth",
+  "trustProxy",
+  "enabled",
+] as const
 
 async function applyReconciliation(
   deps: GatewayReconcileDeps
@@ -107,6 +112,7 @@ async function applyReconciliation(
       const desired = {
         url: target.url,
         requireAuth: target.requireAuth,
+        trustProxy: target.trustProxy,
         // File-owned: a restart re-enables a config gateway an administrator
         // switched off, which is the point (see the header).
         enabled: true,
@@ -217,14 +223,22 @@ function differs(
   current: {
     url: string
     requireAuth: boolean | null
+    trustProxy: boolean | null
     enabled: boolean | null
   },
-  desired: { url: string; requireAuth: boolean; enabled: boolean }
+  desired: {
+    url: string
+    requireAuth: boolean
+    trustProxy: boolean
+    enabled: boolean
+  }
 ): boolean {
   return OWNED_COLUMNS.some((column) => {
     if (column === "url") return current.url !== desired.url
     if (column === "requireAuth")
       return (current.requireAuth === true) !== desired.requireAuth
+    if (column === "trustProxy")
+      return (current.trustProxy === true) !== desired.trustProxy
     return (current.enabled !== false) !== desired.enabled
   })
 }

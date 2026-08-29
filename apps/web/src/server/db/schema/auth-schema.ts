@@ -442,6 +442,7 @@ export function createAuthSchema(schemaName: string) {
       name: text("name").notNull().unique(),
       url: text("url").notNull(),
       requireAuth: boolean("require_auth").default(false),
+      trustProxy: boolean("trust_proxy").default(false),
       source: text("source").notNull(),
       enabled: boolean("enabled").default(true),
       createdAt: timestamp("created_at").defaultNow().notNull(),

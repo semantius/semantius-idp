@@ -290,7 +290,9 @@ function writeConfig(
           // test that a manual row cannot prove. Its target is never called:
           // the suite drives the page, not the data path, because a data-path
           // test needs a live upstream in the stack.
-          gateways: { fromfile: { url: "http://upstream.invalid" } },
+          gateways: {
+            fromfile: { url: "http://upstream.invalid", trustProxy: true },
+          },
           jwt: { audience: stack.baseURL },
           // No `admin.bootstrap`: it no longer exists (D52). The first
           // administrator is created by `completeSetup` below, at the page.

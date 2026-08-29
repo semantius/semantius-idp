@@ -1,23 +1,34 @@
 /**
- * `/gateway/<name>` — an authenticating reverse proxy (FR-GW-3..6, **D91**).
+ * `/gateway/<name>` — an authenticating reverse proxy (FR-GW-3..6, **D91**,
+ * **D92**).
  *
  * **What it is for.** A backend resource server — PostgREST, Neon's Data API —
  * validates this IdP's JWTs against the JWKS and knows nothing about its
- * per-user API keys. A client holding only an `idp_…` key therefore cannot
- * call one at all. This endpoint closes that gap: it streams the request
- * through to a configured upstream and, when the caller presented an API key
- * and no `Authorization` of their own, exchanges the key for a session JWT and
- * injects it as `Authorization: Bearer`.
+ * per-user API keys or its browser sessions. A caller holding either therefore
+ * cannot reach one at all. This endpoint closes that gap: it streams the
+ * request through to a configured upstream and turns whatever credential the
+ * caller arrived with into an `Authorization: Bearer` the upstream can verify.
  *
- * **The exchange rides Better Auth's own token endpoint, and must.**
- * `GET {authBaseUrl}/token` with `x-api-key` already does the whole job:
- * it resolves the key, runs `gateApiKeyPlugin`'s ban/approval re-check
- * (FR-KEY-2), updates `lastRequest` / `requestCount` and the per-key limiter,
- * and mints a JWT whose `azp` is `apiKeys.tokenClientId` (FR-KEY-3). Every one
- * of those lives *only* there. Re-implementing the mint here would be a second
- * copy of the gate, and the second copy is the one that forgets the ban check.
- * It is called in-process through `auth.handler`, which is the pattern
- * `oidc/protocol-proxy.ts` established.
+ * **Three credentials, in a fixed order** ({@link translateAuth}, **D92**):
+ *
+ *  1. `Authorization` — forwarded untouched. The caller said what they want
+ *     presented and this is not the place to second-guess it.
+ *  2. `x-api-key` — exchanged. A refusal is a 401, because the caller chose to
+ *     present it.
+ *  3. the **session cookie** — exchanged, and never forwarded. A refusal falls
+ *     through to anonymous, because the browser attached it by itself.
+ *
+ * **Every exchange rides Better Auth's own token endpoint, and must.**
+ * `GET {authBaseUrl}/token` already does the whole job for both: with
+ * `x-api-key` it resolves the key, runs `gateApiKeyPlugin`'s ban/approval
+ * re-check (FR-KEY-2), updates `lastRequest` / `requestCount` and the per-key
+ * limiter, and mints a JWT whose `azp` is `apiKeys.tokenClientId` (FR-KEY-3);
+ * with a cookie it validates the session and mints one whose `azp` is the
+ * IdP's own id. Every one of those lives *only* there. Re-implementing a mint
+ * here would be a second copy of the gate, and the second copy is the one that
+ * forgets the ban check. It is called in-process through `auth.handler`, which
+ * is the pattern `oidc/protocol-proxy.ts` established — and the upstream can
+ * tell the two apart, because `azp` says which.
  *
  * **The ten-minute token cache is a security trade-off, recorded as one.** A
  * mint is several database round trips — ~100 ms each against a hosted
@@ -26,20 +37,24 @@
  * FR-KEY-2's "asked on every use" for up to the TTL. Two things blunt that,
  * and both are deliberate: the TTL is `min(600 s, jwt.sessionToken.ttl − 60 s)`
  * so a cached token is never served near its own expiry, and the admin
- * ban/revoke paths call {@link resetGatewayTokenCache} (`admin/guard.ts`), so
- * a revocation made through this process punches straight through the window.
- * What is left is a revocation made *elsewhere* — `psql`, a second replica —
- * taking up to ten minutes. D91 records that as the accepted cost.
+ * ban/revoke/sign-out paths call {@link resetGatewayTokenCache}
+ * (`admin/guard.ts`), so a revocation made through this process punches
+ * straight through the window. What is left is a revocation made *elsewhere* —
+ * `psql`, a second replica — taking up to ten minutes. D91 records that as the
+ * accepted cost.
  *
  * **Cookies never cross in either direction.** Outbound, because a browser
  * hitting `/gateway/x` sends this IdP's session cookie and an upstream must
- * never receive it. Inbound, because the gateway is *same-origin with the
- * issuer*: an upstream `Set-Cookie` would land on the IdP's own origin and
- * path. For the same same-origin reason every gateway response carries a
- * forced `Content-Security-Policy: sandbox; default-src 'none'` — the IdP's
- * own policy concedes `'unsafe-inline'` for the framework's streamed scripts
+ * never receive it — reading it as a credential (D92) does not change that.
+ * Inbound, because the gateway is *same-origin with the issuer*: an upstream
+ * `Set-Cookie` would land on the IdP's own origin and path. For the same
+ * same-origin reason every gateway response carries a forced
+ * `Content-Security-Policy: sandbox; default-src 'none'` — the IdP's own
+ * policy concedes `'unsafe-inline'` for the framework's streamed scripts
  * (`http/security-headers.ts`), and that concession must not extend to
- * untrusted upstream HTML served on the issuer's hostname.
+ * untrusted upstream HTML served on the issuer's hostname. Same-origin is also
+ * why the cookie path carries a Fetch-Metadata check; see
+ * {@link sessionCredential}.
  */
 
 import { createHash } from "node:crypto"
@@ -83,12 +98,13 @@ export interface GatewayProxyDeps {
 export const TOKEN_CACHE_MAX_SECONDS = 600
 
 /**
- * How long an invalid key is remembered as invalid.
+ * How long a refused credential is remembered as refused.
  *
  * Short on purpose: a key created a moment ago must start working promptly,
  * and ten seconds is the documented worst case (**D91**). Its job is to blunt
  * a repeat — the same wrong key sent a thousand times a second is otherwise a
- * thousand database lookups.
+ * thousand database lookups. A fresh sign-in is unaffected either way: a new
+ * session is a new token, so it is a different cache entry (**D92**).
  */
 export const NEGATIVE_CACHE_MS = 10_000
 
@@ -132,11 +148,12 @@ const negativeCache = new Map<string, number>()
 const mintMisses = new Map<string, { count: number; resetAt: number }>()
 
 /**
- * Empties the key → JWT caches.
+ * Empties the credential → JWT caches.
  *
- * Called by `admin/guard.ts` after a ban, a removal or an API-key revocation,
- * which is what makes the D91 window closable from inside this process. Also
- * the reset every test needs, because these maps are module-level by design.
+ * Called by `admin/guard.ts` after a ban, a removal, an API-key revocation or
+ * a sign-out, which is what makes the D91 window closable from inside this
+ * process. Also the reset every test needs, because these maps are
+ * module-level by design.
  */
 export function resetGatewayTokenCache(): void {
   tokenCache.clear()
@@ -162,22 +179,38 @@ const HOP_BY_HOP = new Set([
 ])
 
 /**
- * Inbound headers that never reach the upstream, beyond the hop-by-hop set.
+ * Inbound headers that never reach the upstream, whatever else is true.
  *
- * `forwarded` and `x-real-ip` are here for the same reason `x-forwarded-*` is:
- * this hop is the one that gets to say where the request came from, and a
- * value the caller supplied would otherwise be forwarded as though a trusted
- * proxy had written it (review finding S5).
+ * `cookie` is the one worth pausing on: `/gateway/*` is on the issuer's own
+ * origin and inside the session cookie's `Path`, so a browser attaches this
+ * IdP's session cookie to every gateway request automatically. It is read
+ * here — {@link translateAuth} exchanges it for a JWT (**D92**) — and it is
+ * never passed on.
  */
 const NEVER_FORWARDED = new Set([
   "host",
   "content-length",
   "cookie",
-  "forwarded",
-  "x-real-ip",
   API_KEY_HEADER,
   SOCKET_ADDRESS_HEADER,
 ])
+
+/**
+ * Headers that say where the request came from.
+ *
+ * Dropped by default, because a value the caller supplied would otherwise
+ * reach the upstream as though a trusted proxy had written it (review finding
+ * S5), and replaced with this hop's own view. A gateway with `trustProxy: true`
+ * passes them through instead — see {@link applyForwardedHeaders}.
+ */
+const FORWARDING_HEADERS = ["forwarded", "x-real-ip"] as const
+
+function isForwardingHeader(lower: string): boolean {
+  return (
+    lower.startsWith("x-forwarded-") ||
+    (FORWARDING_HEADERS as readonly string[]).includes(lower)
+  )
+}
 
 const NO_STORE = { "cache-control": "no-store" } as const
 
@@ -223,8 +256,9 @@ export async function proxyGatewayRequest(
     const lower = key.toLowerCase()
     if (HOP_BY_HOP.has(lower) || NEVER_FORWARDED.has(lower)) continue
     if (dropped.has(lower)) continue
-    // This hop decides what `X-Forwarded-*` says; see `NEVER_FORWARDED`.
-    if (lower.startsWith("x-forwarded-")) continue
+    // Unless this gateway trusts the edge, this hop is the one that gets to
+    // say where the request came from (**D92**).
+    if (!row.trustProxy && isForwardingHeader(lower)) continue
     outbound.append(key, value)
   }
 
@@ -239,7 +273,7 @@ export async function proxyGatewayRequest(
     outbound.set("authorization", translated.authorization)
   }
 
-  applyForwardedHeaders(deps, request, outbound, clientIp)
+  applyForwardedHeaders(deps, request, outbound, clientIp, row)
 
   const incoming = new URL(request.url)
   const target = `${row.url}${subPath === "" ? "" : `/${subPath}`}${incoming.search}`
@@ -323,15 +357,67 @@ async function translateAuth(
   if (existing) return { authorization: existing }
 
   const key = request.headers.get(API_KEY_HEADER)
-  if (!key) {
-    // PostgREST and the Data API both have an anonymous role, so anonymous
-    // reach is a legitimate configuration — and `requireAuth` is the knob for
-    // the upstream where it is not.
-    return row.requireAuth ? { refusal: refuse(401, "auth_required") } : {}
+  if (key) {
+    const exchanged = await exchange(
+      deps,
+      { kind: "key", secret: key, headers: { [API_KEY_HEADER]: key } },
+      clientIp
+    )
+    // A key is a credential the caller **chose** to present. Refusing it out
+    // loud is the useful answer; silently forwarding anonymously would look
+    // like the upstream rejecting them.
+    return exchanged ?? { refusal: refuse(401, "invalid_api_key") }
   }
 
+  const session = sessionCredential(request)
+  if (session) {
+    const exchanged = await exchange(
+      deps,
+      {
+        kind: "session",
+        secret: session.token,
+        headers: { cookie: session.header },
+      },
+      clientIp
+    )
+    if (exchanged) return exchanged
+    // **Falls through on a refusal, unlike the key above** (**D92**). The
+    // browser attached this cookie by itself; the caller did not choose to
+    // present it. An expired session turning a working anonymous call into a
+    // 401 would be this endpoint inventing a failure out of a cookie nobody
+    // sent on purpose.
+  }
+
+  // PostgREST and the Data API both have an anonymous role, so anonymous
+  // reach is a legitimate configuration — and `requireAuth` is the knob for
+  // the upstream where it is not.
+  return row.requireAuth ? { refusal: refuse(401, "auth_required") } : {}
+}
+
+/** One credential, on its way to being a bearer token. */
+interface Credential {
+  /** Namespaces the cache key, so a key and a cookie can never collide. */
+  kind: "key" | "session"
+  /** The secret whose hash keys the caches. Never stored or logged. */
+  secret: string
+  /** What the mint request carries to Better Auth. */
+  headers: Record<string, string>
+}
+
+/**
+ * Runs one credential through the caches, the limiter and the mint.
+ *
+ * `undefined` means "this did not produce a token", and **what that is worth
+ * is the caller's decision** — the two callers answer it differently, which is
+ * the whole reason this returns rather than refusing.
+ */
+async function exchange(
+  deps: GatewayProxyDeps,
+  credential: Credential,
+  clientIp: string | undefined
+): Promise<Translation | undefined> {
   const now = deps.now ?? Date.now
-  const hash = hashKey(key)
+  const hash = hashCredential(credential)
 
   const cached = tokenCache.get(hash)
   if (cached && cached.expiresAt > now()) {
@@ -340,18 +426,16 @@ async function translateAuth(
   if (cached) tokenCache.delete(hash)
 
   const negativeUntil = negativeCache.get(hash)
-  if (negativeUntil !== undefined && negativeUntil > now()) {
-    return { refusal: refuse(401, "invalid_api_key") }
-  }
+  if (negativeUntil !== undefined && negativeUntil > now()) return undefined
   if (negativeUntil !== undefined) negativeCache.delete(hash)
 
-  // Before the database, not after: the point of the limiter is that an
-  // invalid-key flood costs nothing to refuse.
+  // Before the database, not after: the point of the limiter is that a flood
+  // of credentials that resolve to nothing costs nothing to refuse.
   if (!allowMintAttempt(clientIp, now())) {
     return { refusal: refuse(429, "too_many_mint_attempts") }
   }
 
-  const minted = await mint(deps, key, clientIp)
+  const minted = await mint(deps, credential.headers, clientIp)
   if (minted.status === 429) {
     // Better Auth's own per-key limit. Passed through rather than translated:
     // the caller is being told to slow down and that is exactly true.
@@ -359,7 +443,7 @@ async function translateAuth(
   }
   if (!minted.token) {
     negativeCache.set(hash, now() + NEGATIVE_CACHE_MS)
-    return { refusal: refuse(401, "invalid_api_key") }
+    return undefined
   }
 
   storeToken(deps, hash, minted.token, now())
@@ -367,14 +451,71 @@ async function translateAuth(
 }
 
 /**
- * SHA-256, never the key itself.
+ * SHA-256 of the credential, never the credential itself, namespaced by kind.
  *
- * Unsalted is right here: an `idp_` key is a high-entropy random secret, so
- * there is no dictionary to precompute, and a per-process salt would only stop
- * this map from being useful across a restart, which it is not anyway.
+ * Unsalted is right here: both an `idp_` key and a session token are
+ * high-entropy random secrets, so there is no dictionary to precompute, and a
+ * per-process salt would only stop this map from being useful across a
+ * restart, which it is not anyway. The `kind:` prefix is what makes a key and
+ * a session token with the same bytes — impossible, but free to rule out —
+ * two different cache entries.
  */
-function hashKey(key: string): string {
-  return createHash("sha256").update(key).digest("base64url")
+function hashCredential(credential: Credential): string {
+  return createHash("sha256")
+    .update(`${credential.kind}:${credential.secret}`)
+    .digest("base64url")
+}
+
+/**
+ * Better Auth's session cookie, whatever prefix this deployment uses.
+ *
+ * `cookiePrefix` is `idp` or `__Secure-idp` depending on whether the issuer is
+ * https (`auth/instance.ts`), so the name is matched by its suffix rather than
+ * spelled out — and the suffix does not match `…session_data`, the cookie
+ * cache, which is not a credential.
+ */
+const SESSION_COOKIE_SUFFIX = "session_token"
+
+/**
+ * The session cookie, if this request may use one (**D92**).
+ *
+ * **The Fetch-Metadata check is the load-bearing half.** `/gateway/*` is on
+ * the issuer's origin, so the browser attaches the session cookie by itself —
+ * which is exactly the ambient authority CSRF exploits. The cookies are
+ * `SameSite=Lax` and host-only, so a cross-site *subresource* never carries
+ * one; what Lax still permits is a **top-level GET navigation**, and a link to
+ * `…/gateway/data/rpc/something` is precisely that. Without this check, an
+ * attacker's link would have the IdP mint a JWT for whoever clicked it and
+ * forward the call as them.
+ *
+ * `Sec-Fetch-Site` is what settles it, because the browser sets it and a page
+ * cannot. Absent means the caller is not a browser — a script that attached
+ * the cookie itself already holds it, and CSRF is not a thing that can be done
+ * to it.
+ *
+ * Returning `undefined` here means "no usable session", which lands in the
+ * anonymous branch rather than in a refusal.
+ */
+function sessionCredential(
+  request: Request
+): { token: string; header: string } | undefined {
+  const header = request.headers.get("cookie")
+  if (!header) return undefined
+
+  const site = request.headers.get("sec-fetch-site")
+  if (site !== null && site !== "same-origin" && site !== "none") {
+    return undefined
+  }
+
+  for (const pair of header.split(";")) {
+    const index = pair.indexOf("=")
+    if (index === -1) continue
+    const name = pair.slice(0, index).trim()
+    const value = pair.slice(index + 1).trim()
+    if (value === "" || !name.endsWith(SESSION_COOKIE_SUFFIX)) continue
+    return { token: value, header }
+  }
+  return undefined
 }
 
 function allowMintAttempt(
@@ -401,11 +542,11 @@ interface MintResult {
 
 async function mint(
   deps: GatewayProxyDeps,
-  key: string,
+  credential: Record<string, string>,
   clientIp: string | undefined
 ): Promise<MintResult> {
   const paths = createBasePaths(deps.config.base)
-  const headers = new Headers({ [API_KEY_HEADER]: key })
+  const headers = new Headers(credential)
   // The address the auth instance's own resolver trusts, so Better Auth
   // buckets this mint per caller instead of collapsing every one of them into
   // the shared `no-trusted-ip|/token` bucket (`auth/instance.ts`).
@@ -477,14 +618,47 @@ function storeToken(
  * upstream that builds its own links needs to know the address the caller
  * actually used, and inventing the configured one would break exactly the
  * sub-path and reverse-proxy deployments SEC-1 exists to make work.
+ *
+ * **`trustProxy: true` passes the edge's own values through instead**
+ * (**D92**), which is the case the shipped Caddyfile produces and the default
+ * could not express. Behind Caddy with `server.trustProxy: false` — the
+ * default, and what a deployment that has not read OPS-9 is running — this
+ * hop's honest answer is *Caddy's* address and the **internal** scheme, so an
+ * upstream was told the caller was `172.18.0.3` over `http`. Neither is wrong
+ * about what this process saw; both are useless to the upstream. Passing the
+ * edge's headers through is the only way an internal service gets the browser
+ * they are actually serving.
+ *
+ * It is a **deliberate loosening and it is per gateway for that reason**: it
+ * makes the upstream believe headers this IdP did not write, so a deployment
+ * with nothing in front of it would let a caller dictate their own address.
+ * The operator asserts the topology per target, the way `server.trustProxy`
+ * asserts it for the process — and the two are independent, because whether
+ * the IdP believes the edge *for its own rate limits and audit trail* is a
+ * different question from whether it passes the edge's account of the request
+ * to a service behind it.
+ *
+ * Either way the three headers end up **set**: a `trustProxy` gateway with no
+ * proxy in front of it falls back to this hop's view rather than telling the
+ * upstream nothing.
  */
 function applyForwardedHeaders(
   deps: GatewayProxyDeps,
   request: Request,
   outbound: Headers,
-  clientIp: string | undefined
+  clientIp: string | undefined,
+  row: GatewayRow
 ): void {
-  if (clientIp) outbound.set("X-Forwarded-For", clientIp)
+  // Whatever the edge sent is already on `outbound` when `row.trustProxy` is
+  // set — the copy loop kept it — so each of these fills a gap rather than
+  // overwriting an answer that came from further out.
+  const fill = (name: string, value: string | undefined): void => {
+    if (value === undefined) return
+    if (row.trustProxy && outbound.has(name)) return
+    outbound.set(name, value)
+  }
+
+  fill("X-Forwarded-For", clientIp)
 
   const trustProxy = deps.config.file.server.trustProxy
   const incoming = new URL(request.url)
@@ -493,11 +667,11 @@ function applyForwardedHeaders(
   const forwardedProto =
     trustProxy !== false ? request.headers.get("x-forwarded-proto") : null
 
-  outbound.set(
+  fill(
     "X-Forwarded-Host",
     forwardedHost ?? request.headers.get("host") ?? incoming.host
   )
-  outbound.set(
+  fill(
     "X-Forwarded-Proto",
     forwardedProto ?? incoming.protocol.replace(":", "")
   )

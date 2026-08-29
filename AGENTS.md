@@ -24,7 +24,7 @@ Four files, in this order. Read them before proposing anything.
 | File | What it is |
 | --- | --- |
 | [status.md](status.md) | The handoff. Done, not-done, and why — the ground truth between sessions. |
-| [spec-v1.md](spec-v1.md) | Signed off, amended through **D91**. Numbered requirements, and §12.1's decision log with the reasoning. |
+| [spec-v1.md](spec-v1.md) | Signed off, amended through **D92**. Numbered requirements, and §12.1's decision log with the reasoning. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | The gates, the style, and how to amend the spec. |
 | [docs/release.md](docs/release.md) | What is left before v1.0.0, and it is the owner's, not yours. |
 
@@ -306,7 +306,7 @@ drift gate see no difference. `admin/endpoints.ts`'s header already said this
 about that file — believe it for schemas too.
 
 **`/gateway/*` is same-origin with the issuer, and everything odd about it
-follows from that** (**D91**). It proxies an operator-named upstream on the
+follows from that** (**D91**, **D92**). It proxies an operator-named upstream on the
 IdP's own hostname, so: cookies are stripped outbound (a browser sends this
 IdP's session cookie to `/gateway/x`), `Set-Cookie` is stripped inbound (an
 upstream would otherwise set one on the issuer's origin and path), the CSP is
@@ -316,8 +316,17 @@ policy concedes `'unsafe-inline'` — and a `Location` that resolves off the
 upstream's origin is deleted. The key → JWT cache means **a ban is not
 re-checked for up to ten minutes**; `admin/guard.ts` calls
 `resetGatewayTokenCache()` so a revocation made through this process is
-immediate, and anything that ends a user's or a key's access must keep doing
-so.
+immediate, and anything that ends a user's, a key's **or a session's** access
+must keep doing so — `ENDS_CREDENTIAL_ACCESS` is that list.
+
+Same-origin is also why **the session cookie is only accepted as a credential
+when `Sec-Fetch-Site` is absent, `same-origin` or `none`** (**D92**). The
+cookies are `SameSite=Lax` and host-only, so a cross-site subresource never
+carries one — but Lax still sends them on a **top-level GET navigation**, and
+a link to `…/gateway/<name>/…` is exactly that. Better Auth's own origin check
+cannot help here: the mint is a synthetic in-process request, so it would be
+checking a request this module wrote. Do not remove the check to make a client
+work; a client that trips it was never going to have the cookie.
 
 **The integration suite runs against a local Postgres, and must.** It used to
 default to the deployment's own Neon instance in `us-east-2` — **~102 ms per

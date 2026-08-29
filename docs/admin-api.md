@@ -265,9 +265,12 @@ curl -X POST https://idp.example.com/api/auth/idp/create-gateway \
 
 Then `curl -H "x-api-key: $USER_KEY" https://idp.example.com/gateway/data/items`.
 
-`requireAuth: true` refuses a call carrying neither `Authorization` nor
-`x-api-key` instead of forwarding it anonymously — leave it off for a target
-with an anonymous role of its own, like PostgREST.
+`requireAuth: true` refuses a call carrying no credential at all instead of
+forwarding it anonymously — leave it off for a target with an anonymous role of
+its own, like PostgREST. `trustProxy: true` forwards the `X-Forwarded-*` a
+reverse proxy in front of this IdP set, rather than replacing them with what
+this hop can see (**D92**); only set it when something in front actually sets
+them.
 
 Gateways are **half** read-only, the way clients are. The ones in the
 `gateways` block of `config.jsonc` are reconciled at start-up and refused by
@@ -277,9 +280,9 @@ start-up sweep skips, so they survive restarts and can be edited, disabled and
 removed.
 
 **The exchange is cached for ten minutes**, and a cache hit skips the owner
-re-check. A ban or a key revocation made through *this* API clears the cache
-immediately; one made outside the process — `psql`, another replica — takes up
-to the ten minutes. That is the documented trade-off, not a bug.
+re-check. A ban, a key revocation or a sign-out made through *this* API clears
+the cache immediately; one made outside the process — `psql`, another replica —
+takes up to the ten minutes. That is the documented trade-off, not a bug.
 
 ## The refusals
 

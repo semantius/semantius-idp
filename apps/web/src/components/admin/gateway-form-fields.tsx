@@ -17,8 +17,8 @@ import type { Draft } from "@/server/http/draft"
 import type { Catalog } from "@/server/i18n"
 
 /**
- * The three fields a gateway is described by, shared by the create and edit
- * dialogs (FR-GW-7, **D91**).
+ * The four fields a gateway is described by, shared by the create and edit
+ * dialogs (FR-GW-7, **D91**, **D92**).
  *
  * Shared for the reason `client-form-fields.tsx` sets out at length:
  * `/idp/update-gateway` is a **full replace**, so a field the edit form does
@@ -34,6 +34,7 @@ export interface GatewayFormValues {
   name: string
   url: string
   requireAuth: boolean
+  trustProxy: boolean
 }
 
 /**
@@ -56,6 +57,7 @@ export function resolveGatewayFormValues(
     name: values.name ?? fallback.name,
     url: values.url ?? fallback.url,
     requireAuth: values.requireAuth === "on",
+    trustProxy: values.trustProxy === "on",
   }
 }
 
@@ -159,6 +161,24 @@ export function GatewayFormFields({
             className="block text-xs text-muted-foreground"
           >
             {t.admin.gateways.requireAuthHelp}
+          </span>
+        </span>
+      </Label>
+      <Label className="flex items-start gap-2 text-sm font-normal">
+        <Checkbox
+          name="trustProxy"
+          value="on"
+          defaultChecked={values.trustProxy}
+          aria-label={t.admin.gateways.trustProxy}
+          aria-describedby={field("trust-proxy-help")}
+        />
+        <span>
+          {t.admin.gateways.trustProxy}
+          <span
+            id={field("trust-proxy-help")}
+            className="block text-xs text-muted-foreground"
+          >
+            {t.admin.gateways.trustProxyHelp}
           </span>
         </span>
       </Label>

@@ -49,6 +49,7 @@ export function GatewayEditDialog({
     name: gateway.name,
     url: gateway.url,
     requireAuth: gateway.requireAuth,
+    trustProxy: gateway.trustProxy,
   })
 
   return (

@@ -121,15 +121,28 @@ export function isGuardedAdminPath(path: string): boolean {
 }
 
 /**
- * Endpoints that end an API key's usefulness without being admin endpoints
- * (**D91**).
+ * Endpoints that end a credential's usefulness without being admin endpoints
+ * (**D91**, extended by **D92**).
+ *
+ * The gateway caches a credential → JWT exchange, and a cache hit skips the
+ * re-check — so anything that revokes a credential has to empty that cache in
+ * the same process, or it goes on opening gateways for up to ten minutes.
  *
  * `/api-key/delete` is the api-key plugin's own, reachable from `/account` and
- * from `/admin/users/:id` alike, and a revoked key must stop opening a gateway
- * in this process straight away rather than when the ten-minute cache expires.
- * `/api-key/update` is here because it is how a key is disabled or re-dated.
+ * from `/admin/users/:id` alike; `/api-key/update` is how a key is disabled or
+ * re-dated. The four session paths arrived with **D92**, which made a session
+ * cookie a gateway credential in its own right: without them, signing out
+ * would leave the JWT that cookie was exchanged for working until the TTL.
+ * `/admin/revoke-user-sessions` needs no entry — it is already `GUARDED`.
  */
-const ENDS_KEY_ACCESS = new Set(["/api-key/delete", "/api-key/update"])
+const ENDS_CREDENTIAL_ACCESS = new Set([
+  "/api-key/delete",
+  "/api-key/update",
+  "/sign-out",
+  "/revoke-session",
+  "/revoke-sessions",
+  "/revoke-other-sessions",
+])
 
 interface AdminBody {
   userId?: unknown
@@ -274,20 +287,23 @@ export function buildAdminAfterHook(deps: AdminGuardDeps): AuthMiddleware {
     const path = ctx.path
     const isUnban = path === "/admin/unban-user"
 
-    // **D91's punch-through.** The gateway caches a key → JWT exchange for up
-    // to ten minutes, and a cache hit skips the FR-KEY-2 owner re-check — so
-    // without this a suspended user's key would keep opening every gateway
-    // until the entry expired. Cheap (three `Map.clear()`s) and rare, so it is
-    // unconditional rather than scoped to the affected key: this hook does not
-    // know which key belongs to whom, and a targeted invalidation would be a
-    // second place that has to agree about that.
+    // **D91's punch-through**, widened to sessions by **D92**. The gateway
+    // caches a credential → JWT exchange for up to ten minutes, and a cache
+    // hit skips the FR-KEY-2 owner re-check — so without this a suspended
+    // user's key, or a signed-out browser's session, would keep opening every
+    // gateway until the entry expired. Cheap (three `Map.clear()`s) and rare,
+    // so it is unconditional rather than scoped to the affected credential:
+    // this hook does not know which key or session belongs to whom, and a
+    // targeted invalidation would be a second place that has to agree.
     //
     // Here, in the hook, rather than in the route handlers behind the buttons,
     // for **D67**'s reason: the admin API is a supported interface, so a
     // `curl` to `/admin/ban-user` has to leave the process in the same state
     // the UI does.
     if (
-      (isUnban || isGuardedAdminPath(path) || ENDS_KEY_ACCESS.has(path)) &&
+      (isUnban ||
+        isGuardedAdminPath(path) ||
+        ENDS_CREDENTIAL_ACCESS.has(path)) &&
       !(ctx.context.returned instanceof APIError)
     ) {
       resetGatewayTokenCache()

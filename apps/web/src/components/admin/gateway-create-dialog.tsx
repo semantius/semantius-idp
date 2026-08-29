@@ -45,6 +45,10 @@ export function GatewayCreateDialog({
     // role, so anonymous reach is the ordinary case and `requireAuth` is the
     // exception an operator opts into (FR-GW-4).
     requireAuth: false,
+    // Also off by default, and for a stronger reason: turning it on makes the
+    // upstream believe headers this IdP did not write, which is only safe
+    // when something in front of it overwrites them (**D92**).
+    trustProxy: false,
   })
 
   return (

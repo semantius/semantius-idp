@@ -625,7 +625,14 @@ export const enUS = {
         "Absolute http(s), no trailing slash. /gateway/<name>/rest is forwarded to <target>/rest.",
       requireAuth: "Require authentication",
       requireAuthHelp:
-        "Refuse a call that carries neither an Authorization header nor an API key, instead of forwarding it anonymously. Leave it off for a target with an anonymous role of its own, such as PostgREST.",
+        "Refuse a call that carries no Authorization header, no API key and no signed-in session, instead of forwarding it anonymously. Leave it off for a target with an anonymous role of its own, such as PostgREST.",
+      // D92.
+      trustProxy: "Pass the reverse proxy's headers through",
+      trustProxyHelp:
+        "Forward the X-Forwarded-For, -Host and -Proto that a reverse proxy in front of this server set, so the target sees the browser's address and public URL rather than this container's view of them. Only turn it on when something in front of this server actually sets them — otherwise a caller can tell the target whatever they like about themselves.",
+      forwarded: "Forwarded headers",
+      forwardedEdge: "From the proxy",
+      forwardedHop: "From this server",
       auth: "Authentication",
       authRequired: "Required",
       authAnonymous: "Anonymous allowed",

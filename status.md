@@ -1,18 +1,20 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-29 · **Branch:** `main` · **Head:** `8159671`, last tag **v0.5.0**
+**As of:** 2026-08-29 · **Branch:** `main` · **Head:** `2687f72`, last tag **v0.5.0**
 **Plan:** `~/.claude/plans/users-has-a-full-binary-meteor.md` (full-page forms)
 **Spec:** [spec-v1.md](spec-v1.md) — amended through **D94**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
-gate; API gateways (FR-GW, **D91**/**D92**) landed on 2026-08-29 on top of
-them.** Every gate green: lint, typecheck, unit (663), integration (298 across
-twenty-eight files), coverage thresholds including the 85 % per-module gates,
-schema-drift, config-schema staleness, the configuration-reference and
-example-config gates, dependency pinning, the client-bundle gate, the TST-8
-container smoke test — run against the moved `docker/` layout and completing
-the first-run wizard — and the TST-6 end-to-end suite: 100 tests in a real
-browser against the built image, in both deployment shapes.
+gate; API gateways (FR-GW, **D91**/**D92**) landed on 2026-08-29, and the
+full-page create/edit forms with their breadcrumb header (**D93**) and the US
+spelling sweep (**D94**) on top of them.** Every gate green: lint, typecheck,
+unit (666), integration (299 across twenty-eight files), coverage thresholds
+including the 85 % per-module gates, schema-drift, config-schema staleness,
+the configuration-reference and example-config gates, dependency pinning, the
+client-bundle gate, the TST-8 container smoke test — run against the moved
+`docker/` layout and completing the first-run wizard — and the TST-6
+end-to-end suite: 104 tests in a real browser against the built image, in both
+deployment shapes.
 
 The `docker/idp-*` lifecycle scripts were exercised end to end as well —
 create → status → cli → stop → start → logs → destroy — against a throwaway

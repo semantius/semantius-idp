@@ -7,7 +7,7 @@
  * guard ends up applying to the page but not to the endpoint behind it.
  *
  * `auth.api.getSession` is deliberate rather than reading the cookie: it
- * honours the cookie cache, the ban/approval state and the impersonation
+ * honors the cookie cache, the ban/approval state and the impersonation
  * fields, so a session that Better Auth considers dead is not resurrected here.
  *
  * **"No session" and "the database is unreachable" are not the same answer**
@@ -56,8 +56,8 @@ export interface ReadSessionOptions {
    * The cookie cache (`session.cookieCacheMinutes`, capped at 5) is what makes
    * a page load cheap, and it is exactly wrong for a decision that depends on
    * *current* state: the cached copy carries the ban flag and the approval
-   * state as they were when it was minted, so a write authorised from it is a
-   * write authorised by a copy of the world up to five minutes old. Every form
+   * state as they were when it was minted, so a write authorized from it is a
+   * write authorized by a copy of the world up to five minutes old. Every form
    * POST handler asks for the row (`http/require-session.ts`, **D81**).
    */
   authoritative?: boolean

@@ -31,7 +31,7 @@ export interface AuditEvent {
   actorType?: "session" | "api-key" | "system" | "cli" | "anonymous"
   /** What it happened to. */
   target?: { type: string; id: string }
-  /** Anonymised before storage (SEC-5). */
+  /** Anonymized before storage (SEC-5). */
   ipAddress?: string | null
   userAgent?: string | null
   requestId?: string
@@ -74,7 +74,7 @@ export function createAudit(database: DbHandle, logger: Logger): Audit {
         actorType: event.actorType ?? null,
         targetType: event.target?.type ?? null,
         targetId: event.target?.id ?? null,
-        // The edge already resolved and anonymised the caller's address using
+        // The edge already resolved and anonymized the caller's address using
         // `server.trustProxy`. Falling back to it means a call site that reads
         // a raw `X-Forwarded-For` — which anyone can prepend to — cannot write
         // a spoofed address into the trail just by passing one.

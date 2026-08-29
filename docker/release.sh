@@ -12,7 +12,7 @@
 # workflow's first job **refuses a tag that disagrees with it**: the image
 # stamps `IDP_VERSION` from the tag and `/healthz`, `idp version` and
 # `/admin/system` all report it, so a tree claiming one version while the
-# artefact claims another is a running deployment nobody can trace back to a
+# artifact claims another is a running deployment nobody can trace back to a
 # commit (**D73**).
 #
 # The same shape as `semantius-app`'s `docker/release.sh`, which has cut three

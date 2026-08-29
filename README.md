@@ -43,7 +43,7 @@ not by clicking around a database.
 
 ### What it is not
 
-- **Not multi-tenant.** One deployment, one user population. No organisations,
+- **Not multi-tenant.** One deployment, one user population. No organizations,
   no teams.
 - **Not a machine-to-machine token service.** There is no `client_credentials`
   grant in v1; a per-user API key is the answer for scripted access
@@ -372,7 +372,7 @@ expires, bounded by `oauth.accessTokenTtl` (15 minutes by default).
 
 A resource server behind this IdP validates JWTs against the JWKS. It knows
 nothing about the per-user API keys of `/account/api-keys`, so a script holding
-one cannot call it — the key is not a credential it recognises.
+one cannot call it — the key is not a credential it recognizes.
 
 A gateway closes that gap. Name a target in `config.jsonc`:
 
@@ -384,7 +384,7 @@ A gateway closes that gap. Name a target in `config.jsonc`:
 
 and `https://idp.example.com/gateway/data/items?select=id` is forwarded to
 `https://postgrest.internal:3000/items?select=id` with the method, headers,
-query and body unchanged. Three credentials are recognised, in order:
+query and body unchanged. Three credentials are recognized, in order:
 
 1. **`Authorization`** — forwarded untouched. You said what to present.
 2. **`x-api-key`** — **exchanged for a JWT**, through the same
@@ -425,7 +425,7 @@ able to act as though it belongs here.
 process for ten minutes. Suspending a user, revoking a key or signing out
 **through this IdP** — the admin area, the admin API, or the sign-out button —
 clears the cache at once; a change made directly in the database takes up to
-ten minutes to bite. And the session cookie is only honoured when the request
+ten minutes to bite. And the session cookie is only honored when the request
 is **not cross-site**: a browser following a link from somewhere else reaches
 the gateway anonymously, which is what stops a link being a way to act as
 whoever clicks it. WebSockets are not proxied (`501`).
@@ -578,6 +578,6 @@ immutable `sha-<commit>`. What is checked before a release is
 forward-only — take a backup before upgrading, because there is no downgrade
 path. [CHANGELOG.md](CHANGELOG.md) records what changed.
 
-## Licence
+## License
 
 [MIT](LICENSE).

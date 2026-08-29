@@ -11,7 +11,7 @@ import {
 
 describe("FR-I18N-1 locale resolution", () => {
   it("prefers ui_locales, then the cookie, then Accept-Language, then the config", () => {
-    // With only en-US shipping, the observable behaviour is that each source is
+    // With only en-US shipping, the observable behavior is that each source is
     // consulted and an unsupported value never wins.
     expect(
       resolveLocale({

@@ -147,7 +147,7 @@ describe("the D30 environment switch", () => {
 
   it("is ignored in degraded mode", () => {
     // FR-MAIL-2: with no key nothing is sent, and that is the requirement.
-    // Capturing here would make the one behaviour where "nothing is sent" is
+    // Capturing here would make the one behavior where "nothing is sent" is
     // correct indistinguishable from one where it is a bug.
     const mailer = createMailer({
       config: configWith({ resend: { apiKey: "" }, from: "IdP <idp@x.test>" }),

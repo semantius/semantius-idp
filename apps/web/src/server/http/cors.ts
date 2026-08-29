@@ -1,7 +1,7 @@
 /**
  * Who may call which protocol endpoint from a browser (FR-OIDC-17).
  *
- * CORS on an identity provider is an authorisation decision, not a
+ * CORS on an identity provider is an authorization decision, not a
  * convenience. Three different answers, for three different reasons:
  *
  * - **Discovery and JWKS: `*`.** Both are public, unauthenticated documents

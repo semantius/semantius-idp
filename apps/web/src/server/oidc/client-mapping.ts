@@ -14,7 +14,7 @@
  *   registering a client through `/admin/clients` is the one caller that passes
  *   one: their own id.
  * - **`resourceServer` is not a column.** 1.7.1 decides introspection
- *   authorisation from the `oauth_client_resource` links, so the flag becomes
+ *   authorization from the `oauth_client_resource` links, so the flag becomes
  *   a link at reconcile time — see {@link resourceLinksFor} — and is mirrored
  *   into `metadata` only so an operator reading the row can see what the file
  *   asked for.
@@ -128,7 +128,7 @@ export function toClientRow(
  * column of their own.
  *
  * `resourceServer` is mirrored here for legibility; the link is what actually
- * authorises introspection. `firstParty` (FR-OIDC-14) has no 1.7.1 equivalent
+ * authorizes introspection. `firstParty` (FR-OIDC-14) has no 1.7.1 equivalent
  * at all, so this is its only home.
  */
 function metadataFor(entry: ClientEntry): Record<string, unknown> | null {

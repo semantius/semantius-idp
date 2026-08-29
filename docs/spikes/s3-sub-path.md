@@ -60,7 +60,7 @@ matches those with the same basepath the links were rendered with.
 **Declaring a start instance disables Start's implicit CSRF middleware** (it is
 only installed when no instance exists). `src/start-entry.ts` registers
 `createCsrfMiddleware({ filter: ctx => ctx.handlerType === "serverFn" })`
-explicitly to keep the behaviour identical; a cross-origin `POST` to a server
+explicitly to keep the behavior identical; a cross-origin `POST` to a server
 function still answers 403.
 
 ---

@@ -81,7 +81,7 @@ export interface ApiKeyView {
   lastRequest?: string
 }
 
-export interface EnrolmentView {
+export interface EnrollmentView {
   /** Inline SVG for the `otpauth://` URI, rendered on the server. */
   qrSvg: string
   /** The base32 secret, for an authenticator that cannot scan. */
@@ -218,7 +218,7 @@ export const fetchConsents = createServerFn({ method: "GET" }).handler(
  *
  * Better Auth's own delete endpoint scopes by session, but the revoke handler
  * reads the id from a form field, and "the id came from a page I rendered" is
- * not an authorisation check.
+ * not an authorization check.
  */
 export async function apiKeyBelongsTo(
   runtime: Runtime,
@@ -244,7 +244,7 @@ export async function apiKeyBelongsTo(
  *
  * The key itself never appears in a URL — the module header of
  * `server/http/one-shot.ts` is the argument, and this is the same shape the
- * 2FA enrolment below uses. Claiming consumes the stash, so the value can be
+ * 2FA enrollment below uses. Claiming consumes the stash, so the value can be
  * rendered on exactly one page load and a reload shows nothing.
  */
 export const claimApiKeySecret = createServerFn({ method: "GET" })
@@ -266,16 +266,16 @@ export const claimApiKeySecret = createServerFn({ method: "GET" })
   })
 
 /**
- * Claims a pending 2FA enrolment, if the landing URL carries a handle.
+ * Claims a pending 2FA enrollment, if the landing URL carries a handle.
  *
  * The QR is rendered here rather than in the browser for two reasons: the
  * `qrcode` package never reaches the client bundle, and the `otpauth://` URI —
  * which contains the shared secret — never leaves the server. What the page
  * receives is a picture of it.
  */
-export const claimEnrolment = createServerFn({ method: "GET" })
+export const claimEnrollment = createServerFn({ method: "GET" })
   .validator((handle: unknown) => (typeof handle === "string" ? handle : ""))
-  .handler(async ({ data: handle }): Promise<EnrolmentView | null> => {
+  .handler(async ({ data: handle }): Promise<EnrollmentView | null> => {
     if (handle === "") return null
     const runtime = await getRuntime()
     const current = await readSession(runtime, getRequest())

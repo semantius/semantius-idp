@@ -23,7 +23,7 @@
  * - **RFC 7009.** A revocation request for an unknown token is a *success* —
  *   §2.2 is explicit — so a client cannot use the endpoint to find out which
  *   tokens exist. 1.7.1 answers `400 invalid_request "token not found"`;
- *   that one case is normalised, and every other error is passed through.
+ *   that one case is normalized, and every other error is passed through.
  *
  * Nothing here reads `Host` or `X-Forwarded-Host` (SEC-1): the forwarded URL
  * is rebuilt from `server.baseUrl`.
@@ -247,7 +247,7 @@ function withNoStore(response: Response): Response {
 /**
  * RFC 7009 §2.2: an unknown token is a success.
  *
- * Only that one shape is normalised. A malformed request, an unauthenticated
+ * Only that one shape is normalized. A malformed request, an unauthenticated
  * client or an unsupported token type is still an error, because each of those
  * is the *client's* mistake and hiding it would make integration harder for no
  * security gain.

@@ -233,7 +233,7 @@ describe("the request log (SEC-5)", () => {
     expect(entry.path).toBe("/admin/users?status=pending")
   })
 
-  it("anonymises the address before it reaches the log", () => {
+  it("anonymizes the address before it reaches the log", () => {
     const entry = buildLogEntry({
       request: REQUEST,
       status: 200,

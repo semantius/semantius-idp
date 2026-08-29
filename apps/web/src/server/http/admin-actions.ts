@@ -365,7 +365,7 @@ function failed(result: AuthCallResult): AdminActionOutcome {
   // `adminErrorCodeFor` lowercases into something the catalog can look up — so
   // a refusal explains itself instead of saying "something went wrong". The
   // admin variant because everything routed through here is an authenticated
-  // administrator's action: an unrecognised refusal is a failed request, not a
+  // administrator's action: an unrecognized refusal is a failed request, not a
   // wrong password (**D70**).
   return { error: adminErrorCodeFor(result) }
 }

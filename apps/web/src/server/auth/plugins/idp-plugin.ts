@@ -46,7 +46,7 @@ const auditLogSchema = {
       /** The object of the action — usually a user id, sometimes a client id. */
       targetType: { type: "string" as const, required: false },
       targetId: { type: "string" as const, required: false, index: true },
-      /** Anonymised (SEC-5). */
+      /** Anonymized (SEC-5). */
       ipAddress: { type: "string" as const, required: false },
       userAgent: { type: "string" as const, required: false },
       /** Correlates the row with the request log line. */
@@ -97,7 +97,7 @@ export const IDP_PLUGIN_ID = "idp"
 
 export interface IdpPluginOptions {
   config: IdpConfig
-  /** Absent while the schema is generated, which needs no behaviour. */
+  /** Absent while the schema is generated, which needs no behavior. */
   audit?: Audit
   mailer?: Mailer
   /**

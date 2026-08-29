@@ -22,13 +22,13 @@ the process; there is no hot reload and `SIGHUP` is ignored.
 | `server.baseUrl` | string | — **required** | Issuer. Scheme + host[:port] + optional path, no trailing slash. Every absolute URL the IdP emits derives from this value only. |
 | `server.host` | string | `0.0.0.0` | Listen address. Also settable with HOST. |
 | `server.port` | integer | `3000` | Listen port. Also settable with PORT. |
-| `server.trustProxy` | boolean \| string[] | `false` | Honour X-Forwarded-* from the immediate upstream (true) or from the listed CIDR ranges. Client IP is the rightmost untrusted hop. |
+| `server.trustProxy` | boolean \| string[] | `false` | Honor X-Forwarded-* from the immediate upstream (true) or from the listed CIDR ranges. Client IP is the rightmost untrusted hop. |
 | `server.trustedOrigins` | string[] | — | CSRF origin allow-list. Empty by default, which trusts the address each request actually arrived on (its X-Forwarded-Host, or its Host) — what a deployment behind a reverse proxy needs when its public URL is not known at configuration time. Set it to pin the check to named origins instead; `https://*.example.com` matches a subdomain and `*` turns the check off. |
 | `server.allowInsecureHttp` | boolean | `false` | Permit a non-https baseUrl outside localhost. Development only. |
 | `server.shutdownTimeoutSeconds` | integer | `10` | SIGTERM drain budget. |
 | `secret` | string | — **required** | ≥ 32 random bytes. Fallback env: BETTER_AUTH_SECRET. Must be a placeholder in production. |
 | `database.url` | string | — **one of** `url` / `directUrl` | Connection string for ordinary application traffic. A transaction-mode pooler belongs here and nowhere else. Optional: when it is absent, `directUrl` serves both roles, which is the single-endpoint deployment (**D74**). Fallback env: DATABASE_URL. |
-| `database.directUrl` | string | — **one of** `url` / `directUrl` | Direct, non-pooled connection string, used by every step that holds a session advisory lock — startup, migrations, the CLI and the cleanup job — because session locks do not hold through a transaction-mode pooler. This is the connection that must always work; `url` is the optional optimisation beside it. At least one of the two must be set, and when `url` looks pooled this one is required. Fallback env: DATABASE_URL_ADMIN. |
+| `database.directUrl` | string | — **one of** `url` / `directUrl` | Direct, non-pooled connection string, used by every step that holds a session advisory lock — startup, migrations, the CLI and the cleanup job — because session locks do not hold through a transaction-mode pooler. This is the connection that must always work; `url` is the optional optimization beside it. At least one of the two must be set, and when `url` looks pooled this one is required. Fallback env: DATABASE_URL_ADMIN. |
 | `database.schema` | string | `idp` | All IdP tables and the drizzle migrations table live here; nothing is created in `public`. |
 | `database.ssl` | `disable` \| `require` \| `verify-full` | — | Overrides the connection string's sslmode. Defaults to `require` unless the host is localhost. |
 | `database.sslCa` | string | — | PEM certificate authority, typically `${file:/run/secrets/ca.pem}`. |
@@ -62,7 +62,7 @@ the process; there is no hot reload and `SIGHUP` is ignored.
 | `session.cookieCacheMinutes` | integer | `5` | Capped at 5 so revocations bite quickly. |
 | `session.revokeOAuthTokensOnLogout` | boolean | `false` | Whether signing out of the IdP also kills the OAuth tokens issued to clients from that session. Off by default: a user closing this tab does not usually mean to sign out of every application they use. |
 | `social` | { … } | `{}` | Keyed by provider id — `google`, `github`, `microsoft`. Each entry needs `clientId` and `clientSecret`; `microsoft` also needs `tenantId`. |
-| `twoFactor.enabled` | boolean | `true` | Whether users may enrol at all. Enrolment is per user and always optional; turning this off hides the whole feature. |
+| `twoFactor.enabled` | boolean | `true` | Whether users may enroll at all. Enrollment is per user and always optional; turning this off hides the whole feature. |
 | `twoFactor.issuer` | string | — | TOTP issuer label. Defaults to site.name. |
 | `twoFactor.trustDeviceDays` | integer | `30` | How long a device stays trusted after a successful challenge. `0` asks every time and removes the checkbox. |
 | `apiKeys.enabled` | boolean | `true` | Off hides the account page and 404s its route. |

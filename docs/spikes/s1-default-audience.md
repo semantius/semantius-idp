@@ -87,7 +87,7 @@ server a second audience value it never asked about.
 > injection half of R1 — no `resource` means an *opaque* token — is unaffected
 > and is what the hook below actually fixes.
 
-### The original plan — normalise `aud` in the `jwt.sign` seam
+### The original plan — normalize `aud` in the `jwt.sign` seam
 
 S5 established that `JwtOptions.jwt.sign` receives the complete payload for every
 signed token. The claims builder therefore:
@@ -117,7 +117,7 @@ Confirmed: `enforcePerClientResources` defaults to **true**, and
 `assertClientLinkedToResources` throws `invalid_target` for any requested
 resource the client is not linked to via `oauthClientResource`.
 
-**Decision:** keep the default on — it is the behaviour FR-OIDC-6's third
+**Decision:** keep the default on — it is the behavior FR-OIDC-6's third
 acceptance criterion asks for — and make reconciliation own the links:
 
 - resource rows themselves are seeded by the plugin from `OAuthOptions.resources`
@@ -131,7 +131,7 @@ The `enforcePerClientResources: false` fallback from the spec is **not** needed.
 
 ## Consequences recorded elsewhere
 
-- FR-OIDC-6 AC is met through the `jwt.sign` normalisation, not by the provider
+- FR-OIDC-6 AC is met through the `jwt.sign` normalization, not by the provider
   alone — noted here so the M8 test suite asserts it rather than assuming it.
 - The same `jwt.sign` seam carries the FR-OIDC-7 claims for all three token
   paths, which is why the claims builder is a pure function taking a payload.

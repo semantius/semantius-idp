@@ -176,7 +176,7 @@ export function AdminCard({
   )
 }
 
-/** A labelled number, for the dashboard. */
+/** A labeled number, for the dashboard. */
 export function Stat({
   label,
   value,

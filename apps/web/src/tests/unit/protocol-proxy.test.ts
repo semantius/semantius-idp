@@ -205,7 +205,7 @@ describe("corsFor", () => {
     expect(decision.headers).toEqual({})
   })
 
-  it("recognises a preflight", () => {
+  it("recognizes a preflight", () => {
     expect(
       corsFor(request(undefined, "OPTIONS"), configWith(), "public").preflight
     ).toBe(true)

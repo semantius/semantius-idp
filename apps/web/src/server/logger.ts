@@ -216,7 +216,7 @@ export function safeUrlForLog(url: string): string {
 }
 
 /**
- * Anonymises a client IP for logging (SEC-5): the last octet of an IPv4 address
+ * Anonymizes a client IP for logging (SEC-5): the last octet of an IPv4 address
  * and everything below the /64 of an IPv6 address are dropped, which keeps the
  * value useful for rate-limit forensics without storing a personal identifier.
  */

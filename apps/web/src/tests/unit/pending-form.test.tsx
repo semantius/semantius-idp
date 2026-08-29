@@ -15,7 +15,7 @@ import { TextField } from "@/components/auth/form-parts"
  * which is the degraded case this pattern is explicitly allowed to have (D31),
  * as long as the degradation is "no spinner" and not "no form".
  *
- * The in-flight behaviour itself — the deferred frame, the submitter match,
+ * The in-flight behavior itself — the deferred frame, the submitter match,
  * the `readOnly` swap, the bfcache reset — is **not** covered anywhere. It
  * needs a real browser doing a real navigation, which neither this file nor
  * the e2e suite currently does; the e2e specs assert what the *next* page

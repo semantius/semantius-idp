@@ -185,7 +185,7 @@ export function errorCodeFor(result: AuthCallResult): string {
  *  - a duplicate address, in either of Better Auth's two spellings, is named
  *    as one rather than hidden behind `signup_failed`;
  *  - an answer of `invalid_credentials` — which after the switch above means
- *    "nothing recognised this" — becomes `request_failed`, whose message is
+ *    "nothing recognized this" — becomes `request_failed`, whose message is
  *    the ordinary server-error sentence.
  *
  * Everything else passes straight through, so the admin refusals, the client

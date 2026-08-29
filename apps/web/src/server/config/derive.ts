@@ -133,7 +133,7 @@ export function isLocalhostUrl(value: string): boolean {
  * established` — a message that says nothing about SSL settings — against a
  * URL that already said `sslmode=disable`. The smoke test hit it first.
  *
- * `prefer` and `allow` are deliberately *not* honoured. They mean "try, then
+ * `prefer` and `allow` are deliberately *not* honored. They mean "try, then
  * fall back", which this deployment has no way to express: it either verifies
  * or it does not, and silently downgrading a connection because a URL said
  * `prefer` is the opposite of what a security-relevant default should do.

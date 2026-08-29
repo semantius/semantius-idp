@@ -258,7 +258,7 @@ async function ensureSigningKey(
       .limit(1)
     if (existing.length > 0) return
 
-    // The JWKS endpoint is the supported way to materialise the first key pair:
+    // The JWKS endpoint is the supported way to materialize the first key pair:
     // it generates it, encrypts the private half with `secret`, stores it and
     // publishes it — all before anything can ask for a signature.
     const response = await deps.auth.handler(
@@ -281,7 +281,7 @@ async function ensureSigningKey(
 
 /**
  * FR-ROLE-2: a role that is stored on a user but no longer in `roles.jsonc` is
- * dropped from their claims. That is a silent behaviour change for whoever
+ * dropped from their claims. That is a silent behavior change for whoever
  * holds it, so it is warned about at boot and flagged in the admin UI.
  */
 /** Returns what it logged, so `/admin/roles` can show the same thing. */
@@ -344,7 +344,7 @@ async function warnAboutUnknownRoles(deps: StartupDeps): Promise<string[]> {
  * administrator.
  *
  * Logged at `warn` because a deployment nobody can sign in to is worth
- * noticing in a log, and priming the memoised gate here means the first
+ * noticing in a log, and priming the memoized gate here means the first
  * request does not pay for the query.
  */
 async function announceSetupIfPending(deps: StartupDeps): Promise<void> {

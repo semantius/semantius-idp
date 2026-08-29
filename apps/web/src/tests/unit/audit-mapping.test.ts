@@ -111,14 +111,14 @@ describe("auditEventFor", () => {
     }
   })
 
-  it("records enrolment only when it succeeded (FR-2FA-1)", () => {
+  it("records enrollment only when it succeeded (FR-2FA-1)", () => {
     expect(auditEventFor("/two-factor/enable", true)?.action).toBe(
       "twofactor.enabled"
     )
     expect(auditEventFor("/two-factor/disable", true)?.action).toBe(
       "twofactor.disabled"
     )
-    // A refused enrolment changed nothing; there is no honest action for it.
+    // A refused enrollment changed nothing; there is no honest action for it.
     expect(auditEventFor("/two-factor/enable", false)).toBeUndefined()
     expect(auditEventFor("/two-factor/disable", false)).toBeUndefined()
   })

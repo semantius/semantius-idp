@@ -13,7 +13,7 @@
  * have run. Building the runtime therefore *is* the OPS-2 sequence, in order,
  * and every caller naturally waits for it rather than racing it.
  *
- * The promise is memoised, so concurrent callers share one startup and one
+ * The promise is memoized, so concurrent callers share one startup and one
  * pool. A failed startup is not cached: the next request retries, which is what
  * an operator fixing a config typo expects.
  */
@@ -115,7 +115,7 @@ export async function buildRuntime(): Promise<Runtime> {
   // statement inside a READ ONLY transaction -- `select set_config('search_path',
   // …, false)` is the easy example -- changes session state that a pooled
   // connection then hands to the next piece of ordinary traffic. Its own
-  // handles contain that to the console. `max: 1` serialises concurrent
+  // handles contain that to the console. `max: 1` serializes concurrent
   // queries, which is right for a single-admin console and safe here because
   // no advisory lock is involved (the AGENTS.md `max: 1` deadlock warning is
   // about `withAdvisoryLock`, which reserves a connection for the whole

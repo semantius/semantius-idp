@@ -32,7 +32,7 @@ const QUIET_PATHS = new Set(["/healthz", "/readyz"])
 
 export interface RequestContext {
   requestId: string
-  /** Already anonymised (SEC-5): the last octet or the low 64 bits are gone. */
+  /** Already anonymized (SEC-5): the last octet or the low 64 bits are gone. */
   ipAddress?: string
   /**
    * The HTTP status the rendered **document** should carry, when it is not
@@ -104,7 +104,7 @@ export function newRequestId(): string {
 /**
  * An id supplied by a trusted proxy, or a new one.
  *
- * Only honoured when the deployment trusts its proxy at all — an id is echoed
+ * Only honored when the deployment trusts its proxy at all — an id is echoed
  * into logs, so accepting an arbitrary one from the internet is a way to write
  * whatever you like into them. Constrained to a short alphanumeric shape for
  * the same reason.

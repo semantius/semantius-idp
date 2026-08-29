@@ -6,7 +6,7 @@
  * varied with an operator's `config.jsonc`, two deployments would need different
  * migrations and the CI drift gate would be meaningless. So the generator runs
  * against these constants, and every value here is deliberately one that cannot
- * influence a column: enabling e-mail or a social provider changes behaviour,
+ * influence a column: enabling e-mail or a social provider changes behavior,
  * never the shape of a table.
  */
 

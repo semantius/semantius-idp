@@ -8,7 +8,7 @@
  * bundle. `createServerFn` is the seam; `functions/ui.ts` explains the rule at
  * length.
  *
- * The answer is memoised in the process once it is `false` (see
+ * The answer is memoized in the process once it is `false` (see
  * `admin/first-user.ts`), so this is one round trip and no query on every page
  * a signed-out visitor loads.
  */

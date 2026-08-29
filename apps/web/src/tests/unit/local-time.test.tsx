@@ -23,7 +23,7 @@ describe("LocalTime, server-rendered", () => {
   })
 
   it("renders UTC, and says so, before hydration", () => {
-    // Labelled: an unlabelled 21:07 that is really 23:07 in Berlin is worse
+    // Labeled: an unlabeled 21:07 that is really 23:07 in Berlin is worse
     // than no time at all, and this string is what a no-JS reader keeps.
     expect(renderToString(<LocalTime iso={ISO} />)).toContain(
       "2026-08-25 21:07 UTC"

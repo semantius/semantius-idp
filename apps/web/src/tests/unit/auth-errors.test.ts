@@ -63,7 +63,7 @@ describe("notice codes", () => {
 
   it("says nothing for a code it does not know", () => {
     // Unlike an error, an unknown notice must not fall back to a message —
-    // inventing good news from an unrecognised query parameter would be worse
+    // inventing good news from an unrecognized query parameter would be worse
     // than silence.
     expect(messageForNoticeCode("made_up", t)).toBeUndefined()
     expect(messageForNoticeCode(undefined, t)).toBeUndefined()
@@ -144,7 +144,7 @@ describe("errorCodeFor (FR-ADMIN-4, SEC-7)", () => {
 
   it("still collapses an unknown refusal into the neutral one", () => {
     // SEC-7: a wrong password and an address with no account are the same
-    // answer, and anything unrecognised joins them rather than leaking.
+    // answer, and anything unrecognized joins them rather than leaking.
     expect(codeFor("SOMETHING_NEW")).toBe("invalid_credentials")
     expect(codeFor("ANYTHING", 429)).toBe("rate_limited")
     expect(codeFor("ANYTHING", 500)).toBe("server_error")
@@ -192,7 +192,7 @@ describe("adminErrorCodeFor (D70)", () => {
 
   it("never answers an administrator with a credential message", () => {
     // Everything that used to fall through: a bare 401, a validation refusal,
-    // an unrecognised code. None of them is about a password here.
+    // an unrecognized code. None of them is about a password here.
     for (const code of [
       "SOMETHING_NEW",
       "VALIDATION_ERROR",

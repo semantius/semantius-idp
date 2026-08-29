@@ -41,7 +41,7 @@ const NEVER_STASHED = /pass(word)?|secret|token|credential/i
  * URIs, and small enough that this cannot become a way to write arbitrary
  * bulk into `verification` — the routes that POST forms sit in front of no
  * rate limiter. Over the cap nothing is stashed and the refusal is reported
- * on its own, which is exactly the behaviour that existed before drafts.
+ * on its own, which is exactly the behavior that existed before drafts.
  */
 const MAX_DRAFT_BYTES = 10_000
 

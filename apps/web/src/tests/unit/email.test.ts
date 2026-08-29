@@ -78,7 +78,7 @@ describe("FR-MAIL-1 templates", () => {
       expect(url.startsWith("http://localhost:3000")).toBe(true)
   })
 
-  it("honours a sub-path issuer in its links (OPS-10)", () => {
+  it("honors a sub-path issuer in its links (OPS-10)", () => {
     const subPath = withEmail({
       server: { baseUrl: "https://apps.example.com/idp" },
       jwt: { audience: "https://apps.example.com/idp" },

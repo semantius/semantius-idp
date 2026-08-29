@@ -277,7 +277,7 @@ describe("client reconciliation", () => {
     }
   })
 
-  it("serialises concurrent reconciles rather than racing them", async () => {
+  it("serializes concurrent reconciles rather than racing them", async () => {
     const context = await contextWithClients("reconcile_concurrent", [
       WEB_CLIENT,
       SPA_CLIENT,

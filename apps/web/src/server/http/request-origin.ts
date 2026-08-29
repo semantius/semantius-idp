@@ -39,7 +39,7 @@
  * exactly the deployments this exists for, and the difference it would buy is
  * an attacker who already controls http on the deployment's own hostname.
  *
- * An operator who wants the strict behaviour back sets `server.trustedOrigins`
+ * An operator who wants the strict behavior back sets `server.trustedOrigins`
  * and nothing here is consulted.
  */
 

@@ -13,7 +13,7 @@ services:
   idp:
     environment:
       # D30. Swaps the Resend transport for one that writes each message to
-      # disk as JSON instead of sending it. Honoured only when e-mail would
+      # disk as JSON instead of sending it. Honored only when e-mail would
       # otherwise work, so the config still needs an API key it never calls.
       IDP_EMAIL_TRANSPORT: capture
       IDP_EMAIL_CAPTURE_DIR: /mail

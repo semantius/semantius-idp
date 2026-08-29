@@ -15,7 +15,7 @@
  *    reconcile call {@link resetGatewayRegistry}. That is the mechanism, and
  *    it is exact: OPS-11 is a single-instance topology, so the process that
  *    wrote the row is the process that serves the next request. The
- *    `first-user.ts` memoisation is the precedent.
+ *    `first-user.ts` memoization is the precedent.
  * 2. **A 60 s TTL**, as a valve for the replica that is not supposed to exist
  *    and sometimes does — an accidental second container, or a row changed
  *    with `psql`. Without it such a change would never be picked up.

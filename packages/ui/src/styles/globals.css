@@ -72,7 +72,7 @@
        3.98:1, under the 4.5:1 WCAG AA floor R-1 requires, and every page with
        a destructive dialog trigger failed the axe gate in `e2e/a11y.spec.ts`.
        0.525 measures 4.62:1 for that pairing and 5.53:1 for white on the solid
-       colour. A deliberate divergence from the preset: re-applying one resets
+       color. A deliberate divergence from the preset: re-applying one resets
        it, so re-check the contrast when you do. */
     --destructive: oklch(0.525 0.245 27.325);
     --border: oklch(0.923 0.003 48.717);

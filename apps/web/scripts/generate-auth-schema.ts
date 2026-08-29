@@ -68,7 +68,7 @@ const OUT_PATH = join(
 /**
  * The schema name the committed file and the committed migrations are written
  * against. `database.schema` retargets both at runtime (D27, DM-4), so this is
- * a canonical value in the artefacts, never a deployment decision.
+ * a canonical value in the artifacts, never a deployment decision.
  */
 const CANONICAL_SCHEMA_NAME = "idp"
 

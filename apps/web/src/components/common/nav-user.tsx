@@ -46,7 +46,7 @@ import type { Catalog } from "@/server/i18n"
  *
  * `name` is derived (D49) and can be empty for an account created with neither
  * part filled in, so the address is the fallback rather than a literal "U":
- * every account has one, and an initial the user recognises beats a
+ * every account has one, and an initial the user recognizes beats a
  * placeholder that is the same for everybody.
  */
 function initialsOf(name: string, email: string): string {

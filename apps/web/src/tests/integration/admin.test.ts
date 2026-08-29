@@ -14,7 +14,7 @@
  *     different plugin.
  *  3. **Nothing administrative answers a non-administrator**, including Better
  *     Auth's own endpoints, which our guard sits in front of but does not
- *     authorise.
+ *     authorize.
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
@@ -526,7 +526,7 @@ describe("the endpoints this app adds", () => {
     const locked = await makeUser("locked@example.com")
     await signIn("locked@example.com")
 
-    // Enrolment rows the user cannot reach any more.
+    // Enrollment rows the user cannot reach any more.
     await ctx.database.db.insert(ctx.database.schema.twoFactor).values({
       id: "tf-1",
       userId: locked,

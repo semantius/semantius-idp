@@ -12,7 +12,7 @@ import type { ClientFormValues } from "@/lib/client-rules"
 /**
  * The rules `/admin/clients` and `oauth_clients.jsonc` both apply (**D62**).
  *
- * `config-clients.test.ts` asserts the schema's behaviour through zod; this
+ * `config-clients.test.ts` asserts the schema's behavior through zod; this
  * asserts the shared decision underneath both, which is the thing that must
  * not drift — a form that accepted something the schema refuses is a
  * guaranteed rejection with the dialog closed and the fields emptied, which is

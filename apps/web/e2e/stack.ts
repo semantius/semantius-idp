@@ -232,7 +232,7 @@ function writeConfig(
   // red the first time a Linux runner ran it.
   //
   // `0o777` on a directory `mkdtemp` created for one run: the alternative is
-  // pinning the container to the host's uid, which changes the artefact under
+  // pinning the container to the host's uid, which changes the artifact under
   // test and defeats the point of driving the published image.
   chmodSync(stack.mailDir, 0o777)
 

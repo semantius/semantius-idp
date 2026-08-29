@@ -198,7 +198,7 @@ function SessionsPage() {
 /**
  * The token of one of the caller's own sessions, or `undefined`.
  *
- * Scoping the lookup to `userId` is the authorisation check: without it the
+ * Scoping the lookup to `userId` is the authorization check: without it the
  * form would revoke any session whose id someone could guess or observe.
  */
 async function tokenForOwnSession(

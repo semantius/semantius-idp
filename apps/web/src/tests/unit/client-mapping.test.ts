@@ -1,7 +1,7 @@
 /**
  * `oauth_clients.json` → `oauth_client` (FR-OIDC-2/3, spike S5 §1).
  *
- * The mapping is where a configuration file becomes an authorisation
+ * The mapping is where a configuration file becomes an authorization
  * decision, so each assertion here is a rule with a consequence: a public
  * client that kept a secret would be a client whose "secret" is in every
  * user's browser, and a `userId` that was not null would make a config-synced
@@ -119,7 +119,7 @@ describe("toClientRow", () => {
 })
 
 describe("authMethodFor", () => {
-  it("honours an explicit method", () => {
+  it("honors an explicit method", () => {
     expect(
       authMethodFor(entry({ tokenEndpointAuthMethod: "client_secret_post" }))
     ).toBe("client_secret_post")

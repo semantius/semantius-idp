@@ -37,7 +37,7 @@ Specifically:
 
 ## What is not
 
-These are documented behaviours rather than defects. If you think the reasoning
+These are documented behaviors rather than defects. If you think the reasoning
 is wrong, say so — but they will not be treated as vulnerabilities.
 
 - **An issued access token stays valid until it expires.** Offline validation

@@ -2,7 +2,7 @@
 
 **As of:** 2026-08-29 · **Branch:** `main` · **Head:** `8159671`, last tag **v0.5.0**
 **Plan:** `~/.claude/plans/users-has-a-full-binary-meteor.md` (full-page forms)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D93**
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D94**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
 gate; API gateways (FR-GW, **D91**/**D92**) landed on 2026-08-29 on top of
@@ -28,7 +28,7 @@ Both are [docs/release.md](docs/release.md).
 fourteen defects, three of which meant a documented feature did not work at
 all — the e-mail verification link went to a page that cannot spend a token, no
 OIDC login could resume through the sign-in page, and `form-action 'self'`
-cancelled the redirect that carries an authorization code, so no OAuth login
+canceled the redirect that carries an authorization code, so no OAuth login
 could complete in Chrome. None of them was visible to any other gate, because
 every other gate in this repository reads HTML, JSON or a database row.
 
@@ -143,8 +143,17 @@ moved too.
    `users/{new,$userId/index,$userId/edit}`. Each page owns the POST it used to
    send to the list, otherwise unchanged.
 
-4. **US spelling throughout** (**D94**) — kept separate so a ~250-occurrence
-   spelling diff does not bury the routing change.
+4. **US spelling throughout** (**D94**) — 139 files, ~250 occurrences, kept
+   separate so a spelling diff does not bury the routing change. Swept word by
+   word from a confirmed inventory, never with a blanket `-ise`/`-our` regex,
+   which would have caught `your`, `hour`, `four`, `otherwise`, `promising`,
+   `optimistic` and `analyses`. The 2FA `Enrolment` family is the only
+   identifier cluster and appears nowhere in `drizzle/**` or `server/db/**`, so
+   it is a pure TypeScript rename — and `enrolling`/`enrolled` are spelled the
+   same on both sides, so the `?enrolling=` parameter was never wrong.
+   `packages/ui/src/components/**` and `globals.css` are excluded as registry
+   and preset output; `sql-runner.tsx`'s `"cancelled"` is an upstream
+   state-machine literal as well as a label.
 
 **Three symptoms of the over-generalization went with the dialogs**, each of
 which had been patched rather than diagnosed: the `max-h` override in
@@ -186,7 +195,7 @@ blocker's `enableBeforeUnload`, off one `onInput` on the form.
 so an addressable record is reachable without opening a menu first — the users
 list has linked its e-mail column all along. A file-managed row's edit URL
 redirects to the list with a reason rather than rendering `notFound()`, which
-is a centred page with no sidebar replying "this does not exist" about a row
+is a centered page with no sidebar replying "this does not exist" about a row
 that was on the previous screen. A client id of `.` or `..` is refused, because
 a browser resolves `/admin/clients/../edit` to `/admin/edit` before the request
 leaves it — two exact values, not a rule about dots. And `SecretDialog` names
@@ -200,7 +209,7 @@ nothing said that rotating from the row menu is how to get another.
 **The gap.** A resource server behind this IdP — PostgREST, a Neon Data API —
 validates JWTs against the JWKS and has never heard of the per-user API keys
 of `/account/api-keys`. So a script holding one key could not call it at all:
-the key is not a credential it recognises, and there was no supported way to
+the key is not a credential it recognizes, and there was no supported way to
 turn one into a credential it does.
 
 `/gateway/<name>[/<rest>]` closes it. Every method, header, query and body is
@@ -534,7 +543,7 @@ built from it.
 hint, and it is honest but narrow: pressing `/` while focus is *inside the
 tree* jumps to the search box. It does nothing from anywhere else on the page,
 which is why it reads as a puzzle. Left as it is for now — the hint is the
-registry's, the behaviour is standard for a tree widget, and widening it to
+registry's, the behavior is standard for a tree widget, and widening it to
 the whole panel means intercepting `/` from inside the search input itself.
 Worth revisiting if it confuses anybody else.
 
@@ -556,7 +565,7 @@ editor and runs it. Two things in it are load-bearing:
   ran. The end-to-end suite found it while the machine was busy with the
   coverage run, which is exactly what a slow connection looks like. State
   re-renders when the runner mounts, the effect runs again, and the request is
-  honoured late rather than dropped. That is also why the runner's handle is
+  honored late rather than dropped. That is also why the runner's handle is
   built **once** and reads `run` through a ref of its own:
   `useImperativeHandle` detaches and re-attaches on every render, so a handle
   rebuilt each time would call a callback ref with `null` and a new object
@@ -640,7 +649,7 @@ feature exists and is merely switched off.
 - **`neon-tokens` is not imported.** Both components list it as a registry
   dependency and `shadcn add` writes its `tokens.css` beside them; it
   re-imports `shadcn/tailwind.css` and redefines the whole palette in Neon's
-  brand colours — `--primary`, `--destructive` and every `--sidebar-*`
+  brand colors — `--primary`, `--destructive` and every `--sidebar-*`
   included, two of which are the hand-measured R-1 divergences. Deleted;
   `packages/ui/src/styles/neon-supplement.css` carries the two custom
   properties and the one utility class the components actually name.
@@ -671,7 +680,7 @@ it for an accident, and the default is `disabled`.
 The owner asked for the layout the sibling **semantius-app** has, on both
 areas: a collapsible left sidebar, the signed-in identity and its menu in the
 footer, full-width content, a sheet drawer on a phone. What was there was a
-centred column capped at `max-w-6xl` / `max-w-4xl`, a row of nav pills and two
+centered column capped at `max-w-6xl` / `max-w-4xl`, a row of nav pills and two
 ghost buttons.
 
 **The part that is not cosmetic is where the chrome lives.** It used to be
@@ -795,7 +804,7 @@ creation both land on the list — and there it travels as a **one-shot handle**
 the same stash the client secret and the set-password link use.
 `?subject=jane@example.com` was rejected: `safeUrlForLog` keeps the query string
 of every path outside `/oauth2/*` and `/api/auth/*`, so that would write a
-deleted account's address into the request log of a codebase that anonymises IP
+deleted account's address into the request log of a codebase that anonymizes IP
 addresses for exactly that reason (SEC-5).
 
 The dispatcher reads the address **before** the removal. That is a select, not
@@ -939,7 +948,7 @@ Three mechanics, each a way to get a menu-plus-dialog wrong:
 semantics and its place after a separator, but `menuColor:
 "default-translucent"` stamps `**:data-[variant=destructive]:text-accent-foreground!`
 on the popup: a backdrop-blurred translucent surface cannot promise R-1's
-4.5:1 for coloured text over arbitrary page content, and axe cannot measure
+4.5:1 for colored text over arbitrary page content, and axe cannot measure
 contrast through a backdrop filter either. Overriding it would fork registry
 output for a control that only opens a confirmation — and that confirmation's
 own submit button *is* destructive, above a sentence saying it cannot be
@@ -996,7 +1005,7 @@ right.
   tag is not `vX.Y.Z[-pre]`, or if the root `package.json` disagrees with it.
   That second check is not bureaucracy: the image stamps `IDP_VERSION` from the
   tag, and `/healthz`, `idp version` and `/admin/system` all report it, so a
-  tree saying 0.0.1 while the artefact says 0.1.0 is a running version nobody
+  tree saying 0.0.1 while the artifact says 0.1.0 is a running version nobody
   can trace back to a commit.
 - **`image`** builds amd64 and loads it locally, runs the TST-8 container smoke
   test, the Trivy scan and the SBOM **against that image**, then logs in and
@@ -1050,7 +1059,7 @@ with `--platform linux/arm64` the `$BUILDPLATFORM`-pinned stage came up
 
 `FROM --platform=$BUILDPLATFORM oven/bun:${BUN_VERSION}-slim AS bun` makes the
 borrowed binary match the rootfs that runs it on any build host. `runtime`
-stays unpinned — it is the artefact, and the one stage that must be
+stays unpinned — it is the artifact, and the one stage that must be
 per-architecture.
 
 **This was invisible to every gate here**, and would have been invisible to the
@@ -1073,7 +1082,7 @@ Docker backend is `aarch64`, so `pnpm docker:smoke` built and ran
 it passed all nineteen TST-8 checks: ready in 0.33 s, image 117.9 MiB, idle
 RSS 185.4 MiB, SIGTERM exit 0, JWT verified against the published JWKS. That
 matters more here than it would elsewhere: this image's runtime **is** Bun, so
-the arm64 artefact runs a different binary from the one CI exercises, and
+the arm64 artifact runs a different binary from the one CI exercises, and
 until now nothing had ever run it. CI's `docker` job covers amd64. Between the
 two, both published architectures have now actually been started.
 
@@ -1091,7 +1100,7 @@ header block carries no leading whitespace, which is the thing that would have
 turned the entire release page into one code block.
 
 The workflows parse, and both are Prettier-clean once line endings are
-normalised (this checkout is CRLF under `core.autocrlf=true`; every file in it
+normalized (this checkout is CRLF under `core.autocrlf=true`; every file in it
 warns, including untouched ones). `guard`'s shell was exercised outside CI over
 seven inputs — `v0.1.0`, `v0.1.0-rc1`, a version/tag mismatch, `v-old`,
 `vendor-x`, and both dispatch spellings — and accepts and refuses the right
@@ -1160,7 +1169,7 @@ strings**, and the requirement was on the wrong one.
 is backwards. The **direct** endpoint is the one that must always work:
 startup, migrations, the CLI and the cleanup job all take session advisory
 locks, and those do not hold through a transaction-mode pooler (**D27**). The
-pooled endpoint is an optimisation, and a given Postgres may not offer one at
+pooled endpoint is an optimization, and a given Postgres may not offer one at
 all. So an operator holding only the direct endpoint had to file it under the
 name that describes the pooled one — and one who set only
 `DATABASE_URL_ADMIN`, which is the natural thing to do when that is the URL you
@@ -1172,7 +1181,7 @@ other, resolved once in `derive.ts` as `databaseUrl` / `databaseDirectUrl`, so
 a single-endpoint deployment gets the same string for both — correct, because a
 plain Postgres endpoint is already direct.
 
-Resolving in `derive.ts` rather than normalising in the loader was the design
+Resolving in `derive.ts` rather than normalizing in the loader was the design
 call: the published JSON Schema then states what is true — neither key is
 required on its own, and `required: ["url"]` is gone from
 `config-schema/config.schema.json` — while all six consumers still receive a
@@ -1341,7 +1350,7 @@ test? It does not. The **test database was the deployment's own Neon instance
 in `us-east-2`** — measured at **102 ms per round trip** from here — and the
 harness builds a fresh schema per context: `drop schema`, then 77 migration
 statements, each its own round trip. That is ~8 s of latency per context before
-a single assertion, more than a hundred contexts, all serialised by
+a single assertion, more than a hundred contexts, all serialized by
 `fileParallelism: false`. `admin.test.ts` alone was ten minutes for 33 tests.
 
 Against a Postgres container on loopback the identical suite is **183 s** —
@@ -1368,7 +1377,7 @@ With the latency gone it is worth about a minute, and it is not worth that.
 
 ---
 
-## "The login page says this address is not recognised" (2026-08-27, **D68**)
+## "The login page says this address is not recognized" (2026-08-27, **D68**)
 
 Reported from a deployment that does not know its own public URL and sits
 behind a reverse proxy. It is **D57**'s refusal again — the CSRF origin check
@@ -1447,7 +1456,7 @@ come before anything in Pending.
 **The two questions, answered.**
 
 - **F13 — `/.well-known/change-password` is legitimate**, and no code changed.
-  It is a registered well-known URI (RFC 8615; the behaviour is the W3C
+  It is a registered well-known URI (RFC 8615; the behavior is the W3C
   "Change Password URL" specification), served by Okta, Google, GitHub and
   Apple, and used by Safari, Chrome, 1Password and iCloud Keychain to offer
   one-click "change this password". It is already a redirect to
@@ -1623,7 +1632,7 @@ It does not, and `lock_timeout` is why nobody expected that. **D56** set it so a
 running dev server would produce a sentence instead of a hang — but an idle
 connection holds no table lock, so the drop simply succeeds. The server then
 keeps running against a schema that is no longer there, and the first-run gate
-memoises `false` for the life of the process (**D52**, on the reasoning that a
+memoizes `false` for the life of the process (**D52**, on the reasoning that a
 deployment cannot go back to having no users while it is running, which is the
 exact invariant this script breaks). So `/` and `/login` go on serving the
 sign-in page, and every request underneath throws — which is what the owner's
@@ -1666,7 +1675,7 @@ page. `src/tests/unit/read-session.test.ts` pins all three.
 
 The cost is accepted deliberately: a transient database failure that used to
 look like a sign-out now looks like a failure. That is the honest trade, and the
-old behaviour hid every outage on the one code path whose whole job is to say
+old behavior hid every outage on the one code path whose whole job is to say
 who the caller is.
 
 Two smaller things rode along: the wizard's button says **"Create first admin
@@ -1778,7 +1787,7 @@ What changed, in the order it was done:
    FR-I18N-1 always said. One `<LocalTime>` replaces seven ad-hoc UTC slices in
    the admin area — three different precisions — and, across three call sites
    in the account area, two configured-locale `Intl` helpers — the latter under a comment asserting the
-   opposite of the spec. The first paint stays deterministic UTC, labelled,
+   opposite of the spec. The first paint stays deterministic UTC, labeled,
    because formatting on both sides of hydration is how a page tears.
 7. **Admin-registered OAuth clients no longer all demanded consent.** The
    create handler sent `skipConsent: false` from a checkbox that did not exist,
@@ -1898,7 +1907,7 @@ Three things about the gate are deliberate:
   on the direct connection. Two browsers submitting at once is the ordinary
   race; the loser is told the deployment is already set up and creates nothing.
   `setup.test.ts` runs exactly that race.
-- **The answer is memoised in one direction.** `false` is never re-queried —
+- **The answer is memoized in one direction.** `false` is never re-queried —
   `/` and `/login` are the two busiest pages a signed-out visitor loads — while
   `true` is re-read every time, because it is about to become false. The
   integration harness resets it per file, since one process runs every file
@@ -1932,7 +1941,7 @@ that decide *which configuration* and *which schema*.
 Nine deployment files at the repository root made the root listing a deployment
 folder with a source tree in it. They are in `docker/` now — Dockerfile,
 `Dockerfile.dockerignore` (BuildKit's per-Dockerfile ignore, which CI already
-honours because it builds with buildx), both compose files, both Caddyfiles —
+honors because it builds with buildx), both compose files, both Caddyfiles —
 with a `.cmd`/`.sh` pair per verb copied from the `pgrest` conventions:
 `idp-create`, `idp-start`, `idp-stop`, `idp-status`, `idp-logs`, `idp-cli`,
 `idp-destroy`.
@@ -1976,7 +1985,7 @@ Two things were checked rather than assumed before building it:
 - **One real gap.** `clientOrigins()` fed both CORS and the CSP `form-action`
   list from the configuration file alone, so a database client's login would
   have failed in Chrome — the authorization completes, the redirect back is
-  cancelled, and nothing in the log names an origin. That is the D46 failure
+  canceled, and nothing in the log names an origin. That is the D46 failure
   again, from a new direction. The set is now file ∪ **enabled** database
   clients, cached in the process and refreshed at start-up and by every
   mutation.
@@ -1986,7 +1995,7 @@ Two things were checked rather than assumed before building it:
 The generated API key rode back as `?created=<secret>` and the set-password
 invite link as `?link=<url>`. Both are now stashed server-side and claimed by
 the landing loader, which consumes them — the repository's own `one-shot.ts`
-header had been arguing for exactly this since the 2FA enrolment used it.
+header had been arguing for exactly this since the 2FA enrollment used it.
 Claiming once is what makes "shown once" true rather than aspirational: a
 reload shows the page without the value.
 
@@ -2022,7 +2031,7 @@ sound and left alone.
 The convention is that a spec amendment rides the commit that makes it true.
 For M12 and M13 it did not, so `spec-v1.md` stood at **D38** while the tree had
 moved past it in seven places. All seven are written now, and none of them
-changed a line of code: every amendment describes behaviour that already ships
+changed a line of code: every amendment describes behavior that already ships
 and is already tested.
 
 **D30 was reserved and never filled in.** It is the capture transport. With the
@@ -2140,7 +2149,7 @@ redirect, apply a policy, or render a page.
   provider signs the authorization request and lists the signed parameter names
   in a **repeated** `ba_param` key. The page carried the request back using
   `location.searchStr`, and Start does not keep the bytes it received — its
-  serialiser writes a repeated key as one JSON array, so the string never
+  serializer writes a repeated key as one JSON array, so the string never
   matched its own signature. `/oauth2/continue` answered 400, the resume was
   abandoned, and the user landed on `auth.defaultRedirect` looking like a
   client that had asked for nothing. `readOauthQuery` now rebuilds the query
@@ -2149,7 +2158,7 @@ redirect, apply a policy, or render a page.
 - **`form-action 'self'` made every OAuth login impossible in Chrome.** A
   completed authorization is a 303 *from a form* to the client's redirect URI,
   and Chromium applies `form-action` to the redirect a submission follows, not
-  only to where it is posted. The navigation was cancelled with `ERR_ABORTED`:
+  only to where it is posted. The navigation was canceled with `ERR_ABORTED`:
   the browser sat on a filled-in sign-in form while the server had already
   issued the authorization code, and the only trace was a console refusal.
   Firefox does not check redirects, which is how it survived every manual
@@ -2179,7 +2188,7 @@ redirect, apply a policy, or render a page.
   navigation, which is why nothing had noticed.
 
 **Three were RP-initiated logout, which nothing had ever driven.** FR-OIDC-11
-had no behavioural test at all before this milestone, and all three of its parts
+had no behavioral test at all before this milestone, and all three of its parts
 were broken at once (**D47**): the route skipped the provider entirely when no
 `id_token_hint` was present, so the signed confirmation cookie it depends on was
 never minted; `/sign-out` then posted the original request back to
@@ -2259,7 +2268,7 @@ build relocates to any mount path. Vite 7 and earlier coerced a relative base
 back to `/` for the dev server; Vite 8.0.16 does not, and prefixes every
 transform URL with `/./` instead. A real path survives that — `/./src/router.tsx`
 still resolves against the root, which is why the app itself kept working — but
-Vite's own URLs are recognised by their `/@` prefix and do not:
+Vite's own URLs are recognized by their `/@` prefix and do not:
 
 ```
 vite:resolve  /./@fs/C:/…/packages/ui/src/styles/globals.css  ->  null
@@ -2363,7 +2372,7 @@ to follow the README.
    would have hit `Client network socket disconnected before secure TLS
    connection was established`, which names nothing they could act on, against
    a URL that had said `sslmode=disable` all along. An explicit `sslmode` is
-   now honoured ahead of the heuristic. `prefer` and `allow` deliberately are
+   now honored ahead of the heuristic. `prefer` and `allow` deliberately are
    not: they mean "try, then downgrade", and reading either as "disable" would
    silently drop TLS on a hosted database because a URL was copied from
    somewhere.
@@ -2387,7 +2396,7 @@ to follow the README.
 
 `docker-compose.dev.yml` (the plan calls it optional) and the arm64 leg of the
 build on pull requests — arm64 is emulated in CI and roughly triples the build
-for an artefact nobody merges, so tags build both and PRs build amd64.
+for an artifact nobody merges, so tags build both and PRs build amd64.
 
 **The SIGTERM path is now genuinely exercised** — the smoke test stops the
 container and asserts the exit code is 0 rather than 137. On Windows it still
@@ -2429,7 +2438,7 @@ operator knows, lose it, reset, sign in again with the `.env` value.
 the **key string** there, so the test was always false: every key-issued JWT
 claimed `azp: "idp"`, and `apiKeys.tokenClientId` was configuration that did
 nothing. It stayed invisible for two reasons, not one — `tokens.test.ts`
-asserted the behaviour the bug produced, *and* the test config left
+asserted the behavior the bug produced, *and* the test config left
 `tokenClientId` at its `"idp"` default, so that assertion would have passed
 whichever way the discriminator went.
 
@@ -2488,7 +2497,7 @@ writes each message to `/mail` as JSON, which the e2e overlay bind-mounts out
 of the container so a spec can read a verification or reset link. Files rather
 than an HTTP endpoint, because an endpoint that returns captured mail is an
 endpoint that returns password-reset links and it would exist in the shipped
-image. It is honoured **only when e-mail would otherwise work**: capturing in
+image. It is honored **only when e-mail would otherwise work**: capturing in
 degraded mode would make FR-MAIL-2's "nothing is sent" untestable.
 
 Two harness defects, both found by running it:
@@ -2539,7 +2548,7 @@ is the same lesson Phase 0 recorded:
 
 Two spike conclusions turned out to be wrong and are recorded as decisions:
 
-- **D32** — S1/S5 planned to normalise `aud` in the `jwt.sign` seam. That seam
+- **D32** — S1/S5 planned to normalize `aud` in the `jwt.sign` seam. That seam
   does not exist for a self-hosted key set: the `jwt` plugin refuses to
   construct with `jwt.sign` unless `jwks.remoteUrl` moves the keys off the
   deployment. `aud` keeps the implicit userinfo audience the provider appends
@@ -2549,7 +2558,7 @@ Two spike conclusions turned out to be wrong and are recorded as decisions:
   key signs immediately, before any verifier has seen it. `rotate-keys.ts`
   publishes first and signs an hour later.
 
-One thing the provider gets wrong is normalised rather than accepted:
+One thing the provider gets wrong is normalized rather than accepted:
 `/oauth2/revoke` answers 400 for an unknown token where RFC 7009 §2.2 requires
 200, which would let the endpoint be used as an oracle for which tokens exist.
 
@@ -2627,7 +2636,7 @@ touched the persistent `idp` schema).
 `token` to the key **string**, so that test is always false: `azp` is always
 `idp` and `apiKeys.tokenClientId` is dead configuration. `tokens.test.ts`
 asserts `azp === "idp"` for a key exchange with a comment endorsing it, so the
-_behaviour_ is the one that was chosen — but the discriminator and the config
+_behavior_ is the one that was chosen — but the discriminator and the config
 option both claim otherwise. **Left for M11**, where the token surface is
 already being revisited; changing token claims mid-M10 would be re-opening a
 decision another block made and tested.
@@ -2680,7 +2689,7 @@ Off by default, and DOC-4 has to say that enabling it adds one egress origin.
    `trustProxy: false` the previous code set `ipAddressHeaders: []`, leaving
    Better Auth unable to resolve any address at all — it said so in a warning
    at every boot and nothing had picked it up. Fixed by **D38**.
-4. **429s carried a header nothing honours.** Better Auth answers with
+4. **429s carried a header nothing honors.** Better Auth answers with
    `X-Retry-After`; no browser and no HTTP client does anything with it. The
    edge now copies it onto `Retry-After`.
 
@@ -2779,7 +2788,7 @@ stacked on the change-password form. It reads as unstyled scaffolding, not a
 product.
 
 **What it should be:** an **icon button inside the field**, right-aligned,
-vertically centred — the conventional eye / eye-off affordance. One control that
+vertically centered — the conventional eye / eye-off affordance. One control that
 toggles, not two links that swap. A leading field icon (envelope, padlock) is
 the reference the owner gave; the reveal control is the part that matters.
 
@@ -2814,7 +2823,7 @@ worth keeping, because both contradict what the code used to assume:
   and gives the natural tab order.
 - `-webkit-text-security: none` on `input[type=password]` is parsed and then
   **clamped back to `disc`** by Chromium 151 and WebKit 26.5; only Firefox 153
-  honours it. All three honour it on `input[type=text]`, so the two engines are
+  honors it. All three honor it on `input[type=text]`, so the two engines are
   specifically refusing to let a password field be unmasked by style. The
   scriptless reveal this component always claimed therefore only ever worked in
   Firefox — moot now, but it is why the CSS path is a fallback and not the
@@ -2966,7 +2975,7 @@ round-trip it through a parameter.
 **Acceptance:**
 
 - key validates as a relative path or an absolute URL; a bare hostname is rejected
-- sign-in honours the precedence above, and an OAuth continuation still wins
+- sign-in honors the precedence above, and an OAuth continuation still wins
 - `returnTo` from the query is still refused unless same-origin relative — the
   existing SEC-3 tests must keep passing unchanged
 - forced password change reaches an absolute destination correctly
@@ -3116,7 +3125,7 @@ that was already written for exactly this situation.
 Now a session-scoped `SET`, with `RESET lock_timeout` before the connection
 goes back to the pool so the next borrower does not inherit it. New
 `tests/integration/advisory-lock.test.ts` holds the lock on one connection and
-asserts the second gives up, names the lock in the error, honours
+asserts the second gives up, names the lock in the error, honors
 `skipIfLocked`, releases on both success and throw, and leaves no
 `lock_timeout` behind. **Verified by putting the bug back**: the timeout test
 hangs until killed, and passes in seven seconds with the fix.
@@ -3346,7 +3355,7 @@ Startup warns when the URL looks pooled and `directUrl` is unset.
 
 | Risk                         | Outcome                                                                                                                                                                                                                                                                                                                                           |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **R1** default audience      | Real — no `resource` parameter yields an _opaque_ token, not a JWT. Fixed by a `hooks.before` injection; **the pre-authorized `pnpm patch` is not needed**. The wrinkle it recorded — a second `aud` from the `openid` scope — could _not_ be normalised in the `jwt.sign` seam, because that seam requires a remote key set; settled as **D32**. |
+| **R1** default audience      | Real — no `resource` parameter yields an _opaque_ token, not a JWT. Fixed by a `hooks.before` injection; **the pre-authorized `pnpm patch` is not needed**. The wrinkle it recorded — a second `aud` from the `openid` scope — could _not_ be normalized in the `jwt.sign` seam, because that seam requires a remote key set; settled as **D32**. |
 | **R2** per-client resources  | Confirmed: `enforcePerClientResources` defaults to `true`. Kept on; reconcile owns the links.                                                                                                                                                                                                                                                     |
 | **R4** client-secret hashing | Resolved outright — `storeClientSecret` accepts our own `hash`/`verify` pair, so reconcile and the token endpoint use the same function object.                                                                                                                                                                                                   |
 | **R5** session JWT           | Half right. `definePayload` is the seam for the session JWT and one claims builder does cover all three FR-OIDC-7 paths — but **not** through `jwt.sign`, which the plugin refuses to accept without a remote key set (D32).                                                                                                                      |
@@ -3378,7 +3387,7 @@ linking fully disabled (FR-SOC-2) · `additionalFields` per DM-3/FR-AUTH-7 ·
 telemetry off (SEC-8) · oauth-provider restricted to the two v1 grants (D26),
 client CRUD denied, resources seeded · `databaseHooks` as the single enforcement
 point for the approval gate, domain restriction and status assignment · a
-before-hook normalising e-mail ahead of validation.
+before-hook normalizing e-mail ahead of validation.
 
 **Startup (OPS-2)** — `apps/web/src/server/startup.ts`
 migrate → signing key → reconcile clients → validate roles → bootstrap admin,
@@ -3399,10 +3408,10 @@ shared `{hash, verify}` pair the token endpoint verifies with (R4) · one claims
 builder for all three token shapes · the R1 default-resource injection · scoped
 token revocation (user / session / client) · the FR-OIDC-13 absolute refresh
 ceiling · the issuer-root protocol proxy with the discovery rewrite, the CORS
-matrix and the RFC 7009 normalisation · publish-then-sign key rotation (R11).
+matrix and the RFC 7009 normalization · publish-then-sign key rotation (R11).
 
 **Account area (FR-ACCT-1, FR-KEY-1)** — `apps/web/src/routes/account/`
-Profile, security (password, e-mail, 2FA enrolment with a server-rendered QR),
+Profile, security (password, e-mail, 2FA enrollment with a server-rendered QR),
 sessions, API keys and connected applications, every sensitive POST behind the
 FR-AUTH-5 freshness gate reading authoritative session state.
 

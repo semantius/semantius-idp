@@ -31,7 +31,7 @@
     "host": "0.0.0.0",
     "port": 3000,
 
-    // Behind Caddy or any reverse proxy set this so X-Forwarded-* is honoured.
+    // Behind Caddy or any reverse proxy set this so X-Forwarded-* is honored.
     // `true` trusts the immediate upstream; a CIDR list trusts those ranges.
     "trustProxy": false,
 
@@ -239,7 +239,7 @@
   // outside this process keeps working for up to that long (D91).
   //
   // A signed-in browser's own session cookie is a credential too (D92): it is
-  // exchanged for a JWT the same way, never forwarded, and only honoured when
+  // exchanged for a JWT the same way, never forwarded, and only honored when
   // the request is not cross-site.
   //
   // The name is a URL path segment: lower-case letters, digits, `_` and `-`.

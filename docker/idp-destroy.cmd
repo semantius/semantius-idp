@@ -6,7 +6,7 @@ cd /d "%~dp0"
 
 set /p ans=This DELETES the idp Postgres volume (all users, keys and tokens). Continue? [y/N] 
 if /i not "%ans%"=="y" (
-  echo Cancelled.
+  echo Canceled.
   exit /b 0
 )
 

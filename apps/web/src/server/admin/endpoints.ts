@@ -112,7 +112,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
    * FR-2FA-2: an administrator resets a locked-out user's second factor.
    *
    * Three things have to happen together, and skipping any one of them leaves
-   * the account in a state nobody can reason about: the enrolment rows go, the
+   * the account in a state nobody can reason about: the enrollment rows go, the
    * flag on the user goes, and every live session goes with them — because a
    * session that was minted *behind* a second factor is exactly what an
    * attacker who triggered the reset would be holding.
@@ -563,7 +563,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
    * the reasons D50 gave for not using its registration endpoint either: it is
    * scoped to the client's creator rather than to an administrator, it does
    * not know half these fields, and it validates against nothing this
-   * deployment recognises — no `clientSchema`, no `oauth.scopes` bound, no
+   * deployment recognizes — no `clientSchema`, no `oauth.scopes` bound, no
    * reconcile lock, no audit row.
    *
    * Five things are load-bearing, and each of them is a way to quietly break a
@@ -620,7 +620,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
         await withAdvisoryLock(locking.sql, "reconcileClients", async () => {
           await handle.db.transaction(async (tx) => {
             // Re-read inside the lock. `assertMutableClient` answered before it
-            // was taken, and what the lock serialises against is a reconcile
+            // was taken, and what the lock serializes against is a reconcile
             // that could have turned this row into a file client, or removed
             // it, in between.
             const [existing] = await tx
@@ -776,7 +776,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
    *
    * No advisory lock, on `set-client-disabled`'s precedent: a single-column
    * write to one row races nothing a reconcile does, and the lock is there to
-   * serialise the sweep that decides which rows are orphans. No origin refresh
+   * serialize the sweep that decides which rows are orphans. No origin refresh
    * either — a secret is not a redirect URI.
    */
   const rotateClientSecret = createAuthEndpoint(
@@ -1054,7 +1054,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
       try {
         await withAdvisoryLock(locking.sql, "reconcileGateways", async () => {
           await handle.db.transaction(async (tx) => {
-            // Re-read inside the lock: what it serialises against is a
+            // Re-read inside the lock: what it serializes against is a
             // reconcile that could have claimed this row for the file, or
             // swept it away, since the check above.
             await assertMutableGateway(tx, handle, entry.name)
@@ -1132,7 +1132,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
    *
    * No advisory lock, on `set-client-disabled`'s precedent: a single-column
    * write to one row races nothing the sweep does, and the lock exists to
-   * serialise the sweep that decides which rows are orphans.
+   * serialize the sweep that decides which rows are orphans.
    */
   const setGatewayDisabled = createAuthEndpoint(
     "/idp/set-gateway-disabled",

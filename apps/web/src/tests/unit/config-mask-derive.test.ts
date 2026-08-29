@@ -220,7 +220,7 @@ describe("derive.ts", () => {
     ).toEqual(["email", "roles"])
   })
 
-  it("normalises a single or multi-valued default audience", () => {
+  it("normalizes a single or multi-valued default audience", () => {
     expect(deriveConfig(parse(), [], BUILT_IN_ROLES).defaultAudience).toEqual([
       "http://localhost:3000",
     ])
@@ -256,7 +256,7 @@ describe("derive.ts", () => {
         BUILT_IN_ROLES
       ).databaseSsl
 
-    it("honours an explicit sslmode over the host heuristic", () => {
+    it("honors an explicit sslmode over the host heuristic", () => {
       // The reference compose deployment: the host is `postgres` on a private
       // network, so the heuristic says "require" and Postgres has no TLS. The
       // failure is `Client network socket disconnected before secure TLS

@@ -5,7 +5,7 @@ to this file, because tools disagree about the name and the knowledge should not
 be duplicated to satisfy them.
 
 > Git stores `CLAUDE.md` as a symlink (mode `120000`). On a Windows checkout
-> without Developer Mode it materialises as a one-line text file containing
+> without Developer Mode it materializes as a one-line text file containing
 > `AGENTS.md` — that is expected. Do not "fix" it by copying the content across;
 > two copies is the thing the symlink exists to prevent.
 
@@ -60,6 +60,28 @@ number saying what was considered and rejected, the requirement text updated,
 and a CHANGELOG entry — all in the same commit as the code. Amendments that
 lag have happened here and cost a whole session to reconstruct (see status.md,
 "The spec debt, paid").
+
+### This repository is written in US English
+
+Not a preference: the message catalog is `en-US.ts` and FR-I18N-1's default
+locale *is* `en-US`, so a user-facing string spelled `recognise` under that
+name is wrong rather than merely foreign (**D94**). Prose, comments and
+identifiers alike.
+
+**`packages/ui/src/components/**` and `packages/ui/src/styles/globals.css` are
+out of scope**, because they are registry and preset output used verbatim —
+`sql-runner.tsx`'s `"cancelled"` is an upstream state-machine literal as well
+as a label, and changing it would add a fork divergence the next `shadcn add`
+reverts.
+
+Sweep word by word, never with a blanket `-ise`/`-our` regex: `your`, `hour`,
+`four`, `otherwise`, `promising`, `optimistic` and `analyses` are what one of
+those produces.
+
+```bash
+rg -oi -g '!node_modules' -g '!dist' -g '!*.lock' -g '!packages/ui/src/components' \
+  '\b(materialis|anonymis|serialis|normalis|initialis|organis|recognis|authoris|memois|catalogue|behaviour|colour|honour|artefact|judgement|whilst|amongst|centred|licence|labelled|cancelled|enrolment|enrol\b|optimisation)\w*'
+```
 
 ### Comments explain why, not what
 
@@ -191,7 +213,7 @@ because SEC-7 requires a public page to answer a wrong password and an unknown
 address identically. Every admin form was using it, so a duplicate address in
 the create-user dialog — a dialog with no password field — said the e-mail and
 password combination was wrong. The admin variant names the duplicate and turns
-anything unrecognised into `request_failed`. Public pages, `change-password.ts`
+anything unrecognized into `request_failed`. Public pages, `change-password.ts`
 (which genuinely checks a password) and the account routes keep the collapse;
 `/account/security`'s change-email deliberately so, because it is an
 enumeration surface for a non-administrator.
@@ -341,7 +363,7 @@ at, link to and bookmark. Four things that bite:
   re-rendered, so a `useState` cleared on submit is still `true` when the guard
   reads it.
 - **A file-managed row's edit URL redirects, never `notFound()`.**
-  `notFound()` is a centred page with no sidebar and no link out, replying
+  `notFound()` is a centered page with no sidebar and no link out, replying
   "this does not exist" about a row that was visible on the previous screen.
   Redirect to the list with `?error=<code>` that `messageForErrorCode`
   resolves.
@@ -384,7 +406,7 @@ work; a client that trips it was never going to have the cookie.
 default to the deployment's own Neon instance in `us-east-2` — **~102 ms per
 round trip** from here — and every context it builds drops a schema and applies
 77 migration statements one at a time, so each was about eight seconds of pure
-latency before a single assertion. Times a hundred-odd contexts, serialised by
+latency before a single assertion. Times a hundred-odd contexts, serialized by
 `fileParallelism: false`: **fifty-four minutes**. Against a container on
 loopback the identical suite is **three minutes**.
 `apps/web/scripts/test-database.ts` starts and reuses one (`idp-test-db`, port
@@ -448,7 +470,7 @@ two-platform build handed that one stage the wrong architecture's binary — a
 defect no single-platform build can expose, which is why it survived until the
 first `--platform=linux/amd64,linux/arm64` run. The symptom is
 `qemu-x86_64: Could not open '/lib64/ld-linux-x86-64.so.2'`, which reads like a
-missing library. `runtime` stays unpinned on purpose: it is the artefact.
+missing library. `runtime` stays unpinned on purpose: it is the artifact.
 Verify a Dockerfile change with **both** platforms —
 `docker buildx build --platform linux/amd64,linux/arm64 -f docker/Dockerfile
 --output type=cacheonly .` — because none of the gates do.
@@ -545,7 +567,7 @@ the supported way to clean one up.
 **Restart the app after a reset — the `lock_timeout` does not stop you** (**D58**).
 An idle connection holds no table lock, so the drop succeeds against a running
 dev server, which then talks to a schema that is no longer there *and* keeps
-serving the sign-in page: the first-run gate memoises "setup is done" for the
+serving the sign-in page: the first-run gate memoizes "setup is done" for the
 life of the process (`server/admin/first-user.ts`). The script now counts other
 backends on the database and says to restart; believe it.
 

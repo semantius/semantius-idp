@@ -51,20 +51,20 @@ async function register(context: TestContext): Promise<string> {
   return cookie!
 }
 
-interface Enrolment {
+interface Enrollment {
   secret: string
   backupCodes: string[]
 }
 
 /**
- * Turns 2FA on and completes the enrolment.
+ * Turns 2FA on and completes the enrollment.
  *
  * `/two-factor/enable` writes an *unverified* secret; the flag on the user
  * only goes up once a code from that secret has been accepted, which is what
  * stops someone locking themselves out of an account they mistyped a secret
  * into.
  */
-async function enrol(context: TestContext, cookie: string): Promise<Enrolment> {
+async function enroll(context: TestContext, cookie: string): Promise<Enrollment> {
   const enabled = await context.auth.handler(
     authRequest("/two-factor/enable", {
       headers: { cookie },
@@ -128,7 +128,7 @@ describe("two-factor challenge", () => {
     const context = await contextWith("twofactor_challenge")
     try {
       const cookie = await register(context)
-      const { secret } = await enrol(context, cookie)
+      const { secret } = await enroll(context, cookie)
 
       const response = await signIn(context)
       expect(response.status).toBe(200)
@@ -155,7 +155,7 @@ describe("two-factor challenge", () => {
     const context = await contextWith("twofactor_wrong_code")
     try {
       const cookie = await register(context)
-      await enrol(context, cookie)
+      await enroll(context, cookie)
 
       const response = await signIn(context)
       const rejected = await context.auth.handler(
@@ -175,7 +175,7 @@ describe("two-factor challenge", () => {
     const context = await contextWith("twofactor_backup_once")
     try {
       const cookie = await register(context)
-      const { backupCodes } = await enrol(context, cookie)
+      const { backupCodes } = await enroll(context, cookie)
       const code = backupCodes[0]!
 
       const first = await signIn(context)
@@ -219,9 +219,9 @@ describe("two-factor challenge", () => {
     const context = await contextWith("twofactor_audit")
     try {
       const cookie = await register(context)
-      const { secret } = await enrol(context, cookie)
+      const { secret } = await enroll(context, cookie)
 
-      // Enrolment itself signs in, so what matters is the delta.
+      // Enrollment itself signs in, so what matters is the delta.
       const before = await signInAudit(context)
       const challenge = await signIn(context)
       expect(

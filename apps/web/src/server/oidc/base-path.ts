@@ -130,7 +130,7 @@ export const PROTOCOL_ROUTES = {
   securityTxt: "/.well-known/security.txt",
 } as const
 
-/** One labelled absolute URL on the admin system page (FR-ADMIN-2, **D55**). */
+/** One labeled absolute URL on the admin system page (FR-ADMIN-2, **D55**). */
 export interface DiscoveryUrl {
   /** A stable key the catalog translates; never shown raw. */
   key: string
@@ -153,7 +153,7 @@ export interface DiscoveryUrl {
  * missing, and listing only the RFC 8414 one would have them add half of what
  * the reference deployment does.
  *
- * The two origin-root entries are labelled as the reverse proxy's, because
+ * The two origin-root entries are labeled as the reverse proxy's, because
  * they sit *above* this app's mount point and therefore cannot be routes here.
  *
  * `securityTxt` is included only when the file exists, because the route 404s

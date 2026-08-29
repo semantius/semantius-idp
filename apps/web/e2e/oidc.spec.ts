@@ -72,7 +72,7 @@ test.describe("a relying party signs a user in", () => {
     const rp = await startRelyingParty(stack, CLIENT)
 
     // SEC-4 and FR-OIDC-1 have to hold at the same time, and for one release
-    // they did not: `form-action 'self'` cancelled the 303 that carries the
+    // they did not: `form-action 'self'` canceled the 303 that carries the
     // authorization code to the client, because Chromium applies the directive
     // to the redirect a submission follows. The browser sat on a filled-in
     // sign-in form and the only trace was a console refusal nothing read.

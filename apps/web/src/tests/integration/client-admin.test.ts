@@ -557,7 +557,7 @@ describe("editing a client (D72)", () => {
     await create(cookie)
     // The file's row only exists once it has been reconciled in; without this
     // the refusal below is `CLIENT_NOT_FOUND`, which proves nothing about
-    // whether the file marker is honoured.
+    // whether the file marker is honored.
     await reconcileClients({
       config: ctx.config,
       database: ctx.database,

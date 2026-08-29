@@ -207,7 +207,7 @@ API than everything else:
 { "clientId": "reports", "audience": "https://reports-api.example.com", "…": "…" }
 ```
 
-An explicit `resource` parameter is honoured when the client is linked to it,
+An explicit `resource` parameter is honored when the client is linked to it,
 and refused with `invalid_target` when it is not. The effective registry is
 `oauth.resources` plus `jwt.audience` plus every per-client `audience`;
 reconciliation links each client to the default and to its own.
@@ -216,7 +216,7 @@ reconciliation links each client to the default and to its own.
 
 `skipConsent` defaults to **true** for every client in this file, because an
 administrator put it there — asking the user to approve an application their
-own organisation registered is a click that teaches them to click. Set it to
+own organization registered is a click that teaches them to click. Set it to
 `false` for the applications where the question is real:
 
 ```jsonc

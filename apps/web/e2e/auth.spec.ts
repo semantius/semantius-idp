@@ -127,7 +127,7 @@ test.describe("signing in", () => {
     await page.getByLabel("Password", { exact: true }).fill(user.password)
     await submit(page, "Sign in")
 
-    // SEC-3: `returnTo` is a same-origin relative path, and it is honoured.
+    // SEC-3: `returnTo` is a same-origin relative path, and it is honored.
     await expect(page).toHaveURL(app.url("/account/sessions"))
   })
 })

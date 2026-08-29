@@ -9,8 +9,8 @@
  *
  * **The read is authoritative, and that is the point** (**D81**). The cookie
  * cache answers with the session as it was up to `session.cookieCacheMinutes`
- * ago — including the ban flag and the approval state — so a write authorised
- * from the cache is a write authorised by a copy of the world up to five
+ * ago — including the ban flag and the approval state — so a write authorized
+ * from the cache is a write authorized by a copy of the world up to five
  * minutes old. A revocation, a suspension or a withdrawn approval must bite on
  * the *next write*, not five minutes after it. Page loads keep the cache;
  * these handlers are form posts and can afford the query.

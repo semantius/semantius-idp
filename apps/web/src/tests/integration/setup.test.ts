@@ -20,7 +20,7 @@ import type { TestContext } from "./harness"
  * exists at all, and the advisory-locked creation that must produce exactly one
  * administrator however many browsers post the form at once.
  *
- * The route's own behaviour — the `/` and `/login` redirects, the password
+ * The route's own behavior — the `/` and `/login` redirects, the password
  * policy refusal, the automatic sign-in — is driven by a browser in
  * `e2e/auth.spec.ts`, because a redirect nobody follows is not a redirect that
  * has been tested.
@@ -102,7 +102,7 @@ describe("first-run setup (D52)", () => {
     expect(users).toHaveLength(1)
 
     const admin = users[0]!
-    // FR-AUTH-1: normalised on the way in.
+    // FR-AUTH-1: normalized on the way in.
     expect(admin.email).toBe("first.operator@example.com")
     expect(splitRoles(admin.role)).toContain("admin")
     expect(splitRoles(admin.role)).toContain("user")
@@ -257,7 +257,7 @@ describe("first-run setup (D52)", () => {
     expect(await isSetupPending(ctx.database)).toBe(false)
   })
 
-  it("forgets the memoised answer when asked to", async () => {
+  it("forgets the memoized answer when asked to", async () => {
     const ctx = await createTestContext("setup-gate-reset")
     contexts.push(ctx)
 

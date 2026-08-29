@@ -132,7 +132,7 @@ export const Route = createFileRoute("/login")({
         // FR-2FA-1: a correct password with 2FA on is not a session yet.
         // Better Auth answers 200 with `twoFactorRedirect` and sets the
         // short-lived challenge cookie, which is the only thing that
-        // authorises `/two-factor` — so the cookies have to be replayed.
+        // authorizes `/two-factor` — so the cookies have to be replayed.
         if (result.body.twoFactorRedirect === true) {
           const challenge = `${runtime.config.base.basePath}${APP_ROUTES.twoFactor}`
           const params = new URLSearchParams()

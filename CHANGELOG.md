@@ -62,7 +62,7 @@ Decisions that changed a numbered requirement carry their `D` number from
   session. A refused session falls through to anonymous rather than answering
   401, because the browser attached the cookie without being asked.
 
-  **The cookie is only honoured when `Sec-Fetch-Site` is absent, `same-origin`
+  **The cookie is only honored when `Sec-Fetch-Site` is absent, `same-origin`
   or `none`.** Cookie authentication on a same-origin proxy is the ambient
   authority CSRF exploits, and `SameSite=Lax` still carries the cookie on a
   top-level cross-site GET — so a link to `…/gateway/<name>/…` would otherwise
@@ -111,6 +111,20 @@ Decisions that changed a numbered requirement carry their `D` number from
   upstream answers 502; an unknown and a disabled name answer the same 404.
 
 ### Changed
+
+- **US spelling throughout** (**D94**, FR-I18N-1). The repository was written
+  in British English — 139 files, ~250 occurrences — while its own message
+  catalog is named `en-US.ts`. Four of them were text a person reads: the D57
+  untrusted-origin message, and three configuration descriptions whose JSON
+  Schema and reference-table outputs are generated and `--check`-gated, so the
+  source was fixed and the generators re-run. The 2FA `Enrolment` family is the
+  only identifier cluster, and it appears nowhere in `drizzle/**` or
+  `server/db/**`, so it is a pure TypeScript rename — `enrolling` and
+  `enrolled` are spelled the same in both, so the `?enrolling=` parameter is
+  untouched. Swept word by word from a confirmed inventory rather than with a
+  blanket `-ise`/`-our` regex, which would have caught `your`, `hour`,
+  `otherwise` and `analyses`. `packages/ui/src/components/**` and
+  `globals.css` are excluded as registry and preset output.
 
 - **Every create and every edit is a page; every confirmation stays a modal**
   (**D93**, FR-ADMIN-2, FR-OIDC-2, FR-GW-7, FR-ROLE-2). `/admin/clients` and
@@ -162,7 +176,7 @@ Decisions that changed a numbered requirement carry their `D` number from
   Also: a row's **name** is a link to its edit page, so an addressable record
   is reachable without opening a menu first; a file-managed name stays plain
   text. A file-managed row's edit URL redirects to the list with a reason
-  rather than rendering `notFound()`, which is a centred page with no sidebar
+  rather than rendering `notFound()`, which is a centered page with no sidebar
   and no way out. `SecretDialog` now names the recovery, because Escape
   destroys the only copy of a client secret and nothing said that rotating from
   the row menu is how to get another.
@@ -584,7 +598,7 @@ run. The ones that mattered:
   self-registered account could never be verified — and with
   `auth.requireEmailVerification` on, could never sign in.
 - **No OIDC login could resume through an interstitial.** The signed
-  authorization request was re-serialised on its way through the sign-in page,
+  authorization request was re-serialized on its way through the sign-in page,
   which broke its own signature (FR-OIDC-9).
 - **`form-action 'self'` made every OAuth login fail in Chrome**, which applies
   the directive to the redirect a form submission follows (**D46**).
@@ -671,7 +685,7 @@ were questions, and one was "polish every page".
   admin pages printed raw UTC in three different precisions, and the account
   pages ran `Intl` server-side against the *configured* locale under a comment
   asserting the opposite. One `<LocalTime>` with two variants replaces
-  every one of them. The first paint stays a deterministic UTC string, labelled
+  every one of them. The first paint stays a deterministic UTC string, labeled
   as such — formatting on both sides of hydration is how a page tears — and
   the full ISO value moves into `title`.
 - **Admin-registered OAuth clients no longer all demanded consent.** The create
@@ -698,7 +712,7 @@ were questions, and one was "polish every page".
   well-known segment, RFC 8414 §3.1 puts it in front of the path — and
   `Caddyfile.subpath` rewrites *both* origin-root spellings, because enough
   clients ask for the OpenID one too. All four are listed, the two origin-root
-  ones labelled as the reverse proxy's, and `security.txt` appears only when
+  ones labeled as the reverse proxy's, and `security.txt` appears only when
   the file exists. The signing-key label
   became "Active key ID": the page never showed key material, but the old
   wording read as though it did.
@@ -768,7 +782,7 @@ were questions, and one was "polish every page".
 - **`pnpm drizzle:reset` says to *restart* a running app, and counts the
   connections that show one is** (**D58**). `lock_timeout` does not stop a
   reset under a live server — an idle connection holds no table lock — and the
-  first-run gate memoises "setup is done" for the life of the process, so that
+  first-run gate memoizes "setup is done" for the life of the process, so that
   server kept serving the sign-in page to somebody who had just emptied the
   database. The target block now reports other backends on the database
   alongside the table count.
@@ -834,7 +848,7 @@ were questions, and one was "polish every page".
   come back to the list — where the other outcome of the same action, the
   one-time set-password link, already opened as a dialog. Both live on the list
   now, and the URL is gone rather than redirected: only that page linked to it.
-  The pre-ticked default role changes no server behaviour; an untouched form
+  The pre-ticked default role changes no server behavior; an untouched form
   always got `defaultRole`, and now it says so.
 - **Changing a password from the account area is a dialog**, not a link to
   another page. Every other action on `/account/security` already was one. The
@@ -864,7 +878,7 @@ were questions, and one was "polish every page".
   administrator created the account, drops the promise about signing other
   devices out of an account nobody has signed in to, and points a dead link at
   the administrator rather than at self-service, which may be switched off. The
-  one-time link dialog on `/admin/users` is labelled with the address as well.
+  one-time link dialog on `/admin/users` is labeled with the address as well.
 - **The audit trail says what it means, and covers the admin API** (**D66**).
   An account an administrator created was recorded as `signup.created` with
   `by: "admin"` — the same action name as a self-service registration and as
@@ -942,7 +956,7 @@ were questions, and one was "polish every page".
   password from an unknown address — owned everything else. Behind `/admin/*`
   that collapse buys nothing (the administrator is looking at a list of every
   account) and costs the truth, so admin forms now map through
-  `adminErrorCodeFor`: a duplicate address is named, and anything unrecognised
+  `adminErrorCodeFor`: a duplicate address is named, and anything unrecognized
   is a failed request. The public pages are byte-for-byte unchanged.
 - **Creating a user cannot 500 after the account exists** (**D70**). The
   set-password link was minted after the create returned, unguarded — so a
@@ -1011,7 +1025,7 @@ were questions, and one was "polish every page".
   deployment's own hosted database, which is **~102 ms away per round trip**,
   and every test context it builds drops a schema and applies 77 migration
   statements one at a time — about eight seconds of pure latency each, before a
-  single assertion, times more than a hundred contexts, serialised.
+  single assertion, times more than a hundred contexts, serialized.
   `test:integration` and `test:coverage` now start and reuse a local Postgres
   container (`idp-test-db`, fsync off) unless `IDP_TEST_DATABASE_URL` says
   otherwise, which is how CI keeps using the service container it already had.
@@ -1055,11 +1069,11 @@ were questions, and one was "polish every page".
   total, and the single build stage is handed whichever of the two the other
   pass resolved. `FROM --platform=$BUILDPLATFORM oven/bun:…` makes the
   borrowed binary match the rootfs that runs it, on any build host. `runtime`
-  stays unpinned, because that stage is the artefact and is the one thing here
+  stays unpinned, because that stage is the artifact and is the one thing here
   that must be per-architecture.
 - **The tag and `package.json` have to agree.** The image stamps
   `IDP_VERSION` from the tag and `/healthz`, `idp version` and the admin
-  system page all report it, so a repository claiming 0.0.1 while the artefact
+  system page all report it, so a repository claiming 0.0.1 while the artifact
   claims 0.1.0 is one whose running version cannot be traced back to a tree.
   The release workflow's first job refuses the tag otherwise, in thirty
   seconds rather than at minute fifteen. The workspace is at **0.1.0**
@@ -1082,7 +1096,7 @@ were questions, and one was "polish every page".
   beside it, which had it backwards. The **direct** endpoint is the one that
   must always work — startup, migrations, the CLI and the cleanup job take
   session advisory locks, and those do not hold through a transaction-mode
-  pooler (**D27**) — while the pooled endpoint is an optimisation a given
+  pooler (**D27**) — while the pooled endpoint is an optimization a given
   Postgres may not offer at all. So an operator holding only the direct
   endpoint had to file it under the name that describes the pooled one, and
   one who set only `DATABASE_URL_ADMIN` was refused outright for a
@@ -1108,13 +1122,13 @@ were questions, and one was "polish every page".
   summary and `process.exit` sat at the end of `main`, after the `try`/`finally`
   - and three failure paths `return` early, so every one of them skipped both.
   A missing image, or a stack that never came up, was reported to CI as a pass.
-  TST-8 is the only gate that tests the artefact a tag publishes, and it could
+  TST-8 is the only gate that tests the artifact a tag publishes, and it could
   not fail. Both now live at the call site, where a `return` cannot reach them.
 - **The smoke test could test the wrong image entirely** (**D75**).
   `docker-compose.yml`'s `idp` service carries both `image:` and `build:`, so
   `compose up` silently builds from source when the tag is absent - right for
   `idp-create.sh`, wrong for a gate whose whole purpose is to exercise the
-  artefact CI is about to publish. A mistyped `IDP_IMAGE` would have it pass
+  artifact CI is about to publish. A mistyped `IDP_IMAGE` would have it pass
   while proving nothing. It now refuses to start unless the image is already in
   the daemon. Found by pointing it at `nonexistent-image:v0`, which built one.
 - **A failed check is a GitHub Actions annotation** (**D75**). A `run:` step
@@ -1137,7 +1151,7 @@ were questions, and one was "polish every page".
   `docker image inspect --format {{.Size}}`, and Docker Desktop's containerd
   image store answers with the **compressed** size: 117.9 MiB for the image a
   GitHub runner measures at 385.8 MiB. Both numbers are honest and only the
-  second one is the artefact. The budget now says so where somebody will read
+  second one is the artifact. The budget now says so where somebody will read
   it before trusting a local pass.
 - **Playwright reports failures where they can be read** (**D75**). The suite
   uploads an HTML report, and downloading a workflow artifact needs a token
@@ -1155,7 +1169,7 @@ were questions, and one was "polish every page".
   Desktop does not enforce host uids, so it cannot reproduce - 78 tests pass
   locally against the exact image that failed on the runner. The directory is
   now `chmod 0777` (a `mkdtemp` directory for one run), rather than pinning the
-  container's uid, which would change the artefact under test.
+  container's uid, which would change the artifact under test.
 - **Bun's version is pinned in five files and nothing compared them.**
   `.bun-version`, `package.json`'s `engines.bun`, the Dockerfile's
   `ARG BUN_VERSION`, and now both workflows. Bun is not a build tool in this

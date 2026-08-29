@@ -150,7 +150,7 @@ function DatabasePage() {
    * `ref.current` still null and typed a statement that never ran; the e2e
    * suite caught it on a loaded machine, and a slow connection is the same
    * window made wider. State re-renders when the runner mounts, so the effect
-   * below runs again and the request is honoured late rather than dropped.
+   * below runs again and the request is honored late rather than dropped.
    */
   const [runner, setRunner] = useState<SQLRunnerHandle | null>(null)
   /**

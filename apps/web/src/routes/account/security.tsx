@@ -27,8 +27,8 @@ import {
 import { requireSession } from "@/server/http/require-session"
 import { stash } from "@/server/http/one-shot"
 import { changePassword } from "@/server/auth/change-password"
-import { claimEnrolment } from "@/server/functions/account"
-import type { EnrolmentView } from "@/server/functions/account"
+import { claimEnrollment } from "@/server/functions/account"
+import type { EnrollmentView } from "@/server/functions/account"
 import { getRuntime } from "@/server/runtime"
 import type { Runtime } from "@/server/runtime"
 import { PendingForm, SubmitButton } from "@/components/common/pending-form"
@@ -58,7 +58,7 @@ const HERE = "/account/security"
  * passwords themselves are **not** restored — `PasswordField` has no
  * `defaultValue` prop, deliberately (**D62**).
  *
- * Enrolment is two steps because Better Auth stores the secret unverified
+ * Enrollment is two steps because Better Auth stores the secret unverified
  * until a code from it is accepted — which is what stops someone locking
  * themselves out with a mistyped secret. The secret and the backup codes reach
  * the confirmation page through the one-shot stash, never through the URL.
@@ -72,7 +72,7 @@ export const Route = createFileRoute("/account/security")({
         { label: t.account.nav.security, to: "/account/security" },
       ]),
       profile: context.profile,
-      enrolment: await claimEnrolment({
+      enrollment: await claimEnrollment({
         data: searchString(search.enrolling) ?? "",
       }),
       notice: searchString(search.notice),
@@ -203,7 +203,7 @@ async function enableTwoFactor(
     runtime,
     JSON.stringify({ userId, totpUri, backupCodes }),
     // Long enough to fetch an authenticator app, short enough that an
-    // abandoned enrolment does not sit in the table for the day.
+    // abandoned enrollment does not sit in the table for the day.
     { ttlSeconds: 900 }
   )
 
@@ -214,10 +214,10 @@ async function enableTwoFactor(
 }
 
 /**
- * Enrolment finishes here, and so does the notification (FR-MAIL-1, FR-2FA-1).
+ * Enrollment finishes here, and so does the notification (FR-MAIL-1, FR-2FA-1).
  *
  * **Sent from the route rather than from a hook**, because "the second factor
- * changed" is a fact about the *enrolment*, and only these two handlers know
+ * changed" is a fact about the *enrollment*, and only these two handlers know
  * which way it went. The template existed from M6 and nothing had ever called
  * it: turning 2FA on or off sent no message at all, which is exactly the
  * change an account's owner most needs to hear about from someone other than
@@ -285,7 +285,7 @@ const PASSWORD_ERRORS = new Set([
 ])
 
 function SecurityPage() {
-  const { ui, profile, enrolment, notice, error } = Route.useLoaderData()
+  const { ui, profile, enrollment, notice, error } = Route.useLoaderData()
   const t = getCatalog(ui.locale)
   const confirm = usePasswordConfirm(t)
 
@@ -368,14 +368,14 @@ function SecurityPage() {
         </AccountSection>
       ) : null}
 
-      {/* FR-2FA-1: with 2FA off there is nothing to enrol in. */}
+      {/* FR-2FA-1: with 2FA off there is nothing to enroll in. */}
       {ui.twoFactorEnabled ? (
         <AccountSection
           title={t.account.twoFactor.title}
           description={t.account.twoFactor.description}
         >
-          {enrolment ? (
-            <TwoFactorEnrolment enrolment={enrolment} t={t} />
+          {enrollment ? (
+            <TwoFactorEnrollment enrollment={enrollment} t={t} />
           ) : profile.twoFactorEnabled ? (
             <PendingForm
               busy={t.common.loading}
@@ -423,11 +423,11 @@ function SecurityPage() {
   )
 }
 
-function TwoFactorEnrolment({
-  enrolment,
+function TwoFactorEnrollment({
+  enrollment,
   t,
 }: {
-  enrolment: EnrolmentView
+  enrollment: EnrollmentView
   t: ReturnType<typeof getCatalog>
 }) {
   return (
@@ -439,12 +439,12 @@ function TwoFactorEnrolment({
       <div
         className="w-[200px] [&_svg]:h-auto [&_svg]:w-full [&_svg]:rounded-lg [&_svg]:bg-white [&_svg]:p-2"
         aria-hidden="true"
-        dangerouslySetInnerHTML={{ __html: enrolment.qrSvg }}
+        dangerouslySetInnerHTML={{ __html: enrollment.qrSvg }}
       />
 
       <p className="text-sm text-muted-foreground">
         {t.account.twoFactor.manualEntry}{" "}
-        <code className="font-mono break-all">{enrolment.manualKey}</code>
+        <code className="font-mono break-all">{enrollment.manualKey}</code>
       </p>
 
       <div>
@@ -455,7 +455,7 @@ function TwoFactorEnrolment({
           {t.account.twoFactor.backupCodesNotice}
         </p>
         <ul className="mt-2 grid grid-cols-2 gap-1 font-mono text-sm">
-          {enrolment.backupCodes.map((code) => (
+          {enrollment.backupCodes.map((code) => (
             <li key={code}>{code}</li>
           ))}
         </ul>

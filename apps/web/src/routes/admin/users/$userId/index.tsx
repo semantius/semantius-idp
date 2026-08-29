@@ -141,7 +141,7 @@ export const Route = createFileRoute("/admin/users/$userId/")({
         // **D78**: a handle, never the address. `safeUrlForLog` keeps the query
         // string of everything outside `/oauth2/*` and `/api/auth/*`, so
         // `?subject=jane@example.com` would put a deleted account's address in
-        // the request log — in a codebase that anonymises IP addresses for
+        // the request log — in a codebase that anonymizes IP addresses for
         // exactly that reason (SEC-5). Two minutes is a redirect's worth of
         // life; the claim consumes it either way.
         if (outcome.subject) {

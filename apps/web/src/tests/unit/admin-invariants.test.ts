@@ -134,7 +134,7 @@ describe("the last administrator", () => {
     ).not.toThrow()
   })
 
-  it("recognises any configured admin role, not just `admin`", () => {
+  it("recognizes any configured admin role, not just `admin`", () => {
     const owner = user({ id: "bob", role: "owner" })
     expect(check(CARL, ALICE, { kind: "delete" }, [ALICE, owner])).not.toThrow()
   })

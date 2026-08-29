@@ -112,9 +112,9 @@ export const DEFAULT_CAPTURE_DIR = "/tmp/idp-mail"
  * per-run by whoever starts the process, which is the blast radius this
  * deserves.
  *
- * It is honoured **only when e-mail would otherwise work**: with no Resend key
+ * It is honored **only when e-mail would otherwise work**: with no Resend key
  * the deployment is in degraded mode (FR-MAIL-2), and capturing there would
- * make "nothing is sent" untestable — which is the one behaviour where nothing
+ * make "nothing is sent" untestable — which is the one behavior where nothing
  * being sent is the requirement.
  */
 function captureFromEnvironment(
@@ -157,8 +157,8 @@ function defaultTransport(
  * Convenience for tests and the e2e image: a mailer whose transport can be
  * inspected.
  *
- * It still honours degraded mode. A capture mailer that sent regardless would
- * make FR-MAIL-2 untestable — the one behaviour where "nothing is sent" is the
+ * It still honors degraded mode. A capture mailer that sent regardless would
+ * make FR-MAIL-2 untestable — the one behavior where "nothing is sent" is the
  * requirement.
  */
 export function createCaptureMailer(

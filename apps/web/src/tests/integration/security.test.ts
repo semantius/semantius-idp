@@ -632,7 +632,7 @@ describe("rate limiting (SEC-2)", () => {
     expect(limited, "sign-in was never rate limited").toBeTruthy()
 
     // Better Auth answers with `X-Retry-After`, which is not a header anything
-    // honours — no browser and no HTTP client does anything with it. The edge
+    // honors — no browser and no HTTP client does anything with it. The edge
     // copies it onto the real one, so the assertion goes through that function
     // rather than the raw handler, which is not what a client ever sees.
     const delivered = withStandardRetryAfter(limited!)

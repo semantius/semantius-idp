@@ -96,7 +96,7 @@ describe("buildUserClaims", () => {
 
   it("drops a role that is no longer in the catalog (FR-ROLE-2)", () => {
     // The column still says `legacy`; the catalog does not. A resource server
-    // authorising on a role this deployment no longer defines is exactly what
+    // authorizing on a role this deployment no longer defines is exactly what
     // the catalog exists to prevent.
     const claims = buildUserClaims(
       { ...USER, role: "admin,legacy" },

@@ -81,7 +81,7 @@ export const enUS = {
       // request was refused before the password was looked at, because the
       // browser is on an address the deployment does not know.
       untrustedOrigin:
-        "This page was opened from a web address this server does not recognise, so the sign-in was refused. Open it from the server's own address and try again.",
+        "This page was opened from a web address this server does not recognize, so the sign-in was refused. Open it from the server's own address and try again.",
       unavailable: "This account is not available.",
       required: "Sign in to continue.",
     },
@@ -784,8 +784,8 @@ export const enUS = {
         openidConfigurationRoot:
           "OpenID Provider configuration (root form — served by the reverse proxy)",
         jwks: "JSON Web Key Set",
-        // The URL is registered under RFC 8615; the behaviour is a W3C
-        // change-password specification, which is what an operator recognises.
+        // The URL is registered under RFC 8615; the behavior is a W3C
+        // change-password specification, which is what an operator recognizes.
         changePassword: "Change-password well-known URL",
         securityTxt: "security.txt (RFC 9116)",
       },
@@ -796,7 +796,7 @@ export const enUS = {
      * The two forked Neon components carry their own English strings --
      * "Read only", "Run", "Enable writes", the results grid's empty state.
      * They are near-verbatim registry output and their strings are not
-     * catalogued, so that is a bounded FR-I18N-1 exception, recorded in the
+     * cataloged, so that is a bounded FR-I18N-1 exception, recorded in the
      * spec text beside the requirement and in D83. Everything the page itself
      * writes is here -- including, since D84, the schema selector's label and
      * the name of the run button the fork added, both of which are ours.

@@ -21,7 +21,7 @@
           "maximum": 65535
         },
         "trustProxy": {
-          "description": "Honour X-Forwarded-* from the immediate upstream (true) or from the listed CIDR ranges. Client IP is the rightmost untrusted hop.",
+          "description": "Honor X-Forwarded-* from the immediate upstream (true) or from the listed CIDR ranges. Client IP is the rightmost untrusted hop.",
           "anyOf": [
             {
               "type": "boolean"
@@ -71,7 +71,7 @@
           "minLength": 1
         },
         "directUrl": {
-          "description": "Direct, non-pooled connection string, used by every step that holds a session advisory lock — startup, migrations, the CLI and the cleanup job — because session locks do not hold through a transaction-mode pooler. This is the connection that must always work; `url` is the optional optimisation beside it. At least one of the two must be set, and when `url` looks pooled this one is required. Fallback env: DATABASE_URL_ADMIN.",
+          "description": "Direct, non-pooled connection string, used by every step that holds a session advisory lock — startup, migrations, the CLI and the cleanup job — because session locks do not hold through a transaction-mode pooler. This is the connection that must always work; `url` is the optional optimization beside it. At least one of the two must be set, and when `url` looks pooled this one is required. Fallback env: DATABASE_URL_ADMIN.",
           "type": "string",
           "minLength": 1
         },
@@ -372,7 +372,7 @@
       "type": "object",
       "properties": {
         "enabled": {
-          "description": "Whether users may enrol at all. Enrolment is per user and always optional; turning this off hides the whole feature.",
+          "description": "Whether users may enroll at all. Enrollment is per user and always optional; turning this off hides the whole feature.",
           "type": "boolean"
         },
         "issuer": {

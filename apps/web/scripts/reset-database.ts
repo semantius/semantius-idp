@@ -32,7 +32,7 @@
  * `lock_timeout` below was meant to be the guard here and is not: an idle
  * connection holds no table lock, so the drop succeeds against a live dev
  * server and leaves it talking to a schema that no longer exists. Worse, the
- * first-run gate memoises `false` for the life of the process (D52,
+ * first-run gate memoizes `false` for the life of the process (D52,
  * `src/server/admin/first-user.ts`), so that server goes on serving the
  * *sign-in* page — the one page the person who has just reset the database is
  * certain they should not be seeing. The connection count in the target block
@@ -115,8 +115,8 @@ async function confirm(schemaName: string): Promise<boolean> {
     const answer = await rl.question(
       `Drop schema "${schemaName}" and everything in it? This cannot be undone. [y/N] `
     )
-    const normalised = answer.trim().toLowerCase()
-    return normalised === "y" || normalised === "yes"
+    const normalized = answer.trim().toLowerCase()
+    return normalized === "y" || normalized === "yes"
   } finally {
     rl.close()
   }

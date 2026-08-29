@@ -15,7 +15,7 @@ import { NoticeToast } from "@/components/common/notice-toast"
  * then the toast that follows is a second copy of it.
  *
  * So this asserts the absence, on the `pending-form.test.tsx` pattern. The
- * behaviour that matters — the toast appears, the URL loses `?notice=`, a
+ * behavior that matters — the toast appears, the URL loses `?notice=`, a
  * reload does not bring it back — is driven by a browser in
  * `e2e/account.spec.ts`, because none of it exists until hydration.
  */

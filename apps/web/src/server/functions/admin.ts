@@ -127,7 +127,7 @@ export interface AdminAuditRow {
   ipAddress?: string
   requestId?: string
   /**
-   * Compact JSON, not the object. Server functions serialise their return
+   * Compact JSON, not the object. Server functions serialize their return
    * value through a typed channel that refuses `unknown`, and the page renders
    * this as text anyway — parsing it back to re-print it would be a round trip
    * with nothing in the middle.
@@ -650,7 +650,7 @@ export const fetchClients = createServerFn({ method: "GET" }).handler(
       enableEndSession: row.enableEndSession === true,
       // D50: the file marker is `userId === null`, and it is what decides
       // whether this row may be edited here at all — not merely how it is
-      // labelled. A row whose id also appears in the file is shown as
+      // labeled. A row whose id also appears in the file is shown as
       // file-managed either way, because the next restart will make it so.
       managedBy:
         fileClients.has(row.clientId) || row.userId === null
@@ -881,7 +881,7 @@ export interface AdminDatabaseSchema {
  * one is a GET.
  */
 export const fetchDatabaseSchema = createServerFn({ method: "GET" })
-  // Optional, and normalised to `{}` rather than left undefined: the loader
+  // Optional, and normalized to `{}` rather than left undefined: the loader
   // calls this with no argument at all, and the page calls it again with a
   // schema name every time the selector changes (D84).
   .validator((input: { schema?: string } | undefined) => input ?? {})
@@ -980,7 +980,7 @@ export const executeDatabaseQuery = createServerFn({ method: "POST" })
     }
   })
 
-/** The caller's headers, re-labelled for the JSON body this builds. */
+/** The caller's headers, re-labeled for the JSON body this builds. */
 function withJson(source: Headers): Headers {
   const headers = new Headers(source)
   headers.set("content-type", "application/json")

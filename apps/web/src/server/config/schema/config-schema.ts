@@ -111,7 +111,7 @@ const serverSchema = z.strictObject({
     .union([flexBoolean(), flexArray(cidr)])
     .default(false)
     .describe(
-      "Honour X-Forwarded-* from the immediate upstream (true) or from the listed CIDR ranges. Client IP is the rightmost untrusted hop."
+      "Honor X-Forwarded-* from the immediate upstream (true) or from the listed CIDR ranges. Client IP is the rightmost untrusted hop."
     ),
   trustedOrigins: flexArray(trustedOrigin)
     .optional()
@@ -141,7 +141,7 @@ const databaseSchema = z.strictObject({
     .min(1)
     .optional()
     .describe(
-      "Direct, non-pooled connection string, used by every step that holds a session advisory lock — startup, migrations, the CLI and the cleanup job — because session locks do not hold through a transaction-mode pooler. This is the connection that must always work; `url` is the optional optimisation beside it. At least one of the two must be set, and when `url` looks pooled this one is required. Fallback env: DATABASE_URL_ADMIN."
+      "Direct, non-pooled connection string, used by every step that holds a session advisory lock — startup, migrations, the CLI and the cleanup job — because session locks do not hold through a transaction-mode pooler. This is the connection that must always work; `url` is the optional optimization beside it. At least one of the two must be set, and when `url` looks pooled this one is required. Fallback env: DATABASE_URL_ADMIN."
     ),
   schema: z
     .string()
@@ -416,7 +416,7 @@ const twoFactorSchema = z.strictObject({
   enabled: flexBoolean()
     .default(true)
     .describe(
-      "Whether users may enrol at all. Enrolment is per user and always optional; turning this off hides the whole feature." // FR-2FA-1
+      "Whether users may enroll at all. Enrollment is per user and always optional; turning this off hides the whole feature." // FR-2FA-1
     ),
   issuer: z
     .string()

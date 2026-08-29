@@ -6,7 +6,7 @@
  * `emailVerified`) are already `input: false` in the core and admin plugin
  * schemas. The four the IdP adds must be too: `status` in particular is the
  * approval gate, so a sign-up body claiming `"status": "active"` has to be
- * ignored, not honoured.
+ * ignored, not honored.
  *
  * `input: false` is Better Auth's own mechanism — the field is stripped from
  * request bodies and can only be written through internal/admin paths — which

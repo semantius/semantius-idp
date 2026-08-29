@@ -165,7 +165,7 @@ describe("anonymizeIp (SEC-5)", () => {
   })
 })
 
-describe("logger behaviour", () => {
+describe("logger behavior", () => {
   it("emits one JSON object per line with time, level and msg", () => {
     const { logger, records } = capture()
     logger.warn("careful", { requestId: "req-1" })

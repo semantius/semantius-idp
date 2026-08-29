@@ -93,7 +93,7 @@ export const Route = createFileRoute("/account/api-keys")({
 
         if (form.action === "revoke") {
           const keyId = form.keyId ?? ""
-          // "The id came from a page I rendered" is not an authorisation
+          // "The id came from a page I rendered" is not an authorization
           // check — the ownership test is.
           if (!(await apiKeyBelongsTo(runtime, signedIn.session, keyId))) {
             return redirectWithCookies(withError(here, "not_found"))

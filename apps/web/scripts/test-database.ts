@@ -6,7 +6,7 @@
  * instance in `us-east-2`, and from here that is **~102 ms per round trip**.
  * Every context this suite builds drops a schema and applies 77 migration
  * statements one at a time — about eight seconds of latency each, before a
- * single assertion — and there are more than a hundred of them, all serialised
+ * single assertion — and there are more than a hundred of them, all serialized
  * by `fileParallelism: false`. Against a container on loopback the same suite
  * is **~3 minutes**, and the tests are unchanged: the round trip went from
  * 102 ms to a fraction of one.
@@ -82,7 +82,7 @@ function ready(): boolean {
 
 async function waitForReady(): Promise<boolean> {
   // Postgres accepts connections a moment after the container starts, and the
-  // first run also has to initialise the data directory.
+  // first run also has to initialize the data directory.
   for (let attempt = 0; attempt < 60; attempt += 1) {
     if (ready()) return true
     await new Promise((resolve) => setTimeout(resolve, 500))

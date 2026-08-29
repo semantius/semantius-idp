@@ -8,10 +8,10 @@ import { parseInviteLink } from "@/lib/invite-link"
  * It became `{url, email}` so the dialog can say whose account it is for. The
  * bare-URL case is kept on purpose: a handle stashed by an older process is
  * still claimable for its ten minutes across a restart, and a link that works
- * but is unlabelled is a better answer than no link at all.
+ * but is unlabeled is a better answer than no link at all.
  */
 describe("parseInviteLink", () => {
-  it("reads the labelled shape", () => {
+  it("reads the labeled shape", () => {
     expect(
       parseInviteLink('{"url":"https://idp/reset?token=x","email":"a@b.test"}')
     ).toEqual({ url: "https://idp/reset?token=x", email: "a@b.test" })

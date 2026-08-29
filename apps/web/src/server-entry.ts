@@ -130,7 +130,7 @@ function assetHref(url: string): string {
 }
 
 /**
- * Undoes `src/start-entry.ts`'s prefixing so Start's handler recognises a
+ * Undoes `src/start-entry.ts`'s prefixing so Start's handler recognizes a
  * server-function call. Page requests keep their prefix — the router matches
  * them with the same `basepath` the links were rendered with.
  */

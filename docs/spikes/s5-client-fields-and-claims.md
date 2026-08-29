@@ -127,7 +127,7 @@ The database row shape is `SchemaClient`; the RFC 7591 metadata shape is
   (D26 removed M2M from v1).
 - **There is no `resourceServer` column.** FR-OIDC-4 wants a client that may
   introspect tokens it is an audience for. 1.7.1 implements this differently:
-  introspection authorisation is decided by whether the caller is linked to the
+  introspection authorization is decided by whether the caller is linked to the
   token's resource through `oauthClientResource`. Our `resourceServer: true`
   therefore becomes "link this client to the resource" at reconcile time and is
   additionally mirrored into `metadata`; no spec change is needed, but the
@@ -185,7 +185,7 @@ token through it — the OAuth access token, the ID token and the session JWT fr
 `GET /api/auth/token`.
 
 **Decision:** `jwt.sign` is the single signing seam. It receives the finished
-payload, so one `buildAccessTokenClaims()` normalises all three paths in one
+payload, so one `buildAccessTokenClaims()` normalizes all three paths in one
 place, which is precisely what FR-OIDC-7 asks for ("one claims builder for all
 paths"). See `docs/spikes/s1-default-audience.md` for the second reason this
 matters.

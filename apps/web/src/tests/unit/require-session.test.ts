@@ -4,7 +4,7 @@
  * Two properties, and the second is the one worth a test: a caller with no
  * session is bounced to `/login` carrying where they were, and the read is
  * **authoritative** — it must not be answered from the cookie cache, because
- * a write authorised from the cache is a write authorised by a copy of the
+ * a write authorized from the cache is a write authorized by a copy of the
  * session up to five minutes old.
  *
  * The predecessor's tests asserted a fifteen-minute window on

@@ -1,6 +1,6 @@
 /**
  * Database hooks — the single enforcement point for the approval gate
- * (FR-SIGNUP-2), the domain restriction (FR-SIGNUP-3) and e-mail normalisation
+ * (FR-SIGNUP-2), the domain restriction (FR-SIGNUP-3) and e-mail normalization
  * (FR-AUTH-1).
  *
  * These run underneath every path that creates a user or a session: password

@@ -44,7 +44,7 @@ export default defineConfig({
           include: ["src/tests/integration/**/*.test.ts"],
           environment: "node",
           // A schema create + migrate per file is the slow part; give it room
-          // and keep files serial so advisory-lock behaviour stays observable.
+          // and keep files serial so advisory-lock behavior stays observable.
           testTimeout: 60_000,
           hookTimeout: 120_000,
           fileParallelism: false,

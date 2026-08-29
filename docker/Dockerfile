@@ -49,7 +49,7 @@ ARG NODE_VERSION=22
 # '/lib64/ld-linux-x86-64.so.2'`, which reads like a missing library and is an
 # amd64 binary inside an arm64 root filesystem. The pin makes the borrowed
 # binary match the rootfs that runs it, on any host. `runtime` below is
-# deliberately **not** pinned — that stage is the artefact, and it is the one
+# deliberately **not** pinned — that stage is the artifact, and it is the one
 # thing here that must be per-architecture.
 FROM --platform=$BUILDPLATFORM oven/bun:${BUN_VERSION}-slim AS bun
 

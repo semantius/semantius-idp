@@ -30,7 +30,7 @@ export function UserBadges({
   t: Catalog
 }) {
   // A status the catalog has no word for is shown verbatim rather than blank:
-  // an unrecognised value is exactly when an administrator needs to see it.
+  // an unrecognized value is exactly when an administrator needs to see it.
   const label = (t.admin.status as Record<string, string | undefined>)[
     user.status
   ]

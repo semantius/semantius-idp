@@ -15,7 +15,7 @@
  * for it, so with the endpoint registered unconditionally this hook is the
  * thing that answers 403 (FR-ADMIN-5).
  *
- * What this hook deliberately does *not* do is authorise. The admin plugin's
+ * What this hook deliberately does *not* do is authorize. The admin plugin's
  * own middleware already refuses non-admins on every one of these paths; a
  * second implementation of that check here would be a second thing to keep in
  * step with `admin.adminRoles`.
@@ -69,7 +69,7 @@ const IMPERSONATION_ENDING = new WeakMap<
 /**
  * The before hook's half of that, exported so the pairing is one named thing
  * rather than a `WeakMap` two functions happen to share — and so the after
- * hook's behaviour can be asserted without a running Better Auth.
+ * hook's behavior can be asserted without a running Better Auth.
  */
 export function rememberEndingImpersonation(
   context: object,

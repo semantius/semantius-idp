@@ -13,7 +13,7 @@ import { usePendingForm } from "@/components/common/pending-form"
 /**
  * Form pieces shared by the public pages (FR-ACCT-2, WCAG 2.1 AA).
  *
- * Every input is labelled, carries the right `autocomplete` token so password
+ * Every input is labeled, carries the right `autocomplete` token so password
  * managers behave, and describes its own hint and error through
  * `aria-describedby`. The password field's visibility toggle is a plain
  * checkbox, so the control is already correct on the first paint, before
@@ -186,9 +186,9 @@ export function TextField({
  *   |--------------|-------------------------------------------------|
  *   | Chromium 151 | none — clamped to `disc`                        |
  *   | WebKit 26.5  | none — clamped to `disc`                        |
- *   | Firefox 153  | honoured                                        |
+ *   | Firefox 153  | honored                                        |
  *
- *   All three honour it on `input[type=text]`, so the property is alive and
+ *   All three honor it on `input[type=text]`, so the property is alive and
  *   Blink and WebKit are specifically refusing to let a password field be
  *   unmasked by style. The CSS-only reveal this component once claimed
  *   therefore only ever worked in Firefox. It stays as a one-class fallback

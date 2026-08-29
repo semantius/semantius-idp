@@ -20,7 +20,7 @@ import type { Page } from "@playwright/test"
  * **Serious and critical only, and zero of them.** axe reports four impact
  * levels; the two below these are largely advisory and a gate that failed on
  * them would be turned off within a month. These two are the ones that stop
- * somebody using the page at all — an unlabelled field, a control with no
+ * somebody using the page at all — an unlabeled field, a control with no
  * accessible name, contrast a person cannot read.
  *
  * This is the *automated* half of R-1 and it is not the whole of it: axe

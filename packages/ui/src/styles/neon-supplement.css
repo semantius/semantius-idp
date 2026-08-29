@@ -6,7 +6,7 @@
  * dependency, so `shadcn add` writes its `tokens.css` beside them. That file is
  * NOT imported here, and the copy the CLI created was deleted: it `@import`s a
  * second `shadcn/tailwind.css` base (already imported by `globals.css`) and it
- * redefines the whole shadcn palette in the Neon brand colours — including
+ * redefines the whole shadcn palette in the Neon brand colors — including
  * `--primary`, `--destructive` and every `--sidebar-*`. Two of those are
  * hand-measured divergences from this project's preset that exist because the
  * preset's own values failed R-1's 4.5:1 floor in `e2e/a11y.spec.ts`; letting
@@ -19,12 +19,12 @@
  *
  * `--status-scaling` / `--status-sleeping` are consumed only as arbitrary
  * values (`bg-[var(--status-scaling)]/15`, `text-[var(--status-scaling)]`, and
- * the CodeMirror theme's inline `color`), never as a Tailwind colour utility,
+ * the CodeMirror theme's inline `color`), never as a Tailwind color utility,
  * so they need no `@theme inline` registration.
  */
 
 :root {
-  /* Darkened from Neon's own #d97706. The component pairs the colour with
+  /* Darkened from Neon's own #d97706. The component pairs the color with
      itself at low alpha -- `text-[var(--status-scaling)]` over
      `bg-[var(--status-scaling)]/5` in the blocked-write banner, and over `/15`
      in the mode toggle -- so the ground is nearly white and the ink is the
@@ -37,7 +37,7 @@
      Measured with the WCAG 2.x relative-luminance formula, alpha composited
      over `--background` (light: #ffffff). */
   --status-scaling: #92400e;
-  /* The CodeMirror theme's comment colour, drawn on `--background`. Neon's own
+  /* The CodeMirror theme's comment color, drawn on `--background`. Neon's own
      value already measures 4.83:1 there, so it is kept. */
   --status-sleeping: #6b7280;
 }
@@ -49,7 +49,7 @@
   /* Neon's dark value is #6b7280, which measures 2.27:1 on `--card` -- fine for
      a syntax comment by its own lights but under the floor if anything else
      ever draws text with it. #9ca3af (Neon's own `--muted-foreground` for dark)
-     measures 6.89:1 and reads as the same colour role. */
+     measures 6.89:1 and reads as the same color role. */
   --status-sleeping: #9ca3af;
 }
 

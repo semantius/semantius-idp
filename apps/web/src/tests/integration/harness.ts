@@ -80,7 +80,7 @@ export interface TestContextOptions {
    *
    * Supplied so the suite never reaches the internet: a test that depends on a
    * third party is a test that fails on a train. Without it the check fails
-   * open, which is the documented production behaviour.
+   * open, which is the documented production behavior.
    */
   breachFetch?: (input: string, init?: RequestInit) => Promise<Response>
 }
@@ -174,7 +174,7 @@ export async function createTestContext(
   )
   const config = deriveConfig(file, clients, options.roles ?? BUILT_IN_ROLES)
 
-  // D52's first-run gate memoises "a user exists" for the life of the process,
+  // D52's first-run gate memoizes "a user exists" for the life of the process,
   // and one process runs every file in this suite against a different schema.
   // Forgetting it here is what keeps the second file from inheriting the first
   // file's answer.

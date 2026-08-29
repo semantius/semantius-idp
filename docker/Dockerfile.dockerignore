@@ -22,7 +22,7 @@ config/
 *.pem
 *.key
 
-# The deployment artefacts themselves (D51). The Dockerfile is passed to the
+# The deployment artifacts themselves (D51). The Dockerfile is passed to the
 # builder by path and never read out of the context, and the compose file and
 # the `idp-*` scripts are how you *run* the image rather than anything it needs.
 docker/
@@ -39,7 +39,7 @@ audits
 *.md
 !README.md
 
-# Test and local artefacts.
+# Test and local artifacts.
 playwright-report
 test-results
 coverage

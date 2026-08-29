@@ -71,10 +71,10 @@ export interface FirstUserResult {
 }
 
 /**
- * Whether the deployment still has no users, memoised for the life of the
+ * Whether the deployment still has no users, memoized for the life of the
  * process.
  *
- * **Memoised in one direction only.** `true` is re-checked on every ask, because
+ * **Memoized in one direction only.** `true` is re-checked on every ask, because
  * it is about to become false and a stale `true` would show the setup page to
  * somebody who should see the login form. `false` is never re-queried: a
  * deployment cannot go back to having no users while it is running (deleting
@@ -102,7 +102,7 @@ export function markSetupComplete(): void {
 }
 
 /**
- * Forgets the memoised answer.
+ * Forgets the memoized answer.
  *
  * For tests only: each integration file runs against its own throwaway schema
  * inside one process, so a `false` cached by one would otherwise decide the

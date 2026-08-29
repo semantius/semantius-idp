@@ -14,7 +14,7 @@
  *
  *  - the request must be a plain relative path — a leading `/`, a `..`
  *    segment, a backslash, a null byte, a drive letter or a scheme is refused
- *    outright, not normalised into something safe;
+ *    outright, not normalized into something safe;
  *  - the resolved path is checked to still be inside the branding folder after
  *    resolution, which is the only check that catches whatever the first list
  *    missed;

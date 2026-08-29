@@ -20,7 +20,7 @@ export interface InviteLink {
 export function parseInviteLink(value: string | null): InviteLink | undefined {
   if (!value) return undefined
   // A stash written before D65, or by anything else, is a bare URL. Treated as
-  // one rather than discarded: the link still works, it is only unlabelled.
+  // one rather than discarded: the link still works, it is only unlabeled.
   if (!value.startsWith("{")) return { url: value }
   try {
     const parsed: unknown = JSON.parse(value)

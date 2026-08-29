@@ -9,8 +9,8 @@
  * when the deployment is mounted at a sub-path.
  *
  * The proxy is exercised directly rather than through the route layer: the
- * routes are three lines each and the interesting behaviour — rewriting,
- * caching, the RFC 7009 normalisation — all lives here.
+ * routes are three lines each and the interesting behavior — rewriting,
+ * caching, the RFC 7009 normalization — all lives here.
  */
 
 import { describe, expect, it } from "vitest"
@@ -127,7 +127,7 @@ describe("discovery at the host root", () => {
     }
   })
 
-  it("advertises the endpoints that exist, and the scopes it will honour", async () => {
+  it("advertises the endpoints that exist, and the scopes it will honor", async () => {
     const context = await createTestContext("discovery_surface")
     try {
       const document = await discoveryFor(context)
@@ -267,7 +267,7 @@ describe("revocation (RFC 7009 §2.2)", () => {
         }),
         { providerPath: "/oauth2/revoke" }
       )
-      // The provider answers 400; normalising it is what stops the endpoint
+      // The provider answers 400; normalizing it is what stops the endpoint
       // being an oracle for which tokens exist.
       expect(response.status).toBe(200)
     } finally {
@@ -290,7 +290,7 @@ describe("revocation (RFC 7009 §2.2)", () => {
         }),
         { providerPath: "/oauth2/revoke" }
       )
-      // Only "token not found" is normalised. A missing client is the
+      // Only "token not found" is normalized. A missing client is the
       // caller's mistake and hiding it helps nobody.
       expect(response.status).toBeGreaterThanOrEqual(400)
     } finally {

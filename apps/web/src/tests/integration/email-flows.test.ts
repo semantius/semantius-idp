@@ -40,7 +40,7 @@ describe("e-mail flows", () => {
       expect(ctx.config.requireEmailVerification).toBe(true)
     })
 
-    it("sends a verification link on sign-up and honours it (FR-AUTH-2)", async () => {
+    it("sends a verification link on sign-up and honors it (FR-AUTH-2)", async () => {
       const email = `verify-${Date.now()}@example.com`
 
       const signUp = await ctx.auth.handler(

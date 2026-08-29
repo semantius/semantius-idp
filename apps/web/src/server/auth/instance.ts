@@ -284,7 +284,7 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
       },
       crossSubDomainCookies: { enabled: false },
       ipAddress: {
-        // SEC-2: only honour forwarded headers when a proxy is trusted.
+        // SEC-2: only honor forwarded headers when a proxy is trusted.
         disableIpTracking: false,
         ...(file.server.trustProxy === false
           ? {
@@ -388,7 +388,7 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
         ? [
             gateApiKeyPlugin(
               apiKey({
-                // FR-KEY-1: hashed at rest, prefixed for recognisability.
+                // FR-KEY-1: hashed at rest, prefixed for recognizability.
                 defaultPrefix: "idp_",
                 disableKeyHashing: false,
                 requireName: true,
@@ -555,9 +555,9 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
     ],
 
     // FR-SIGNUP-2/3, FR-AUTH-1: the approval gate, the domain restriction and
-    // e-mail normalisation, enforced beneath every path that creates a user or
+    // e-mail normalization, enforced beneath every path that creates a user or
     // a session.
-    // FR-AUTH-1: normalise addresses before Better Auth validates them.
+    // FR-AUTH-1: normalize addresses before Better Auth validates them.
     hooks: {
       before: buildBeforeHook({
         config,
@@ -602,7 +602,7 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
  * session has no session token; in 1.7.1 the api-key plugin puts the *key
  * string* there, so the test was always false, every key-issued JWT claimed
  * `azp: "idp"`, and `apiKeys.tokenClientId` was configuration that did
- * nothing. Worse, it was invisible: `tokens.test.ts` asserted the behaviour
+ * nothing. Worse, it was invisible: `tokens.test.ts` asserted the behavior
  * the bug produced. The answer now comes from `isApiKeySession`, which reads a
  * marker our own gate stamps on the session it watched the plugin build — the
  * one place in the process that knows.

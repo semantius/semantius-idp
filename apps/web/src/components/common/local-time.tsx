@@ -14,7 +14,7 @@ import { useSyncExternalStore } from "react"
  * server's ICU, the server's timezone and the configured locale; the client's
  * is the visitor's. Formatting on both sides produces two different strings
  * for the same node and React tears the hydration. So the first paint is a
- * deterministic sliced-UTC string — labelled `UTC` wherever a time is shown,
+ * deterministic sliced-UTC string — labeled `UTC` wherever a time is shown,
  * so it is not mistaken for local — and a hydration gate swaps it for the real
  * thing.
  * `useSyncExternalStore` with a server snapshot of `false` is the smallest
@@ -76,7 +76,7 @@ export function LocalTime({
 }
 
 /**
- * Memoised per variant. `Intl.DateTimeFormat` is expensive to construct and an
+ * Memoized per variant. `Intl.DateTimeFormat` is expensive to construct and an
  * audit page renders fifty of these; the browser's locale and timezone cannot
  * change without a reload, so one formatter per variant is all that is needed.
  */

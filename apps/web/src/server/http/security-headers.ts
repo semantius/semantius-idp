@@ -3,7 +3,7 @@
  *
  * **CSP without a nonce, and why.** A nonce is the better mechanism and it is
  * not available here: TanStack Start streams the HTML shell, and the inline
- * scripts that carry the router's serialised state are emitted by the
+ * scripts that carry the router's serialized state are emitted by the
  * framework — there is no seam to stamp a per-request nonce into them, and a
  * policy that omits them stops the application from hydrating. Hashing is no
  * better: the payload is different on every request by construction.
@@ -176,7 +176,7 @@ function setUnlessPresent(headers: Headers, name: string, value: string): void {
 }
 
 /**
- * Gives a 429 the header clients actually honour (SEC-2).
+ * Gives a 429 the header clients actually honor (SEC-2).
  *
  * Better Auth's rate limiter answers with `X-Retry-After`, which is not a
  * header — no browser, no `fetch` wrapper and no HTTP client library does

@@ -105,7 +105,7 @@ Four layers, each answering a question the others cannot:
 | unit | `src/tests/unit/` | Does this function decide correctly? |
 | integration | `src/tests/integration/` | Against a real Postgres, does the flow work? |
 | e2e | `e2e/` | In a browser, against the built image, in both deployment shapes — does a person get through? |
-| smoke | `scripts/smoke-test.ts` | Does the artefact we publish start, serve, and stop? |
+| smoke | `scripts/smoke-test.ts` | Does the artifact we publish start, serve, and stop? |
 
 Integration tests each get their own uniquely named schema, which is cheap
 because every table is schema-scoped. They read `IDP_TEST_DATABASE_URL`, else
@@ -126,7 +126,7 @@ tests by design.
 
 ### What a good test looks like here
 
-It asserts the behaviour a requirement names, and its comment says which
+It asserts the behavior a requirement names, and its comment says which
 defect it exists for. The suite is full of assertions that look arbitrary until
 you read the sentence above them — that sentence is the point. A test whose
 failure message does not tell you what broke is half a test.
@@ -143,7 +143,7 @@ failure message does not tell you what broke is half a test.
   so.
 - **British spelling** in prose. American in identifiers where an API uses it.
 
-## Changing behaviour the spec describes
+## Changing behavior the spec describes
 
 [spec-v1.md](spec-v1.md) is signed off. A change to a numbered requirement is a
 **spec amendment**: add a row to the decision log in §12 with a `D` number, say

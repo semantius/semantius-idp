@@ -9,7 +9,7 @@ import { readOauthQuery, rawSearch } from "@/lib/oauth-query"
  * signed. It does not have to reproduce the bytes: `verifyOAuthQueryParams`
  * parses with `URLSearchParams` and canonicalises before hashing, so order and
  * the choice between `+` and `%20` are free. What is not free is a repeated
- * key, and that is exactly what went wrong — Start's search serialiser writes
+ * key, and that is exactly what went wrong — Start's search serializer writes
  * one as a JSON array, so `ba_param=a&ba_param=b` came back as
  * `ba_param=["a","b"]`, the signature never matched, `/oauth2/continue`
  * answered 400, and every OIDC login that passed through the sign-in page
@@ -68,7 +68,7 @@ describe("rawSearch", () => {
 })
 
 describe("readOauthQuery", () => {
-  it("recognises the provider's redirect and rebuilds it", () => {
+  it("recognizes the provider's redirect and rebuilds it", () => {
     const carried = readOauthQuery({ search: authorizationSearch() })
     expect(carried).toBeDefined()
     expect(new URLSearchParams(carried).getAll("ba_param")).toHaveLength(5)

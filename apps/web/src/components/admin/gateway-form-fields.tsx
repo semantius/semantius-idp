@@ -209,7 +209,7 @@ type FormSubmitEvent = Parameters<
  * The submit-time check, reading values straight out of the form.
  *
  * Uncontrolled inputs throughout, so the fields keep their `defaultValue`
- * behaviour and a restored draft is not fighting React state.
+ * behavior and a restored draft is not fighting React state.
  */
 export function useGatewayForm(): {
   onSubmit: (event: FormSubmitEvent) => void

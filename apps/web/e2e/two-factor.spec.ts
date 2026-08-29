@@ -11,7 +11,7 @@ import { totpCode } from "../src/tests/fixtures/totp"
  * codes with the same helper the server verifies them with. Reusing it here
  * keeps that property and costs nothing.
  *
- * The secret is read off the enrolment page's **manual-entry key** rather than
+ * The secret is read off the enrollment page's **manual-entry key** rather than
  * decoded from the QR image: the QR is rendered server-side as an SVG and is
  * `aria-hidden`, and the text beside it is what a person without a camera
  * uses — so reading it is also a check that it is there.
@@ -20,7 +20,7 @@ import { totpCode } from "../src/tests/fixtures/totp"
 test.describe.configure({ mode: "serial" })
 
 /**
- * What the enrolment produced, for the test after it.
+ * What the enrollment produced, for the test after it.
  *
  * A module-level variable rather than a fixture: enrolling twice would be two
  * minutes spent proving the same thing, and `mode: "serial"` with one worker
@@ -31,7 +31,7 @@ let enrolled:
   | undefined
 
 test.describe("two-factor authentication", () => {
-  test("enrol, then answer the challenge on the next sign-in", async ({
+  test("enroll, then answer the challenge on the next sign-in", async ({
     page,
     app,
     stack,
@@ -45,7 +45,7 @@ test.describe("two-factor authentication", () => {
       page.getByText("Two-factor authentication is off.")
     ).toBeVisible()
 
-    // Turning it on asks for the password again (FR-AUTH-5); the enrolment
+    // Turning it on asks for the password again (FR-AUTH-5); the enrollment
     // only appears once it is right.
     await page.getByLabel("Password", { exact: true }).fill(user.password)
     await submit(page, "Turn on")
@@ -101,7 +101,7 @@ test.describe("two-factor authentication", () => {
     page,
     app,
   }) => {
-    expect(enrolled, "the enrolment test must run first").toBeTruthy()
+    expect(enrolled, "the enrollment test must run first").toBeTruthy()
     const { email, password, backupCodes } = enrolled!
 
     await signIn(page, app, email, password)

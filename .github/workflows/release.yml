@@ -14,7 +14,7 @@ name: Release
 #
 # What runs here and what does not:
 #
-#   * The **artefact** gates run — the container smoke test, the vulnerability
+#   * The **artifact** gates run — the container smoke test, the vulnerability
 #     scan, the SBOM. They ask whether *this image* works, and the image is
 #     what a tag publishes.
 #   * The **source** gates do not — lint, typecheck, unit, integration, e2e.
@@ -95,7 +95,7 @@ jobs:
 
           # The image stamps `IDP_VERSION` from the tag, and `/healthz`, `idp
           # version` and the admin system page all report it. If the repository
-          # says 0.0.1 while the artefact says 0.1.0, a running version can no
+          # says 0.0.1 while the artifact says 0.1.0, a running version can no
           # longer be traced back to a tree — so the two have to agree, and the
           # bump belongs in the commit the tag points at.
           core="${version%%-*}"
@@ -188,7 +188,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Smoke test (TST-8, OPS-13)
-        # The only gate that asks whether the artefact works: it starts the
+        # The only gate that asks whether the artifact works: it starts the
         # image, migrates, completes the first-run wizard, verifies a token
         # against the published JWKS and checks that SIGTERM exits 0.
         env:

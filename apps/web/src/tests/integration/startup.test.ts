@@ -70,7 +70,7 @@ describe("startup sequence (OPS-2)", () => {
   })
 
   it("skips the gateway sweep only when there is nothing to sweep (FR-GW-2)", async () => {
-    // The skip is a real decision rather than an optimisation: an empty
+    // The skip is a real decision rather than an optimization: an empty
     // `gateways` block with rows still in the table is exactly the case the
     // sweep exists for, so it must not be skipped then.
     const ctx = await createTestContext("startup-gateways")

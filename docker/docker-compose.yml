@@ -86,7 +86,7 @@ services:
       postgres:
         # Not `depends_on: [postgres]`, which only waits for the *container* to
         # start: the IdP migrates on boot, and a migration against a Postgres
-        # that is still initialising fails the whole start-up (OPS-2).
+        # that is still initializing fails the whole start-up (OPS-2).
         condition: service_healthy
     env_file:
       # **This is how the database URLs reach the container** (D48), and the

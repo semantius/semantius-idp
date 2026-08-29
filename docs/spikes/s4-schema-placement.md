@@ -1,4 +1,4 @@
-# S4 — Schema placement and pooler behaviour (risk R8)
+# S4 — Schema placement and pooler behavior (risk R8)
 
 **Status:** done, all checks green · **Date:** 2026-08-23
 **Reproduce:** `pnpm --filter web exec bun run scripts/spike-s4-schema-placement.ts`

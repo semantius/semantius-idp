@@ -1,5 +1,5 @@
 /**
- * Recognising an interrupted authorization on an interstitial page
+ * Recognizing an interrupted authorization on an interstitial page
  * (FR-OIDC-9).
  *
  * The provider does not hand the request over in a parameter called
@@ -11,7 +11,7 @@
  *
  * So there are two shapes to read, and both really occur:
  *
- *  - the provider's own redirect, recognised by the signature it carries;
+ *  - the provider's own redirect, recognized by the signature it carries;
  *  - this app's hand-off between its own pages — login → two-factor →
  *    forced change — where the string travels as a single parameter because a
  *    nested query string cannot be spliced into another one.
@@ -33,8 +33,8 @@ export interface OauthQuerySource {
  *
  * **Not `location.searchStr`**, which is where this used to come from and is
  * the reason no authorization ever resumed through an interstitial. Start
- * re-serialises the search object rather than keeping the bytes it received,
- * and its serialiser writes a repeated key as **one JSON array**:
+ * re-serializes the search object rather than keeping the bytes it received,
+ * and its serializer writes a repeated key as **one JSON array**:
  *
  *     sent   ba_param=ba_iat&ba_param=client_id&ba_param=exp
  *     got    ba_param=%5B%22ba_iat%22%2C%22client_id%22%2C%22exp%22%5D

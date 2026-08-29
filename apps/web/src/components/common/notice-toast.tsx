@@ -33,7 +33,7 @@ const BACKSTOP_RETRY_MS = 1_000
  * string of every path that is not `/oauth2/*` or `/api/auth/*`, so
  * `?subject=jane@example.com` would write one deleted account's address into
  * the request log on every admin action — a personal identifier in a log the
- * same codebase anonymises IP addresses for (SEC-5). The stash is
+ * same codebase anonymizes IP addresses for (SEC-5). The stash is
  * `server/http/one-shot.ts`, the same one the client secret and the
  * set-password link use.
  */

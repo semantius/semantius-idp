@@ -40,7 +40,7 @@ import { createLocalJWKSet, jwtVerify } from "jose"
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..")
 
-/** D51: the deployment artefacts live in `docker/`, and the build context is `..`. */
+/** D51: the deployment artifacts live in `docker/`, and the build context is `..`. */
 const COMPOSE_FILE = "docker/docker-compose.yml"
 const DOCKERFILE = "docker/Dockerfile"
 
@@ -324,7 +324,7 @@ async function main(): Promise<void> {
     // `build:`, so `compose up` **silently builds from source** when the tag
     // is not present locally. That is right for `idp-create.sh`, where an
     // operator has no image yet, and wrong here: TST-8 exists to test the
-    // artefact CI is about to publish, and a mistyped `IDP_IMAGE` would have
+    // artifact CI is about to publish, and a mistyped `IDP_IMAGE` would have
     // it quietly test a fresh build of the working tree instead — passing,
     // while proving nothing about the thing being released. Verified by
     // running this against `nonexistent-image:v0`, which built and passed.

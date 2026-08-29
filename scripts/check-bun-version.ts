@@ -4,7 +4,7 @@
  * Bun is not a build tool here — it is **the runtime**. The final image is
  * `oven/bun:<version>-slim` with Bun as PID 1, the CLI and the server are
  * bundled with `--target=bun`, and the health check is a Bun one-liner. That
- * makes the version a property of the artefact, not of somebody's toolchain,
+ * makes the version a property of the artifact, not of somebody's toolchain,
  * and it is written down in five places:
  *
  *   .bun-version                       the source of truth

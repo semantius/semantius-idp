@@ -80,7 +80,7 @@ export function parseJsoncText(
 }
 
 /**
- * `$schema` is honoured for editor IntelliSense and is exempt from the
+ * `$schema` is honored for editor IntelliSense and is exempt from the
  * unknown-key rule (CFG-1). It is stripped before validation so that every
  * schema can keep `additionalProperties: false`.
  */

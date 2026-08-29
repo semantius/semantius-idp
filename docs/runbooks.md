@@ -282,7 +282,7 @@ and a log entry can be tied together.
 
 What is recorded (SEC-6): sign-in success and failure, sign-up, verification,
 approval and rejection, suspension and its lifting, role changes, password
-changes and resets, session revocation, two-factor enrolment and reset, API-key
+changes and resets, session revocation, two-factor enrollment and reset, API-key
 creation and revocation and failures, impersonation, consent granted and
 revoked, token issuance and revocation, client reconciliation diffs, key
 rotation, and refused social sign-ins.
@@ -311,7 +311,7 @@ the administrator case. For an ordinary user:
   password there instead; it forces a change at their next sign-in.
 - **Lost their second factor** — an administrator resets it from the same page.
   That turns 2FA off, signs them out everywhere, and tells them by e-mail. They
-  enrol again afterwards.
+  enroll again afterwards.
 - **Suspended by mistake** — lift the suspension; the account works again
   immediately.
 - **Waiting for approval** — approve them; they get an e-mail and can sign in.

@@ -241,7 +241,7 @@ jobs:
   # ---------------------------------------------------------------------------
   # The image, and the only test that exercises it (OPS-1, TST-8, SEC-9).
   #
-  # Everything above tests the application. This tests the artefact: that what
+  # Everything above tests the application. This tests the artifact: that what
   # would be published starts, migrates, serves the protocol, signs somebody in
   # and stops when told. A missing file in the final stage, a signal that never
   # reaches PID 1, a health check probing the wrong path — none of those are
@@ -249,7 +249,7 @@ jobs:
   # that is only ever found in production.
   #
   # amd64 only, and nothing is published: arm64 is emulated here and would
-  # roughly triple the build for an artefact nobody merges. Both architectures
+  # roughly triple the build for an artifact nobody merges. Both architectures
   # and the registry belong to `release.yml`, which is the workflow a tag
   # actually triggers — this one never sees a tag, because it filters on
   # branches (**D73**).

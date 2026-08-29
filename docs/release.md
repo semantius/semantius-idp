@@ -29,7 +29,7 @@ against, not to re-run by hand:
       actually implements.
 - [ ] The README's quick start still matches what the smoke test does.
 - [ ] `config.example/` still validates — CI checks this, but check the
-      comments still describe the current behaviour. `config-schema/` is
+      comments still describe the current behavior. `config-schema/` is
       generated; `config:schemas --check` is the gate that proves it.
 
 ## Social sign-in (TST-7)
@@ -100,7 +100,7 @@ The Neon constraints test asserts the shape. This asserts that Neon agrees.
       query that requires the `authenticated` role succeeds.
 - [ ] Rotate the signing key (`idp rotate-keys`) and confirm tokens issued
       **before** the rotation still verify, and new ones do too. This is the
-      grace-period behaviour, and getting it wrong is invisible until a
+      grace-period behavior, and getting it wrong is invisible until a
       rotation happens in production.
 
 ## A last look at the deployment
@@ -161,7 +161,7 @@ changelog's section for the version. A merge to `main` does none of that.
 A pre-release tag (`v1.0.0-rc1`) publishes as `1.0.0-rc1` only — no `1.0`, no
 `1`, no `latest` — and the GitHub release is marked as a pre-release.
 
-> Until 2026-08-27 this section described behaviour that did not exist: the
+> Until 2026-08-27 this section described behavior that did not exist: the
 > publish steps lived in `ci.yml`, guarded on `refs/tags/v*`, in a workflow
 > that only triggers on branches. Nothing had ever been published. **D73**.
 

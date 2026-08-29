@@ -167,7 +167,7 @@ describe("config loader", () => {
     expect(issue?.message).toContain("`slidingWindow`")
   })
 
-  it("honours the $schema key without complaining about it", () => {
+  it("honors the $schema key without complaining about it", () => {
     const { config } = load({
       config: { $schema: "./config.schema.json", ...baseConfig() },
     })

@@ -67,7 +67,7 @@ export default defineConfig({
   expect: { timeout: 10_000 },
 
   use: {
-    // Every artefact only on failure: a green run should leave nothing behind,
+    // Every artifact only on failure: a green run should leave nothing behind,
     // and a red one should leave everything needed to understand it.
     trace: "retain-on-failure",
     screenshot: "only-on-failure",

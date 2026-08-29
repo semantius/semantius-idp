@@ -226,7 +226,7 @@ describe("access tokens (FR-OIDC-5/6, risk R1, D32)", () => {
     expect(aud).toContain(ISSUER)
     // The provider appends its own userinfo endpoint whenever `openid` is
     // requested and offers no way to suppress it; `jwt.sign`, which S1
-    // planned to normalise it in, cannot be used without moving the key set
+    // planned to normalize it in, cannot be used without moving the key set
     // off this deployment. Recorded as D32 — every RFC 7519 §4.1.3 verifier
     // checks `aud` by membership, which is what the test above proves.
     expect(aud).toContain(`${ISSUER}/api/auth/oauth2/userinfo`)
@@ -244,7 +244,7 @@ describe("access tokens (FR-OIDC-5/6, risk R1, D32)", () => {
     expect(profile.sub).toBeTruthy()
   })
 
-  it("honours a resource the client is linked to, and refuses one it is not", async () => {
+  it("honors a resource the client is linked to, and refuses one it is not", async () => {
     const allowed = await exchange({ resource: "https://api.example.com" })
     const payload = decodeJwt(String(allowed.access_token))
     const aud = Array.isArray(payload.aud) ? payload.aud : [payload.aud]
@@ -474,8 +474,8 @@ describe("revocation (FR-OIDC-12, FR-AUTH-3)", () => {
     // RFC 7009 §2.2 is explicit that an *unknown* token is a success, so a
     // client cannot use the endpoint as an oracle for which tokens exist.
     // 1.7.1 answers `400 invalid_request "token not found"`. This asserts the
-    // behaviour as it stands so that M8c's issuer-root delegate, which
-    // normalises it to 200, is a visible change rather than a silent one.
+    // behavior as it stands so that M8c's issuer-root delegate, which
+    // normalizes it to 200, is a visible change rather than a silent one.
     const unknown = await revoke("not-a-token")
     expect(unknown.status).toBe(400)
     expect(JSON.parse(unknown.body).error).toBe("invalid_request")

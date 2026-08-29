@@ -30,7 +30,7 @@ import { PendingForm, SubmitButton } from "@/components/common/pending-form"
  *
  * `/login` sends the browser here when Better Auth answers a correct password
  * with `twoFactorRedirect` instead of a session. At that moment there is *no*
- * session: what authorises this page is the short-lived `two_factor` cookie
+ * session: what authorizes this page is the short-lived `two_factor` cookie
  * the sign-in set, and completing the challenge is what creates the session.
  * So a failure cannot fall back to "you are already signed in" — it goes back
  * to `/login`.
@@ -87,7 +87,7 @@ export const Route = createFileRoute("/two-factor")({
           {
             code: (backup ? form.backupCode : form.code)?.trim() ?? "",
             // Better Auth reads `trustDevice` from the body of either verify
-            // endpoint and honours `trustDeviceMaxAge` from the plugin.
+            // endpoint and honors `trustDeviceMaxAge` from the plugin.
             trustDevice: form.trustDevice === "1",
           },
           request

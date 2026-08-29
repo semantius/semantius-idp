@@ -110,7 +110,7 @@ describe("Better Auth skeleton against Postgres", () => {
       ["mustChangePassword", true],
       ["approvedBy", "self"],
       ["approvedAt", new Date(0).toISOString()],
-    ])("never honours %s in a sign-up body", async (field, value) => {
+    ])("never honors %s in a sign-up body", async (field, value) => {
       const email = `massassign-${field.toLowerCase()}-${Date.now()}@example.com`
       const response = await ctx.auth.handler(
         authRequest("/sign-up/email", {
@@ -173,7 +173,7 @@ describe("Better Auth skeleton against Postgres", () => {
     })
   })
 
-  it("normalises the e-mail address (FR-AUTH-1)", async () => {
+  it("normalizes the e-mail address (FR-AUTH-1)", async () => {
     const stamp = Date.now()
     const response = await ctx.auth.handler(
       authRequest("/sign-up/email", {

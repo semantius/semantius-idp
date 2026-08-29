@@ -65,7 +65,7 @@ const sessions = new Map<string, RpSession>()
 /**
  * `allowInsecureRequests` because the test deployments serve plain HTTP on
  * loopback. Remove it — and everything stops working over http, which is the
- * correct behaviour for anything else.
+ * correct behavior for anything else.
  */
 const config = await client.discovery(
   new URL(ISSUER),

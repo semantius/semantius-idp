@@ -108,12 +108,12 @@ test.describe("the admin area", () => {
     }
 
     // Two halves, asserted separately, because they fail for different
-    // reasons: the loader has to honour `page`, and the Next link has to build
+    // reasons: the loader has to honor `page`, and the Next link has to build
     // a URL that says so.
     await app.goto(`/admin/users?q=${prefix}&pageSize=10&page=2`)
     await expect(
       page.locator("tbody tr"),
-      "the loader honours the page parameter"
+      "the loader honors the page parameter"
     ).toHaveCount(2)
 
     await app.goto(`/admin/users?q=${prefix}&pageSize=10`)
@@ -399,7 +399,7 @@ test.describe("the admin area", () => {
     await signInAsAdmin(page, app)
     await app.goto("/admin/clients")
 
-    // FR-OIDC-2: a file-managed row is labelled and carries no controls, because
+    // FR-OIDC-2: a file-managed row is labeled and carries no controls, because
     // an edit here is one the next restart would silently undo.
     const fileRow = page.locator("tbody tr").filter({ hasText: "e2e-app" })
     await expect(fileRow.getByText("From the file")).toBeVisible()
@@ -572,7 +572,7 @@ test.describe("the admin area", () => {
     await signInAsAdmin(page, app)
     await app.goto("/admin/gateways")
 
-    // FR-GW-2: the config-declared row is labelled and carries no menu at all,
+    // FR-GW-2: the config-declared row is labeled and carries no menu at all,
     // because an edit here is one the next restart would silently undo. The
     // same assertion D50's client test makes, and for the same reason.
     const fileRow = page.locator("tbody tr").filter({ hasText: "fromfile" })

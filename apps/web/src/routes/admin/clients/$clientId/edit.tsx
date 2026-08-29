@@ -53,7 +53,7 @@ const CONSUMED = ["error", "draft"] as const
  *
  * **A file-managed row is refused with a redirect, not `notFound()`.** The
  * write would be undone by the next restart (FR-OIDC-2, **D50**), so it must
- * not happen — but `notFound()` is a `min-h-svh` centred page with no sidebar
+ * not happen — but `notFound()` is a `min-h-svh` centered page with no sidebar
  * and no link out (`__root.tsx`), replying "this does not exist" about a row
  * that was visible on the previous screen. The list with a reason is the shape
  * every other refusal on that page already uses.
@@ -220,7 +220,7 @@ function EditClientPage() {
             {t.common.cancel}
           </Link>
           {/* `admin.actions.save` ("Save"), not `common.save` ("Save
-              changes"): every other write in this area is labelled the first
+              changes"): every other write in this area is labeled the first
               way. */}
           <SubmitButton>{t.admin.actions.save}</SubmitButton>
         </div>

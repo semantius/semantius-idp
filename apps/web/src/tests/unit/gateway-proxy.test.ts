@@ -9,7 +9,7 @@
  * database and no upstream.
  *
  * What is deliberately *not* here is the part a stub cannot prove: that Bun's
- * own `fetch` honours `duplex: "half"` and `decompress: false`. The
+ * own `fetch` honors `duplex: "half"` and `decompress: false`. The
  * integration suite streams a real body through a real `Bun.serve` for that.
  */
 
@@ -571,7 +571,7 @@ describe("outbound headers (FR-GW-3)", () => {
     expect(sent.get("x-forwarded-proto")).toBe("http")
   })
 
-  it("honours trusted inbound forwarding headers when trustProxy is on", async () => {
+  it("honors trusted inbound forwarding headers when trustProxy is on", async () => {
     const h = harness({
       config: config({ server: { baseUrl: ISSUER, trustProxy: true } }),
     })

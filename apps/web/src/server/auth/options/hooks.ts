@@ -4,7 +4,7 @@
  * Two things live here, both of which have to happen *before* validation or the
  * endpoint's own logic:
  *
- * - **E-mail normalisation (FR-AUTH-1).** "E-mails are trimmed and lower-cased
+ * - **E-mail normalization (FR-AUTH-1).** "E-mails are trimmed and lower-cased
  *   everywhere." Doing it in a database hook is too late: the endpoint's schema
  *   rejects `" User@Example.com "` as malformed before any row is written, so a
  *   user who copied their address with a trailing space gets an unhelpful
@@ -296,7 +296,7 @@ export function auditEventFor(
       // already carried by the protocol error the client receives.
       return ok ? { action: "token.issued", outcome } : undefined
     case "/two-factor/enable":
-      // Only on success — a refused enrolment changed nothing (FR-2FA-1).
+      // Only on success — a refused enrollment changed nothing (FR-2FA-1).
       return ok ? { action: "twofactor.enabled", outcome } : undefined
     case "/two-factor/disable":
       return ok ? { action: "twofactor.disabled", outcome } : undefined

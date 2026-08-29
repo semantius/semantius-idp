@@ -16,7 +16,7 @@
  *
  * **Roles are catalog-filtered** (FR-ROLE-2): a role that has been removed from
  * `roles.jsonc` stops appearing in tokens, even though the column still holds
- * it. The drop is the point — a resource server authorising on a role the
+ * it. The drop is the point — a resource server authorizing on a role the
  * deployment no longer defines is exactly the situation the catalog exists to
  * prevent.
  */
@@ -49,7 +49,7 @@ export function buildUserClaims(
   config: IdpConfig
 ): Claims {
   // Static claims first, so a deployment cannot accidentally shadow a user
-  // claim with a constant and quietly break authorisation downstream.
+  // claim with a constant and quietly break authorization downstream.
   const claims: Claims = { ...config.file.jwt.claims }
 
   if (!user) return claims

@@ -10,7 +10,7 @@
  * Vite 8 stopped coercing a relative base to `/` for the dev server and now
  * prefixes each transform URL with `/./`. A real path survives it — `/./src/
  * router.tsx` still resolves against the root — but Vite's internal URLs are
- * recognised by their `/@` prefix, so `/./@fs/…` resolves to null and falls
+ * recognized by their `/@` prefix, so `/./@fs/…` resolves to null and falls
  * through to the application's 404. Hence `base` is relative for the build
  * only (`vite.config.ts`), and these two requests are what says so.
  *

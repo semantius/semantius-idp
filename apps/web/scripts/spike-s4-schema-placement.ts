@@ -1,8 +1,8 @@
 /**
- * Spike S4 (risk R8) — schema placement and Neon pooler behaviour.
+ * Spike S4 (risk R8) — schema placement and Neon pooler behavior.
  *
  * Proves, against the real dev database:
- *   1. `database.schema` is honoured at runtime — a fresh migrate into a
+ *   1. `database.schema` is honored at runtime — a fresh migrate into a
  *      non-default schema puts every table AND drizzle's journal there, and
  *      leaves `public` untouched;
  *   2. the default schema still works, so the canonical SQL is not a special case;

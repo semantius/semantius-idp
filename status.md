@@ -1,6 +1,6 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-29 · **Branch:** `main` · **Head:** `59e1be7`, last tag **v0.5.0**
+**As of:** 2026-08-29 · **Branch:** `main` · **Head:** `993f2e4`, last tag **v0.5.0**
 **Plan:** `~/.claude/plans/backend-systems-validate-the-luminous-backus.md` (API gateways)
 **Spec:** [spec-v1.md](spec-v1.md) — amended through **D91**
 

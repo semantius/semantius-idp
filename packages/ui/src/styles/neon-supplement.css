@@ -163,7 +163,7 @@
  *   text-muted-foreground/65   2.51:1 light   3.61:1 dark
  *   text-destructive/70        3.68:1 light   3.55:1 dark   (on `bg-destructive/5`)
  *
- * At full opacity the same inks measure 4.81:1 / 6.76:1 and 5.06:1 / 5.86:1 --
+ * At full opacity the same inks measure 6.56:1 / 6.76:1 and 5.06:1 / 5.86:1 --
  * over the floor in both themes, on both grounds. Composited over `--card`
  * (and over `--card` plus `--muted` at 10 % for the row-number cell) with the
  * WCAG 2.x relative-luminance formula.
@@ -197,7 +197,7 @@
  * the light theme, which the axe scan of /admin/database fails on. It is not
  * one of the component's Tailwind classes but a `@codemirror/view` base-theme
  * rule, so there is nothing in `sql-runner.tsx` to have got wrong and nothing
- * to patch there either. `--muted-foreground` measures 4.81:1 light and
+ * to patch there either. `--muted-foreground` measures 6.56:1 light and
  * 7.63:1 dark, and is the same ink every other hint on the page uses.
  *
  * `.cm-editor` is in the selector for specificity: style-mod mounts

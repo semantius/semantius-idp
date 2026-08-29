@@ -208,6 +208,32 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ### Fixed
 
+- **The form fields were invisible** (**D96**, R-1). Reported by the owner on
+  the D93 form pages. In the `base-rhea` style `input`, `textarea`,
+  `native-select` and `checkbox` are every one of them `border-transparent
+  bg-input/50` — so a control's *fill* is the only thing on screen that says it
+  is there — while `--input` carries the stone base color's `--border` value, a
+  hairline. Composited at 50 % over a white card that is #f3f2f1, **1.11:1**,
+  and an unchecked checkbox 1.23:1. The token is now stone-400 in the light
+  theme (1.41:1 for a field, 1.90:1 for a checkbox) and 26 % white in the dark
+  one (1.48:1 / 2.14:1). A visible border would be the better answer: it is set
+  by four registry components, which are never patched because the next
+  `shadcn add` undoes it.
+
+  **`--muted-foreground` moves with it**, 0.553 → 0.48. It is the ink a
+  placeholder is drawn in, and the application has exactly one — the schema
+  explorer's search on `/admin/database` — which measured 4.30:1 on the old
+  fill and would have been 3.41:1 on the new one. It was under R-1's 4.5:1
+  floor before this change and no gate could see it: axe measures neither
+  placeholder text nor a pairing no page happens to render. It is 6.56:1 on
+  white and 4.66:1 on a field now, and every hint paragraph under every field
+  gains with it. The dark theme keeps its own, which is why `--input` stops at
+  26 % there: 30 % would put that placeholder at 4.27:1.
+
+  Third deliberate divergence from the preset, after `--destructive` and
+  `--status-scaling` (**D83**), and the third that the next `apply` silently
+  resets — the measurements are in the comment beside each token.
+
 - **Two scrollbars on every signed-in page** (**D95**). The shell was `h-svh`
   *in* the document's flow: a box exactly as tall as the viewport, in a
   document then exactly as tall as the viewport, and one rounding away from

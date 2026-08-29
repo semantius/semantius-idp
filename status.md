@@ -2,7 +2,7 @@
 
 **As of:** 2026-08-29 · **Branch:** `main` · **Head:** `2687f72`, last tag **v0.5.0**
 **Plan:** `~/.claude/plans/users-has-a-full-binary-meteor.md` (full-page forms)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D95**
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D96**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
 gate; API gateways (FR-GW, **D91**/**D92**) landed on 2026-08-29, and the
@@ -91,6 +91,69 @@ README quick start against it, and confirming `latest` from outside.
 
 ---
 
+## The form fields were invisible (2026-08-29, **D96**)
+
+A fifth note from the same round and the same screen: *"something is wrong with
+the theme — the inputs are not visible"*, on `/admin/gateways/new`.
+
+Nothing was wrong with the page. In the `base-rhea` style every text control is
+`border-transparent bg-input/50` — `input`, `textarea`, `native-select`, and
+the checkbox at `/90` — so a control's **fill is the only thing on screen that
+says it is there**. And `--input` carries the stone base color's `--border`
+value, `oklch(0.923 0.003 48.717)`: a hairline color, painted as a surface.
+Composited at 50 % over a white card that is `#f3f2f1` — **1.11:1**, and the
+unchecked checkboxes 1.23:1. It survives a screenshot and does not survive a
+dim panel, which is why it had been on screen for weeks without anyone
+noticing.
+
+Checked against the registry before anything was changed: `r/colors/stone.json`
+ships exactly that `--input`, and `r/styles/base-rhea` ships those class
+strings. This is the preset's own arithmetic, not a botched `apply` — and the
+next `apply` brings it back.
+
+**The border is not reachable, so the token is the fix.** A 1 px border at 3:1
+is what an accessible field normally has, and the transparent one is set by
+four registry components; patching them is the thing AGENTS.md forbids, and
+the next `shadcn add` would undo it silently. A *fill* cannot reach 3:1 without
+going near-black — a `/90` checkbox at 3:1 needs `--input` ≈ `#898989`, which
+makes a field `#c4c4c4` and reads as disabled — so the value chosen is the one
+that makes a field unmistakably a field: **stone-400** in the light theme,
+**26 % white** in the dark one.
+
+**Darkening the ground moved a floor with it.** `--muted-foreground` is the ink
+a placeholder is drawn in, and the application has exactly one placeholder: the
+schema explorer's search on `/admin/database`, a page the axe scan visits. It
+measured 4.30:1 on the old fill — already under R-1's 4.5:1 — and would have
+been 3.41:1 on the new one. No gate could see either number: axe measures
+neither placeholder text nor a pairing no page happens to render, which is also
+why `--muted-foreground` on `--muted` has been 4.41:1 all along. The light
+theme's is `oklch(0.48 0.013 58.071)` now; the dark theme's is unchanged, which
+is why its `--input` stops at 26 % rather than matching light's step — 30 %
+would put that placeholder at 4.27:1.
+
+Measured with the WCAG 2.x relative-luminance formula, composited over `--card`:
+
+| pairing (light unless said) | before | after |
+| --- | --- | --- |
+| a field's fill on `--card` | 1.11:1 | **1.41:1** |
+| an unchecked checkbox | 1.23:1 | **1.90:1** |
+| a field's fill on `--card`, dark | 1.23:1 | **1.48:1** |
+| an unchecked checkbox, dark | 1.50:1 | **2.14:1** |
+| a placeholder on a field | 4.30:1 | **4.66:1** |
+| `--muted-foreground` on white | 4.81:1 | **6.56:1** |
+| `--muted-foreground` on `--muted` | 4.41:1 | **6.02:1** |
+
+Nothing else in the palette moved, and no component changed. The two
+measurements in `neon-supplement.css` that cite `--muted-foreground`'s 4.81:1
+are restated at 6.56:1 in the same change, because a stale measurement in a
+comment is worse than none.
+
+**This is the third deliberate divergence from the preset** — `--destructive`
+(**D83**) and `neon-supplement.css`'s `--status-scaling` are the other two —
+and the third that an `apply` resets. Each one says so beside itself.
+
+---
+
 ## Four owner notes on the D93 pages (2026-08-29, **D95**)
 
 Visual feedback on the pages D93 built, from the owner running the app. None of
@@ -109,6 +172,10 @@ and `e2e/account.spec.ts`'s assertion moves from `main` to
 `[data-slot="sidebar-footer"]` — the same D82 note that file already carries
 about the address, from the other side. How the name is derived is untouched
 (**D49**).
+
+`e2e/signup.spec.ts:73` makes that same assertion about a self-registered
+account and was missed; CI and the local suite both failed on it, in the only
+kind of gate that could. It moves to the footer too.
 
 **2. Two fields in one card had no space between them.** The registry's
 `CardContent` is `px-(--card-spacing)` and nothing else — a plain block, and

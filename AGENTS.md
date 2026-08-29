@@ -24,7 +24,7 @@ Four files, in this order. Read them before proposing anything.
 | File | What it is |
 | --- | --- |
 | [status.md](status.md) | The handoff. Done, not-done, and why — the ground truth between sessions. |
-| [spec-v1.md](spec-v1.md) | Signed off, amended through **D92**. Numbered requirements, and §12.1's decision log with the reasoning. |
+| [spec-v1.md](spec-v1.md) | Signed off, amended through **D96**. Numbered requirements, and §12.1's decision log with the reasoning. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | The gates, the style, and how to amend the spec. |
 | [docs/release.md](docs/release.md) | What is left before v1.0.0, and it is the owner's, not yours. |
 
@@ -247,6 +247,21 @@ a 3.98:1 pairing, under R-1's 4.5:1 floor, and the axe gate failed on every
 page with a destructive dialog trigger. Both themes are darkened, with the
 measurements in `globals.css` beside the token. **Re-applying a preset resets
 it**, so re-measure after any `shadcn apply`.
+
+**`--input` is a *fill* in this style, and it arrived holding a hairline
+color** (**D96**). `input`, `textarea`, `native-select` and `checkbox` are all
+`border-transparent bg-input/50` — `/90` for the checkbox — so a control's fill
+is the only thing on screen that says it is there, while the stone base color
+ships `--input` equal to `--border`. At 50 % over a white card that is
+`#f3f2f1`: **1.11:1**, invisible on a dim panel and perfectly visible in a
+screenshot, which is how it survived weeks. Both themes are darkened, with the
+numbers beside the token. Two things follow. **A border is not the fix here**,
+however much it should be: `border-transparent` is set by four registry
+components and an edit there is undone by the next `shadcn add`. And
+**darkening a ground moves the floor of anything drawn on it** —
+`--muted-foreground` had to move with it for the one placeholder in the
+application, and its own measurements in `neon-supplement.css` had to be
+restated. **Re-applying a preset resets all of it.**
 
 **A preset token that carries an *icon* well may not carry *text* at all.**
 `--sidebar-primary` against `--sidebar-primary-foreground` measures **3.07:1**

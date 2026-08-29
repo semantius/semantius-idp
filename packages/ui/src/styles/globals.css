@@ -64,7 +64,14 @@
     --secondary: oklch(0.967 0.001 286.375);
     --secondary-foreground: oklch(0.21 0.006 285.885);
     --muted: oklch(0.97 0.001 106.424);
-    --muted-foreground: oklch(0.553 0.013 58.071);
+    /* Darkened from the preset's own 0.553 because the ground under it moved:
+       see `--input` below, on whose new fill this ink is what a placeholder is
+       drawn in. 6.56:1 on white, 6.02:1 on `--muted` and 4.66:1 on a field,
+       against 4.81:1, 4.41:1 and 4.30:1 before -- the last two of which were
+       already under R-1's 4.5:1 floor and are not caught by any gate, because
+       axe measures neither placeholder text nor a pairing no page happens to
+       render. */
+    --muted-foreground: oklch(0.48 0.013 58.071);
     --accent: oklch(0.97 0.001 106.424);
     --accent-foreground: oklch(0.216 0.006 56.043);
     /* Darkened from the preset's own 0.577. `variant="destructive"` is
@@ -76,7 +83,20 @@
        it, so re-check the contrast when you do. */
     --destructive: oklch(0.525 0.245 27.325);
     --border: oklch(0.923 0.003 48.717);
-    --input: oklch(0.923 0.003 48.717);
+    /* stone-400, darkened from the preset's own 0.923 -- which is `--border`'s
+       value, a hairline color, while this style paints `--input` as a *fill*:
+       `input`, `textarea`, `native-select` and `checkbox` are every one of
+       them `border-transparent bg-input/50` (`/90` for the checkbox), so the
+       fill is the only thing on screen that says a control is there. At 0.923
+       that fill is #f3f2f1 on a white card -- 1.11:1, and the owner reported
+       the fields on /admin/gateways/new as missing. stone-400 measures 1.41:1
+       for a field and 1.90:1 for an unchecked checkbox.
+       A visible *border* is the better answer and is not available: the
+       transparent one is set by four registry components, and an edit there is
+       undone by the next `shadcn add` (AGENTS.md). Same kind of deliberate
+       divergence as `--destructive` above -- re-applying a preset resets it,
+       so re-measure. */
+    --input: oklch(0.769 0.011 56.29);
     --ring: oklch(0.709 0.01 56.259);
     --chart-1: oklch(0.845 0.143 164.978);
     --chart-2: oklch(0.696 0.17 162.48);
@@ -114,7 +134,12 @@
        would fail the gate. 0.72 measures 4.59:1. */
     --destructive: oklch(0.72 0.191 22.216);
     --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
+    /* The same finding in this theme: `bg-input/50` of 15 % white is 1.23:1 on
+       `--card`, and the checkbox 1.50:1. 26 % measures 1.48:1 and 2.14:1.
+       It stops there rather than matching light mode's step: at 30 % the
+       schema explorer's search placeholder -- `--muted-foreground`, which this
+       theme keeps -- falls to 4.27:1, under R-1's floor. */
+    --input: oklch(1 0 0 / 26%);
     --ring: oklch(0.553 0.013 58.071);
     --chart-1: oklch(0.845 0.143 164.978);
     --chart-2: oklch(0.696 0.17 162.48);

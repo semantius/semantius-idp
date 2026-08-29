@@ -69,8 +69,13 @@ test.describe("signing up", () => {
     // derived from them rather than being a field of its own.
     await expect(page.getByLabel("First name")).toHaveValue("Sam")
     await expect(page.getByLabel("Last name")).toHaveValue("Signup")
-    // `main`: since **D82** the sidebar footer carries the display name too.
-    await expect(page.locator("main").getByText("Sam Signup")).toBeVisible()
+    // The footer, not `main`: **D95** took the read-only display name off the
+    // form, because since **D82** the shell already carries it on every page
+    // of the area. `account.spec.ts` moved with it and this assertion — the
+    // same one, made about a self-registered account — was missed.
+    await expect(
+      page.locator('[data-slot="sidebar-footer"]').getByText("Sam Signup")
+    ).toBeVisible()
     await signOut(page, app)
   })
 

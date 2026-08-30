@@ -62,7 +62,6 @@ async function insertManual(
     name,
     url,
     requireAuth: false,
-    trustProxy: false,
     source: "manual",
     enabled: true,
     createdAt: new Date(),
@@ -124,7 +123,6 @@ describe("gateway reconciliation", () => {
         name: "data",
         url: "https://old.example",
         requireAuth: false,
-        trustProxy: false,
         source: "config",
         enabled: true,
         createdAt: new Date(),
@@ -165,7 +163,6 @@ describe("gateway reconciliation", () => {
       name: "gone",
       url: "https://gone.example",
       requireAuth: false,
-      trustProxy: false,
       source: "config",
       enabled: true,
       createdAt: new Date(),
@@ -189,7 +186,6 @@ describe("gateway reconciliation", () => {
         name: "gone",
         url: "https://gone.example",
         requireAuth: false,
-        trustProxy: false,
         source: "config",
         enabled: true,
         createdAt: new Date(),
@@ -233,25 +229,6 @@ describe("gateway reconciliation", () => {
     const row = await gatewayRow(context, "shared")
     expect(row?.source).toBe("config")
     expect(row?.url).toBe("https://from-file.example")
-  })
-
-  it("owns trustProxy too, so a file edit reaches the row (**D92**)", async () => {
-    const context = await contextWith("gw_reconcile_trustproxy", {
-      data: { url: "https://postgrest.example", requireAuth: false },
-    })
-    await reconcile(context)
-    expect((await gatewayRow(context, "data"))?.trustProxy).toBe(false)
-
-    // Stand in for the next boot's file: flip the row the other way and let a
-    // config that says `false` put it back.
-    await context.database.db
-      .update(context.database.schema.gateway)
-      .set({ trustProxy: true })
-      .where(eq(context.database.schema.gateway.name, "data"))
-
-    const diff = await reconcile(context)
-    expect(diff.updated).toEqual(["data"])
-    expect((await gatewayRow(context, "data"))?.trustProxy).toBe(false)
   })
 
   it("records one audit row, naming ids and counts only", async () => {

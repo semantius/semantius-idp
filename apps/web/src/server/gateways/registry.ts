@@ -37,8 +37,6 @@ export interface GatewayRow {
   name: string
   url: string
   requireAuth: boolean
-  /** Forward the edge's `X-Forwarded-*` rather than this hop's (**D92**). */
-  trustProxy: boolean
   source: "config" | "manual"
   enabled: boolean
 }
@@ -134,7 +132,6 @@ export function toGatewayRow(row: {
   name: string
   url: string
   requireAuth: boolean | null
-  trustProxy: boolean | null
   source: string
   enabled: boolean | null
 }): GatewayRow {
@@ -143,7 +140,6 @@ export function toGatewayRow(row: {
     name: row.name,
     url: row.url,
     requireAuth: row.requireAuth === true,
-    trustProxy: row.trustProxy === true,
     source: row.source === "config" ? "config" : "manual",
     enabled: row.enabled !== false,
   }

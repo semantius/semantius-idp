@@ -108,7 +108,6 @@ export const Route = createFileRoute("/admin/gateways/$name/edit")({
             name: params.name,
             url: form.url ?? "",
             requireAuth: form.requireAuth === "on",
-            trustProxy: form.trustProxy === "on",
           },
           request
         )
@@ -116,7 +115,6 @@ export const Route = createFileRoute("/admin/gateways/$name/edit")({
           const draft = await stashDraft(runtime, {
             url: form.url,
             requireAuth: form.requireAuth,
-            trustProxy: form.trustProxy,
           })
           return redirectWithCookies(
             withError(withDraft(here, draft), adminErrorCodeFor(result))
@@ -140,7 +138,6 @@ function EditGatewayPage() {
     // only honest prefill is none — with a sentence saying to retype it.
     url: gateway.urlMasked ? "" : gateway.url,
     requireAuth: gateway.requireAuth,
-    trustProxy: gateway.trustProxy,
   })
 
   return (

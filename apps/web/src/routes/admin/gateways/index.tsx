@@ -190,7 +190,6 @@ function GatewaysPage() {
                 <TableHead>{t.admin.gateways.name}</TableHead>
                 <TableHead>{t.admin.gateways.url}</TableHead>
                 <TableHead>{t.admin.gateways.auth}</TableHead>
-                <TableHead>{t.admin.gateways.forwarded}</TableHead>
                 <TableHead>{t.admin.gateways.managedBy}</TableHead>
                 <TableHead>{t.admin.gateways.status}</TableHead>
               </TableRow>
@@ -237,14 +236,6 @@ function GatewaysPage() {
                     {gateway.requireAuth
                       ? t.admin.gateways.authRequired
                       : t.admin.gateways.authAnonymous}
-                  </TableCell>
-                  {/* One column for both forwarding answers, the way the
-                      Auth column carries both of its own: two values of one
-                      fact, not two kinds of fact (round 3, finding 10). */}
-                  <TableCell className="text-xs">
-                    {gateway.trustProxy
-                      ? t.admin.gateways.forwardedEdge
-                      : t.admin.gateways.forwardedHop}
                   </TableCell>
                   <TableCell className="text-xs">
                     <Badge variant="outline">

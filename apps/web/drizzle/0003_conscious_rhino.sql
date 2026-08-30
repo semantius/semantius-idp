@@ -1,1 +1,0 @@
-ALTER TABLE "idp"."gateway" ADD COLUMN "trust_proxy" boolean DEFAULT false;

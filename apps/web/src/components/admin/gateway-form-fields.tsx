@@ -34,7 +34,6 @@ export interface GatewayFormValues {
   name: string
   url: string
   requireAuth: boolean
-  trustProxy: boolean
 }
 
 /**
@@ -57,7 +56,6 @@ export function resolveGatewayFormValues(
     name: values.name ?? fallback.name,
     url: values.url ?? fallback.url,
     requireAuth: values.requireAuth === "on",
-    trustProxy: values.trustProxy === "on",
   }
 }
 
@@ -175,24 +173,6 @@ export function GatewayFormFields({
             className="block text-xs text-muted-foreground"
           >
             {t.admin.gateways.requireAuthHelp}
-          </span>
-        </span>
-      </Label>
-      <Label className="flex items-start gap-2 text-sm font-normal">
-        <Checkbox
-          name="trustProxy"
-          value="on"
-          defaultChecked={values.trustProxy}
-          aria-label={t.admin.gateways.trustProxy}
-          aria-describedby={field("trust-proxy-help")}
-        />
-        <span>
-          {t.admin.gateways.trustProxy}
-          <span
-            id={field("trust-proxy-help")}
-            className="block text-xs text-muted-foreground"
-          >
-            {t.admin.gateways.trustProxyHelp}
           </span>
         </span>
       </Label>

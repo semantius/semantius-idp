@@ -209,8 +209,6 @@ export interface AdminGatewayRow {
    */
   urlMasked: boolean
   requireAuth: boolean
-  /** Pass the edge's `X-Forwarded-*` through rather than this hop's (**D92**). */
-  trustProxy: boolean
   enabled: boolean
   /**
    * Config-owned rows cannot be edited here (FR-GW-2): the next restart would
@@ -696,7 +694,6 @@ export const fetchGateways = createServerFn({ method: "GET" }).handler(
         url: target.url,
         urlMasked: target.masked,
         requireAuth: row.requireAuth === true,
-        trustProxy: row.trustProxy === true,
         enabled: row.enabled !== false,
         source: row.source === "config" ? "config" : ("manual" as const),
       }

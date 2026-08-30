@@ -40,7 +40,6 @@ interface Row {
   name: string
   url: string
   requireAuth: boolean | null
-  trustProxy: boolean | null
   source: string
   enabled: boolean | null
 }
@@ -51,7 +50,6 @@ function row(overrides: Partial<Row> = {}): Row {
     name: "data",
     url: "https://upstream.example",
     requireAuth: false,
-    trustProxy: false,
     source: "manual",
     enabled: true,
     ...overrides,
@@ -571,7 +569,7 @@ describe("outbound headers (FR-GW-3)", () => {
     expect(sent.get("x-forwarded-proto")).toBe("http")
   })
 
-  it("honors trusted inbound forwarding headers when trustProxy is on", async () => {
+  it("resolves the trusted inbound headers rather than relaying them", async () => {
     const h = harness({
       config: config({ server: { baseUrl: ISSUER, trustProxy: true } }),
     })
@@ -581,59 +579,23 @@ describe("outbound headers (FR-GW-3)", () => {
           "x-forwarded-for": "198.51.100.4",
           "x-forwarded-host": "apps.example.com",
           "x-forwarded-proto": "https",
+          forwarded: "for=198.51.100.4;proto=https",
+          "x-real-ip": "198.51.100.4",
         },
       })
     )
 
     const sent = h.sent()
+    // The address the mint limiter bucketed on is the address the upstream is
+    // told, because both read the one value `clientIpFrom` resolved.
     expect(sent.get("x-forwarded-for")).toBe("198.51.100.4")
     expect(sent.get("x-forwarded-host")).toBe("apps.example.com")
     expect(sent.get("x-forwarded-proto")).toBe("https")
-  })
-
-  it("passes the edge's own X-Forwarded-* through when the gateway trusts it", async () => {
-    // **D92.** Behind Caddy with `server.trustProxy: false` — the default —
-    // this hop's honest view is Caddy's address over the internal scheme,
-    // which is useless to the upstream. `trustProxy` on the gateway is what
-    // lets the edge's account of the request reach it.
-    const h = harness({ rows: [row({ trustProxy: true })] })
-    await h.call(
-      get("/gateway/data", {
-        headers: {
-          "x-forwarded-for": "203.0.113.9",
-          "x-forwarded-host": "idp.example.com",
-          "x-forwarded-proto": "https",
-          forwarded: "for=203.0.113.9;proto=https",
-          "x-real-ip": "203.0.113.9",
-          [SOCKET_ADDRESS_HEADER]: "172.18.0.3",
-        },
-      })
-    )
-
-    const sent = h.sent()
-    expect(sent.get("x-forwarded-for")).toBe("203.0.113.9")
-    expect(sent.get("x-forwarded-host")).toBe("idp.example.com")
-    expect(sent.get("x-forwarded-proto")).toBe("https")
-    // RFC 7239 and the nginx spelling ride along, for an upstream that reads
-    // one of those instead.
-    expect(sent.get("forwarded")).toBe("for=203.0.113.9;proto=https")
-    expect(sent.get("x-real-ip")).toBe("203.0.113.9")
-  })
-
-  it("still writes its own when a trusting gateway has no proxy in front", async () => {
-    // The fallback matters: an upstream told nothing is worse than an
-    // upstream told what this hop can actually see.
-    const h = harness({ rows: [row({ trustProxy: true })] })
-    await h.call(
-      get("/gateway/data", {
-        headers: { [SOCKET_ADDRESS_HEADER]: "198.51.100.7" },
-      })
-    )
-
-    const sent = h.sent()
-    expect(sent.get("x-forwarded-for")).toBe("198.51.100.7")
-    expect(sent.get("x-forwarded-host")).toBe("localhost:3000")
-    expect(sent.get("x-forwarded-proto")).toBe("http")
+    // Trusting the edge decides what those values *are*. It never lets the
+    // caller's own copies through unread — which is what would let the
+    // outgoing account of the caller differ from the one that was throttled.
+    expect(sent.has("forwarded")).toBe(false)
+    expect(sent.has("x-real-ip")).toBe(false)
   })
 
   it("passes accept-encoding through and never recodes the bytes", async () => {

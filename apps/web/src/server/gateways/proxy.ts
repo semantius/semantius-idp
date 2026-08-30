@@ -198,10 +198,9 @@ const NEVER_FORWARDED = new Set([
 /**
  * Headers that say where the request came from.
  *
- * Dropped by default, because a value the caller supplied would otherwise
- * reach the upstream as though a trusted proxy had written it (review finding
- * S5), and replaced with this hop's own view. A gateway with `trustProxy: true`
- * passes them through instead — see {@link applyForwardedHeaders}.
+ * Always dropped, because a value the caller supplied would otherwise reach
+ * the upstream as though a trusted proxy had written it (review finding S5),
+ * and replaced with this hop's own view — see {@link applyForwardedHeaders}.
  */
 const FORWARDING_HEADERS = ["forwarded", "x-real-ip"] as const
 
@@ -256,9 +255,8 @@ export async function proxyGatewayRequest(
     const lower = key.toLowerCase()
     if (HOP_BY_HOP.has(lower) || NEVER_FORWARDED.has(lower)) continue
     if (dropped.has(lower)) continue
-    // Unless this gateway trusts the edge, this hop is the one that gets to
-    // say where the request came from (**D92**).
-    if (!row.trustProxy && isForwardingHeader(lower)) continue
+    // This hop is the one that gets to say where the request came from.
+    if (isForwardingHeader(lower)) continue
     outbound.append(key, value)
   }
 
@@ -273,7 +271,7 @@ export async function proxyGatewayRequest(
     outbound.set("authorization", translated.authorization)
   }
 
-  applyForwardedHeaders(deps, request, outbound, clientIp, row)
+  applyForwardedHeaders(deps, request, outbound, clientIp)
 
   const incoming = new URL(request.url)
   const target = `${row.url}${subPath === "" ? "" : `/${subPath}`}${incoming.search}`
@@ -619,46 +617,32 @@ function storeToken(
  * actually used, and inventing the configured one would break exactly the
  * sub-path and reverse-proxy deployments SEC-1 exists to make work.
  *
- * **`trustProxy: true` passes the edge's own values through instead**
- * (**D92**), which is the case the shipped Caddyfile produces and the default
- * could not express. Behind Caddy with `server.trustProxy: false` — the
- * default, and what a deployment that has not read OPS-9 is running — this
- * hop's honest answer is *Caddy's* address and the **internal** scheme, so an
- * upstream was told the caller was `172.18.0.3` over `http`. Neither is wrong
- * about what this process saw; both are useless to the upstream. Passing the
- * edge's headers through is the only way an internal service gets the browser
- * they are actually serving.
+ * **`server.trustProxy` is the only input.** Whether the edge's account of
+ * the caller is credible is a fact about what sits in front of this process,
+ * not about where the request is going, so it cannot vary per target.
+ * Trusting, `clientIpFrom` has already resolved the browser's own address out
+ * of the inbound chain, and the host and scheme it used are the edge's;
+ * otherwise those headers are caller-controlled and this hop's own view is the
+ * only honest answer.
  *
- * It is a **deliberate loosening and it is per gateway for that reason**: it
- * makes the upstream believe headers this IdP did not write, so a deployment
- * with nothing in front of it would let a caller dictate their own address.
- * The operator asserts the topology per target, the way `server.trustProxy`
- * asserts it for the process — and the two are independent, because whether
- * the IdP believes the edge *for its own rate limits and audit trail* is a
- * different question from whether it passes the edge's account of the request
- * to a service behind it.
- *
- * Either way the three headers end up **set**: a `trustProxy` gateway with no
- * proxy in front of it falls back to this hop's view rather than telling the
- * upstream nothing.
+ * The inbound headers are **never relayed**, either way: they are stripped on
+ * the way in and these three are written from the resolved values. That is
+ * what makes the address the rate limiter buckets on and the address the
+ * upstream is told the same address by construction rather than by
+ * coincidence.
  */
 function applyForwardedHeaders(
   deps: GatewayProxyDeps,
   request: Request,
   outbound: Headers,
-  clientIp: string | undefined,
-  row: GatewayRow
+  clientIp: string | undefined
 ): void {
-  // Whatever the edge sent is already on `outbound` when `row.trustProxy` is
-  // set — the copy loop kept it — so each of these fills a gap rather than
-  // overwriting an answer that came from further out.
-  const fill = (name: string, value: string | undefined): void => {
+  const set = (name: string, value: string | undefined): void => {
     if (value === undefined) return
-    if (row.trustProxy && outbound.has(name)) return
     outbound.set(name, value)
   }
 
-  fill("X-Forwarded-For", clientIp)
+  set("X-Forwarded-For", clientIp)
 
   const trustProxy = deps.config.file.server.trustProxy
   const incoming = new URL(request.url)
@@ -667,14 +651,11 @@ function applyForwardedHeaders(
   const forwardedProto =
     trustProxy !== false ? request.headers.get("x-forwarded-proto") : null
 
-  fill(
+  set(
     "X-Forwarded-Host",
     forwardedHost ?? request.headers.get("host") ?? incoming.host
   )
-  fill(
-    "X-Forwarded-Proto",
-    forwardedProto ?? incoming.protocol.replace(":", "")
-  )
+  set("X-Forwarded-Proto", forwardedProto ?? incoming.protocol.replace(":", ""))
 }
 
 function badGateway(

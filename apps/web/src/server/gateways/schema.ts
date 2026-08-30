@@ -47,15 +47,6 @@ export const gatewaySchema = {
         required: false,
         defaultValue: false,
       },
-      /**
-       * Forward the edge's `X-Forwarded-*` rather than this hop's own view
-       * (FR-GW-3, **D92**). Off unless a trusted proxy sits in front.
-       */
-      trustProxy: {
-        type: "boolean" as const,
-        required: false,
-        defaultValue: false,
-      },
       /** `config` (file-owned, swept by reconcile) or `manual` (admin-owned). */
       source: { type: "string" as const, required: true, index: true },
       enabled: {

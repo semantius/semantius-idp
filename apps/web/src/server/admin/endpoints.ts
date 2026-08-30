@@ -961,7 +961,6 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
         name: z.string().min(1),
         url: z.string().min(1),
         requireAuth: z.boolean().optional(),
-        trustProxy: z.boolean().optional(),
       }),
       requireHeaders: true,
       use: [gate],
@@ -991,7 +990,6 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
               name: entry.name,
               url: entry.url,
               requireAuth: entry.requireAuth,
-              trustProxy: entry.trustProxy,
               // The marker (**D91**). Explicit, unlike the clients' implied
               // `userId === null`, so the boot sweep is a plain filter.
               source: "manual",
@@ -1016,7 +1014,6 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
         // operator would rather not publish on the audit page (SEC-6).
         metadata: {
           requireAuth: entry.requireAuth,
-          trustProxy: entry.trustProxy,
         },
       })
       return ctx.json({ name: entry.name })
@@ -1040,7 +1037,6 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
         name: z.string().min(1),
         url: z.string().min(1),
         requireAuth: z.boolean().optional(),
-        trustProxy: z.boolean().optional(),
       }),
       requireHeaders: true,
       use: [gate],
@@ -1063,7 +1059,6 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
               .set({
                 url: entry.url,
                 requireAuth: entry.requireAuth,
-                trustProxy: entry.trustProxy,
                 updatedAt: new Date(),
               })
               .where(eq(handle.schema.gateway.name, entry.name))
@@ -1082,7 +1077,6 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
         target: { type: "gateway", id: entry.name },
         metadata: {
           requireAuth: entry.requireAuth,
-          trustProxy: entry.trustProxy,
         },
       })
       return ctx.json({ name: entry.name })
@@ -1179,12 +1173,10 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
     name: string
     url: string
     requireAuth?: boolean
-    trustProxy?: boolean
   }): {
     name: string
     url: string
     requireAuth: boolean
-    trustProxy: boolean
   } {
     const name = body.name.trim()
     if (!isValidGatewayName(name)) {
@@ -1199,9 +1191,6 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
       ...(body.requireAuth === undefined
         ? {}
         : { requireAuth: body.requireAuth }),
-      ...(body.trustProxy === undefined
-        ? {}
-        : { trustProxy: body.trustProxy }),
     })
     if (!parsed.success) {
       throw new APIError("BAD_REQUEST", {
@@ -1214,7 +1203,6 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
       name,
       url: parsed.data.url,
       requireAuth: parsed.data.requireAuth,
-      trustProxy: parsed.data.trustProxy,
     }
   }
 

@@ -267,10 +267,7 @@ Then `curl -H "x-api-key: $USER_KEY" https://idp.example.com/gateway/data/items`
 
 `requireAuth: true` refuses a call carrying no credential at all instead of
 forwarding it anonymously — leave it off for a target with an anonymous role of
-its own, like PostgREST. `trustProxy: true` forwards the `X-Forwarded-*` a
-reverse proxy in front of this IdP set, rather than replacing them with what
-this hop can see (**D92**); only set it when something in front actually sets
-them.
+its own, like PostgREST.
 
 Gateways are **half** read-only, the way clients are. The ones in the
 `gateways` block of `config.jsonc` are reconciled at start-up and refused by

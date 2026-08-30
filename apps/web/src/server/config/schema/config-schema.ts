@@ -619,11 +619,6 @@ export const gatewayTargetSchema = z.strictObject({
     .describe(
       "Refuse a request that carries neither `Authorization`, `x-api-key` nor a session cookie instead of forwarding it anonymously. For an upstream that has no anonymous role of its own." // FR-GW-4
     ),
-  trustProxy: flexBoolean()
-    .default(false)
-    .describe(
-      "Pass the edge's own `X-Forwarded-For` / `-Host` / `-Proto` through to this upstream instead of replacing them with what this hop can see. Turn it on behind a reverse proxy that sets them — the shipped Caddyfile does — when the upstream needs the browser's address and public URL rather than the container's view of them. **It makes the upstream believe headers this IdP did not write**, so only turn it on when something in front of the IdP overwrites them." // FR-GW-3, D92
-    ),
 })
 
 export type GatewayTargetConfig = z.infer<typeof gatewayTargetSchema>

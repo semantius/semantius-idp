@@ -87,7 +87,6 @@ describe("startup sequence (OPS-2)", () => {
       name: "left-behind",
       url: "https://gone.example",
       requireAuth: false,
-      trustProxy: false,
       source: "config",
       enabled: true,
       createdAt: new Date(),

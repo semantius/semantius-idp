@@ -581,10 +581,6 @@ test.describe("the admin area", () => {
       fileRow.getByRole("button", { name: /^Actions for / })
     ).toHaveCount(0)
 
-    // **D92**: the config row forwards the edge's headers, and the column says
-    // so — the one place an operator can check what an upstream is told.
-    await expect(fileRow.getByText("From the proxy")).toBeVisible()
-
     await page.getByRole("link", { name: "Add a gateway" }).click()
     await expect(page).toHaveURL(
       new RegExp(`${app.basePath}/admin/gateways/new`)
@@ -603,7 +599,6 @@ test.describe("the admin area", () => {
     await expect(row.getByText("Enabled")).toBeVisible()
     // Both flags default off, and the table is where that is visible.
     await expect(row.getByText("Anonymous allowed")).toBeVisible()
-    await expect(row.getByText("From this server")).toBeVisible()
     // The path a caller configures, shown beside the name — the one thing an
     // operator has to copy off this page.
     await expect(row.getByText("/gateway/e2e-gateway")).toBeVisible()

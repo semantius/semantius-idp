@@ -1,11 +1,12 @@
 /**
- * `oauth_clients.jsonc` → the `oauth_client` row (FR-OIDC-2/3, spike S5 §1).
+ * `oauth_clients.jsonc` → the `oauth_client` row (FR-OIDC-2/3).
  *
  * Pure: no database, no clock, no randomness. Reconciliation is the part that
  * is hard to test against a live schema, so everything that can be decided
  * without one is decided here and asserted directly.
  *
- * Two things the mapping is *not* allowed to do, both from S5:
+ * Two things the mapping is *not* allowed to do, both read off the 1.7.1
+ * sources rather than its documentation:
  *
  * - **`userId` stays `null` for a file client.** A config-synced client belongs
  *   to the deployment, not to whoever happened to be signed in — and that is

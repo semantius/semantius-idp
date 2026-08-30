@@ -2,7 +2,7 @@
  * `src/lib/base-path.ts` — the mount path as the browser bundle sees it.
  *
  * The interesting cases are all "did the sub-path deployment survive": every
- * one of these was a live 404 during spike S3 before the wiring existed.
+ * one of these was a live 404 before the wiring existed.
  */
 
 import { afterEach, describe, expect, it } from "vitest"

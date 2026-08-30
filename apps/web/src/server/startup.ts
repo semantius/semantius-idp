@@ -11,7 +11,8 @@
  *
  * - **Every shared-state step runs under a Postgres advisory lock** on the
  *   *direct* connection (`database.directUrl`), because a session lock does not
- *   hold through a transaction pooler — see `docs/spikes/s4-schema-placement.md`.
+ *   hold through a transaction pooler — two connections through a pooled
+ *   endpoint can both believe they hold it (**D27**).
  *   Single-instance is the supported topology (OPS-11), but two containers
  *   restarting together is ordinary, and neither may half-apply anything.
  *

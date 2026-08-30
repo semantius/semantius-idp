@@ -2,7 +2,7 @@
  * TanStack Start's shared entry — the options both the client and the server
  * build read (`src/server.ts` is the server-only half).
  *
- * It exists for one reason: server-function calls (spike S3). The client posts
+ * It exists for one reason: server-function calls. The client posts
  * them to a base path that is baked into *both* bundles at build time
  * (`/_serverFn/`), which is correct at the host root and 404s under `/idp`.
  * The `serverFns.fetch` seam is the supported way to move them; the server

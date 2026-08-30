@@ -4,7 +4,7 @@
  * Migrations are forward-only (DM-1): there is no `down`, and no seed step to
  * re-run, so the way back to a clean database is to remove the schema and let
  * the next boot re-create it. Every path that already did this — the
- * integration harness, the S4 spike, the upgrade-rollback runbook — spells the
+ * integration harness and the upgrade-rollback runbook — spells the
  * same `drop schema … cascade` out by hand against whatever connection string
  * the shell happened to have. This is that statement, aimed by the
  * *configuration the app itself would load*, so it cannot land in a database

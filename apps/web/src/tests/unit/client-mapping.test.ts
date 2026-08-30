@@ -1,5 +1,5 @@
 /**
- * `oauth_clients.json` → `oauth_client` (FR-OIDC-2/3, spike S5 §1).
+ * `oauth_clients.jsonc` → `oauth_client` (FR-OIDC-2/3).
  *
  * The mapping is where a configuration file becomes an authorization
  * decision, so each assertion here is a rule with a consequence: a public

@@ -220,7 +220,7 @@
       //   "accessTokenTtl": "5m" }
     ],
 
-    // false: a client removed from oauth_clients.json is disabled and its
+    // false: a client removed from oauth_clients.jsonc is disabled and its
     // tokens revoked. true: its rows are deleted instead.
     "reconcile": { "prune": false }
   },
@@ -246,16 +246,15 @@
   // The target is absolute http(s) with no trailing slash. `requireAuth: true`
   // refuses an unauthenticated call instead of forwarding it anonymously —
   // leave it off for a target with an anonymous role of its own, like
-  // PostgREST. `trustProxy: true` forwards the X-Forwarded-For/-Host/-Proto
-  // that a reverse proxy in front of this server set, so the target sees the
-  // browser rather than this container — only turn it on when something in
-  // front actually sets them.
+  // PostgREST. Every gateway sends the target X-Forwarded-For/-Host/-Proto
+  // built from this hop's own resolved view of the caller; whether a reverse
+  // proxy's inbound headers feed that view is `server.trustProxy`, above.
   //
   // Entries here are reconciled into the `gateway` table at start-up and
   // swept when they leave the file, under `oauth.reconcile.prune`. Gateways
   // added on /admin/gateways are never touched by that sweep.
   "gateways": {
-    // "data": { "url": "https://postgrest.internal:3000", "trustProxy": true },
+    // "data": { "url": "https://postgrest.internal:3000" },
     // "admin-api": { "url": "https://api.internal", "requireAuth": true }
   },
 

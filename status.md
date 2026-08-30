@@ -1,8 +1,8 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-29 · **Branch:** `main` · **Head:** `144b9e5`, last tag **v0.6.1**
+**As of:** 2026-08-30 · **Branch:** `main` · **Head:** `f806cad`, last tag **v0.6.1**
 **Plan:** `~/.claude/plans/users-has-a-full-binary-meteor.md` (full-page forms)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D98**
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D100**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
 gate; API gateways (FR-GW, **D91**/**D92**) landed on 2026-08-29, and the
@@ -102,7 +102,7 @@ Everything buildable is built. What remains cannot be done from here:
   is what D86 is about; `v0.3.1` carries everything it was going to. `1.0.0` is what
   those checks gate, and it still needs the owner's decision rather than a green
   board. Everything below about the machinery is now history rather than plan:
-  `docker/release.sh vX.Y.Z` bumps the three version files, commits, tags and
+  `./release.sh vX.Y.Z` bumps the three version files, commits, tags and
   pushes, and the tag is the whole trigger. Rehearse a version first with
   **Actions → Release → Run workflow**, which builds both architectures and
   smoke-tests amd64 without pushing anything.
@@ -1337,7 +1337,7 @@ the arm64 artifact runs a different binary from the one CI exercises, and
 until now nothing had ever run it. CI's `docker` job covers amd64. Between the
 two, both published architectures have now actually been started.
 
-`docker/release.sh` was run **for real**, in a throwaway clone wired to a local
+`./release.sh` was run **for real**, in a throwaway clone wired to a local
 bare remote, never `origin`. It bumped 0.0.1 → 0.2.0 across all three files,
 committed, tagged and pushed; the tag came out GPG-signed and `git tag -v`
 verified it. Then, from that state: a pre-release (`v0.3.0-rc.1`) bumped to the
@@ -1386,7 +1386,7 @@ v0.1.2** through it. Read against this one, it settled three things:
   `adenin/semantius-idp` — was simply wrong, and this file's earlier note
   calling it "one of them is wrong" is now answered. Fixed. The label is how a
   pulled image says where it came from.
-- **It had the piece this repository was missing: `docker/release.sh`.**
+- **It had the piece this repository was missing: `./release.sh`.**
   Adopted here, adapted in two ways. A **pre-release is allowed**: that script
   refuses one because its workflow tags `latest` unconditionally, while this
   workflow derives `latest` from whether the version is a pre-release. And a
@@ -1458,7 +1458,7 @@ clean, and `config.example/` still validates.
 
 ### What is left for the owner
 
-Only the tag itself. `docker/release.sh v0.1.0` does the rest, and everything
+Only the tag itself. `./release.sh v0.1.0` does the rest, and everything
 it depends on is verified except the parts that need GitHub.
 
 ---
@@ -3387,7 +3387,8 @@ hangs until killed, and passes in seven seconds with the fix.
 sign-in, no social/sign-up warning, and M2M removed throughout (FR-OIDC-1/3/7,
 CFG-4/5, SEC-6, TST-4, DOC-3, §12, §15 ticked).
 
-**M0 spikes** — findings recorded in [docs/spikes/](docs/spikes/):
+**M0 spikes** — the write-ups were deleted at **D100**; the findings are here,
+in the decision log, and inline in the code that depends on them:
 
 - **The 1.7.x plugins moved.** `oauth-provider` and `api-key` are now separate
   packages (`@better-auth/oauth-provider@1.7.1`, `@better-auth/api-key@1.7.1`),
@@ -3479,7 +3480,7 @@ confirmation page for the no-hint case.
 | #    | Milestone                                         | Status                                                                                |
 | ---- | ------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | M1.0 | Amend spec for D24–D26                            | ✅ done                                                                               |
-| M0   | Spikes S1, S2, S3, S4, S5                         | ✅ done — S3's verdict is in [docs/spikes/s3-sub-path.md](docs/spikes/s3-sub-path.md) |
+| M0   | Spikes S1, S2, S3, S4, S5                         | ✅ done — write-ups deleted at **D100**; findings in D27/D29/D32/D39 and inline  |
 | P0   | Phase 0 — review fixes + M5.5 backfill + CI       | ✅ done                                                                               |
 | M1   | Toolchain baseline                                | ✅ done                                                                               |
 | M2   | Configuration system                              | ✅ done                                                                               |
@@ -3571,8 +3572,8 @@ d90ddb3 feat(m3): database layer, Better Auth instance, migrations, approval gat
 
 ## The spike findings in detail
 
-Notes are in [docs/spikes/](docs/spikes/); S4 is re-runnable with
-`pnpm --filter web exec bun run scripts/spike-s4-schema-placement.ts`.
+The write-ups and the two probe scripts were deleted at **D100**. What follows
+is the surviving account; the decisions they produced are D27, D29, D32 and D39.
 
 ### The 1.7.x plugins moved (S5)
 

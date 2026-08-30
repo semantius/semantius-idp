@@ -10,7 +10,9 @@
  *
  * **What is deliberately not here.** The provider emits `sub`, `aud`,
  * `client_id`, `azp`, `scope`, `sid`, `iss`, `iat`, `exp` and `jti` itself, and
- * spreads custom claims *first* so they cannot override those (spike S5 §2). A
+ * spreads custom claims *first* so they cannot override those — read off
+ * `createJwtAccessToken` in 1.7.1, which builds the payload as
+ * `{ ...overrides.accessTokenClaims, sub, aud, client_id, … }`. A
  * builder that also emitted them would be writing values that are silently
  * discarded, which is worse than not writing them.
  *

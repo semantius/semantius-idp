@@ -35,8 +35,8 @@ export interface UiContext {
   /**
    * `<link rel="icon">`. Always set, and always mount-path-absolute: without
    * it a browser falls back to probing `/favicon.ico` at the *origin* root,
-   * which under a sub-path deployment is somebody else's application (spike
-   * S3 caught the 404).
+   * which under a sub-path deployment is somebody else's application. The
+   * 404 was real before this was mount-path-absolute.
    */
   favicon: string
   theme: "system" | "light" | "dark"
@@ -154,7 +154,7 @@ function labelFor(providerId: string): string {
  * result with the mount path is not cosmetic: a bare `logo.svg` resolves
  * against whatever page is showing, and `/favicon.ico` resolves against the
  * *origin* root — which under a sub-path deployment belongs to a different
- * application (spike S3 caught the 404). An absolute URL is left alone.
+ * application, and the 404 was real. An absolute URL is left alone.
  *
  * **Both spellings are accepted**, and they mean the same file. The schema
  * describes the value as a path *under* `branding/` (`logo.svg`), while the

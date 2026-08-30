@@ -9,7 +9,7 @@
  * of "works at the root, 404s behind Caddy" bugs.
  *
  * Two of those knobs are not read from here, because they belong to bundles
- * this module cannot reach (spike S3, `docs/spikes/s3-sub-path.md`):
+ * this module cannot reach:
  *
  *  - **Vite's `base`** is `"./"`, fixed at build time. It makes the client
  *    bundle relocatable; the two URLs it cannot fix — the SSR asset manifest

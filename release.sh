@@ -16,8 +16,8 @@
 # commit (**D73**).
 #
 # The same shape as `semantius-app`'s `docker/release.sh`, which has cut three
-# releases. Two deliberate differences, both because this repository's workflow
-# is stricter than that one's:
+# releases. Three deliberate differences — the first two because this
+# repository's workflow is stricter than that one's:
 #
 #   * a **pre-release is allowed** here (`v0.2.0-rc.1`). That script refuses
 #     one because its workflow tags `latest` unconditionally; this workflow
@@ -25,16 +25,23 @@
 #     candidate publishes as itself and takes neither `0.2`, `0` nor `latest`;
 #   * **three files are bumped**, not one — the root manifest the workflow
 #     checks, `apps/web`'s, and `version.ts`'s development fallback, which is
-#     what a non-image run of `idp version` reports.
+#     what a non-image run of `idp version` reports;
+#   * it lives at the **repository root** (**D99**). Nothing here builds or
+#     pushes an image — this bumps three files, commits, tags and pushes, and
+#     the tag is the whole trigger — so `docker/` was a place nobody looked.
+#     Not `scripts/` either: that directory is TypeScript run by bun as CI
+#     gates, and this is the one script a human types by hand. The sibling
+#     keeps its own copy where it is; matching a path is not worth a file
+#     being unfindable.
 #
-# Usage: docker/release.sh v0.1.0 [-y]
+# Usage: ./release.sh v0.1.0 [-y]
 set -euo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")"
 
 die() { printf 'release: %s\n' "$*" >&2; exit 1; }
 
 VERSION="${1:-}"
-[ -n "$VERSION" ] || die "usage: docker/release.sh vX.Y.Z[-pre] [-y]"
+[ -n "$VERSION" ] || die "usage: ./release.sh vX.Y.Z[-pre] [-y]"
 
 ASSUME_YES=0
 case "${2:-}" in

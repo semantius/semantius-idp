@@ -4,7 +4,7 @@
  * The build emits a `{ fetch }` object, not a listener, and nothing in it
  * serves `dist/client`. This wrapper supplies both, and it is the layer that
  * knows about the mount path: a request for `/idp/assets/x.js` is a request
- * for `dist/client/assets/x.js` (OPS-10, spike S3). Page requests keep their
+ * for `dist/client/assets/x.js` (OPS-10). Page requests keep their
  * prefix — the router matches them with it.
  *
  * The entry is imported by path rather than by specifier so that `tsc` does

@@ -117,7 +117,7 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
     // **only when `baseURL` has no path of its own** — give it the issuer
     // `https://host/idp` and it mounts every endpoint at `/idp/*` and ignores
     // `basePath` entirely, so `/idp/api/auth/sign-in/email` 404s and a
-    // sub-path deployment cannot sign anyone in (found by spike S3). Passing
+    // sub-path deployment cannot sign anyone in — observed, not deduced. Passing
     // the origin and carrying the mount path in `basePath` makes the sub-path
     // case resolve to exactly what the host root resolves to.
     baseURL: paths.origin,
@@ -456,7 +456,8 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
         // the deployment asks for it — the ID token. The provider spreads
         // these *first* and then writes `sub`, `aud`, `client_id`, `azp`,
         // `scope`, `sid`, `iss`, `iat`, `exp` and `jti` over the top, so
-        // nothing here can shadow a protocol claim (S5 §2).
+        // nothing here can shadow a protocol claim: the provider spreads
+        // custom claims first and then writes its own over them.
         customAccessTokenClaims: (info) =>
           buildUserClaims(info.user as ClaimsUser | null | undefined, config),
         ...(file.jwt.claimsInIdToken

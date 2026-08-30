@@ -1,5 +1,5 @@
 /**
- * The mount path as the *browser* bundle sees it (OPS-10, spike S3).
+ * The mount path as the *browser* bundle sees it (OPS-10).
  *
  * `server/oidc/base-path.ts` is the server-side twin: it derives every absolute
  * URL from `server.baseUrl`. This module exists because the same value is

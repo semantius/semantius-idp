@@ -1,6 +1,6 @@
 /**
  * TanStack Start's server entry — the process-wide seam where the *runtime*
- * mount path is applied to a build that was compiled without one (spike S3).
+ * mount path is applied to a build that was compiled without one.
  *
  * Three build-time constants decide where a Start app lives: Vite's `base`,
  * the router's `basepath` and the server-function base. `server.baseUrl` is
@@ -18,9 +18,10 @@
  *    (`src/start-entry.ts`); this entry strips the prefix again, because the
  *    handler matches them against the baked base before anything else runs.
  *
- * Static assets are served by whatever fronts this handler (`scripts/
- * spike-s3-proxy.ts` today, the container's entrypoint from M12); that layer
- * strips the mount path before looking in `dist/client`.
+ * Static assets are served by whatever fronts this handler — `src/serve.ts`,
+ * the container's entrypoint since M12, and Caddy in front of it for a
+ * sub-path mount; that layer strips the mount path before looking in
+ * `dist/client`.
  *
  * **It is also the edge** (M11). Every request that reaches the application
  * passes through here exactly once, which makes it the only honest place to

@@ -282,7 +282,7 @@ describe("user claims (FR-OIDC-7, FR-ROLE-2)", () => {
     expect(payload.roles).toEqual(["admin", "user"])
   })
 
-  it("does not let a custom claim shadow a protocol claim (S5 §2)", async () => {
+  it("does not let a custom claim shadow a protocol claim", async () => {
     const tokens = await exchange()
     const payload = decodeJwt(String(tokens.access_token))
     // The builder never emits these; the provider writes them over whatever

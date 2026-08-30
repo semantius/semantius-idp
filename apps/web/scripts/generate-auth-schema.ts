@@ -8,7 +8,7 @@
  * version-stranded at 1.4.21". It was wrong** — `@better-auth/cli` is
  * deprecated and the CLI was renamed to `auth`, which publishes 1.7.1 and
  * depends on `better-auth@1.7.1` and `@better-auth/core@1.7.1`: exactly our
- * pins. Recorded as **D29**; see `docs/spikes/s5-client-fields-and-claims.md`.
+ * pins. Recorded as **D29**.
  *
  * The real reason this file survives is narrower and structural. Run against a
  * shim exporting our own option set, `auth generate` produces the same

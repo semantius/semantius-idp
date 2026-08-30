@@ -14,8 +14,8 @@ import type { TestContext } from "./harness"
  *
  * The harness already migrates, so these tests exercise the steps that run
  * after the auth instance exists: the signing key, the role check and the
- * first-run check. The migration step itself is covered by the S4 spike and by
- * every other integration file implicitly.
+ * first-run check. The migration step itself is covered implicitly by every
+ * other integration file, each of which migrates into its own schema.
  *
  * Nothing here creates an administrator any more. D52 replaced the bootstrap
  * step with a page (`integration/setup.test.ts`), and what start-up does now is

@@ -9,8 +9,10 @@
  *
  * Table names are always schema-qualified in the SQL Drizzle emits, which is
  * what makes this work through a transaction-mode connection pooler, where a
- * `search_path` set at connection time does not survive (see
- * `docs/spikes/s4-schema-placement.md`). The `search_path` below is a
+ * `search_path` set at connection time does not survive: a transaction pooler
+ * forwards only an allow-list of startup parameters, `search_path` is not on
+ * it, and nothing warns — the connection simply comes up with the default
+ * path. Measured against Neon's `-pooler` endpoint. The `search_path` below is a
  * convenience for hand-written SQL and psql sessions, never something the
  * runtime depends on.
  */

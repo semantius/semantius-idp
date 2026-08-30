@@ -1,25 +1,8 @@
 # semantius-idp
 
-A lightweight, self-hosted identity provider: user management, authentication,
-and standard JWT access tokens that resource servers validate through JWKS —
-Neon and PostgREST-style deployments included.
-
-One container plus Postgres. Configured by files and environment variables,
-not by clicking around a database.
-
-```
-        ┌───────────┐        code + PKCE        ┌──────────────┐
-        │  browser  │ ────────────────────────▶ │              │
-        └───────────┘ ◀──────────────────────── │ semantius-idp│──▶ Postgres
-              │            id + access token    │              │
-              │                                 └──────────────┘
-              │  Authorization: Bearer …                 │ JWKS
-              ▼                                          ▼
-        ┌───────────┐                            ┌──────────────┐
-        │ your API  │ ─── validates the JWT ───▶ │  /.well-known│
-        │  or Neon  │      against the key set   │  /jwks.json  │
-        └───────────┘                            └──────────────┘
-```
+A complete, lightweight, self-hosted identity provider for internal
+applications: user management, authentication, and standard JWT access tokens
+that resource servers validate through JWKS.
 
 ## What it is
 
@@ -27,44 +10,126 @@ not by clicking around a database.
   refresh tokens; discovery, JWKS, userinfo, introspection, revocation and
   RP-initiated logout. Access tokens are **always signed JWTs** (ES256 by
   default), so a resource server validates them offline against the published
-  key set — no call back to the IdP on every request.
+  key set, with no call back to the IdP on every request.
 - **A place for your users to live.** Password sign-in, optional self-service
   sign-up with an approval queue, e-mail verification and reset, TOTP
-  two-factor, per-user API keys, and an administration area for the people who
-  run it.
+  two-factor, per-user API keys, a self-service account page for every user,
+  and an administration area for the people who run it.
 - **An authenticating reverse proxy for your backends.** `/gateway/<name>`
   forwards to a service you name in `config.jsonc` and turns a caller's API
-  key — or their browser session — into a JWT that service can verify, so a
-  script or a first-party page can reach PostgREST or a Neon Data API that has
-  never heard of either ([API gateways](#api-gateways)).
-- **Configured by files.** `config.jsonc`, `oauth_clients.jsonc` and `roles.jsonc`
-  are the source of truth; the database is the reconciled operative store.
-  Restarting applies changes, and the same folder produces the same deployment.
+  key (or their browser session) into a JWT that service can verify
+  ([API gateways](#api-gateways)).
+- **Configured by files, extended in the admin UI.** `config.jsonc`,
+  `oauth_clients.jsonc` and `roles.jsonc` are the source of truth; the
+  database is the reconciled operative store. Restarting applies changes, and
+  the same folder produces the same deployment. Clients and gateways added in
+  the admin UI take effect without a restart and are never swept by
+  reconciliation.
+
+## Features
+
+**Protocols and tokens**
+
+- OpenID Connect / OAuth 2.1 provider: authorization code with PKCE (S256
+  only) and rotating refresh tokens
+- Access tokens are always signed JWTs (ES256 or RS256), verified offline
+  against the published JWKS, with no call back to the IdP per request
+- Discovery (OIDC and RFC 8414), userinfo, introspection (RFC 7662),
+  revocation (RFC 7009), RP-initiated logout, resource indicators (RFC 8707)
+- OAuth consent with per-client grants users can review and revoke
+- Signing-key rotation, scheduled and manual, with a JWKS grace period
+
+**Authentication methods**
+
+- E-mail + password with a configurable policy and an optional
+  breached-password check
+- TOTP two-factor with backup codes and trusted devices; admins can reset it
+- Social sign-in: Google, GitHub, Microsoft Entra (tenant-locked); identities
+  are keyed to the provider subject and never linked by e-mail address
+- Per-user API keys for scripted access (the deliberate stand-in for a
+  `client_credentials` grant), exchangeable for the same JWTs
+
+**User management**
+
+- Self-service sign-up (off by default) with an approval queue and an e-mail
+  domain allow-list
+- Admin console with an equivalent HTTP API: search and filters, create and
+  edit, roles, approve/reject, ban with expiry, invitations by e-mail or
+  one-time link, password resets, session revocation, 2FA reset, delete
+- Self-service account portal: profile, password, e-mail, two-factor, API
+  keys, active sessions, granted consents
+- Optional impersonation: time-boxed, visible to the user, audited
+- The first administrator is created by a one-time setup page, not a
+  bootstrap password
+- Transactional e-mail through Resend, with a documented degraded mode
+  without it
+
+**Authorization model**
+
+- A role catalog delivered as token claims: a `roles` array plus static
+  claims such as `role: "authenticated"` for Neon and PostgREST; your
+  applications decide what a role means
+- Configurable roles gate the admin console and API
+
+**API gateway**
+
+- An authenticating reverse proxy built in: `/gateway/<name>` streams requests
+  to an upstream you configure and turns a caller's API key or signed-in
+  browser session into a signed JWT, injected as `Authorization: Bearer`
+- JWT-only backends such as PostgREST or a Neon Data API become reachable for
+  scripts and first-party pages without any IdP-specific code on their side
+- Per gateway: anonymous pass-through or required authentication; cookies
+  never cross, and every response is sandboxed
+
+**Integration**
+
+- OAuth clients and gateways declared in a version-controllable config file,
+  registered in the admin UI, or both; file-managed rows stay read-only in
+  the UI
+- A session-to-JWT endpoint for first-party apps on the same host
+- Tokens that Neon RLS, PostgREST and any `jose`-based verifier accept
+  without plugins
+
+**Operations**
+
+- One container (amd64 + arm64) plus one Postgres schema; configuration is
+  three JSONC files with env/file placeholders: reproducible, diffable,
+  applied by restart
+- GitOps-ready: keep the config folder in a repository, gate changes in CI
+  with `idp config validate` (runnable from the published image), and the
+  same folder always produces the same deployment
+- Append-only audit log with a browsable UI, database-backed rate limiting,
+  health endpoints, structured logs with secret redaction, an operator CLI
+- Optional read-only or read-write SQL console over its own database
+- Deploys at a host root or under a sub-path; reference Caddyfiles included
+- Brandable name, logo and favicon
 
 ### What it is not
 
 - **Not multi-tenant.** One deployment, one user population. No organizations,
   no teams.
+- **Not SAML, LDAP or SCIM.** OpenID Connect / OAuth 2.1 is the whole protocol
+  surface; the device-code grant and dynamic client registration are also
+  deliberately absent.
+- **Not every sign-in method.** Password, TOTP two-factor and social sign-in;
+  no passkeys/WebAuthn, no SMS, no magic links. A company that requires
+  hardware keys or passkeys already runs an identity platform that enforces
+  them; configure it as a social provider (Entra, Google) and that policy
+  applies at sign-in, instead of a second WebAuthn stack here.
 - **Not a machine-to-machine token service.** There is no `client_credentials`
   grant in v1; a per-user API key is the answer for scripted access
   ([docs/clients.md](docs/clients.md)).
 - **Not a federation hub.** Social sign-in exists (Google, GitHub, Entra) but
   there is no account linking: an identity is a provider subject, and one
   address belongs to one account.
+- **Not a policy engine.** Roles are labels the token carries; the IdP
+  evaluates no permissions from them, and per-resource authorization belongs
+  to your applications. That is where it usually lives anyway: permissions
+  are managed in the application's own RBAC, beside the resources they
+  protect, and a copy kept in a disconnected layer only drifts from it.
 - **Not a horizontally scaled service.** A single instance is what is tested
-  and supported. Accidental replicas are safe — every mutating start-up step
-  takes an advisory lock — but they are not a topology anyone has measured.
-
-## Why you might want it
-
-Most self-hosted identity providers are either a Java application with a
-database schema you inherit, or a hosted product with a per-seat price. This
-one is a single container that reads three files, keeps everything in one
-Postgres schema (`idp` by default, nothing in `public`), and issues tokens that
-Neon, PostgREST and any `jose`-based verifier accept without a plugin.
-
-The trade is deliberate: fewer features, and the ones present are the ones a
-small deployment actually uses.
+  and supported. Accidental replicas are safe, because every mutating start-up
+  step takes an advisory lock, but they are not a topology anyone has measured.
 
 ## Quick start
 
@@ -94,7 +159,7 @@ DATABASE_URL=…          # only to point somewhere other than the bundled Postg
 
 `IDP_SECRET` is the one value with no sensible default: it encrypts the signing
 keys and signs every session. `DATABASE_URL` already points at the Postgres
-compose starts — a whole connection string, which is the contract (**D48**):
+compose starts. A whole connection string is the contract (**D48**):
 nothing is assembled from a password and there is no secrets file to keep in
 step. Point it at your own Postgres or at Neon and the bundled one becomes
 irrelevant.
@@ -107,7 +172,7 @@ The rest of the verbs read the same way:
 ./idp-stop.sh       # stop the containers, keep them
 ./idp-start.sh      # resume the ones create made
 ./idp-cli.sh …      # the operator CLI inside the container
-./idp-destroy.sh    # remove containers, network and volumes — all data
+./idp-destroy.sh    # remove containers, network and volumes (all data)
 ```
 
 `pnpm docker:build`, `docker:up`, `docker:down` and `docker:smoke` do the same
@@ -118,13 +183,13 @@ brings this exact stack up against the image that will be published, completes
 the setup wizard, and verifies a token against the JWKS.
 
 > **Changing the port or the hostname?** Set `IDP_BASE_URL` to match, and edit
-> the example first-party client in `config/oauth_clients.jsonc` — its redirect
+> the example first-party client in `config/oauth_clients.jsonc`: its redirect
 > URI is `http://localhost:3000/…`, and a `firstParty` client must be on the
 > issuer's own origin. Start-up refuses and says exactly that rather than
 > issuing tokens to somewhere unexpected.
 
 > **Caddy is never in the image.** It is an optional compose profile in front of
-> it, for TLS or for serving the IdP under a sub-path — see
+> it, for TLS or for serving the IdP under a sub-path; see
 > [behind a reverse proxy](#behind-a-reverse-proxy). Of the test suites only the
 > Playwright sub-path project starts one, because that deployment shape is where
 > a wrong cookie `Path` or a stripped prefix shows up; everything else runs
@@ -139,17 +204,17 @@ pnpm dev
 
 `IDP_CONFIG_DIR` points at the configuration folder (`/config` in the
 container). `DATABASE_URL` and `IDP_SECRET` are the two things it cannot start
-without — and `DATABASE_URL` has to be reachable from your host, so the shipped
+without, and `DATABASE_URL` has to be reachable from your host, so the shipped
 `postgres://idp:idp@postgres:5432/idp` (a compose-network name) becomes
 something like `postgres://idp:idp@localhost:5432/idp`.
 
 Migrations apply at boot, and the Drizzle schema and SQL are committed and
 drift-gated in CI, so there is nothing to generate before a first run. The two
-generation commands exist for when you *change* the schema —
+generation commands exist for when you *change* the schema;
 [Development](#development) has them.
 
 > **The database is a pair of connection strings, and at least one must be
-> set.** `DATABASE_URL` is ordinary application traffic — a transaction-mode
+> set.** `DATABASE_URL` is ordinary application traffic: a transaction-mode
 > pooler belongs here and nowhere else. **`DATABASE_URL_ADMIN`** is the direct,
 > non-pooled endpoint, and it is the one that must always work: session
 > advisory locks do not hold through a pooler, and start-up, migrations, the
@@ -157,7 +222,7 @@ generation commands exist for when you *change* the schema —
 > URL with `-pooler` removed.
 >
 > Set both when your Postgres offers both endpoints. Set **either one alone**
-> and it serves both roles — which is right for a plain Postgres, including the
+> and it serves both roles, which is right for a plain Postgres, including the
 > bundled compose one, whose single endpoint is already direct. Start-up warns
 > only for the combination that is actually wrong: `DATABASE_URL` looks pooled
 > and `DATABASE_URL_ADMIN` is unset.
@@ -171,10 +236,10 @@ promise in the documentation.
 | File | Required | What it holds |
 | --- | --- | --- |
 | `config.jsonc` | yes | Everything in [docs/configuration.md](docs/configuration.md) |
-| `oauth_clients.jsonc` | no | The applications that may ask for tokens — [docs/clients.md](docs/clients.md) |
+| `oauth_clients.jsonc` | no | The applications that may ask for tokens; see [docs/clients.md](docs/clients.md) |
 | `roles.jsonc` | no | The role catalog; absent, you get `admin` and `user` |
 
-They are parsed as JSONC — comments and trailing commas are fine — which is
+They are parsed as JSONC (comments and trailing commas are fine), which is
 what the extension says. A `.json` spelling is still read, so a folder written
 before that was true keeps working; having both of one file is refused rather
 than resolved. Any string may carry a placeholder:
@@ -189,7 +254,7 @@ than resolved. Any string may carry a placeholder:
 
 `${env:NAME}`, `${env:NAME:-fallback}` and `${file:/abs/path}` are substituted
 once, before validation. `$${` escapes a literal `${`. **Secrets never belong
-in the files themselves** — an unresolved variable stops start-up and names the
+in the files themselves**: an unresolved variable stops start-up and names the
 file, the JSON pointer and the variable, never the value.
 
 `config.example/` ships with every key commented, and the generated JSON
@@ -209,17 +274,17 @@ The keys that decide what you can do on day one:
 
 | Key | Default | What it changes |
 | --- | --- | --- |
-| `server.baseUrl` | — **required** | The issuer. Every absolute URL derives from it, never from the `Host` header. May carry a path (`https://apps.example.com/idp`). |
-| `jwt.audience` | — **required** | What lands in `aud`. For Neon, the audience that project expects. |
+| `server.baseUrl` | **required** | The issuer. Every absolute URL derives from it, never from the `Host` header. May carry a path (`https://apps.example.com/idp`). |
+| `jwt.audience` | **required** | What lands in `aud`. For Neon, the audience that project expects. |
 | `signUp.enabled` | `false` | Off means `/signup` is **404** and social sign-in works only for identities that already exist. |
 | `signUp.requireApproval` | `true` | Self-registrations land as `pending` until an administrator approves them. |
-| `email.resend.apiKey` | — | Without it the IdP runs in **degraded mode**: no verification, no reset, no notifications, and `/forgot-password` is 404. Administrators set passwords directly instead. |
+| `email.resend.apiKey` | *(unset)* | Without it the IdP runs in **degraded mode**: no verification, no reset, no notifications, and `/forgot-password` is 404. Administrators set passwords directly instead. |
 | `auth.defaultRedirect` | `/account` | Where a completed sign-in lands. Point it at your product when the IdP is bundled beside one. |
 | `admin.adminRoles` | `["admin"]` | Which roles from `roles.jsonc` reach `/admin` and the admin API. |
 | `admin.database` | `disabled` | `read-only` or `read-write` adds `/admin/database`, a schema explorer and SQL console over the IdP's own Postgres. Off means no page, no nav entry and no endpoint. An administrator who can run SQL reads every row at rest, session tokens included. |
 
 If a page you expect is missing, it is almost always one of these two: sign-up
-is off, or e-mail is not configured. That is deliberate — a control that cannot
+is off, or e-mail is not configured. That is deliberate: a control that cannot
 work is not shown.
 
 **The full reference is [docs/configuration.md](docs/configuration.md)**,
@@ -240,7 +305,7 @@ from a role; it puts them in the token and your applications decide.
 }
 ```
 
-Exactly one entry is `default: true` — that is what a self-registration gets.
+Exactly one entry is `default: true`, and that is what a self-registration gets.
 A user may hold several, and they arrive as the **`roles` array** claim. The
 singular `role` claim is never derived from them: it exists only as a static
 value you set in `jwt.claims`, which is what Neon and PostgREST expect.
@@ -257,7 +322,7 @@ Clients can also be **registered from `/admin/clients`** (**D50**). They are
 stored with the creating administrator as their owner, which is exactly the
 marker reconciliation's sweep skips, so the two kinds coexist and neither
 disturbs the other. A client registered that way works immediately, with no
-restart. Dynamic client registration — the protocol endpoint — remains off.
+restart. Dynamic client registration (the protocol endpoint) remains off.
 
 ```jsonc
 {
@@ -287,14 +352,14 @@ Everything a client needs is discoverable from `server.baseUrl`:
 | --- | --- |
 | `/.well-known/openid-configuration` | OpenID Connect discovery |
 | `/.well-known/oauth-authorization-server` | RFC 8414 metadata, same document |
-| `/.well-known/jwks.json` | The published key set — the advertised `jwks_uri` |
+| `/.well-known/jwks.json` | The published key set, the advertised `jwks_uri` |
 | `/.well-known/change-password` | Redirects to `/change-password` (RFC 8615) |
 | `/oauth2/authorize` `/oauth2/token` `/oauth2/userinfo` | The protocol endpoints |
 | `/oauth2/introspect` `/oauth2/revoke` `/oauth2/end-session` | The rest of them |
 | `/healthz` `/readyz` | Liveness, and readiness including migrations |
 
-Under a sub-path the RFC 8414 document **also** lives at the origin root —
-`https://apps.example.com/.well-known/oauth-authorization-server/idp` — because
+Under a sub-path the RFC 8414 document **also** lives at the origin root
+(`https://apps.example.com/.well-known/oauth-authorization-server/idp`), because
 that is where a strict client looks. The shipped
 [docker/Caddyfile.subpath](docker/Caddyfile.subpath) adds that route.
 
@@ -303,9 +368,9 @@ that is where a strict client looks. The shipped
 Caddy is **not part of the image**. It is an optional service in the compose
 file, started by a profile, and two shapes ship as working Caddyfiles:
 
-- **[docker/Caddyfile](docker/Caddyfile)** — the IdP owns a hostname. Automatic
+- **[docker/Caddyfile](docker/Caddyfile)**: the IdP owns a hostname. Automatic
   HTTPS, nothing else to think about.
-- **[docker/Caddyfile.subpath](docker/Caddyfile.subpath)** — the IdP lives at
+- **[docker/Caddyfile.subpath](docker/Caddyfile.subpath)**: the IdP lives at
   `https://apps.example.com/idp` beside another application. Two rules matter
   and both fail quietly when wrong: proxy `{path}/*` **without stripping the
   prefix**, and route the origin-root RFC 8414 document back to the IdP.
@@ -326,7 +391,7 @@ docker compose --env-file ../.env --profile caddy up -d --wait
 
 Resend, or nothing. Set `email.resend.apiKey` and `email.from` and you get
 verification, password reset, and notifications for the events an account's
-owner should hear about from someone other than whoever caused them —
+owner should hear about from someone other than whoever caused them:
 password changed, second factor turned on or off, API key created, account
 approved or rejected.
 
@@ -341,9 +406,9 @@ always `{baseUrl}/api/auth/callback/{provider}`:
 
 | Provider | Callback to register | Also needs |
 | --- | --- | --- |
-| `google` | `{baseUrl}/api/auth/callback/google` | — |
-| `github` | `{baseUrl}/api/auth/callback/github` | — |
-| `microsoft` | `{baseUrl}/api/auth/callback/microsoft` | **`tenantId`** — a GUID or verified domain. `common`, `organizations` and `consumers` are refused. |
+| `google` | `{baseUrl}/api/auth/callback/google` | nothing |
+| `github` | `{baseUrl}/api/auth/callback/github` | nothing |
+| `microsoft` | `{baseUrl}/api/auth/callback/microsoft` | **`tenantId`**, a GUID or verified domain. `common`, `organizations` and `consumers` are refused. |
 
 ```jsonc
 "social": {
@@ -356,7 +421,7 @@ always `{baseUrl}/api/auth/callback/{provider}`:
 
 **There is no account linking.** An identity is `(provider, subject)`. If a
 social profile arrives with an address that already belongs to a different
-account, the sign-in is refused rather than merged — a provider that lets
+account, the sign-in is refused rather than merged: a provider that lets
 someone set an unverified address must not be a way to take over an account.
 
 ## Neon and PostgREST
@@ -372,7 +437,7 @@ expires, bounded by `oauth.accessTokenTtl` (15 minutes by default).
 
 A resource server behind this IdP validates JWTs against the JWKS. It knows
 nothing about the per-user API keys of `/account/api-keys`, so a script holding
-one cannot call it — the key is not a credential it recognizes.
+one cannot call it: the key is not a credential it recognizes.
 
 A gateway closes that gap. Name a target in `config.jsonc`:
 
@@ -386,11 +451,11 @@ and `https://idp.example.com/gateway/data/items?select=id` is forwarded to
 `https://postgrest.internal:3000/items?select=id` with the method, headers,
 query and body unchanged. Three credentials are recognized, in order:
 
-1. **`Authorization`** — forwarded untouched. You said what to present.
-2. **`x-api-key`** — **exchanged for a JWT**, through the same
+1. **`Authorization`**: forwarded untouched. You said what to present.
+2. **`x-api-key`**: **exchanged for a JWT**, through the same
    `GET /api/auth/token` you could call yourself, so the ban re-check, the
    last-used accounting and the `azp` claim are identical.
-3. **A signed-in session cookie** — exchanged the same way, and never
+3. **A signed-in session cookie**: exchanged the same way, and never
    forwarded. This is what lets a page in your own front-end call a gateway as
    the person using it.
 
@@ -399,31 +464,31 @@ curl -H "x-api-key: idp_…" https://idp.example.com/gateway/data/items
 ```
 
 The upstream can tell which it got: `azp` is `apiKeys.tokenClientId` for a key
-and the IdP's own id for a browser session. Anything else — no header, no
-cookie, an expired session — is forwarded anonymously.
+and the IdP's own id for a browser session. Anything else (no header, no
+cookie, an expired session) is forwarded anonymously.
 
 Add `"requireAuth": true` to refuse a call carrying no credential at all
 instead of forwarding it anonymously; leave it off for a target with an
 anonymous role of its own, which is PostgREST's usual shape.
 
-Add `"trustProxy": true` when a reverse proxy in front of this IdP sets
-`X-Forwarded-For` / `-Host` / `-Proto` — the shipped Caddyfile does — and the
-target needs the browser's address and public URL rather than the container's
-view of them. **Only when something in front actually sets them:** with the IdP
-exposed directly it would let a caller tell the target whatever they like about
-themselves.
+Every gateway sends the target `X-Forwarded-For` / `-Host` / `-Proto`, written
+from this hop's own resolved view of the caller — never relayed from the
+inbound request. Whether a reverse proxy in front of the IdP is believed about
+those values is `server.trustProxy`, the same setting that governs the rest of
+the server: it is a fact about what sits in front of this process, not about
+where a gateway points.
 
 Gateways can also be added on **`/admin/gateways`**, where they survive
 restarts; the ones from the file are shown there read-only, because an edit
 would be a change the next restart undoes. Either way the caller's cookies
 never reach the target, the target's `Set-Cookie` never reaches the browser,
-and every gateway response carries a sandboxing `Content-Security-Policy` —
+and every gateway response carries a sandboxing `Content-Security-Policy`:
 the endpoint is same-origin with the issuer, so upstream content must not be
 able to act as though it belongs here.
 
 **Two caveats worth knowing.** The credential-to-JWT exchange is cached in the
 process for ten minutes. Suspending a user, revoking a key or signing out
-**through this IdP** — the admin area, the admin API, or the sign-out button —
+**through this IdP** (the admin area, the admin API, or the sign-out button)
 clears the cache at once; a change made directly in the database takes up to
 ten minutes to bite. And the session cookie is only honored when the request
 is **not cross-site**: a browser following a link from somewhere else reaches
@@ -433,19 +498,19 @@ whoever clicks it. WebSockets are not proxied (`501`).
 ## Security notes
 
 - **Every absolute URL comes from `server.baseUrl`.** A poisoned `Host` header
-  changes nothing — not a redirect, not a link in an e-mail.
+  changes nothing: not a redirect, not a link in an e-mail.
 - **Rate limits are on by default**, stored in the database so they survive a
   restart, with stricter rules for sign-in, reset, 2FA and the token endpoint.
 - **Passwords** are hashed with scrypt (Better Auth's default). Client secrets
   are hashed at rest. The signing keys are AES-256-GCM encrypted with `secret`.
-- **Revocation is immediate** everywhere the IdP is asked — refresh,
-  introspection, userinfo, its own pages — and bounded by the access-token
+- **Revocation is immediate** everywhere the IdP is asked (refresh,
+  introspection, userinfo, its own pages) and bounded by the access-token
   lifetime for stateless verifiers.
 - **The audit log** records every security-relevant event with actor, target,
   outcome and request id, and is browsable at `/admin/audit`.
 - The CSP concedes `script-src 'unsafe-inline'` because the framework streams
   its own scripts with no seam for a nonce. That is recorded rather than
-  hidden — `server/http/security-headers.ts` is the one place to change when
+  hidden: `server/http/security-headers.ts` is the one place to change when
   it can be tightened.
 
 Report a vulnerability through [SECURITY.md](SECURITY.md).
@@ -454,8 +519,8 @@ Report a vulnerability through [SECURITY.md](SECURITY.md).
 
 Runbooks for upgrades, key rotation, `secret` rotation, client reconciliation,
 cleanup, reading the audit log and the egress an install needs are in
-[docs/runbooks.md](docs/runbooks.md). Managing users over HTTP —
-the same API the admin pages use — is [docs/admin-api.md](docs/admin-api.md).
+[docs/runbooks.md](docs/runbooks.md). Managing users over HTTP (the same API
+the admin pages use) is [docs/admin-api.md](docs/admin-api.md).
 The operator CLI is the same binary:
 
 ```bash
@@ -470,7 +535,7 @@ cd docker
 
 ### If you get locked out
 
-There is no `reset-admin` command and no bootstrap password to fall back on —
+There is no `reset-admin` command and no bootstrap password to fall back on:
 both went with the environment bootstrap they belonged to (**D52**). In
 descending order of preference:
 
@@ -500,9 +565,9 @@ set.
 
 | Symptom | Usually |
 | --- | --- |
-| `invalid_redirect_uri`, and no redirect | The URI is not in that client's `redirectUris`. Matching is exact — scheme, host, port, path, no trailing-slash forgiveness. |
+| `invalid_redirect_uri`, and no redirect | The URI is not in that client's `redirectUris`. Matching is exact: scheme, host, port, path, no trailing-slash forgiveness. |
 | A client rejects the tokens: issuer mismatch | `server.baseUrl` and what the client was configured with differ byte-for-byte. Discovery's `issuer` is the value to copy. |
-| Neon rejects the token | The algorithm. Neon validates ES256 and RS256 only, and needs a `kid` — both are the default here, so check you are not overriding `jwt.algorithm`. |
+| Neon rejects the token | The algorithm. Neon validates ES256 and RS256 only, and needs a `kid`; both are the default here, so check you are not overriding `jwt.algorithm`. |
 | Signed in, then immediately signed out | Secure cookies over plain HTTP. Either terminate TLS in front, or set `server.allowInsecureHttp` for local work. |
 | Start-up: "Environment variable … is not set" | A `${env:…}` placeholder with no value and no default. The message names the file and the JSON pointer. |
 | Start-up hangs on migrations | Another instance holds the advisory lock, or `DATABASE_URL` is a pooler and `DATABASE_URL_ADMIN` is unset. |
@@ -527,21 +592,21 @@ pnpm drizzle:reset  # start over: drop the schema and everything in it
 `drizzle.config.ts` the migration generator does, so it sees only
 `IDP_SCHEMA_NAME ?? "idp"` and nothing else in the database;
 `IDP_SCHEMA_NAME=idp_scratch pnpm drizzle:studio` aims it at a throwaway.
-It is a full read-write editor on a live schema — for browsing a running
+It is a full read-write editor on a live schema; for browsing a running
 deployment there is `/admin/database`, which is admin-gated, can be held at
 `read-only`, and writes an audit row per statement (**D83**).
 
 `pnpm drizzle:reset` is how you get back to a clean database (**D56**).
 Migrations are forward-only and there is no seed step, so the reset is the
-schema going away: it drops `database.schema` — read from the same
+schema going away: it drops `database.schema` (read from the same
 configuration the app loads, on `database.directUrl`, and never `public` or
-anything else in the database — and the next `pnpm dev` or `pnpm docker:up`
+anything else in the database), and the next `pnpm dev` or `pnpm docker:up`
 migrates it back empty and serves the first-run setup page again. It prints the
-target — configuration folder, masked connection string, schema, table count —
+target (configuration folder, masked connection string, schema, table count)
 and asks `[y/N]` about that schema by name before it does anything, defaulting
 to no; `--yes` skips the prompt, `--schema <name>` aims it somewhere else, and
 `--migrate` leaves the schema rebuilt rather than absent. Stop the dev server or
-the container first — a live connection holds the locks the drop needs, and the
+the container first: a live connection holds the locks the drop needs, and the
 script says so after ten seconds rather than hanging.
 
 Integration tests run against a real Postgres, each file in its own uniquely
@@ -549,14 +614,14 @@ named schema. They read `IDP_TEST_DATABASE_URL`, else `DATABASE_URL_ADMIN`,
 else `DATABASE_URL`.
 
 End-to-end runs take each stack through the first-run setup wizard in a real
-browser before any spec starts, with per-run throwaway credentials — there is no
+browser before any spec starts, with per-run throwaway credentials: there is no
 administrator to configure and none to leave behind.
 
 End-to-end tests drive the **built image** in a browser, at the host root and
 behind Caddy under a sub-path, including a complete OIDC login through the
 sample relying party in [`apps/web/e2e/sample-rp.ts`](apps/web/e2e/sample-rp.ts).
 
-**Only when you change the schema** — a Better Auth upgrade, a new column —
+**Only when you change the schema** (a Better Auth upgrade, a new column)
 regenerate and commit both the Drizzle schema and the migrations. They are
 committed outputs, and CI compares them byte-for-byte, so a first run needs
 neither:
@@ -575,7 +640,7 @@ exactly. [CONTRIBUTING.md](CONTRIBUTING.md) has the rest.
 Semantic versioning, with the image tagged `X.Y.Z`, `X.Y`, `X`, `latest` and an
 immutable `sha-<commit>`. What is checked before a release is
 [docs/release.md](docs/release.md). Migrations apply automatically on upgrade and are
-forward-only — take a backup before upgrading, because there is no downgrade
+forward-only: take a backup before upgrading, because there is no downgrade
 path. [CHANGELOG.md](CHANGELOG.md) records what changed.
 
 ## License

@@ -7,6 +7,36 @@ Notable changes to this project. The format follows
 Decisions that changed a numbered requirement carry their `D` number from
 [spec-v1.md](spec-v1.md) §12, where the reasoning is.
 
+## [Unreleased]
+
+### Removed
+
+- **`docs/spikes/`, and the two probe scripts that fed it** (**D100**).
+  Four write-ups, `scripts/spike-s3-proxy.ts` and
+  `apps/web/scripts/spike-s4-schema-placement.ts`. Nothing requested the
+  directory — §13 asks that risks be verified in a spike, not that write-ups
+  be kept, and DOC-1/2/3 do not list it — and nothing maintained it: seven
+  commits total, a mapping table naming a type (`SchemaClient`) that exists in
+  no package, and `oauth_clients.json` still spelled `.json` because D90's
+  sweep did not know the directory was there. The findings survive where they
+  are gated: D27, D29, D32, D39, R8's closure row, and
+  `server/oidc/client-mapping.ts` with its unit test. The eight comments that
+  pointed into the folder now state their fact inline instead.
+
+### Changed
+
+- **The release script moved to the repository root** (**D99**, OPS-1).
+  `docker/release.sh` is `./release.sh`. It was adopted from `semantius-app`
+  path and all (**D73**), and the path was the part that did not transfer:
+  nothing in the script is a Docker operation — it bumps three version files,
+  commits, tags and pushes, and the tag push is the whole trigger, with every
+  build, scan and push happening remotely in
+  `.github/workflows/release.yml`. Sitting in `docker/` among the container
+  operator scripts, it was findable only by someone who already knew it was
+  there. `scripts/` was rejected as the destination: that directory is
+  TypeScript run by bun as CI gates, and this is the one script a human types
+  by hand.
+
 ## [0.6.1] — 2026-08-29
 
 ### Added

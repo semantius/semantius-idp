@@ -55,7 +55,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
     <html
       lang={ui.locale}
       className={ui.theme === "dark" ? "dark" : undefined}
-      // How the mount path reaches the browser bundle (OPS-10, spike S3):
+      // How the mount path reaches the browser bundle (OPS-10):
       // already parsed by the time the client entry builds its router.
       {...{ [BASE_PATH_ATTRIBUTE]: ui.basePath }}
     >

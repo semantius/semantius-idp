@@ -3,7 +3,7 @@
  *
  * The branding URLs are the part with a sharp edge: they are the only values
  * in the context that the browser dereferences, so a mount path that is
- * missing from them is a request to somebody else's application (spike S3).
+ * missing from them is a request to somebody else's application.
  */
 
 import { describe, expect, it } from "vitest"
@@ -56,7 +56,7 @@ describe("buildUiContext branding", () => {
 
   it("puts the fallback icon on the mount path", () => {
     // A bare `/favicon.ico` is what a browser probes on its own, and under a
-    // sub-path that hits the origin root — the 404 spike S3 found.
+    // sub-path that hits the origin root — a 404 that actually happened.
     expect(contextFor({}, "http://localhost:3000/idp").favicon).toBe(
       "/idp/favicon.ico"
     )

@@ -291,7 +291,7 @@ function writeConfig(
           // the suite drives the page, not the data path, because a data-path
           // test needs a live upstream in the stack.
           gateways: {
-            fromfile: { url: "http://upstream.invalid", trustProxy: true },
+            fromfile: { url: "http://upstream.invalid" },
           },
           jwt: { audience: stack.baseURL },
           // No `admin.bootstrap`: it no longer exists (D52). The first

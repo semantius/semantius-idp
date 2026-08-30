@@ -128,7 +128,7 @@ publishes nothing. Only a tag publishes.
 Then cut it with the script, which is the supported way:
 
 ```bash
-docker/release.sh v1.0.0
+./release.sh v1.0.0
 ```
 
 It refuses a detached HEAD, a dirty tree, a branch out of sync with its

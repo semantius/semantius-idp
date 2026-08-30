@@ -15,8 +15,11 @@
  *
  * ⚠ Behind a **transaction-mode connection pooler** (PgBouncer, Neon's
  * `-pooler` endpoint) a session lock has no stable session to live in and can
- * be released or attributed to another client. Startup, migrations and the CLI
- * therefore connect through the *direct* endpoint; see `docs/spikes/s4-schema-placement.md`.
+ * be released or attributed to another client. Measured, not assumed: with the
+ * lock held on one reserved connection, `pg_try_advisory_lock` on a second
+ * connection through Neon's pooled endpoint **succeeds**, and through the
+ * direct endpoint is refused. Startup, migrations and the CLI therefore
+ * connect through the *direct* endpoint (`database.directUrl`, **D27**).
  */
 
 import type postgres from "postgres"

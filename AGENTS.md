@@ -24,7 +24,7 @@ Four files, in this order. Read them before proposing anything.
 | File | What it is |
 | --- | --- |
 | [status.md](status.md) | The handoff. Done, not-done, and why — the ground truth between sessions. |
-| [spec-v1.md](spec-v1.md) | Signed off, amended through **D97**. Numbered requirements, and §12.1's decision log with the reasoning. |
+| [spec-v1.md](spec-v1.md) | Signed off, amended through **D100**. Numbered requirements, and §12.1's decision log with the reasoning. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | The gates, the style, and how to amend the spec. |
 | [docs/release.md](docs/release.md) | What is left before v1.0.0, and it is the owner's, not yours. |
 
@@ -564,12 +564,19 @@ on `push: tags: v*`; anything to do with validating a change belongs in
 builds both architectures and smokes amd64 without pushing anything. The tag's
 version must equal the root `package.json` version, or the run refuses in its
 first job — the image stamps `IDP_VERSION` from the tag and three surfaces
-report it. **`docker/release.sh vX.Y.Z` is the supported way to cut one**: it
+report it. **`./release.sh vX.Y.Z` is the supported way to cut one**: it
 checks the preconditions, bumps the three files that carry a version, commits,
 tags and pushes. It is the same script `semantius-app` uses, which is the
 sibling repository to copy release conventions from — its
 `.github/workflows/docker-publish.yml` has cut three releases and is worth
-reading before changing this one.
+reading before changing this one. **It lives at the root, and the sibling's
+lives in `docker/`; do not "fix" that** (**D99**). Nothing in the script is a
+Docker operation — the tag push is the whole trigger and every build happens
+in the workflow — and under `docker/` it was findable only by someone who
+already knew where it was. What D73 imported from the sibling is the shape of
+the script, not its shelf. `scripts/` is not the answer either: that is
+TypeScript run by bun as CI gates, and this is the one script a human types by
+hand.
 
 **There is no bootstrap account.** A database with no users serves the first-run
 setup page (`/setup`, **D52**), and whoever completes it is the first

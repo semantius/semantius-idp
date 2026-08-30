@@ -565,7 +565,12 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
         }),
         // Registered last on purpose: the SEC-6 trail has to see the response
         // the caller gets, after every other plugin has had its say.
-        afterHook: buildAfterHook({ config, audit: deps.audit }),
+        afterHook: buildAfterHook({
+          config,
+          audit: deps.audit,
+          database: deps.database,
+          logger: deps.logger,
+        }),
       }),
     ],
 

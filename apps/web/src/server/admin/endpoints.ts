@@ -39,6 +39,7 @@ import { isPublic, resourceLinksFor, toClientRow } from "../oidc/client-mapping"
 import { revokeTokensFor, syncResourceLinks } from "../oidc/reconcile"
 import { rotateKeys } from "../oidc/rotate-keys"
 import { revokeAllForUser } from "../oidc/revoke-user-tokens"
+import { clearTrustedDevices } from "../auth/trusted-devices"
 import { hashClientSecret } from "../oidc/secret-hash"
 import { splitRoles } from "../role-utils"
 import { revision, version } from "../version"
@@ -111,11 +112,16 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
   /**
    * FR-2FA-2: an administrator resets a locked-out user's second factor.
    *
-   * Three things have to happen together, and skipping any one of them leaves
+   * Four things have to happen together, and skipping any one of them leaves
    * the account in a state nobody can reason about: the enrollment rows go, the
-   * flag on the user goes, and every live session goes with them — because a
+   * flag on the user goes, every live session goes with them — because a
    * session that was minted *behind* a second factor is exactly what an
-   * attacker who triggered the reset would be holding.
+   * attacker who triggered the reset would be holding — and so does every
+   * browser the user had told to skip the second factor (**D104**). The last
+   * one was missing, and it is the one that made the other three
+   * conditional: a trusted browser walks past a *freshly re-enrolled* factor
+   * for up to `twoFactor.trustDeviceDays`, and the trust row is rotated to a
+   * fresh expiry on every use, so one in daily use never lapses.
    */
   const resetTwoFactor = createAuthEndpoint(
     "/idp/reset-two-factor",
@@ -138,6 +144,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
       await handle.db
         .delete(handle.schema.twoFactor)
         .where(eq(handle.schema.twoFactor.userId, user.id))
+      const trustedDevices = await clearTrustedDevices(handle, user.id)
       await ctx.context.internalAdapter.updateUser(user.id, {
         twoFactorEnabled: false,
       })
@@ -153,6 +160,9 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
         actorType: "session",
         actorUserId: actor.id,
         target: { type: "user", id: user.id },
+        // No action of its own: clearing trust is never the event, it is part
+        // of the reset. The count is what an operator would ask afterwards.
+        metadata: { trustedDevices },
       })
       await deps.mailer?.send(
         "twoFactorReset",

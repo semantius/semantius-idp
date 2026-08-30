@@ -108,3 +108,48 @@ function normalizeHost(value: string | null | undefined): string | undefined {
   }
 }
 
+/**
+ * Whether a state-changing POST arrived from this deployment's own pages
+ * (**D101**).
+ *
+ * The account pages write to the database *before* they hand anything to
+ * Better Auth — a session revocation has to kill the OAuth tokens while the
+ * session row is still there to scope on (`oidc/revoke-user-tokens.ts`) — so
+ * Better Auth's own origin check no longer stands in front of the destructive
+ * part. `/account/consents` never had one at all: it deletes and revokes
+ * directly, and nothing in the path ever looked at where the post came from.
+ *
+ * `SameSite=Lax` is not the whole answer here. It stops a *cross-site* form
+ * post, but "site" is the registrable domain: a page on a sibling subdomain is
+ * same-site, and with `server.cookieDomain` set (**D97**) it carries the
+ * session cookie. A compromised or merely careless app on `apps.example.com`
+ * could otherwise disconnect an `idp.example.com` visitor's applications by
+ * submitting a form at them.
+ *
+ * Two checks, in the order a browser makes them answerable:
+ *
+ * - **`Sec-Fetch-Site`**, the same gate `gateways/proxy.ts` uses and for the
+ *   same reason: the browser sets it and a page cannot. Only `same-origin`
+ *   and `none` (a typed address or a bookmark) pass; `same-site` is refused,
+ *   which is the sibling-subdomain case above. **Absent means not a browser**
+ *   — a script that attached the cookie itself already holds it, and CSRF is
+ *   not something that can be done to it.
+ * - **`Origin`**, for the browsers that send no Fetch-Metadata. It has to name
+ *   the address the request arrived on ({@link requestOrigins}).
+ *
+ * Deliberately stricter than Better Auth's list: `server.trustedOrigins` is
+ * about which *clients* may post to the auth endpoints, and these two pages
+ * are only ever posted to from themselves. A deployment behind a proxy that
+ * rewrites `Host` has to send `X-Forwarded-Host`, which is the same
+ * requirement the rest of this module already documents.
+ */
+export function assertSameOrigin(request: Request): boolean {
+  const site = request.headers.get("sec-fetch-site")
+  if (site !== null && site !== "same-origin" && site !== "none") return false
+
+  const origin = request.headers.get("origin")
+  // `null` is what a sandboxed iframe or a redirected post sends; it names no
+  // address, so it cannot name this one.
+  if (origin === null) return true
+  return requestOrigins(request).includes(origin.trim().toLowerCase())
+}

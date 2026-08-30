@@ -25,13 +25,22 @@ import {
   withError,
 } from "@/server/http/auth-proxy"
 import { requireSession } from "@/server/http/require-session"
+import { assertSameOrigin } from "@/server/http/request-origin"
 import { stash } from "@/server/http/one-shot"
 import { changePassword } from "@/server/auth/change-password"
-import { claimEnrollment } from "@/server/functions/account"
-import type { EnrollmentView } from "@/server/functions/account"
+import { clearTrustedDevice } from "@/server/auth/trusted-devices"
+import {
+  claimEnrollment,
+  fetchTrustedDevices,
+} from "@/server/functions/account"
+import type {
+  EnrollmentView,
+  TrustedDeviceView,
+} from "@/server/functions/account"
 import { getRuntime } from "@/server/runtime"
 import type { Runtime } from "@/server/runtime"
 import { PendingForm, SubmitButton } from "@/components/common/pending-form"
+import { LocalTime } from "@/components/common/local-time"
 
 const HERE = "/account/security"
 
@@ -62,6 +71,14 @@ const HERE = "/account/security"
  * until a code from it is accepted — which is what stops someone locking
  * themselves out with a mistyped secret. The secret and the backup codes reach
  * the confirmation page through the one-shot stash, never through the URL.
+ *
+ * **Trusted browsers are listed here and individually revocable** (**D104**).
+ * Ticking "trust this device" is the one second-factor decision a user could
+ * make and not unmake: **D104** kills those rows with the enrollment, but
+ * short of tearing 2FA down there was no way to undo a single tick on a shared
+ * machine — and Better Auth rotates a trust row to a fresh expiry on every
+ * use, so one in use never lapses on its own. The row `id` is the form handle;
+ * the `identifier` is half the credential and never reaches the page.
  */
 export const Route = createFileRoute("/account/security")({
   loader: async ({ context, location }) => {
@@ -75,6 +92,7 @@ export const Route = createFileRoute("/account/security")({
       enrollment: await claimEnrollment({
         data: searchString(search.enrolling) ?? "",
       }),
+      trustedDevices: (await fetchTrustedDevices()) ?? [],
       notice: searchString(search.notice),
       error: searchString(search.error),
     }
@@ -87,6 +105,13 @@ export const Route = createFileRoute("/account/security")({
         const base = runtime.config.base.basePath
         const here = `${base}${HERE}`
 
+        // Everything on this page changes what it takes to get back into
+        // the account, and one of the actions below now writes to the
+        // database directly — so Better Auth's own origin check, which lives
+        // inside `callAuth`, is no longer in front of all of them (**D101**).
+        if (!assertSameOrigin(request)) {
+          return redirectWithCookies(withError(here, "untrusted_origin"))
+        }
         const signedIn = await requireSession(runtime, request, HERE)
         if (!signedIn.ok) return signedIn.response
 
@@ -129,6 +154,19 @@ export const Route = createFileRoute("/account/security")({
               here,
               signedIn.session.user.email
             )
+          case "revoke-trusted-device": {
+            // Ownership is in the delete's own `WHERE`; a miss is the same
+            // answer as an unknown id, which is what SEC-7 asks for.
+            const revoked = await clearTrustedDevice(
+              runtime.database,
+              signedIn.session.user.id,
+              form.deviceId ?? ""
+            )
+            if (!revoked) {
+              return redirectWithCookies(withError(here, "not_found"))
+            }
+            return redirectWithCookies(`${here}?notice=trusted_device_revoked`)
+          }
           default:
             return redirectWithCookies(withError(here, "not_found"))
         }
@@ -285,7 +323,8 @@ const PASSWORD_ERRORS = new Set([
 ])
 
 function SecurityPage() {
-  const { ui, profile, enrollment, notice, error } = Route.useLoaderData()
+  const { ui, profile, enrollment, trustedDevices, notice, error } =
+    Route.useLoaderData()
   const t = getCatalog(ui.locale)
   const confirm = usePasswordConfirm(t)
 
@@ -419,7 +458,67 @@ function SecurityPage() {
           )}
         </AccountSection>
       ) : null}
+
+      {/* Only where there is something to manage: with 2FA off for this user
+          every trust row has been cleared anyway (**D104**), and a section
+          that could only ever say "none" is noise on a page about
+          credentials. */}
+      {ui.twoFactorEnabled && profile.twoFactorEnabled ? (
+        <AccountSection
+          title={t.account.trustedDevices.title}
+          description={t.account.trustedDevices.description}
+        >
+          {trustedDevices.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {t.account.trustedDevices.empty}
+            </p>
+          ) : (
+            <ul className="grid gap-3">
+              {trustedDevices.map((device) => (
+                <TrustedDeviceRow key={device.id} device={device} t={t} />
+              ))}
+            </ul>
+          )}
+        </AccountSection>
+      ) : null}
     </AccountShell>
+  )
+}
+
+/**
+ * One row, and nothing on it that identifies the browser.
+ *
+ * A trust row carries no user agent and no address, so two dates is the honest
+ * list. Naming the device from the request reading the page would name this
+ * one, every time.
+ */
+function TrustedDeviceRow({
+  device,
+  t,
+}: {
+  device: TrustedDeviceView
+  t: ReturnType<typeof getCatalog>
+}) {
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-3 border-b pb-3 last:border-0 last:pb-0">
+      <div className="text-sm">
+        <p className="font-medium">
+          {t.account.trustedDevices.trustedOn}{" "}
+          <LocalTime iso={device.createdAt} variant="date" />
+        </p>
+        <p className="text-muted-foreground">
+          {t.account.trustedDevices.expires}{" "}
+          <LocalTime iso={device.expiresAt} variant="date" />
+        </p>
+      </div>
+      <PendingForm busy={t.common.loading} method="post">
+        <input type="hidden" name="action" value="revoke-trusted-device" />
+        <input type="hidden" name="deviceId" value={device.id} />
+        <SubmitButton variant="outline" size="sm">
+          {t.account.trustedDevices.revoke}
+        </SubmitButton>
+      </PendingForm>
+    </li>
   )
 }
 

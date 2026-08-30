@@ -20,7 +20,7 @@
 
 import { createServerFn } from "@tanstack/react-start"
 import { getRequest } from "@tanstack/react-start/server"
-import { and, desc, eq } from "drizzle-orm"
+import { and, desc, eq, gt } from "drizzle-orm"
 import { toString } from "qrcode"
 
 import { getRuntime } from "../runtime"
@@ -30,6 +30,8 @@ import { readSession } from "../http/session"
 import { readSidebarOpen } from "../http/sidebar-cookie"
 import type { RouteSession } from "../http/session"
 import { effectiveRoles, isAdmin } from "../role-utils"
+import { activeGrantsFor, liveTokenClientsBySession } from "../oidc/grants"
+import { listTrustedDevices } from "../auth/trusted-devices"
 
 export interface ProfileView {
   email: string
@@ -66,8 +68,23 @@ export interface SessionView {
   current: boolean
   createdAt: string
   expiresAt: string
+  /**
+   * `session.updatedAt`, which Better Auth moves when it extends a session
+   * past `session.updateAge` — so the granularity is about a day and the cost
+   * is zero. A per-request "last seen" column would be a write on every page
+   * load to sharpen a number nobody reads to the minute.
+   */
+  lastActiveAt: string
   ipAddress?: string
   userAgent?: string
+  /**
+   * The applications holding a live refresh token minted through this session
+   * (**D101**). Names only — the page renders them so "sign this one out" can
+   * say what it disconnects.
+   */
+  clients: string[]
+  /** True while an administrator is signed in as the user (FR-ADMIN-5). */
+  impersonated: boolean
 }
 
 export interface ApiKeyView {
@@ -81,6 +98,19 @@ export interface ApiKeyView {
   lastRequest?: string
 }
 
+/**
+ * One browser the user told to skip the second factor (**D104**, FR-2FA-1).
+ *
+ * The row `id` and two dates, and nothing else, because there is nothing else:
+ * a trust row records no user agent and no address. The `identifier` is
+ * deliberately absent — it is half the credential (`auth/trusted-devices.ts`).
+ */
+export interface TrustedDeviceView {
+  id: string
+  createdAt: string
+  expiresAt: string
+}
+
 export interface EnrollmentView {
   /** Inline SVG for the `otpauth://` URI, rendered on the server. */
   qrSvg: string
@@ -90,11 +120,23 @@ export interface EnrollmentView {
   backupCodes: string[]
 }
 
-export interface ConsentView {
+/**
+ * One connected application (**D102**).
+ *
+ * `hasConsent` and `activeTokens` are carried but not rendered: the page says
+ * "connected", and whether that rests on a stored consent, on a live refresh
+ * token, or on both is an implementation detail the user cannot act on
+ * differently. They are here because `activeGrantsFor` computes them anyway
+ * and the integration suite asserts on them — a badge that distinguishes the
+ * two would be a design decision, not a mapping change.
+ */
+export interface GrantView {
   clientId: string
   clientName: string
   scopes: string[]
-  createdAt: string
+  connectedAt: string
+  hasConsent: boolean
+  activeTokens: number
 }
 
 /**
@@ -134,25 +176,50 @@ export const fetchProfile = createServerFn({ method: "GET" }).handler(
   }
 )
 
+/**
+ * The **live** sessions, and what signed in through each of them.
+ *
+ * Expired rows are filtered out (**D103**). Better Auth deletes one lazily,
+ * when its cookie is next presented, and the retention sweep clears the rest
+ * hourly — so between the two an expired row could sit in this list for an
+ * hour under a heading that says every session here is live, offering a "Sign
+ * out" for something already signed out. What that costs is the per-row kill
+ * switch for an expired session whose tokens are still alive; "Sign out
+ * everywhere else" enumerates those rows deliberately, and Disconnect reaches
+ * the same tokens by client.
+ */
 export const fetchSessions = createServerFn({ method: "GET" }).handler(
   async (): Promise<SessionView[] | null> => {
     const runtime = await getRuntime()
     const current = await readSession(runtime, getRequest())
     if (!current) return null
 
+    const now = new Date()
+    const { session } = runtime.database.schema
     const rows = await runtime.database.db
       .select()
-      .from(runtime.database.schema.session)
-      .where(eq(runtime.database.schema.session.userId, current.user.id))
-      .orderBy(desc(runtime.database.schema.session.createdAt))
+      .from(session)
+      .where(
+        and(eq(session.userId, current.user.id), gt(session.expiresAt, now))
+      )
+      .orderBy(desc(session.createdAt))
+
+    const clientsBySession = await liveTokenClientsBySession(
+      runtime.database,
+      current.user.id,
+      now
+    )
 
     return rows.map((row) => ({
       id: row.id,
       current: row.id === current.session.id,
       createdAt: row.createdAt.toISOString(),
       expiresAt: row.expiresAt.toISOString(),
+      lastActiveAt: row.updatedAt.toISOString(),
       ipAddress: row.ipAddress ?? undefined,
       userAgent: row.userAgent ?? undefined,
+      clients: clientsBySession.get(row.id) ?? [],
+      impersonated: row.impersonatedBy !== null,
     }))
   }
 )
@@ -183,32 +250,48 @@ export const fetchApiKeys = createServerFn({ method: "GET" }).handler(
   }
 )
 
-export const fetchConsents = createServerFn({ method: "GET" }).handler(
-  async (): Promise<ConsentView[] | null> => {
+/**
+ * The applications the account is connected to (**D102**).
+ *
+ * The union of stored consents and clients holding a live refresh token, which
+ * is what `oidc/grants.ts` exists to compute and why this is four lines: the
+ * merge rules are the interesting part and they belong somewhere the
+ * integration suite can reach without a request.
+ */
+/**
+ * The browsers this account has trusted with its second factor (**D104**).
+ *
+ * Empty when 2FA is off for this user, which is not the same as "there are
+ * none": a user who turned it off has had every row cleared anyway, and a
+ * deployment with `twoFactor.enabled: false` has no such rows at all. Either
+ * way there is no section to render.
+ */
+export const fetchTrustedDevices = createServerFn({ method: "GET" }).handler(
+  async (): Promise<TrustedDeviceView[] | null> => {
+    const runtime = await getRuntime()
+    const current = await readSession(runtime, getRequest())
+    if (!current) return null
+    if (!current.user.twoFactorEnabled) return []
+
+    const rows = await listTrustedDevices(runtime.database, current.user.id)
+    return rows.map((row) => ({
+      id: row.id,
+      createdAt: row.createdAt.toISOString(),
+      expiresAt: row.expiresAt.toISOString(),
+    }))
+  }
+)
+
+export const fetchGrants = createServerFn({ method: "GET" }).handler(
+  async (): Promise<GrantView[] | null> => {
     const runtime = await getRuntime()
     const current = await readSession(runtime, getRequest())
     if (!current) return null
 
-    const { oauthConsent, oauthClient } = runtime.database.schema
-    const rows = await runtime.database.db
-      .select({
-        clientId: oauthConsent.clientId,
-        scopes: oauthConsent.scopes,
-        createdAt: oauthConsent.createdAt,
-        clientName: oauthClient.name,
-      })
-      .from(oauthConsent)
-      .leftJoin(oauthClient, eq(oauthClient.clientId, oauthConsent.clientId))
-      .where(eq(oauthConsent.userId, current.user.id))
-      .orderBy(desc(oauthConsent.createdAt))
-
-    return rows.map((row) => ({
-      clientId: row.clientId,
-      // The registered display name, falling back to the id: a client the
-      // reconciler has removed still has consents to withdraw.
-      clientName: row.clientName ?? row.clientId,
-      scopes: row.scopes,
-      createdAt: row.createdAt.toISOString(),
+    const grants = await activeGrantsFor(runtime.database, current.user.id)
+    return grants.map((grant) => ({
+      ...grant,
+      connectedAt: grant.connectedAt.toISOString(),
     }))
   }
 )

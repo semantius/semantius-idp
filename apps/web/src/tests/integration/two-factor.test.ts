@@ -13,6 +13,16 @@
 
 import { describe, expect, it } from "vitest"
 
+import { and, eq, like } from "drizzle-orm"
+
+import { createLocalAccountIssuer } from "@better-auth/core/db"
+
+import { createUserWithoutRequest } from "@/server/auth/provisioning"
+import {
+  TRUST_DEVICE_PREFIX,
+  clearTrustedDevice,
+  listTrustedDevices,
+} from "@/server/auth/trusted-devices"
 import type { TestContext } from "./harness"
 import { authRequest, createTestContext, sessionCookie } from "./harness"
 import { secretFromTotpUri, totpCode } from "../fixtures/totp"
@@ -54,6 +64,16 @@ async function register(context: TestContext): Promise<string> {
 interface Enrollment {
   secret: string
   backupCodes: string[]
+  /**
+   * The session cookie **after** the enrollment.
+   *
+   * `/two-factor/verify-totp` mints a new session and deletes the one that
+   * asked, so the cookie the caller passed in is dead by the time it returns.
+   * Anything that goes on to use the session — `/two-factor/disable` sits
+   * behind `sensitiveSessionMiddleware` and answers 401 otherwise — has to
+   * carry this one.
+   */
+  cookie: string
 }
 
 /**
@@ -64,7 +84,10 @@ interface Enrollment {
  * stops someone locking themselves out of an account they mistyped a secret
  * into.
  */
-async function enroll(context: TestContext, cookie: string): Promise<Enrollment> {
+async function enroll(
+  context: TestContext,
+  cookie: string
+): Promise<Enrollment> {
   const enabled = await context.auth.handler(
     authRequest("/two-factor/enable", {
       headers: { cookie },
@@ -86,7 +109,11 @@ async function enroll(context: TestContext, cookie: string): Promise<Enrollment>
   )
   expect(verified.status).toBe(200)
 
-  return { secret, backupCodes: body.backupCodes }
+  return {
+    secret,
+    backupCodes: body.backupCodes,
+    cookie: sessionCookie(verified) ?? cookie,
+  }
 }
 
 /** A password sign-in. Returns the response so the caller can read the flag. */
@@ -274,3 +301,340 @@ async function signInAudit(context: TestContext): Promise<number> {
   `
   return (rows[0] as { count: number }).count
 }
+
+/**
+ * A trusted browser dies with the enrollment it belongs to (**D104**,
+ * FR-2FA-2).
+ *
+ * Ticking "trust this device" writes a `verification` row — `identifier` a
+ * random `trust-device-…`, `value` the user id — and Better Auth rotates it
+ * to a fresh thirty-day expiry on every use, so a browser in daily use never
+ * lapses. Neither of the two teardowns cleared them: the administrator's reset
+ * left every one standing, and self-service disable deleted only the row
+ * belonging to the browser doing the disabling. Either way a *freshly
+ * re-enrolled* second factor could be walked past by a browser the user was
+ * worried about.
+ *
+ * The rows are written directly here rather than driven through a
+ * `trustDevice: true` verification: the cookie half is HMAC-signed with the
+ * instance secret and a test that reproduced that would be asserting Better
+ * Auth's crypto, not this. What is under test is the deletion, and the row is
+ * the deletion's whole subject.
+ */
+describe("trusted devices die with the enrollment (D104)", () => {
+  const OTHER = "twofactor-other@example.com"
+
+  /** A second browser's trust row, exactly as the plugin writes one. */
+  async function trustBrowser(
+    context: TestContext,
+    userId: string
+  ): Promise<void> {
+    const { verification } = context.database.schema
+    await context.database.db.insert(verification).values({
+      id: crypto.randomUUID(),
+      identifier: `${TRUST_DEVICE_PREFIX}${crypto.randomUUID().replace(/-/g, "")}`,
+      value: userId,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    })
+  }
+
+  async function trustRows(
+    context: TestContext,
+    userId: string
+  ): Promise<number> {
+    const { verification } = context.database.schema
+    const rows = await context.database.db
+      .select({ id: verification.id })
+      .from(verification)
+      .where(
+        and(
+          eq(verification.value, userId),
+          like(verification.identifier, `${TRUST_DEVICE_PREFIX}%`)
+        )
+      )
+    return rows.length
+  }
+
+  async function userIdFor(
+    context: TestContext,
+    email: string
+  ): Promise<string> {
+    const [row] = await context.database.db
+      .select({ id: context.database.schema.user.id })
+      .from(context.database.schema.user)
+      .where(eq(context.database.schema.user.email, email))
+    expect(row?.id).toBeTruthy()
+    return row!.id
+  }
+
+  /** An administrator with a credential, made the way `admin.test.ts` does. */
+  async function makeAdmin(context: TestContext): Promise<string> {
+    const inner = await context.auth.$context
+    const user = await createUserWithoutRequest(
+      inner,
+      {
+        email: "twofactor-admin@example.com",
+        name: "Resetter",
+        emailVerified: true,
+        role: "admin",
+        status: "active",
+      },
+      { method: "admin" }
+    )
+    await inner.internalAdapter.createAccount({
+      userId: user.id,
+      providerId: "credential",
+      issuer: createLocalAccountIssuer("credential"),
+      accountId: user.id,
+      password: await inner.password.hash(PASSWORD),
+    })
+    const signedIn = await context.auth.handler(
+      authRequest("/sign-in/email", {
+        json: { email: "twofactor-admin@example.com", password: PASSWORD },
+      })
+    )
+    const cookie = sessionCookie(signedIn)
+    expect(cookie, "the administrator must be able to sign in").toBeTruthy()
+    return cookie!
+  }
+
+  it("an administrator's reset forgets every trusted browser, and counts them", async () => {
+    const context = await contextWith("twofactor_reset_trust")
+    try {
+      const cookie = await register(context)
+      await enroll(context, cookie)
+      const userId = await userIdFor(context, EMAIL)
+      await trustBrowser(context, userId)
+      await trustBrowser(context, userId)
+      expect(await trustRows(context, userId)).toBe(2)
+
+      const admin = await makeAdmin(context)
+      const reset = await context.auth.handler(
+        authRequest("/idp/reset-two-factor", {
+          json: { userId },
+          headers: { cookie: admin },
+        })
+      )
+      expect(reset.status).toBe(200)
+
+      expect(await trustRows(context, userId)).toBe(0)
+
+      const [row] = await context.database.db
+        .select({ metadata: context.database.schema.auditLog.metadata })
+        .from(context.database.schema.auditLog)
+        .where(eq(context.database.schema.auditLog.action, "twofactor.reset"))
+      expect(row?.metadata).toMatchObject({ trustedDevices: 2 })
+    } finally {
+      await context.teardown()
+    }
+  })
+
+  it("turning it off yourself forgets every browser, not only this one", async () => {
+    const context = await contextWith("twofactor_disable_trust")
+    try {
+      const enrolled = await enroll(context, await register(context))
+      const userId = await userIdFor(context, EMAIL)
+      // Two other browsers. Better Auth deletes at most the one named by the
+      // presenting cookie, and this request carries none.
+      await trustBrowser(context, userId)
+      await trustBrowser(context, userId)
+      expect(await trustRows(context, userId)).toBe(2)
+
+      const disabled = await context.auth.handler(
+        authRequest("/two-factor/disable", {
+          headers: { cookie: enrolled.cookie },
+          json: { password: PASSWORD },
+        })
+      )
+      expect(disabled.status).toBe(200)
+
+      expect(await trustRows(context, userId)).toBe(0)
+    } finally {
+      await context.teardown()
+    }
+  })
+
+  it("touches nobody else's browsers", async () => {
+    const context = await contextWith("twofactor_trust_scope")
+    try {
+      const enrolled = await enroll(context, await register(context))
+      const mine = await userIdFor(context, EMAIL)
+
+      const inner = await context.auth.$context
+      const other = await createUserWithoutRequest(
+        inner,
+        {
+          email: OTHER,
+          name: "Other",
+          emailVerified: true,
+          status: "active",
+        },
+        { method: "admin" }
+      )
+      await trustBrowser(context, mine)
+      await trustBrowser(context, other.id)
+
+      await context.auth.handler(
+        authRequest("/two-factor/disable", {
+          headers: { cookie: enrolled.cookie },
+          json: { password: PASSWORD },
+        })
+      )
+
+      expect(await trustRows(context, mine)).toBe(0)
+      expect(await trustRows(context, other.id)).toBe(1)
+    } finally {
+      await context.teardown()
+    }
+  })
+})
+
+/**
+ * Seeing and untrusting one browser (**D104**, FR-2FA-1).
+ *
+ * The teardown above kills trust rows with the enrollment; this is the other
+ * half, for the user who ticked the box on a shared machine and wants that one
+ * tick back without turning 2FA off. Rotation means such a row never expires
+ * on its own, so "wait for it" was not an answer.
+ */
+describe("trusted devices listed and individually revocable (D104)", () => {
+  async function trustBrowser(
+    context: TestContext,
+    userId: string
+  ): Promise<string> {
+    const { verification } = context.database.schema
+    const id = crypto.randomUUID()
+    await context.database.db.insert(verification).values({
+      id,
+      identifier: `${TRUST_DEVICE_PREFIX}${crypto.randomUUID().replace(/-/g, "")}`,
+      value: userId,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    })
+    return id
+  }
+
+  async function userIdFor(
+    context: TestContext,
+    email: string
+  ): Promise<string> {
+    const [row] = await context.database.db
+      .select({ id: context.database.schema.user.id })
+      .from(context.database.schema.user)
+      .where(eq(context.database.schema.user.email, email))
+    expect(row?.id).toBeTruthy()
+    return row!.id
+  }
+
+  it("lists only this user's browsers, and never the identifier", async () => {
+    const context = await contextWith("twofactor_list_trust")
+    try {
+      const cookie = await register(context)
+      await enroll(context, cookie)
+      const mine = await userIdFor(context, EMAIL)
+
+      const inner = await context.auth.$context
+      const other = await createUserWithoutRequest(
+        inner,
+        {
+          email: "twofactor-list-other@example.com",
+          name: "Other",
+          emailVerified: true,
+          status: "active",
+        },
+        { method: "admin" }
+      )
+      const first = await trustBrowser(context, mine)
+      const second = await trustBrowser(context, mine)
+      await trustBrowser(context, other.id)
+
+      const listed = await listTrustedDevices(context.database, mine)
+
+      expect(listed.map((row) => row.id).sort()).toEqual([first, second].sort())
+      // The `identifier` is half the credential — the cookie carries an HMAC
+      // over it — so it must not be in the shape the page renders from.
+      for (const row of listed) {
+        expect(Object.keys(row).sort()).toEqual([
+          "createdAt",
+          "expiresAt",
+          "id",
+        ])
+      }
+    } finally {
+      await context.teardown()
+    }
+  })
+
+  it("revokes exactly one, and refuses an id that is not yours", async () => {
+    const context = await contextWith("twofactor_revoke_one_trust")
+    try {
+      const cookie = await register(context)
+      await enroll(context, cookie)
+      const mine = await userIdFor(context, EMAIL)
+
+      const inner = await context.auth.$context
+      const other = await createUserWithoutRequest(
+        inner,
+        {
+          email: "twofactor-revoke-other@example.com",
+          name: "Other",
+          emailVerified: true,
+          status: "active",
+        },
+        { method: "admin" }
+      )
+      const keep = await trustBrowser(context, mine)
+      const drop = await trustBrowser(context, mine)
+      const theirs = await trustBrowser(context, other.id)
+
+      expect(await clearTrustedDevice(context.database, mine, drop)).toBe(true)
+      expect(
+        (await listTrustedDevices(context.database, mine)).map((r) => r.id)
+      ).toEqual([keep])
+
+      // Somebody else's row, by its real id: ownership is in the WHERE, so
+      // this deletes nothing rather than deleting theirs.
+      expect(await clearTrustedDevice(context.database, mine, theirs)).toBe(
+        false
+      )
+      expect(
+        (await listTrustedDevices(context.database, other.id)).length
+      ).toBe(1)
+
+      // A second submit of a form that already worked, and an id that never
+      // existed, are the same answer.
+      expect(await clearTrustedDevice(context.database, mine, drop)).toBe(false)
+      expect(await clearTrustedDevice(context.database, mine, "")).toBe(false)
+    } finally {
+      await context.teardown()
+    }
+  })
+
+  it("will not delete a verification row that is not a trusted device", async () => {
+    const context = await contextWith("twofactor_trust_prefix")
+    try {
+      const cookie = await register(context)
+      await enroll(context, cookie)
+      const mine = await userIdFor(context, EMAIL)
+
+      // A row this user owns by `value` and that is emphatically not a trust
+      // row. Without the prefix in the WHERE, the form could delete it.
+      const { verification } = context.database.schema
+      const id = crypto.randomUUID()
+      await context.database.db.insert(verification).values({
+        id,
+        identifier: `reset-token-${id}`,
+        value: mine,
+        expiresAt: new Date(Date.now() + 3600_000),
+      })
+
+      expect(await clearTrustedDevice(context.database, mine, id)).toBe(false)
+      const [survivor] = await context.database.db
+        .select({ id: verification.id })
+        .from(verification)
+        .where(eq(verification.id, id))
+      expect(survivor?.id).toBe(id)
+    } finally {
+      await context.teardown()
+    }
+  })
+})

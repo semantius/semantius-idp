@@ -1,8 +1,11 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-30 · **Branch:** `main` · **Head:** `f806cad`, last tag **v0.6.1**
-**Plan:** `~/.claude/plans/users-has-a-full-binary-meteor.md` (full-page forms)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D100**
+**As of:** 2026-08-30 · **Branch:** `main` · **Head:** the D101–D104 commit below
+(check it with `git log -1`; a SHA written here cannot name the commit that
+carries it), last tag **v0.6.2**
+**Plan:** `~/.claude/plans/strange-that-1-is-refactored-hamster.md`
+(session & token visibility/revocation)
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D104**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
 gate; API gateways (FR-GW, **D91**/**D92**) landed on 2026-08-29, and the
@@ -124,6 +127,122 @@ README quick start against it, and confirming `latest` from outside.
   next boot serves the first-run setup page, which is now the only way an
   administrator is ever created. No credential to recover, and no command that
   changes one.
+
+---
+
+## Sessions, grants and trusted devices (2026-08-30, **D101**–**D104**)
+
+Four commits, from the session/token plan. What they have in common: an act
+the user takes to cut something off did not cut all of it off, and in two cases
+the page that was supposed to show them what they were connected to showed
+nothing at all.
+
+### The three artifacts an OAuth sign-in leaves
+
+An IdP session row, a stored refresh token, and short-lived JWT access tokens.
+Only the first was visible or revocable from `/account/*`. So:
+
+**"Sign out" now revokes that session's OAuth tokens, always** (**D101**).
+It deleted the row and stopped, and the application on the device being cut off
+went on refreshing for up to 30 days sliding / 90 absolute — unless
+`session.revokeOAuthTokensOnLogout` was on, and it is off by default for an SSO
+reason that has nothing to do with this page. Administrators have cascaded
+since **D67**. **The flag was not the fix**: its hook fires on *every*
+hook-visible deletion including lazy expiry, while the hourly sweep deletes
+expired rows in raw SQL and fires nothing — so flipping it would revoke on
+*lazy* expiry and not on *swept* expiry, nondeterministically, under reason
+`logout`. Explicit revocation cascades at the handler; logout stays governed by
+the flag, and the describe text and FR-AUTH-6 now say which is which.
+`revokeForOtherSessions` enumerates **expired** sessions too, which Better
+Auth's own endpoint skips and which is exactly the forgotten device.
+
+**`/account/consents` was empty and its Disconnect was unreachable**
+(**D102**). It listed `oauth_consent`, and file clients default to
+`skipConsent: true` — nobody is asked, so no row is written. The page now
+lists the union of consents and clients holding a *live* refresh token
+(`server/oidc/grants.ts`), and the handler runs the delete and the revoke
+independently: it used to answer `not_found` the moment the delete found
+nothing, before it ever reached `revokeForClient`.
+
+**In the deployment as configured today, the first of those is insurance
+rather than a live fix.** The Semantius Admin SPA asks for `openid profile
+email` and no `offline_access`, so no refresh token exists and revoking the
+session already cuts it off within the access token's 15 minutes. It arms the
+moment the first `offline_access` client appears — which is precisely when
+nobody would think to re-notice the gap.
+
+### Two gates that were missing from the destructive account posts
+
+Inserting the revocation *before* `callAuth` — mandatory, because both token
+tables reference `session_id` with `on delete set null` — takes two backstops
+away with it: Better Auth's `sensitiveSessionMiddleware` and its origin check
+both run inside `callAuth`. Both posts now read the session authoritatively
+(**D81**) and call the new `assertSameOrigin` first. **`/account/consents` had
+never had either**: it writes to the database directly, so nothing ever looked
+at where the post came from, and it authorized that write from the ≤ 5 minute
+cookie cache. The origin check is the gateway's `Sec-Fetch-Site` gate
+(**D92**): `SameSite=Lax` stops a cross-*site* post and not a sibling
+subdomain, which `server.cookieDomain` (**D97**) is what makes carry the
+cookie.
+
+### A trusted browser outlived the enrollment it belonged to (**D104**)
+
+Ticking "trust this device" writes a `verification` row, and Better Auth
+**rotates it to a fresh thirty-day expiry on every use** — so one in daily use
+never lapses. `/idp/reset-two-factor` cleared the `two_factor` rows, the flag,
+every session and every token, and left these standing; `/two-factor/disable`
+clears only the presenting browser's. A user who lost a phone and re-enrolled
+had a *freshly enrolled* factor that another browser could walk past for a
+month. Both flows now call `clearTrustedDevices`, and `/account/security` lists
+them with a per-row revoke, because otherwise a tick on a shared machine could
+only be undone by tearing 2FA down. **Operator remediation**: a deployment that
+reset a user's 2FA while a device was trusted should reset once more, or delete
+that user's `trust-device-%` rows.
+
+Two flows were considered and rejected, both on the record in D104: a password
+change or reset (a trust row is not a credential), and a ban or revoke-all (the
+status gate refuses the sign-in anyway).
+
+### Polish that rode along
+
+`/account/api-keys` draws `lastRequest`, which the view has always carried and
+the page never showed, along with the two catalog strings written for it. And
+`session.revoked` rows now say which of the four endpoints they came from
+(`scope`) and name the session where the request can honestly do so —
+**ownership-scoped**, because Better Auth's `/revoke-session` answers success
+for a foreign token while silently skipping the delete, so an unconditional id
+would have minted success rows naming a session nobody revoked.
+
+### What was verified
+
+Every gate: lint, typecheck, unit (676 across 57 files), integration (326
+across 30 files), coverage including the 85 % `src/server/oidc/**` gate, the
+configuration-reference and config-schema `--check` gates, schema drift,
+dependency pinning, the Bun pin, the client-bundle gate, `pnpm docker:smoke`,
+and the e2e suite — **101 tests in a real browser against a rebuilt image**,
+both deployment shapes, axe scans included.
+
+New integration coverage worth knowing about: `account-revocation.test.ts`
+drives the two account POST handlers as real form posts, through
+`setRuntime(asRuntime(context))` — a new harness seam (`server/runtime.ts`, the
+CLI's own) that lets a route's `server.handlers` run against the test schema.
+The ordering is the requirement there, and asserting on `revokeForSession`
+alone would pass with the call in the wrong place.
+
+### Left open
+
+- **Social sign-ins never meet the second factor — and the owner has decided
+  that is fine.** Better Auth's 2FA challenge hook matches only
+  `/sign-in/email`, `/sign-in/username` and `/sign-in/phone-number`, so a
+  social callback creates a session without one. Raised on 2026-08-30 and
+  **closed rather than filed**: the provider is the one that authenticated the
+  user, and a deployment that wants a second factor on that path configures it
+  at the provider, where the credential actually lives. Adding one here would
+  ask a user who never typed a password into this IdP for a code from an
+  enrollment made against it. Recorded so it is not re-raised as a finding.
+- Follow-ups the plan named and did not take: an admin per-user grants view;
+  linked-identities visibility and unlink; back-channel logout; e2e sample-RP
+  refresh support; a plural "sessions signed out" notice.
 
 ---
 

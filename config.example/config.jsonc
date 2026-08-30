@@ -135,6 +135,9 @@
     "updateAge": "1d",
     // Capped at 5 so a revocation takes effect quickly.
     "cookieCacheMinutes": 5,
+    // Governs sign-out, RP-initiated logout and the lazy delete of an expired
+    // session. Explicit revocation - the account page, an administrator -
+    // always revokes the session's tokens whatever this says (D101).
     "revokeOAuthTokensOnLogout": false
   },
 

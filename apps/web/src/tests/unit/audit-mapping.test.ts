@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest"
 
-import { auditEventFor, isRedirect } from "@/server/auth/options/hooks"
+import {
+  auditEventFor,
+  isRedirect,
+  sessionRevocationScope,
+} from "@/server/auth/options/hooks"
 import {
   plainAuditFor,
   rememberEndingImpersonation,
@@ -188,9 +192,13 @@ describe("plainAuditFor", () => {
 
   it("takes a created user's id from what the endpoint returned", () => {
     expect(
-      plainAuditFor("/admin/create-user", ctx({ returned: { user: { id: "u1" } } }), {
-        role: ["admin", "user"],
-      })
+      plainAuditFor(
+        "/admin/create-user",
+        ctx({ returned: { user: { id: "u1" } } }),
+        {
+          role: ["admin", "user"],
+        }
+      )
     ).toEqual({
       action: "user.created",
       targetId: "u1",
@@ -267,7 +275,33 @@ describe("plainAuditFor", () => {
   })
 
   it("has no opinion about anything else", () => {
-    expect(plainAuditFor("/admin/ban-user", ctx(), { userId: "u4" })).toBeUndefined()
+    expect(
+      plainAuditFor("/admin/ban-user", ctx(), { userId: "u4" })
+    ).toBeUndefined()
     expect(plainAuditFor("/get-session", ctx(), {})).toBeUndefined()
+  })
+})
+
+/**
+ * Which kind of "sign out" a `session.revoked` row describes.
+ *
+ * Four endpoints share one action, and the row used to say which only by
+ * implication — so "did that user end one session or all of them?" was a
+ * question the trail could not answer. The vocabulary is the admin guard's
+ * (`all`), so the two halves read together.
+ */
+describe("sessionRevocationScope", () => {
+  it("names each of the four paths", () => {
+    expect(sessionRevocationScope("/sign-out")).toBe("current")
+    expect(sessionRevocationScope("/revoke-session")).toBe("one")
+    expect(sessionRevocationScope("/revoke-sessions")).toBe("all")
+    expect(sessionRevocationScope("/revoke-other-sessions")).toBe("others")
+  })
+
+  it("has no opinion about anything else", () => {
+    // It runs on every endpoint the after hook sees, `/get-session` included.
+    for (const path of ["/get-session", "/sign-in/email", "", "/revoke"]) {
+      expect(sessionRevocationScope(path)).toBeUndefined()
+    }
   })
 })

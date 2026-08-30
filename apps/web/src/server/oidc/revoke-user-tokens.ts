@@ -1,15 +1,19 @@
 /**
  * Taking OAuth tokens away (FR-OIDC-12, FR-AUTH-3/6, FR-OIDC-10).
  *
- * Three call sites want three *different* scopes, and collapsing them into one
- * "revoke everything" would be wrong in two of the three:
+ * The call sites want *different* scopes, and collapsing them into one
+ * "revoke everything" would be wrong in most of them:
  *
  * - **`revokeAllForUser`** — a password reset or change, a ban, a rejection, a
  *   deletion, or an administrator's explicit "sign this person out
  *   everywhere". The user's whole OAuth footprint goes.
- * - **`revokeForSession`** — `session.revokeOAuthTokensOnLogout`. FR-AUTH-6
- *   revokes the tokens *that session* obtained, not the user's: signing out on
- *   a laptop must not log the phone out of every connected application.
+ * - **`revokeForSession`** — `session.revokeOAuthTokensOnLogout`, and every
+ *   explicit "sign this session out" on `/account/sessions`. FR-AUTH-6 revokes
+ *   the tokens *that session* obtained, not the user's: signing out on a
+ *   laptop must not log the phone out of every connected application.
+ * - **`revokeForOtherSessions`** — "Sign out everywhere else" (**D101**). The
+ *   same scope, applied to every session but the caller's, expired ones
+ *   included.
  * - **`revokeForClient`** — withdrawing consent. FR-OIDC-10 revokes *that
  *   client's* tokens; the other applications the user has connected are not
  *   part of that decision.
@@ -25,7 +29,7 @@
  * why `oauth.accessTokenTtl` defaults to fifteen minutes.
  */
 
-import { and, eq, isNull } from "drizzle-orm"
+import { and, eq, isNull, ne } from "drizzle-orm"
 
 import type { Audit } from "../audit"
 import type { DbHandle } from "../db/client"
@@ -60,6 +64,15 @@ export async function revokeAllForUser(
  * Scoped on `session_id`, which both token tables carry — and which is set to
  * `null` rather than cascading when a session row is deleted, so this has to
  * run *before* the session goes.
+ *
+ * `userId` is **part of the WHERE**, not only audit metadata (**D101**). A
+ * session id is a handle a caller supplies, and every caller here checks
+ * ownership before it gets this far — but a scope that is enforced only by its
+ * callers is one careless future caller away from a cross-user revocation.
+ * With every existing caller passing the owner, adding it changes no behavior
+ * and moves the check into the layer that does the writing. Omitted, the scope
+ * is the session alone, which is what the `session.delete.before` hook needs
+ * when Better Auth hands it a row it has already resolved.
  */
 export async function revokeForSession(
   deps: RevokeDeps,
@@ -75,11 +88,72 @@ export async function revokeForSession(
 ): Promise<RevokeResult> {
   const { oauthAccessToken, oauthRefreshToken } = deps.database.schema
   const result = await revoke(deps, {
-    accessWhere: eq(oauthAccessToken.sessionId, sessionId),
-    refreshWhere: eq(oauthRefreshToken.sessionId, sessionId),
+    accessWhere: and(
+      eq(oauthAccessToken.sessionId, sessionId),
+      ...(userId ? [eq(oauthAccessToken.userId, userId)] : [])
+    ),
+    refreshWhere: and(
+      eq(oauthRefreshToken.sessionId, sessionId),
+      ...(userId ? [eq(oauthRefreshToken.userId, userId)] : [])
+    ),
   })
   await record(deps, { userId, reason, scope: "session", result, sessionId })
   return result
+}
+
+/**
+ * Every session the user holds **except** the one asking (**D101**).
+ *
+ * This is the token half of "Sign out everywhere else". Better Auth's
+ * `/revoke-other-sessions` deletes the session rows and knows nothing about
+ * this deployment's tokens, so without this the device someone is trying to
+ * cut off keeps refreshing for up to `oauth.refreshTokenTtl` — the exact
+ * device the button exists for.
+ *
+ * Three choices worth naming:
+ *
+ * - **Expired sessions are included.** A forgotten laptop's session has
+ *   usually lapsed by the time anyone worries about it, and its refresh token
+ *   has not: Better Auth's own endpoint skips expired rows, so nothing else
+ *   would ever reach those tokens.
+ * - **A loop, not one bulk `UPDATE ... WHERE session_id IN (...)`.** Each pass
+ *   writes its own `token.revoked` row naming the session and the counts,
+ *   which is the forensic value; `N` is single digits, and the per-session
+ *   path is the one that is already tested.
+ * - **Tokens whose minting session is already gone (`session_id IS NULL`) are
+ *   left alone.** They may belong to an application connected through an
+ *   *earlier* session on the very device the caller is keeping. The client
+ *   axis — Disconnect on `/account/consents` — is what reaches those.
+ */
+export async function revokeForOtherSessions(
+  deps: RevokeDeps,
+  {
+    userId,
+    currentSessionId,
+    reason,
+  }: {
+    userId: string
+    currentSessionId: string
+    reason: string
+  }
+): Promise<RevokeResult> {
+  const { session } = deps.database.schema
+  const rows = await deps.database.db
+    .select({ id: session.id })
+    .from(session)
+    .where(and(eq(session.userId, userId), ne(session.id, currentSessionId)))
+
+  const total: RevokeResult = { accessTokens: 0, refreshTokens: 0 }
+  for (const row of rows) {
+    const result = await revokeForSession(deps, {
+      sessionId: row.id,
+      userId,
+      reason,
+    })
+    total.accessTokens += result.accessTokens
+    total.refreshTokens += result.refreshTokens
+  }
+  return total
 }
 
 /** One client's tokens for one user (FR-OIDC-10). */

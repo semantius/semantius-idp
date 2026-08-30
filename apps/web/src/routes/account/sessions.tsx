@@ -19,11 +19,15 @@ import {
   withError,
 } from "@/server/http/auth-proxy"
 import { requireSession } from "@/server/http/require-session"
-import { readSession } from "@/server/http/session"
+import { assertSameOrigin } from "@/server/http/request-origin"
 import { fetchSessions } from "@/server/functions/account"
-import { APP_ROUTES } from "@/server/oidc/base-path"
+import {
+  revokeForOtherSessions,
+  revokeForSession,
+} from "@/server/oidc/revoke-user-tokens"
 import { getRuntime } from "@/server/runtime"
 import type { Runtime } from "@/server/runtime"
+import { Badge } from "@workspace/ui/components/badge"
 import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 import { LocalTime } from "@/components/common/local-time"
 
@@ -37,6 +41,27 @@ const HERE = "/account/sessions"
  * that it is the move someone makes to lock the real owner out — but the gate
  * itself is gone (**D81**), and the read is authoritative rather than cached,
  * which is the property that actually mattered here.
+ *
+ * **Signing a session out revokes the OAuth tokens it obtained, always**
+ * (**D101**). `session.revokeOAuthTokensOnLogout` governs *logout* — closing
+ * the tab on a laptop is not a statement about every application the user
+ * signed in to, which is the whole SSO argument for its `false` default. This
+ * page is the opposite statement: it exists to cut a device off, and a device
+ * whose app goes on refreshing tokens for another thirty days is not cut off.
+ * The administrator's equivalent has cascaded since **D67**, and self-service
+ * being weaker than admin for the same act is not a defensible split.
+ *
+ * The revocation runs **before** Better Auth deletes the row. Both token
+ * tables reference `session_id` with `on delete set null`, so afterwards there
+ * is nothing left to scope on. The order is fail-secure the way round it is:
+ * if the delete then fails, the tokens are dead and the session lives, and the
+ * retry is a counted no-op.
+ *
+ * That ordering is also why the two gates below come first. Better Auth's own
+ * origin check runs inside `callAuth`, which is now *after* the destructive
+ * part, and so does the authoritative read its `sensitiveSessionMiddleware`
+ * did — neither stands in front of anything any more, so this handler does
+ * both itself.
  */
 export const Route = createFileRoute("/account/sessions")({
   loader: async ({ context, location }) => {
@@ -59,23 +84,26 @@ export const Route = createFileRoute("/account/sessions")({
         const runtime = await getRuntime()
         const base = runtime.config.base.basePath
         const here = `${base}${HERE}`
-        const form = await readForm(request)
-        const all = form.scope === "others"
 
-        if (all) {
-          const signedIn = await requireSession(runtime, request, HERE)
-          if (!signedIn.ok) return signedIn.response
-        } else {
-          const session = await readSession(runtime, request)
-          if (!session) {
-            return redirectWithCookies(
-              `${base}${APP_ROUTES.login}?notice=signin_required`
-            )
-          }
+        // Before a form field is read, let alone a row written.
+        if (!assertSameOrigin(request)) {
+          return redirectWithCookies(withError(here, "untrusted_origin"))
         }
+        const signedIn = await requireSession(runtime, request, HERE)
+        if (!signedIn.ok) return signedIn.response
+        const userId = signedIn.session.user.id
+
+        const form = await readForm(request)
+        const deps = { database: runtime.database, audit: runtime.audit }
+        const reason = "session_revoked_by_user"
 
         let result
-        if (all) {
+        if (form.scope === "others") {
+          await revokeForOtherSessions(deps, {
+            userId,
+            currentSessionId: signedIn.session.session.id,
+            reason,
+          })
           result = await callAuth(
             runtime,
             "/revoke-other-sessions",
@@ -87,13 +115,12 @@ export const Route = createFileRoute("/account/sessions")({
           // live credential and rendering one into HTML would hand every
           // session on the page to anything that can read the document. The
           // lookup is scoped to the caller, so an id from someone else's
-          // account resolves to nothing.
-          const token = await tokenForOwnSession(
-            runtime,
-            request,
-            form.sessionId ?? ""
-          )
+          // account resolves to nothing — which is the authorization check,
+          // and it happens before the revocation acts on the id.
+          const sessionId = form.sessionId ?? ""
+          const token = await tokenForOwnSession(runtime, userId, sessionId)
           if (!token) return redirectWithCookies(withError(here, "not_found"))
+          await revokeForSession(deps, { sessionId, userId, reason })
           result = await callAuth(
             runtime,
             "/revoke-session",
@@ -132,7 +159,10 @@ function SessionsPage() {
         {messageForErrorCode(error, t, ui.passwordMinLength)}
       </FormAlert>
 
-      <AccountSection title={t.account.sessions.title}>
+      <AccountSection
+        title={t.account.sessions.title}
+        description={t.account.sessions.revokeNotice}
+      >
         {sessions.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             {t.account.sessions.empty}
@@ -159,12 +189,39 @@ function SessionsPage() {
                         {t.account.sessions.current}
                       </span>
                     ) : null}
+                    {/* FR-ADMIN-5 from the user's side: an administrator
+                        signed in as them is a session on this list, and
+                        without this it reads as an unrecognized device. */}
+                    {session.impersonated ? (
+                      <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs font-normal text-foreground">
+                        {t.account.sessions.impersonated}
+                      </span>
+                    ) : null}
                   </p>
                   <p className="text-muted-foreground">
                     {t.account.sessions.signedIn}{" "}
                     <LocalTime iso={session.createdAt} />
                     {session.ipAddress ? ` · ${session.ipAddress}` : ""}
                   </p>
+                  <p className="text-muted-foreground">
+                    {t.account.sessions.lastActive}{" "}
+                    <LocalTime iso={session.lastActiveAt} />
+                  </p>
+                  {/* Names only. Everything else about a token stays on the
+                      server — this line exists so "sign out" can say what it
+                      is about to disconnect. */}
+                  {session.clients.length > 0 ? (
+                    <p className="mt-1 flex flex-wrap items-center gap-1">
+                      <span className="text-muted-foreground">
+                        {t.account.sessions.connectedApps}
+                      </span>
+                      {session.clients.map((client) => (
+                        <Badge key={client} variant="outline">
+                          {client}
+                        </Badge>
+                      ))}
+                    </p>
+                  ) : null}
                 </div>
                 {session.current ? null : (
                   <PendingForm busy={t.common.loading} method="post">
@@ -199,22 +256,23 @@ function SessionsPage() {
  * The token of one of the caller's own sessions, or `undefined`.
  *
  * Scoping the lookup to `userId` is the authorization check: without it the
- * form would revoke any session whose id someone could guess or observe.
+ * form would revoke any session whose id someone could guess or observe. The
+ * owner is passed in rather than re-read here — the handler has already
+ * resolved it *authoritatively*, and reading it again from the cookie cache
+ * would quietly put back the five-minute window this page must not have.
  */
 async function tokenForOwnSession(
   runtime: Runtime,
-  request: Request,
+  userId: string,
   sessionId: string
 ): Promise<string | undefined> {
   if (sessionId === "") return undefined
-  const current = await readSession(runtime, request)
-  if (!current) return undefined
 
   const { session } = runtime.database.schema
   const [row] = await runtime.database.db
     .select({ token: session.token })
     .from(session)
-    .where(and(eq(session.id, sessionId), eq(session.userId, current.user.id)))
+    .where(and(eq(session.id, sessionId), eq(session.userId, userId)))
     .limit(1)
   return row?.token
 }

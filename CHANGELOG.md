@@ -9,6 +9,82 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ## [Unreleased]
 
+### Fixed
+
+- **"Sign out" on `/account/sessions` now revokes the OAuth tokens that
+  session obtained — in both scopes, whatever
+  `session.revokeOAuthTokensOnLogout` says** (**D101**, FR-AUTH-6, FR-ACCT-1).
+  Until now it deleted the session row and stopped there, so an application
+  holding a refresh token went on renewing itself for up to 30 days sliding /
+  90 absolute on the very device the button exists to cut off — unless the
+  operator had turned that flag on, and it is off by default for a good SSO
+  reason that has nothing to do with this page. Administrators have cascaded
+  since **D67**. `Sign out everywhere else` enumerates **expired** sessions
+  too, which Better Auth's own endpoint skips and which is exactly the
+  forgotten device. The flag still governs sign-out, RP-initiated logout and
+  lazy expiry, and its description now says so rather than leaving it to be
+  discovered; the hourly retention sweep has never fired it.
+- **`/account/consents` was permanently empty, and its Disconnect
+  unreachable** (**D102**, FR-OIDC-10). It listed stored consents, and file
+  clients default to `skipConsent: true` — the administrator configured
+  them, so nobody is asked and no consent row is written. The page now lists
+  the union of stored consents and clients holding a live refresh token, and
+  Disconnect deletes any consent row **and** revokes that client's tokens,
+  each independently: it used to answer "not found" the moment the delete
+  found nothing, before it ever reached the revocation.
+- **Both destructive account posts now check the request's origin and read the
+  session authoritatively** (**D101**). `/account/consents` had never done
+  either — it writes to the database directly, so Better Auth's own origin
+  check never stood in front of it, and it authorized that write from the ≤ 5
+  minute cookie cache. `SameSite=Lax` does not stop a post from a same-site
+  sibling subdomain, which `server.cookieDomain` is what makes carry the
+  session cookie; the check is the same `Sec-Fetch-Site` gate `/gateway/*`
+  already uses.
+- **Resetting or turning off two-factor authentication now forgets every
+  browser that was trusted with it** (**D104**, FR-2FA-2). Ticking "trust this
+  device" writes a row that Better Auth rotates to a fresh 30-day expiry on
+  every use, so one in daily use never lapses — and neither teardown cleared
+  it: an administrator's reset left every trusted browser standing, and
+  self-service "turn off" cleared only the browser doing the turning off. A
+  freshly re-enrolled second factor could therefore be walked past for up to
+  `twoFactor.trustDeviceDays`. **Deployments that reset a user's 2FA while a
+  device was trusted should reset it once more**, or delete that user's
+  `trust-device-%` rows from the `verification` table; the reset now reports
+  how many it cleared in its audit row.
+
+### Added
+
+- **The sessions list says when each session was last active and what signed in
+  through it** (**D103**, FR-ACCT-1). Application names only, never token
+  material — so "Sign out" can say what it is about to disconnect. An
+  impersonated session is now badged as one in the user's own list, as it
+  already was on the admin page.
+- **Trusted browsers are listed on `/account/security`, and each can be
+  untrusted on its own** (**D104**, FR-2FA-1). Ticking "trust this device" was
+  the one second-factor decision that could not be undone short of turning 2FA
+  off — and Better Auth rotates the row to a fresh expiry on every use, so
+  one in use never lapsed by itself. The list shows when the browser was
+  trusted and when that stops; it never shows the row's identifier, which is
+  half the credential.
+- **`/account/api-keys` shows when each key was last used.** Better Auth
+  stamps `lastRequest` on every use and the view has always carried it — the
+  page simply never drew it, along with the two catalog strings written for
+  it. It is the one thing on the row that answers "is this key still in use?",
+  which is the question in front of anyone deciding whether to revoke one.
+- **`session.revoked` audit rows say which kind of sign-out they were**, and
+  name the session where the endpoint can honestly do so. Four endpoints share
+  the one action, so the row left "did they end one session or all of them?"
+  unanswerable. The id is ownership-scoped: Better Auth's `/revoke-session`
+  answers success for somebody else's token while silently skipping the
+  delete, so an unconditional id would have minted success rows naming a
+  session that was never revoked.
+- **Expired sessions leave the list** (**D103**). Better Auth deletes one
+  lazily and the sweep clears the rest hourly, so an already-dead session could
+  sit for an hour under a heading promising every session there was live. The
+  connected-applications page now also states what it cannot list: an
+  application that signed in without staying connected holds no durable grant,
+  and its access ends on its own within minutes.
+
 ### Removed
 
 - **`docs/spikes/`, and the two probe scripts that fed it** (**D100**).

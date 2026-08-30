@@ -62,7 +62,7 @@ the process; there is no hot reload and `SIGHUP` is ignored.
 | `session.expiresIn` | number \| string | `7d` | How long a browser session lives without being renewed. |
 | `session.updateAge` | number \| string | `1d` | A session older than this is extended on the next request. |
 | `session.cookieCacheMinutes` | integer | `5` | Capped at 5 so revocations bite quickly. |
-| `session.revokeOAuthTokensOnLogout` | boolean | `false` | Whether signing out of the IdP also kills the OAuth tokens issued to clients from that session. Off by default: a user closing this tab does not usually mean to sign out of every application they use. |
+| `session.revokeOAuthTokensOnLogout` | boolean | `false` | Whether ending a session also kills the OAuth tokens it obtained. Off by default: a user closing this tab does not usually mean to sign out of every application they use. It governs sign-out, RP-initiated logout and the lazy delete of an expired session; the hourly retention sweep deletes expired sessions in raw SQL and triggers nothing. Explicit revocation always revokes the tokens whatever this says - the account page's own sign-out, `Sign out everywhere else`, and an administrator's revoke-all. |
 | `social` | { … } | `{}` | Keyed by provider id — `google`, `github`, `microsoft`. Each entry needs `clientId` and `clientSecret`; `microsoft` also needs `tenantId`. |
 | `twoFactor.enabled` | boolean | `true` | Whether users may enroll at all. Enrollment is per user and always optional; turning this off hides the whole feature. |
 | `twoFactor.issuer` | string | — | TOTP issuer label. Defaults to site.name. |

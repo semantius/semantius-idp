@@ -17,6 +17,7 @@ import { createLocalAccountIssuer } from "@better-auth/core/db"
 
 import { createUserWithoutRequest } from "@/server/auth/provisioning"
 import { reconcileClients } from "@/server/oidc/reconcile"
+import { revokeForSession } from "@/server/oidc/revoke-user-tokens"
 import type { TestContext } from "./harness"
 import { authRequest, createTestContext, sessionCookie } from "./harness"
 
@@ -275,6 +276,147 @@ describe("an administrator revoking sessions (FR-OIDC-12, D67)", () => {
       // Both of them, and not because a route handler happened to be in the
       // way: this request never touched one.
       expect(await liveRefreshTokens(context)).toBe(0)
+    } finally {
+      await context.teardown()
+    }
+  })
+})
+
+/**
+ * The two properties `revokeForSession` has to hold on its own (**D101**).
+ *
+ * Both are about the WHERE rather than about a caller: a revocation that a
+ * refresh can walk out from under is not a revocation, and a scope enforced
+ * only by whoever calls it is one careless caller away from reaching the wrong
+ * account.
+ */
+describe("revokeForSession's scope (D101)", () => {
+  /** The refresh token an authorization-code exchange handed back. */
+  async function grantReturning(
+    context: TestContext,
+    cookie: string
+  ): Promise<string> {
+    const verifier = randomBytes(32).toString("base64url")
+    const challenge = createHash("sha256").update(verifier).digest("base64url")
+    const query = new URLSearchParams({
+      response_type: "code",
+      client_id: CLIENT.clientId,
+      redirect_uri: REDIRECT,
+      scope: "openid offline_access",
+      state: "state",
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+    })
+    const authorized = await context.auth.handler(
+      new Request(`${ISSUER}/api/auth/oauth2/authorize?${query.toString()}`, {
+        headers: { cookie },
+        redirect: "manual",
+      })
+    )
+    const code = new URL(
+      authorized.headers.get("location") ?? ""
+    ).searchParams.get("code")
+    expect(code, "the flow must produce a code").toBeTruthy()
+
+    const exchanged = await context.auth.handler(
+      new Request(`${ISSUER}/api/auth/oauth2/token`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          origin: ISSUER,
+          authorization: `Basic ${Buffer.from(`${CLIENT.clientId}:${SECRET}`).toString("base64")}`,
+        },
+        body: new URLSearchParams({
+          grant_type: "authorization_code",
+          code: code!,
+          redirect_uri: REDIRECT,
+          code_verifier: verifier,
+        }).toString(),
+      })
+    )
+    expect(exchanged.status).toBe(200)
+    const body = (await exchanged.json()) as { refresh_token?: string }
+    expect(body.refresh_token).toBeTruthy()
+    return body.refresh_token!
+  }
+
+  async function sessionIdFor(
+    context: TestContext,
+    cookie: string
+  ): Promise<string> {
+    const result = await context.auth.api.getSession({
+      headers: new Headers({ cookie }),
+    })
+    const id = (result?.session as { id?: string } | undefined)?.id
+    expect(id, "the cookie should resolve to a session").toBeTruthy()
+    return id!
+  }
+
+  it("survives a rotation, because the new row inherits the session", async () => {
+    const context = await contextWith("revoke_after_rotation")
+    try {
+      const [laptop] = await twoSessions(context)
+      const first = await grantReturning(context, laptop)
+
+      // A refresh writes a *new* row and stamps the old one `revoked`. The
+      // new one carries `session_id` across, which is the property this
+      // scope rests on: revoke by session after any number of refreshes and
+      // the newest token is the one that dies.
+      const refreshed = await context.auth.handler(
+        new Request(`${ISSUER}/api/auth/oauth2/token`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+            origin: ISSUER,
+            authorization: `Basic ${Buffer.from(`${CLIENT.clientId}:${SECRET}`).toString("base64")}`,
+          },
+          body: new URLSearchParams({
+            grant_type: "refresh_token",
+            refresh_token: first,
+          }).toString(),
+        })
+      )
+      expect(refreshed.status).toBe(200)
+      expect(await liveRefreshTokens(context)).toBe(1)
+
+      const [target] = await context.database.db
+        .select({ id: context.database.schema.user.id })
+        .from(context.database.schema.user)
+        .where(eq(context.database.schema.user.email, EMAIL))
+
+      await revokeForSession(
+        { database: context.database, audit: context.audit },
+        {
+          sessionId: await sessionIdFor(context, laptop),
+          userId: target!.id,
+          reason: "session_revoked_by_user",
+        }
+      )
+      expect(await liveRefreshTokens(context)).toBe(0)
+    } finally {
+      await context.teardown()
+    }
+  })
+
+  it("revokes nothing when the session and the user do not belong together", async () => {
+    const context = await contextWith("revoke_wrong_owner")
+    try {
+      const [laptop] = await twoSessions(context)
+      await grantReturning(context, laptop)
+      expect(await liveRefreshTokens(context)).toBe(1)
+
+      const result = await revokeForSession(
+        { database: context.database, audit: context.audit },
+        {
+          sessionId: await sessionIdFor(context, laptop),
+          // A real user id, and not this session's owner.
+          userId: "somebody-else",
+          reason: "session_revoked_by_user",
+        }
+      )
+
+      expect(result).toEqual({ accessTokens: 0, refreshTokens: 0 })
+      expect(await liveRefreshTokens(context)).toBe(1)
     } finally {
       await context.teardown()
     }

@@ -30,8 +30,11 @@ import { createDb, quoteIdentifier } from "@/server/db/client"
 import type { DbHandle } from "@/server/db/client"
 import { runMigrations } from "@/server/db/migrate"
 import { createAudit } from "@/server/audit"
+import type { Audit } from "@/server/audit"
 import { createCaptureMailer } from "@/server/email/mailer"
 import { createLogger } from "@/server/logger"
+import type { Logger } from "@/server/logger"
+import type { Runtime } from "@/server/runtime"
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const MIGRATIONS_FOLDER = join(HERE, "..", "..", "..", "drizzle")
@@ -93,9 +96,45 @@ export interface TestContext {
   adminContext: AdminContext
   /** Capture transport: every e-mail the run would have sent (FR-MAIL-1). */
   mailer: ReturnType<typeof createCaptureMailer>
+  /** The SEC-6 trail this context writes to, for {@link asRuntime}. */
+  audit: Audit
+  logger: Logger
   schemaName: string
   /** Drops the schema and closes the pool. */
   teardown: () => Promise<void>
+}
+
+/**
+ * This context, shaped as the process `Runtime` a route handler expects.
+ *
+ * Route `server.handlers` reach the IdP through `await getRuntime()`, and
+ * `setRuntime` is the seam the CLI already uses to hand it one it built itself
+ * (`server/runtime.ts`). Passing this to it is what lets an integration test
+ * drive a real form POST — gates, revocation, audit and redirect — against the
+ * file's own schema, instead of asserting on the helpers underneath it and
+ * hoping the handler calls them in the right order. Vitest isolates module
+ * state per file, so the assignment cannot leak into the next one.
+ *
+ * `shutdown` is a no-op: the context owns its pool and `teardown` closes it.
+ * Calling both would close it twice.
+ */
+export function asRuntime(context: TestContext): Runtime {
+  return {
+    config: context.config,
+    database: context.database,
+    auth: context.auth,
+    audit: context.audit,
+    mailer: context.mailer,
+    logger: context.logger,
+    startup: {
+      steps: [],
+      roleWarnings: [],
+      completedAt: new Date().toISOString(),
+    },
+    configDir: "",
+    warnings: [],
+    shutdown: async () => {},
+  }
 }
 
 /**
@@ -234,6 +273,8 @@ export async function createTestContext(
     auth,
     adminContext,
     mailer,
+    audit,
+    logger,
     schemaName,
     teardown: async () => {
       // Before the drop: a console handle still holding a connection to the

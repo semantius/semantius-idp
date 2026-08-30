@@ -253,6 +253,22 @@ function ApiKeysPage() {
                       t.account.apiKeys.never
                     )}
                   </p>
+                  {/* Better Auth stamps `lastRequest` on every use, and the
+                      view has always carried it — the page simply never drew
+                      it, along with the two catalog strings written for it.
+                      It is the one thing on this row that answers "is this
+                      key still in use?", which is the question in front of
+                      anyone deciding whether to revoke one. */}
+                  <p className="text-muted-foreground">
+                    {key.lastRequest ? (
+                      <>
+                        {t.account.apiKeys.lastUsed}{" "}
+                        <LocalTime iso={key.lastRequest} />
+                      </>
+                    ) : (
+                      t.account.apiKeys.neverUsed
+                    )}
+                  </p>
                 </div>
                 <PendingForm busy={t.common.loading} method="post">
                   <input type="hidden" name="action" value="revoke" />

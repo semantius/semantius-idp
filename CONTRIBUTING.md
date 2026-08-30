@@ -141,7 +141,13 @@ failure message does not tell you what broke is half a test.
 - **Requirement ids in comments** — `FR-OIDC-9`, `SEC-4`, `D46` — tie code to
   [spec-v1.md](spec-v1.md). Use them when a line exists because the spec says
   so.
-- **British spelling** in prose. American in identifiers where an API uses it.
+- **US English** throughout — prose, comments and identifiers alike (**D94**).
+  Not a preference: the message catalog is `en-US.ts` and FR-I18N-1's default
+  locale *is* `en-US`, so a user-facing string spelled `recognise` under that
+  name is wrong rather than merely foreign. `packages/ui/src/components/**` and
+  `packages/ui/src/styles/globals.css` are out of scope, being registry and
+  preset output used verbatim. This line said the opposite until D94; the
+  sweep it names is in [AGENTS.md](AGENTS.md).
 
 ## Changing behavior the spec describes
 

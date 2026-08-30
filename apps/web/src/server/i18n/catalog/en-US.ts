@@ -323,6 +323,11 @@ export const enUS = {
       revoke: "Sign out",
       revokeAll: "Sign out everywhere else",
       empty: "No other sessions.",
+      lastActive: "Last active",
+      connectedApps: "Signed in to",
+      impersonated: "Administrator session",
+      revokeNotice:
+        "Signing a session out also disconnects the applications that signed in through it.",
     },
     apiKeys: {
       title: "API keys",
@@ -363,6 +368,18 @@ export const enUS = {
       turnedOn: "Two-factor authentication is now on.",
       turnedOff: "Two-factor authentication is now off.",
     },
+    trustedDevices: {
+      title: "Trusted browsers",
+      description:
+        "Browsers you told to skip the code. Turning two-factor authentication off forgets all of them.",
+      trustedOn: "Trusted",
+      expires: "Stops being trusted",
+      revoke: "Ask for a code here",
+      empty: "No browser is trusted.",
+      // Named for the consequence, not the mechanism: what the user wants to
+      // know is what happens the next time they sign in on that machine.
+      revoked: "That browser will ask for a code at the next sign-in.",
+    },
     consents: {
       title: "Connected applications",
       revoke: "Disconnect",
@@ -373,6 +390,8 @@ export const enUS = {
       scopes: "Allowed",
       connectedOn: "Connected",
       revoked: "That application has been disconnected.",
+      transientNote:
+        "An application that signed in without staying connected is not listed; its access ends on its own within minutes.",
     },
   },
 
@@ -630,14 +649,16 @@ export const enUS = {
       // `com.example.app` is an ordinary client id.
       reservedClientId:
         "“.” and “..” cannot be used as a client ID — the ID is part of this application's own address here. Any other combination of those characters is fine.",
-      nameRequired: "Give the application a name; it is what users are asked to trust.",
+      nameRequired:
+        "Give the application a name; it is what users are asked to trust.",
       redirectRequired:
         "At least one redirect URI is required — every application here uses the authorization-code flow.",
       uriWildcard: (uri: string) =>
         `${uri} contains a wildcard. Redirect URIs are matched exactly, character for character.`,
       uriNotAbsolute: (uri: string) =>
         `${uri} is not an absolute URI. Include the scheme, as in https://app.example.com/callback.`,
-      uriFragment: (uri: string) => `${uri} contains a "#" fragment, which is not allowed.`,
+      uriFragment: (uri: string) =>
+        `${uri} contains a "#" fragment, which is not allowed.`,
       uriHttp: (uri: string) =>
         `${uri} must use https. Plain http is only allowed on loopback — http://localhost or http://127.0.0.1.`,
       uriPrivateScheme: (uri: string) =>

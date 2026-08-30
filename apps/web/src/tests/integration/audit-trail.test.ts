@@ -143,3 +143,153 @@ describe("audit trail (SEC-6)", () => {
     expect(after).toHaveLength(before.length)
   })
 })
+
+/**
+ * `session.revoked` says *which* sign-out, and names a session only when one
+ * really was ended.
+ *
+ * Four endpoints share the action, so a row without a scope leaves "did they
+ * end one session or all of them?" unanswerable. The id is the delicate half:
+ * Better Auth's `/revoke-session` compares the presented token's owner to the
+ * caller and, when they differ, **skips the delete and answers success
+ * anyway** — so an unconditional id would mint success rows naming a
+ * victim's session for a revocation that never happened.
+ */
+describe("what a session.revoked row says (SEC-6)", () => {
+  let ctx: TestContext
+  const password = "correct horse battery staple"
+
+  beforeAll(async () => {
+    ctx = await createTestContext("audit-session-scope", {
+      config: {
+        signUp: { enabled: true, requireApproval: false },
+        auth: { requireEmailVerification: false },
+      },
+    })
+  }, 120_000)
+  afterAll(async () => await ctx.teardown())
+
+  beforeEach(async () => {
+    await ctx.database.db.delete(ctx.database.schema.auditLog)
+  })
+
+  async function revocations() {
+    return ctx.database.db
+      .select()
+      .from(ctx.database.schema.auditLog)
+      .where(eq(ctx.database.schema.auditLog.action, "session.revoked"))
+  }
+
+  async function signedIn(email: string): Promise<string> {
+    await ctx.auth.handler(
+      authRequest("/sign-up/email", {
+        json: { email, password, name: "Scoped" },
+      })
+    )
+    const response = await ctx.auth.handler(
+      authRequest("/sign-in/email", { json: { email, password } })
+    )
+    const cookie = sessionCookie(response)
+    expect(cookie).toBeTruthy()
+    return cookie!
+  }
+
+  async function tokenOf(cookie: string): Promise<string> {
+    const result = await ctx.auth.api.getSession({
+      headers: new Headers({ cookie }),
+    })
+    const token = (result?.session as { token?: string } | undefined)?.token
+    expect(token).toBeTruthy()
+    return token!
+  }
+
+  async function sessionIdOf(cookie: string): Promise<string> {
+    const result = await ctx.auth.api.getSession({
+      headers: new Headers({ cookie }),
+    })
+    const id = (result?.session as { id?: string } | undefined)?.id
+    expect(id).toBeTruthy()
+    return id!
+  }
+
+  it("names the session a sign-out ended", async () => {
+    const cookie = await signedIn("scope-signout@example.com")
+    const id = await sessionIdOf(cookie)
+
+    await ctx.auth.handler(
+      authRequest("/sign-out", { headers: { cookie }, json: {} })
+    )
+
+    const [row] = await revocations()
+    // `/sign-out` carries no session middleware, so the id can only come from
+    // the before hook resolving the caller's own signed cookie while the row
+    // still exists.
+    expect(row?.metadata).toMatchObject({ scope: "current", sessionId: id })
+  })
+
+  it("names the session a revoke ended, and scopes the rest", async () => {
+    const keep = await signedIn("scope-revoke@example.com")
+    const other = await ctx.auth.handler(
+      authRequest("/sign-in/email", {
+        json: { email: "scope-revoke@example.com", password },
+      })
+    )
+    const target = sessionCookie(other)!
+    const targetId = await sessionIdOf(target)
+
+    await ctx.auth.handler(
+      authRequest("/revoke-session", {
+        headers: { cookie: keep },
+        json: { token: await tokenOf(target) },
+      })
+    )
+
+    const [row] = await revocations()
+    expect(row?.metadata).toMatchObject({ scope: "one", sessionId: targetId })
+  })
+
+  it("omits the id when the token was somebody else's", async () => {
+    const mine = await signedIn("scope-mine@example.com")
+    const theirs = await signedIn("scope-theirs@example.com")
+    const theirToken = await tokenOf(theirs)
+
+    const response = await ctx.auth.handler(
+      authRequest("/revoke-session", {
+        headers: { cookie: mine },
+        json: { token: theirToken },
+      })
+    )
+    // Better Auth's own answer, and the reason this case exists at all.
+    expect(response.status).toBe(200)
+
+    // The victim is still signed in: nothing was revoked.
+    const still = await ctx.auth.api.getSession({
+      headers: new Headers({ cookie: theirs }),
+    })
+    expect(still?.user).toBeTruthy()
+
+    const [row] = await revocations()
+    expect(row?.metadata).toMatchObject({ scope: "one" })
+    expect((row?.metadata as { sessionId?: string }).sessionId).toBeUndefined()
+  })
+
+  it("scopes a bulk revocation and names no single session", async () => {
+    const cookie = await signedIn("scope-others@example.com")
+    await ctx.auth.handler(
+      authRequest("/sign-in/email", {
+        json: { email: "scope-others@example.com", password },
+      })
+    )
+
+    await ctx.auth.handler(
+      authRequest("/revoke-other-sessions", {
+        headers: { cookie },
+        json: {},
+      })
+    )
+
+    const [row] = await revocations()
+    expect(row?.metadata).toMatchObject({ scope: "others" })
+    expect((row?.metadata as { sessionId?: string }).sessionId).toBeUndefined()
+  })
+})

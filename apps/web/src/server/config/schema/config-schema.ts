@@ -418,7 +418,7 @@ const sessionSchema = z.strictObject({
   revokeOAuthTokensOnLogout: flexBoolean()
     .default(false)
     .describe(
-      "Whether signing out of the IdP also kills the OAuth tokens issued to clients from that session. Off by default: a user closing this tab does not usually mean to sign out of every application they use." // FR-AUTH-6
+      "Whether ending a session also kills the OAuth tokens it obtained. Off by default: a user closing this tab does not usually mean to sign out of every application they use. It governs sign-out, RP-initiated logout and the lazy delete of an expired session; the hourly retention sweep deletes expired sessions in raw SQL and triggers nothing. Explicit revocation always revokes the tokens whatever this says - the account page's own sign-out, `Sign out everywhere else`, and an administrator's revoke-all." // FR-AUTH-6, D101
     ),
 })
 

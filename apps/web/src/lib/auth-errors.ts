@@ -145,6 +145,7 @@ export const NOTICE_CODES = new Set([
   "session_revoked",
   "apikey_revoked",
   "consent_revoked",
+  "trusted_device_revoked",
   "twofactor_on",
   "twofactor_off",
   "already_setup",
@@ -179,6 +180,8 @@ export function messageForNoticeCode(
       return t.account.apiKeys.revoked
     case "consent_revoked":
       return t.account.consents.revoked
+    case "trusted_device_revoked":
+      return t.account.trustedDevices.revoked
     case "twofactor_on":
       return t.account.twoFactor.turnedOn
     case "twofactor_off":

@@ -25,6 +25,8 @@
  * this user's token" (SEC-3).
  */
 
+import { expandHostTemplate, hasHostTemplate } from "../../lib/client-rules"
+import { currentRequestIssuer } from "./request-log"
 import type { IdpConfig } from "../config/derive"
 
 export type CorsPolicy = "public" | "clients" | "none"
@@ -76,20 +78,48 @@ export function clearDatabaseClientOrigins(): void {
  * would make an admin-registered client's sign-in fail in Chrome and nowhere
  * else: the authorization completes and the browser refuses the `form-action`
  * redirect back to it.
+ *
+ * `{host}` templates expand HERE, at read time, from the current request's
+ * issuer — never earlier. Both stores hold the template verbatim (the config
+ * file by definition, the database rows by `reconcile.ts`'s contract, and the
+ * refresher below runs at start-up and after admin mutations, OUTSIDE any
+ * request, where there is no host to expand with). A template that cannot be
+ * expanded — no request in scope — contributes nothing: an unexpanded
+ * `https://{host}` can never equal a real `Origin` header, so dropping it is
+ * the same refusal stated honestly.
  */
 export function clientOrigins(config: IdpConfig): Set<string> {
   const origins = new Set<string>()
+  const requestHost = currentIssuerHost()
+  const add = (origin: string | undefined) => {
+    if (!origin) return
+    if (hasHostTemplate(origin)) {
+      if (requestHost) origins.add(expandHostTemplate(origin, requestHost))
+      return
+    }
+    origins.add(origin)
+  }
   for (const client of config.clients) {
     for (const uri of [
       ...client.redirectUris,
       ...client.postLogoutRedirectUris,
     ]) {
-      const origin = originOf(uri)
-      if (origin) origins.add(origin)
+      add(originOf(uri))
     }
   }
-  for (const origin of databaseOrigins) origins.add(origin)
+  for (const origin of databaseOrigins) add(origin)
   return origins
+}
+
+/** The `host[:port]` of the issuer the current request resolved to. */
+function currentIssuerHost(): string | undefined {
+  const issuer = currentRequestIssuer()
+  if (!issuer) return undefined
+  try {
+    return new URL(issuer).host
+  } catch {
+    return undefined
+  }
 }
 
 /**

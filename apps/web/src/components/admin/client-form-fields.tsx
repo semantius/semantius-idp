@@ -469,6 +469,8 @@ function uriMessage(t: Catalog, code: string | undefined): string | undefined {
       return t.admin.clients.uriHttp(uri)
     case "private_scheme":
       return t.admin.clients.uriPrivateScheme(uri)
+    case "host_template":
+      return t.admin.clients.uriHostTemplate(uri)
     default:
       return undefined
   }

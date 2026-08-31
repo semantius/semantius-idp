@@ -31,7 +31,7 @@ interface Call {
 function runtimeWith(response: Response, calls: Call[] = []) {
   const warn = vi.fn()
   const runtime = {
-    config: { base: BASE },
+    config: { base: BASE, file: { server: { trustProxy: false } } },
     logger: { warn },
     auth: {
       handler: async (request: Request) => {

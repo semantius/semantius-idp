@@ -21,9 +21,11 @@
  *   asked for.
  */
 
+import { hasHostTemplate } from "../../lib/client-rules"
 import type { IdpConfig } from "../config/derive"
 import type { ClientEntry } from "../config/schema/clients-schema"
 import { PUBLIC_CLIENT_TYPES } from "../config/schema/clients-schema"
+import { HOST_TEMPLATE_DISCOVERY_ID } from "./host-template-clients"
 
 /** The v1 grant set (D26). `client_credentials` is not among them. */
 export const DEFAULT_GRANT_TYPES = [
@@ -60,6 +62,15 @@ export interface ClientRow {
    * admin-created client alive across a restart.
    */
   userId: string | null
+  /**
+   * `host-template` when any redirect or post-logout URI carries the
+   * `{host}` template, `null` otherwise. The provider's `getClient()` routes
+   * a row carrying this through `oidc/host-template-clients.ts`, which
+   * expands the template per request and keeps the row out of the
+   * trusted-client cache. The URIs themselves are stored VERBATIM — the
+   * template, not any expansion.
+   */
+  clientDiscoveryId: string | null
 }
 
 export interface MappingOptions {
@@ -121,6 +132,12 @@ export function toClientRow(
     policy: entry.policy ?? null,
     metadata: metadataFor(entry),
     userId: options.userId ?? null,
+    clientDiscoveryId: [
+      ...entry.redirectUris,
+      ...entry.postLogoutRedirectUris,
+    ].some(hasHostTemplate)
+      ? HOST_TEMPLATE_DISCOVERY_ID
+      : null,
   }
 }
 

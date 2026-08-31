@@ -822,3 +822,68 @@ describe("the breach check (FR-AUTH-1)", () => {
     expect(response.status).toBe(200)
   })
 })
+
+describe("e-mail links stay canonical under server.dynamicIssuer (SEC-1)", () => {
+  /**
+   * The one thing the dynamic issuer deliberately does NOT move. Reset and
+   * verification links are built from `server.baseUrl` at boot — that is the
+   * property that keeps a forged `Host` out of a password-reset link — and
+   * turning the flag on must not change it. Asserted with the flag ON and the
+   * most hostile headers a request can carry, in a context of its own so the
+   * shared fixture above stays exactly what the flag-off cases assert against.
+   */
+  it("builds the reset link from server.baseUrl whatever host the request claims", async () => {
+    const dynamicCtx = await createTestContext("security_dynamic_mail", {
+      config: {
+        server: {
+          baseUrl: "http://localhost:3000",
+          dynamicIssuer: true,
+          trustProxy: true,
+        },
+        signUp: { enabled: true, requireApproval: false },
+        auth: { requireEmailVerification: false },
+        email: {
+          resend: { apiKey: "re_test" },
+          from: "IdP <idp@example.com>",
+        },
+      },
+    })
+    try {
+      const context = await dynamicCtx.auth.$context
+      const user = await createUserWithoutRequest(
+        context,
+        {
+          email: "dynamic-reset@example.com",
+          name: "Dynamic Reset",
+          emailVerified: true,
+          status: "active",
+        },
+        { method: "admin" }
+      )
+      await context.internalAdapter.createAccount({
+        userId: user.id,
+        providerId: "credential",
+        issuer: createLocalAccountIssuer("credential"),
+        accountId: user.id,
+        password: await context.password.hash(PASSWORD),
+      })
+
+      await dynamicCtx.auth.handler(
+        authRequest("/request-password-reset", {
+          json: { email: "dynamic-reset@example.com" },
+          headers: {
+            host: "evil.example.com",
+            "x-forwarded-host": "evil.example.com",
+            "x-forwarded-proto": "https",
+          },
+        })
+      )
+      const mail = dynamicCtx.mailer.captured.last()
+      expect(mail).toBeTruthy()
+      expect(JSON.stringify(mail)).not.toContain("evil.example.com")
+      expect(JSON.stringify(mail)).toContain("localhost:3000")
+    } finally {
+      await dynamicCtx.teardown()
+    }
+  })
+})

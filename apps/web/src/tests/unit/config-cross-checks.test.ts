@@ -380,4 +380,134 @@ describe("CFG-5 cross-checks", () => {
       messages({ clients: { clients: [spaClient({ requirePKCE: false })] } })
     ).toContain("PKCE is mandatory")
   })
+
+  describe("server.dynamicIssuer contradictions", () => {
+    const dynamicConfig = (server: Record<string, unknown> = {}) => ({
+      ...baseConfig(),
+      server: {
+        baseUrl: "http://localhost:3000",
+        dynamicIssuer: true,
+        trustProxy: true,
+        ...server,
+      },
+    })
+
+    it("refuses dynamicIssuer with trustProxy off", () => {
+      expect(
+        messages({ config: dynamicConfig({ trustProxy: false }) })
+      ).toContain("requires `server.trustProxy`")
+    })
+
+    it("refuses dynamicIssuer with a domain-wide session cookie", () => {
+      const config = {
+        ...baseConfig(),
+        server: {
+          baseUrl: "https://apps.example.com/idp",
+          dynamicIssuer: true,
+          trustProxy: true,
+          cookieDomain: "example.com",
+        },
+      }
+      expect(messages({ config })).toContain("`server.cookieDomain`")
+    })
+
+    it("refuses a {host} redirect URI while dynamicIssuer is off", () => {
+      expect(
+        messages({
+          clients: {
+            clients: [
+              spaClient({ redirectUris: ["https://{host}/oauth2_callback"] }),
+            ],
+          },
+        })
+      ).toContain("`{host}` template")
+    })
+
+    it("accepts a {host} redirect URI with dynamicIssuer on", () => {
+      const { warnings } = load({
+        config: dynamicConfig(),
+        clients: {
+          clients: [
+            spaClient({ redirectUris: ["https://{host}/oauth2_callback"] }),
+          ],
+        },
+      })
+      expect(warnings).toBeDefined()
+    })
+
+    it("lets a {host} URI satisfy the firstParty same-origin rule", () => {
+      const { warnings } = load({
+        config: dynamicConfig(),
+        clients: {
+          clients: [
+            spaClient({
+              firstParty: true,
+              redirectUris: ["https://{host}/oauth2_callback"],
+            }),
+          ],
+        },
+      })
+      expect(warnings).toBeDefined()
+    })
+
+    it("warns that social callbacks stay on the canonical host", () => {
+      const { warnings } = load({
+        config: {
+          ...dynamicConfig(),
+          social: { github: { clientId: "id", clientSecret: "secret" } },
+        },
+      })
+      expect(warnings.map((warning) => warning.code)).toContain(
+        "social.canonical_host_only"
+      )
+    })
+  })
+
+  describe("shipped default secrets are detectable (warnings, never refusals)", () => {
+    it("warns about the shipped dev `secret`, which passes every shape check", () => {
+      const config = {
+        ...baseConfig(),
+        secret: "dev-only-idp-secret-change-me-0123456789abcdef",
+      }
+      const { warnings } = load({ config })
+      expect(warnings.map((warning) => warning.code)).toContain(
+        "secret.shipped_default"
+      )
+    })
+
+    it("warns about a shipped default database password", () => {
+      const config = {
+        ...baseConfig(),
+        database: { url: "postgres://postgres:postgres@localhost:5432/db" },
+      }
+      const { warnings } = load({ config })
+      expect(warnings.map((warning) => warning.code)).toContain(
+        "database.shipped_default_password"
+      )
+    })
+
+    it("stays a warning on an https deployment — a refusal would demand a key rotation", () => {
+      // `isProduction` flips the moment the baseUrl becomes https; the remedy
+      // for a shipped secret at that point (rotating it) logs everyone out
+      // and makes the stored signing keys undecryptable. So: loud, not fatal.
+      const config = {
+        ...prodConfig(),
+        secret: "${env:IDP_SECRET}",
+      }
+      const { warnings } = load(
+        { config },
+        { IDP_SECRET: "dev-only-idp-secret-change-me-0123456789abcdef" }
+      )
+      expect(warnings.map((warning) => warning.code)).toContain(
+        "secret.shipped_default"
+      )
+    })
+
+    it("does not warn about a real secret and real credentials", () => {
+      const { warnings } = load({})
+      const codes = warnings.map((warning) => warning.code)
+      expect(codes).not.toContain("secret.shipped_default")
+      expect(codes).not.toContain("database.shipped_default_password")
+    })
+  })
 })

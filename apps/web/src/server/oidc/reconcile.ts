@@ -217,6 +217,7 @@ const OWNED_COLUMNS = [
   "clientSecret",
   "name",
   "disabled",
+  "clientDiscoveryId",
   "skipConsent",
   "enableEndSession",
   "scopes",

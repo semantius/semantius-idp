@@ -39,6 +39,7 @@ import { buildAdminEndpoints } from "../admin/endpoints"
 import { buildAdminAfterHook, buildAdminGuard } from "../admin/guard"
 import { SOCKET_ADDRESS_HEADER } from "../http/client-ip"
 import { requestOrigins } from "../http/request-origin"
+import { currentRequestIssuer, recordAuthApiError } from "../http/request-log"
 import { buildEmailCallbacks } from "./options/email-callbacks"
 import { gateApiKeyPlugin, isApiKeySession } from "./options/api-key-gate"
 import { buildAfterHook, buildBeforeHook } from "./options/hooks"
@@ -144,6 +145,19 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
     // auth mount that the rest of M8c works to keep out of sight.
     onAPIError: {
       errorURL: `${paths.basePath}${APP_ROUTES.error}`,
+      // Better Auth's router collapses a non-APIError into a bare 500 with an
+      // empty body, so the response alone cannot say what happened. The error
+      // is stashed on the request context here, where it is still an object —
+      // `oidc/protocol-proxy.ts` reads it to map exactly one shape (a jose
+      // `iss` claim failure, the host-scoped-token case under
+      // `server.dynamicIssuer`) to a 401. Registering this callback replaces
+      // Better Auth's own error logging, so the line is written here too.
+      onError: (error) => {
+        recordAuthApiError(error)
+        deps.logger?.error("auth api error", {
+          error: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+        })
+      },
     },
 
     database: deps.database
@@ -354,7 +368,20 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
           gracePeriod: config.jwksGracePeriodSeconds,
         },
         jwt: {
-          issuer: paths.issuer,
+          // A GETTER, not a value, and not something that may become unset.
+          // `options.jwt.issuer` is read lazily on every sign and by the
+          // provider's `getIssuer`, so this is the one seam through which
+          // `server.dynamicIssuer` reaches every `iss` — tokens, discovery,
+          // logout-hint verification. Outside a request (start-up key checks,
+          // the CLI) it is the boot issuer. It must never be left undefined:
+          // the fallback would be `ctx.context.baseURL`
+          // (`https://host/idp/api/auth`), and `handleIssuerMetadataRequest`
+          // derives the well-known PATH from it, so discovery would 404.
+          // (defu 6.1.7 preserves the accessor descriptor and does not invoke
+          // it during option merging — verified, not assumed.)
+          get issuer() {
+            return currentRequestIssuer() ?? paths.issuer
+          },
           audience:
             config.defaultAudience.length === 1
               ? config.defaultAudience[0]

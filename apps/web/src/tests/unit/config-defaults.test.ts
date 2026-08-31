@@ -20,6 +20,7 @@ describe("CFG-4 defaults", () => {
         host: "0.0.0.0",
         port: 3000,
         trustProxy: false,
+        dynamicIssuer: false,
         allowInsecureHttp: false,
         shutdownTimeoutSeconds: 10,
         // **D97**: the whole host, and host-only. `cookieDomain` has no default

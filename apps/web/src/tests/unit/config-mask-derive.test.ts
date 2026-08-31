@@ -130,6 +130,7 @@ describe("derive.ts", () => {
       basePath: "",
       cookiePath: "/",
       secure: true,
+      dynamicIssuer: false,
     })
   })
 
@@ -141,6 +142,7 @@ describe("derive.ts", () => {
       basePath: "/idp",
       cookiePath: "/",
       secure: true,
+      dynamicIssuer: false,
     })
   })
 
@@ -156,6 +158,7 @@ describe("derive.ts", () => {
       cookiePath: "/idp",
       cookieDomain: "example.com",
       secure: true,
+      dynamicIssuer: false,
     })
   })
 

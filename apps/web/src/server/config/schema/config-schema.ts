@@ -14,6 +14,7 @@
 import { z } from "zod"
 
 import {
+  absoluteUri,
   absoluteUrl,
   duration,
   flexArray,
@@ -142,6 +143,11 @@ const serverSchema = z.strictObject({
     .default(false)
     .describe(
       "Honor X-Forwarded-* from the immediate upstream (true) or from the listed CIDR ranges. Client IP is the rightmost untrusted hop."
+    ),
+  dynamicIssuer: flexBoolean()
+    .default(false)
+    .describe(
+      "Derive the issuer — and every browser-facing URL except e-mail links — per request, from the host the request arrived on, instead of always from `baseUrl`. Off by default, and off is the safe answer. Turning it on asserts four things about the ingress: every hop in front of the IdP OVERWRITES X-Forwarded-Host with the host it matched (nginx passes an inbound one through unless told `proxy_set_header X-Forwarded-Host $host;` — so do AWS ALBs and GCP LBs); the edge forwards only Hosts matching a configured route; the edge serves a CLOSED set of host values; and nothing reaches the container around that edge. Distinct from `trustProxy`, which asserts only the hop INTO the IdP. E-mail links always stay on `baseUrl` (SEC-1): that is what keeps a forged Host out of a password-reset link."
     ),
   trustedOrigins: flexArray(trustedOrigin)
     .optional()
@@ -497,9 +503,9 @@ const jwtSchema = z.strictObject({
       "Neon validates ES256 and RS256 only; any other algorithm is rejected at startup."
     ),
   audience: z
-    .union([absoluteUrl(), flexArray(absoluteUrl(), { min: 1 })])
+    .union([absoluteUri(), flexArray(absoluteUri(), { min: 1 })])
     .describe(
-      "Default RFC 8707 resource, applied whenever a client sends no `resource` parameter. Becomes the JWT `aud`."
+      "Default RFC 8707 resource, applied whenever a client sends no `resource` parameter. Becomes the JWT `aud`. Any absolute URI — a fixed non-http identifier such as `semantius://api` keeps the audience independent of the issuer host, which matters under `server.dynamicIssuer`."
     ),
   includeUserData: flexBoolean()
     .default(true)
@@ -543,9 +549,9 @@ const jwtSchema = z.strictObject({
 })
 
 const oauthResourceSchema = z.union([
-  absoluteUrl(),
+  absoluteUri(),
   z.strictObject({
-    identifier: absoluteUrl(),
+    identifier: absoluteUri(),
     name: z.string().optional(),
     allowedScopes: flexArray(z.string().min(1)).optional(),
     accessTokenTtl: duration({ min: 60 }).optional(),

@@ -293,8 +293,8 @@ there is a person to ask.
 | `name` | — | Shown on the consent screen and in `/admin/clients`. |
 | `type` | — **required** | `web`, `spa` or `native`. |
 | `clientSecret` | — | Required for `web`, forbidden otherwise. ≥ 32 characters, and a placeholder in production. |
-| `redirectUris` | `[]` | Absolute, exact-match, no wildcards or fragments. https except loopback; private-use schemes for `native`. |
-| `postLogoutRedirectUris` | `[]` | Required if `enableEndSession` is on. |
+| `redirectUris` | `[]` | Absolute, exact-match, no wildcards or fragments. https except loopback; private-use schemes for `native`. With `server.dynamicIssuer` on, `https://{host}/…` registers the URI on every hostname the trusted edge routes — `{host}` must be the whole host component, exactly once, substituted per request; still not a wildcard. |
+| `postLogoutRedirectUris` | `[]` | Required if `enableEndSession` is on. The `{host}` template works here too, so RP-initiated logout follows the request host as well. |
 | `scopes` | — | A subset of `oauth.scopes`. |
 | `audience` | — | Overrides `jwt.audience` for this client. String or array. |
 | `grantTypes` | `["authorization_code", "refresh_token"]` | The only two there are. |

@@ -33,6 +33,15 @@ import type { Logger } from "../logger"
  * failed refresh must not fail either. A stale set is a client that cannot
  * sign in until the next restart; a thrown error here would be a deployment
  * that does not start.
+ *
+ * `{host}` templates are deliberately PRESERVED, not expanded: this runs at
+ * start-up and after admin mutations, outside any request, so there is no
+ * host to expand with — `currentRequestIssuer()` is `undefined` here.
+ * `browserOriginsOf` passes `https://{host}` through unchanged (`new URL`
+ * parses it without throwing), the cache stores the template, and
+ * `clientOrigins()` in `http/cors.ts` expands it at read time, per request.
+ * Expanding here instead would bake one boot-time host into a cache whose
+ * whole point is to answer for every host.
  */
 export async function refreshDatabaseClientOrigins(
   database: DbHandle,

@@ -65,15 +65,31 @@ describe("resolveSignInDestination — the configured default", () => {
     }
   })
 
-  it("prefixes a relative default with the mount path", () => {
+  it("keeps the schema default on the IdP's own account page, mount path and all", () => {
     expect(resolveSignInDestination({ config: atSubPath() })).toBe(
       "/idp/account"
     )
+  })
+
+  it("treats a configured relative default as origin-relative, never re-based under the mount", () => {
+    // "/" means the product at the root of whatever host the user is on —
+    // not "/idp/", the identity provider. Same for any other configured path.
+    expect(
+      resolveSignInDestination({
+        config: atSubPath({ defaultRedirect: "/" }),
+      })
+    ).toBe("/")
     expect(
       resolveSignInDestination({
         config: atSubPath({ defaultRedirect: "/welcome" }),
       })
-    ).toBe("/idp/welcome")
+    ).toBe("/welcome")
+    // At the host root the two readings coincide.
+    expect(
+      resolveSignInDestination({
+        config: atRoot({ defaultRedirect: "/welcome" }),
+      })
+    ).toBe("/welcome")
   })
 
   it("falls back to /account when the key is somehow absent", () => {

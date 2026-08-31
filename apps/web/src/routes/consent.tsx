@@ -68,7 +68,10 @@ export const Route = createFileRoute("/consent")({
         const response = await runtime.auth.handler(
           new Request(`${paths.authBaseUrl}/oauth2/consent`, {
             method: "POST",
-            headers: consentHeaders(request),
+            headers: consentHeaders(
+              request,
+              runtime.config.file.server.trustProxy
+            ),
             body: JSON.stringify({
               accept,
               [OAUTH_QUERY_FIELD]: oauthQuery,
@@ -109,8 +112,19 @@ export const Route = createFileRoute("/consent")({
   },
 })
 
-/** JSON in, JSON out, with the caller's own session and origin. */
-function consentHeaders(request: Request): Headers {
+/**
+ * JSON in, JSON out, with the caller's own session, origin and host.
+ *
+ * `host` (and `x-forwarded-host`, when a proxy is trusted) is copied for the
+ * same reason `oidc/continuation.ts` copies it: this synthetic request targets
+ * the static auth base URL, so under `server.dynamicIssuer` the origin check
+ * would otherwise resolve to the canonical host and refuse the browser's
+ * `Origin` from any other one with 403 INVALID_ORIGIN.
+ */
+function consentHeaders(
+  request: Request,
+  trustProxy: boolean | readonly string[]
+): Headers {
   const headers = new Headers()
   headers.set("content-type", "application/json")
   headers.set("accept", "application/json")
@@ -118,6 +132,12 @@ function consentHeaders(request: Request): Headers {
   if (cookie) headers.set("cookie", cookie)
   const origin = request.headers.get("origin")
   if (origin) headers.set("origin", origin)
+  const host = request.headers.get("host")
+  if (host) headers.set("host", host)
+  if (trustProxy !== false) {
+    const forwardedHost = request.headers.get("x-forwarded-host")
+    if (forwardedHost) headers.set("x-forwarded-host", forwardedHost)
+  }
   return headers
 }
 

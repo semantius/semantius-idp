@@ -9,7 +9,7 @@
 
 import { z } from "zod"
 
-import { absoluteUrl, flexArray, flexBoolean } from "../zod-helpers"
+import { absoluteUri, absoluteUrl, flexArray, flexBoolean } from "../zod-helpers"
 import {
   CLIENT_TYPES,
   PUBLIC_CLIENT_TYPES,
@@ -119,6 +119,11 @@ function validateRedirectUri(
         `\`${value}\` uses a private-use scheme, which is only allowed for \`type: "native"\` clients.`
       )
       return
+    case "host_template":
+      fail(
+        `\`${value}\` misuses the \`{host}\` template: it must stand for the entire host component, exactly once — \`https://{host}/callback\` — with no credentials and no port of its own.`
+      )
+      return
   }
 }
 
@@ -144,7 +149,7 @@ const baseClientSchema = z.strictObject({
     .optional()
     .describe("Must be a subset of `oauth.scopes`."),
   audience: z
-    .union([absoluteUrl(), flexArray(absoluteUrl(), { min: 1 })])
+    .union([absoluteUri(), flexArray(absoluteUri(), { min: 1 })])
     .optional()
     .describe(
       "Per-client default audience; overrides `jwt.audience` for this client." // FR-OIDC-6

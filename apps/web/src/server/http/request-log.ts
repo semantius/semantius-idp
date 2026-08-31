@@ -35,6 +35,24 @@ export interface RequestContext {
   /** Already anonymized (SEC-5): the last octet or the low 64 bits are gone. */
   ipAddress?: string
   /**
+   * The issuer this request is answered with, resolved once at the edge by
+   * `oidc/request-issuer.ts`. The boot issuer unless `server.dynamicIssuer`
+   * put the request's own host there. Read through
+   * {@link currentRequestIssuer} by everything that emits an issuer-derived
+   * value — the JWT `iss`, discovery, CORS's `{host}` expansion — so one
+   * request cannot see two answers.
+   */
+  issuer?: string
+  /**
+   * The last error Better Auth's router swallowed into a bare 500 for this
+   * request, stashed by `onAPIError.onError` (see `auth/instance.ts`). The
+   * protocol proxy reads it to turn one specific shape — a jose
+   * `JWTClaimValidationFailed` on `iss`, which is what a host-scoped access
+   * token presented on another host produces under `dynamicIssuer` — into a
+   * clean 401 instead of a 500 nobody can act on.
+   */
+  authApiError?: unknown
+  /**
    * The HTTP status the rendered **document** should carry, when it is not
    * 200 (FR-ROLE-3).
    *
@@ -70,6 +88,26 @@ export function currentRequest(): RequestContext | undefined {
 /** The current request id, for an audit row. */
 export function currentRequestId(): string | undefined {
   return storage.getStore()?.requestId
+}
+
+/**
+ * The issuer resolved for the current request, or `undefined` outside one —
+ * start-up, the CLI, a background job — where every caller falls back to the
+ * boot issuer and gets exactly the pre-`dynamicIssuer` behavior.
+ */
+export function currentRequestIssuer(): string | undefined {
+  return storage.getStore()?.issuer
+}
+
+/** Stashes an error the auth router is about to collapse into a bare 500. */
+export function recordAuthApiError(error: unknown): void {
+  const context = storage.getStore()
+  if (context) context.authApiError = error
+}
+
+/** The stashed error, for the protocol proxy's 500-shape mapping. */
+export function currentAuthApiError(): unknown {
+  return storage.getStore()?.authApiError
 }
 
 /**

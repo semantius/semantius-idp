@@ -543,6 +543,11 @@ async function mint(
   credential: Record<string, string>,
   clientIp: string | undefined
 ): Promise<MintResult> {
+  // Runs INSIDE the request scope, so under `server.dynamicIssuer` the minted
+  // JWT's `iss` is the arriving host — harmless against PostgREST, which
+  // validates the signature and never `iss`. Worth knowing: the ten-minute
+  // mint cache below replays that token across hosts, so a key first used on
+  // host A briefly presents `iss: A` on host B.
   const paths = createBasePaths(deps.config.base)
   const headers = new Headers(credential)
   // The address the auth instance's own resolver trusts, so Better Auth

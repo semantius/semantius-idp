@@ -15,6 +15,13 @@
   // only. There is no `client_credentials` and no `service` client type: for
   // scripted access, issue the user a per-user API key and exchange it for a
   // JWT at GET {baseUrl}/api/auth/token with an `x-api-key` header.
+  //
+  // Redirect URIs are exact matches, no wildcards. With `server.dynamicIssuer`
+  // on (config.jsonc), a URI may carry the per-request host template instead:
+  // "https://{host}/callback" — {host} must be the whole host component,
+  // exactly once, and is substituted by the IdP with the host the
+  // authorization arrived on. Not a wildcard: `*` stays refused, and the
+  // expansion only ever names hosts the trusted edge actually routed.
 
   "clients": [
     {

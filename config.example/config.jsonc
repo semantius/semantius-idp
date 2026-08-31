@@ -35,6 +35,21 @@
     // `true` trusts the immediate upstream; a CIDR list trusts those ranges.
     "trustProxy": false,
 
+    // Derive the issuer — and every browser-facing URL EXCEPT e-mail links —
+    // per request, from the host the request arrived on, instead of always
+    // from baseUrl. For a deployment reached under more than one name, or
+    // handed a domain after it booted. Off by default, and off is the safe
+    // answer: turning it on asserts that every hop in front of the IdP
+    // OVERWRITES X-Forwarded-Host with the host it matched (nginx needs
+    // `proxy_set_header X-Forwarded-Host $host;` — it passes an inbound one
+    // through otherwise, and so do AWS ALBs and GCP LBs), forwards only Hosts
+    // matching a configured route, serves a CLOSED set of hosts, and cannot
+    // be bypassed. Requires trustProxy; incompatible with cookieDomain.
+    // E-mail links always stay on baseUrl — that is what keeps a forged Host
+    // out of a password-reset link — so baseUrl still needs one edit when the
+    // canonical domain changes.
+    // "dynamicIssuer": true,
+
     // CSRF origin allow-list. Leave it out and the check follows the request:
     // the browser's Origin has to name the address the request arrived on
     // (X-Forwarded-Host, or Host), which is what a deployment behind a reverse
@@ -182,7 +197,10 @@
 
     // REQUIRED. The default RFC 8707 resource: it becomes the `aud` of every
     // access token whose client sent no `resource` parameter, which is what
-    // makes tokens JWTs that Neon accepts out of the box. Usually the issuer.
+    // makes tokens JWTs that Neon accepts out of the box. Usually the issuer —
+    // but any absolute URI works, and a FIXED one (e.g. "myapp://api") is the
+    // right choice with server.dynamicIssuer, where an audience derived from
+    // a URL would go stale the moment the deployment gains a domain.
     "audience": "${env:IDP_BASE_URL:-http://localhost:3000}",
 
     "includeUserData": true,

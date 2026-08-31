@@ -13,6 +13,7 @@
 import type { ConfigIssue, ConfigWarning } from "./errors"
 import { isLocalhostUrl } from "./derive"
 import { looksPooled } from "../db/client"
+import { hasHostTemplate } from "../../lib/client-rules"
 import {
   RESERVED_CLAIM_NAMES,
   REJECTED_ENTRA_TENANTS,
@@ -70,6 +71,28 @@ export function runCrossChecks(input: CrossCheckInput): CrossCheckResult {
     })
   }
 
+  // --------------------------------------------------- dynamic issuer (D…) --
+  // Contradictions that would make `server.dynamicIssuer` silently unsafe or
+  // silently dead, refused at boot rather than discovered in production.
+  if (config.server.dynamicIssuer) {
+    if (config.server.trustProxy === false) {
+      issues.push({
+        file: "config.json",
+        pointer: "/server/dynamicIssuer",
+        message:
+          "`server.dynamicIssuer` requires `server.trustProxy`. The flag asserts that a trusted edge overwrites X-Forwarded-Host on every hop; with no trusted proxy at all there is no such edge, and the issuer would follow whatever Host a direct caller sent.",
+      })
+    }
+    if (config.server.cookieDomain) {
+      issues.push({
+        file: "config.json",
+        pointer: "/server/cookieDomain",
+        message:
+          "`server.dynamicIssuer` cannot be combined with `server.cookieDomain`. The dynamic issuer scopes sessions and tokens to the host that minted them; a domain-wide cookie makes a session minted on one host readable across the whole domain, which quietly undoes that scoping.",
+      })
+    }
+  }
+
   // D68: `*` is a supported value and the only one that removes the check
   // rather than aiming it, so it says so at start-up. A deployment that meant
   // "I do not know my public URL" wants the default — which still checks —
@@ -91,6 +114,36 @@ export function runCrossChecks(input: CrossCheckInput): CrossCheckResult {
       message: "`secret` must be at least 32 characters (32 random bytes).",
       hint: "Generate one with `openssl rand -base64 48`.",
     })
+  }
+
+  // A shipped default passes every SHAPE check — the reference stack's dev
+  // `secret` is 46 characters and arrives through a `${env:…}` placeholder,
+  // which is exactly what the production-literal rule below asks for — so the
+  // VALUE is checked here, against the known defaults and the markers they
+  // carry. A **warning**, never a refusal, and the severity is the point:
+  // `isProduction` flips the moment `baseUrl` becomes https, and a boot
+  // refusal at that moment would demand rotating `secret` — which logs
+  // everyone out and makes the stored signing keys undecryptable. A refusal
+  // would turn "insecure but working" into "broken, and the fix destroys the
+  // keys". The warning reaches the log at startup and the admin system page.
+  if (looksLikeShippedSecret(config.secret)) {
+    warnings.push({
+      code: "secret.shipped_default",
+      message:
+        "`secret` looks like a shipped development default. Anyone who reads the public repository can forge sessions and decrypt the stored JWT signing keys. Generate a real one (`openssl rand -base64 48`) — and treat changing it as a key rotation: it signs every session and encrypts the signing keys, so rotating it logs everyone out.",
+    })
+  }
+  for (const [pointer, url] of [
+    ["/database/url", config.database.url],
+    ["/database/directUrl", config.database.directUrl],
+  ] as const) {
+    const password = connectionPassword(url)
+    if (password === undefined || !looksLikeShippedSecret(password)) continue
+    warnings.push({
+      code: "database.shipped_default_password",
+      message: `The connection string at \`${pointer}\` carries what looks like a shipped default password. Anyone who can reach the database port has whatever access that login grants — change it in the database and in the connection string together.`,
+    })
+    break // one warning covers both URLs; they carry the same credential
   }
 
   // -------------------------------------------------------------- database --
@@ -262,12 +315,35 @@ export function runCrossChecks(input: CrossCheckInput): CrossCheckResult {
       }
     }
 
+    // A `{host}` template only means something when the issuer follows the
+    // request host. With `dynamicIssuer` off, nothing ever expands it: the
+    // client would be registered with a URI no browser can be redirected to,
+    // and the first sign-in would fail with an unregistered-redirect error
+    // that names a URL the operator never typed. Refused here, where the
+    // contradiction is visible.
+    if (!config.server.dynamicIssuer) {
+      const templated = [
+        ...client.redirectUris,
+        ...client.postLogoutRedirectUris,
+      ].filter(hasHostTemplate)
+      if (templated.length > 0) {
+        issues.push({
+          file: "oauth_clients.json",
+          pointer: `/clients/${index}/redirectUris`,
+          message: `Client \`${client.clientId}\` uses the \`{host}\` template (${templated.join(", ")}), which is only expanded when \`server.dynamicIssuer\` is on.`,
+          hint: "Turn `server.dynamicIssuer` on (read its conditions first), or register the literal URIs.",
+        })
+      }
+    }
+
     // A first-party app shares the host-only session cookie, so it must sit on
-    // the issuer's own origin (FR-OIDC-14).
+    // the issuer's own origin (FR-OIDC-14). A `{host}` template satisfies the
+    // rule by construction: it expands to the host of the request being
+    // authorized — the same host the host-only session cookie belongs to.
     if (client.firstParty) {
       const issuerOrigin = safeOrigin(config.server.baseUrl)
       const foreign = client.redirectUris.filter(
-        (uri) => safeOrigin(uri) !== issuerOrigin
+        (uri) => !hasHostTemplate(uri) && safeOrigin(uri) !== issuerOrigin
       )
       if (foreign.length > 0) {
         issues.push({
@@ -364,6 +440,21 @@ export function runCrossChecks(input: CrossCheckInput): CrossCheckResult {
         "Open registration without approval and without e-mail: anyone can create a usable account with an address nobody verified.",
     })
   }
+  // Social callbacks stay canonical under `dynamicIssuer`: the provider
+  // registers ONE callback URL, built from `baseUrl` at boot
+  // (`api/routes/sign-in.mjs` hard-codes it from `baseURL`), so social
+  // sign-in completes only on the canonical host. Password sign-in follows
+  // every host; this says why the Google button works on one of them.
+  if (
+    config.server.dynamicIssuer &&
+    Object.values(config.social).some((provider) => provider.enabled !== false)
+  ) {
+    warnings.push({
+      code: "social.canonical_host_only",
+      message:
+        "A social provider is enabled together with `server.dynamicIssuer`. Social callbacks are built from `server.baseUrl` and registered with the provider once, so social sign-in works on the canonical host only; other hosts still offer password sign-in.",
+    })
+  }
   // D25: a social provider enabled while sign-up is off is the normal
   // invite-only deployment and is deliberately not warned about.
   //
@@ -377,6 +468,48 @@ export function runCrossChecks(input: CrossCheckInput): CrossCheckResult {
 function safeOrigin(value: string): string | undefined {
   try {
     return new URL(value).origin
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * The known shipped defaults, plus the markers a placeholder secret carries.
+ *
+ * Values, not shapes: both idp-side checks above verify shape (length, and
+ * "came through a placeholder"), which every shipped default passes. The list
+ * is short on purpose — it exists to catch the documented dev credentials of
+ * the reference stack, not to judge password strength.
+ */
+const SHIPPED_DEFAULT_VALUES: ReadonlySet<string> = new Set([
+  "postgres",
+  "devpassword",
+])
+const SHIPPED_DEFAULT_MARKERS = [
+  "change-me",
+  "changeme",
+  "dev-only",
+  "example",
+  "insecure",
+] as const
+
+function looksLikeShippedSecret(value: string): boolean {
+  const lower = value.toLowerCase()
+  if (SHIPPED_DEFAULT_VALUES.has(lower)) return true
+  return SHIPPED_DEFAULT_MARKERS.some((marker) => lower.includes(marker))
+}
+
+/** The password component of a connection string, decoded, if it has one. */
+function connectionPassword(value: string | undefined): string | undefined {
+  if (!value) return undefined
+  try {
+    const password = new URL(value).password
+    if (password === "") return undefined
+    try {
+      return decodeURIComponent(password)
+    } catch {
+      return password
+    }
   } catch {
     return undefined
   }

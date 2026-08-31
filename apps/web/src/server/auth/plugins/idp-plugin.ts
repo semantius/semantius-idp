@@ -26,6 +26,7 @@ import type { IdpConfig } from "../../config/derive"
 import type { Mailer } from "../../email/mailer"
 import { NOT_AN_ADMIN, requireAdmin } from "../../admin/gate"
 import { gatewaySchema } from "../../gateways/schema"
+import { registerHostTemplateDiscovery } from "../../oidc/host-template-clients"
 
 /**
  * Append-only audit trail (SEC-6). No secrets are ever stored: `metadata`
@@ -248,6 +249,14 @@ export function idpPlugin(options: IdpPluginOptions): BetterAuthPlugin {
 
   return {
     id: IDP_PLUGIN_ID,
+    // Registers the `{host}` client-discovery with the oauth-provider plugin
+    // (`server.dynamicIssuer`, D-dynamic-issuer). In `init` because that is
+    // the provider's documented extension seam, and unconditional because a
+    // deployment with no template clients simply never stamps
+    // `clientDiscoveryId` on a row — the discovery is then never consulted.
+    init(ctx) {
+      registerHostTemplateDiscovery(ctx)
+    },
     schema: {
       ...auditLogSchema,
       ...pendingAuthorizationSchema,

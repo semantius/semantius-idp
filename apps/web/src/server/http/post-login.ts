@@ -68,9 +68,18 @@ export function resolveSignInDestination({
   // hand-built config in a test cannot turn a missing key into a crash.
   const configured = config.file.auth.defaultRedirect as string | undefined
   if (configured) {
-    return configured.startsWith("/")
-      ? withBasePath(basePath, configured)
-      : configured
+    // A CONFIGURED relative redirect is ORIGIN-relative, not app-relative: the
+    // operator pointing sign-in at "/" means the product beside the IdP, and
+    // re-basing it under the mount path would land users on `/idp/` — the
+    // identity provider, the one place they did not sign in to visit. It also
+    // survives a host the deployment learned about after boot, which an
+    // absolute URL built from a boot-time env cannot. The single exception is
+    // the schema's own default, `/account`: that names the IdP's account page
+    // and keeps the mount path, exactly as it always has.
+    if (configured === FALLBACK_SIGN_IN_DESTINATION) {
+      return withBasePath(basePath, configured)
+    }
+    return configured
   }
 
   return withBasePath(basePath, FALLBACK_SIGN_IN_DESTINATION)

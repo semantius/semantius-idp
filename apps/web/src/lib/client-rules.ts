@@ -32,11 +32,47 @@ export type RedirectUriProblem =
   | "fragment"
   | "http_not_loopback"
   | "private_scheme"
+  | "host_template"
+
+/**
+ * The per-request host template a redirect URI may carry:
+ * `https://{host}/oauth2_callback`.
+ *
+ * NOT a wildcard, and deliberately a different grammar from the config files'
+ * `${env:…}` placeholders — those are substituted once at load time, this one
+ * per request, by the IdP, from the host the authorization arrived on (only
+ * meaningful under `server.dynamicIssuer`). It must stand for the ENTIRE host
+ * component: `{host}` between the scheme and the path, exactly once, no port
+ * of its own, no credentials — anything else is refused as `host_template`,
+ * and `*` stays refused as the wildcard it is.
+ */
+export const HOST_TEMPLATE = "{host}"
+
+/** A syntactically valid stand-in host, substituted for validation only. */
+const TEMPLATE_PLACEHOLDER = "host-template.invalid"
+
+export function hasHostTemplate(value: string): boolean {
+  return value.includes(HOST_TEMPLATE)
+}
+
+/**
+ * Substitutes the whole-host template with a real `host[:port]`.
+ *
+ * Callers only pass URIs that already passed {@link checkRedirectUri}, where
+ * the template is constrained to the host position — so a plain string
+ * replace cannot move anything anywhere else.
+ */
+export function expandHostTemplate(uri: string, host: string): string {
+  return uri.replaceAll(HOST_TEMPLATE, host)
+}
 
 /**
  * A redirect URI must be absolute and exactly matched at authorize time
  * (FR-OIDC-3/4). Wildcards and fragments are rejected outright; plain http is
  * only allowed on loopback, and private-use schemes only for native clients.
+ * The `{host}` template is substituted with a placeholder host BEFORE the
+ * wildcard check, so a templated URI validates like the URI it expands to —
+ * and `*` stays refused either way.
  *
  * `undefined` means the URI is acceptable for a client of that type.
  */
@@ -44,16 +80,33 @@ export function checkRedirectUri(
   value: string,
   type: ClientType
 ): RedirectUriProblem | undefined {
-  if (value.includes("*")) return "wildcard"
+  const templated = hasHostTemplate(value)
+  // First occurrence only: a second `{host}` survives into `candidate` and
+  // fails the whole-host check below, which is how "exactly once" is enforced
+  // without counting.
+  const candidate = templated
+    ? value.replace(HOST_TEMPLATE, TEMPLATE_PLACEHOLDER)
+    : value
+  if (candidate.includes("*")) return "wildcard"
   let url: URL
   try {
-    url = new URL(value)
+    url = new URL(candidate)
   } catch {
     return "not_absolute"
   }
+  if (templated) {
+    // The template must BE the host component — not part of one, not a path
+    // segment, not beside a userinfo block, and only once.
+    const wholeHost =
+      url.host === TEMPLATE_PLACEHOLDER &&
+      url.username === "" &&
+      url.password === "" &&
+      !hasHostTemplate(candidate)
+    if (!wholeHost) return "host_template"
+  }
   // Both halves matter: `URL` drops an empty trailing `#`, which is still a
   // fragment as far as an exact match is concerned.
-  if (url.hash !== "" || value.includes("#")) return "fragment"
+  if (url.hash !== "" || candidate.includes("#")) return "fragment"
   if (url.protocol === "https:") return undefined
   if (url.protocol === "http:") {
     const isLoopback =

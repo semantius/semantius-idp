@@ -29,6 +29,13 @@ export interface BasePathInfo {
   cookieDomain?: string
   /** True when `server.baseUrl` uses https, which drives `Secure` cookies (FR-AUTH-5). */
   secure: boolean
+  /**
+   * `server.dynamicIssuer`: derive the issuer per request from the arriving
+   * host instead of always from `baseUrl`. Consumed by
+   * `oidc/request-issuer.ts`; `false` keeps every issuer decision exactly what
+   * it was before the flag existed.
+   */
+  dynamicIssuer: boolean
 }
 
 export interface EffectiveResource {
@@ -115,7 +122,7 @@ export interface IdpConfig {
  */
 export function parseBasePath(
   baseUrl: string,
-  cookies: { path?: string; domain?: string } = {}
+  cookies: { path?: string; domain?: string; dynamicIssuer?: boolean } = {}
 ): BasePathInfo {
   const url = new URL(baseUrl)
   const rawPath = url.pathname.replace(/\/+$/, "")
@@ -126,6 +133,7 @@ export function parseBasePath(
     cookiePath: cookies.path ?? "/",
     ...(cookies.domain ? { cookieDomain: cookies.domain } : {}),
     secure: url.protocol === "https:",
+    dynamicIssuer: cookies.dynamicIssuer ?? false,
   }
 }
 
@@ -208,6 +216,7 @@ export function deriveConfig(
   const base = parseBasePath(file.server.baseUrl, {
     path: file.server.cookiePath,
     domain: file.server.cookieDomain,
+    dynamicIssuer: file.server.dynamicIssuer,
   })
   const emailEnabled = Boolean(file.email.resend.apiKey)
   const defaultAudience = toArray(file.jwt.audience)

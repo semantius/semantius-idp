@@ -206,6 +206,8 @@ export async function runStartup(
     steps: steps.map((entry) =>
       entry.skipped ? `${entry.name} (skipped)` : entry.name
     ),
+    // The canonical issuer — start-up runs outside any request, so under
+    // `server.dynamicIssuer` this is the one issuer that exists yet.
     issuer: config.base.origin + config.base.basePath,
   })
   return {

@@ -93,8 +93,16 @@ export function requestOrigins(request?: Request): readonly string[] {
  * with a space in it) comes back different and is refused. The IPv6 literal
  * `[::1]:3000` comes back unchanged, which is the form an `Origin` header
  * uses.
+ *
+ * Written for *comparison* — the CSRF check above only ever compares the
+ * result — and exported because it is now also an **emission gate**:
+ * `oidc/request-issuer.ts` builds the per-request issuer through it under
+ * `server.dynamicIssuer`, and everything in this comment about wildcards and
+ * the round-trip is what makes that emission safe.
  */
-function normalizeHost(value: string | null | undefined): string | undefined {
+export function normalizeHost(
+  value: string | null | undefined
+): string | undefined {
   if (!value) return undefined
   const candidate = value.trim().toLowerCase()
   if (candidate === "") return undefined

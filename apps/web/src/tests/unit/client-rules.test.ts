@@ -51,6 +51,42 @@ describe("redirect URI rules", () => {
       "private_scheme"
     )
   })
+
+  it("accepts {host} as the whole host of an https URI", () => {
+    expect(
+      checkRedirectUri("https://{host}/oauth2_callback", "spa")
+    ).toBeUndefined()
+    expect(checkRedirectUri("https://{host}", "spa")).toBeUndefined()
+  })
+
+  it("refuses {host} anywhere but the whole-host position, exactly once", () => {
+    // Part of a host, a path segment, a userinfo block, twice, its own port.
+    expect(checkRedirectUri("https://{host}.example.com/cb", "spa")).toBe(
+      "host_template"
+    )
+    expect(checkRedirectUri("https://evil.example/{host}", "spa")).toBe(
+      "host_template"
+    )
+    expect(checkRedirectUri("https://user@{host}/cb", "spa")).toBe(
+      "host_template"
+    )
+    expect(checkRedirectUri("https://{host}/x/{host}", "spa")).toBe(
+      "host_template"
+    )
+    expect(checkRedirectUri("https://{host}:8443/cb", "spa")).toBe(
+      "host_template"
+    )
+  })
+
+  it("keeps refusing a wildcard beside a template — {host} is not one", () => {
+    expect(checkRedirectUri("https://{host}/cb/*", "spa")).toBe("wildcard")
+  })
+
+  it("keeps a templated URI on https", () => {
+    expect(checkRedirectUri("http://{host}/cb", "spa")).toBe(
+      "http_not_loopback"
+    )
+  })
 })
 
 describe("clientId", () => {

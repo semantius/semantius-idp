@@ -61,6 +61,20 @@ export async function resumeAuthorization(
   headers.set("accept", "application/json")
   const origin = request.headers.get("origin")
   if (origin) headers.set("origin", origin)
+  // The host the browser is actually on, copied so the origin check can pass
+  // under `server.dynamicIssuer`. This synthetic request targets the STATIC
+  // `paths.authBaseUrl`, so without these the per-request trusted-origins
+  // fallback resolves to the canonical host, the browser's `Origin:
+  // https://hostB` matches nothing, and `/oauth2/continue` answers 403
+  // INVALID_ORIGIN — an issuer that advertises host B but cannot complete an
+  // authorization there. `X-Forwarded-Host` is copied only when the
+  // deployment trusts a proxy at all, mirroring `request-issuer.ts`.
+  const host = request.headers.get("host")
+  if (host) headers.set("host", host)
+  if (runtime.config.file.server.trustProxy !== false) {
+    const forwardedHost = request.headers.get("x-forwarded-host")
+    if (forwardedHost) headers.set("x-forwarded-host", forwardedHost)
+  }
 
   // The session that was *just* created arrives as `Set-Cookie` on the
   // sign-in response, before any browser has had a chance to send it back —

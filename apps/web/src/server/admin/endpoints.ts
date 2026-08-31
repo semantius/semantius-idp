@@ -325,6 +325,9 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
       return ctx.json({
         version,
         revision: revision ?? null,
+        // Always the CANONICAL issuer, even under `server.dynamicIssuer` —
+        // the admin pages describe the deployment's configuration, not the
+        // host this particular request happened to arrive on.
         issuer: deps.config.base.origin + deps.config.base.basePath,
         // D55: the URLs an operator actually has to paste into the other
         // system. Absolute, and built here rather than in the browser, because

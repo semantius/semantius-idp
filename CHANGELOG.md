@@ -9,6 +9,57 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ## [Unreleased]
 
+### Added
+
+- **`server.dynamicIssuer` — serve a correct issuer on every host a trusted
+  edge routes** (SEC-1's one sanctioned, opt-in exception). Off by default,
+  and off is byte-for-byte the old behavior. On, the issuer is resolved once
+  per request at the edge — leftmost `X-Forwarded-Host` under `trustProxy`,
+  then `Host`, through the same `normalizeHost` gate the CSRF check trusts,
+  scheme always from `baseUrl` — and read from the request context by
+  everything that emits one: the JWT plugin's `issuer` (now a getter),
+  discovery (rewritten per request, cached `private`), logout-hint
+  verification and the CSP `form-action` list. The synthetic requests the
+  interstitial pages make (`/oauth2/continue`, `/oauth2/consent`) copy the
+  caller's `Host`/`X-Forwarded-Host`, so an authorization started on one host
+  completes there. **E-mail links deliberately stay on `baseUrl`** — that is
+  what keeps a forged `Host` out of a password-reset link. Turning the flag
+  on asserts four ingress conditions (see the config reference); it is
+  refused outright with `trustProxy: false` or `server.cookieDomain`, and a
+  boot warning notes that social callbacks stay on the canonical host.
+  Access tokens are host-scoped: one presented on another host answers a
+  clean 401 `invalid_token` (previously an unexplained 500 shape) for up to
+  its 15-minute lifetime after a host switch.
+- **`{host}` redirect-URI templates.** With `dynamicIssuer` on, a client may
+  register `https://{host}/callback`: the IdP substitutes the whole host of
+  the request being authorized — redirect URIs *and* post-logout URIs, so
+  RP-initiated logout follows too. Not a wildcard (`*` stays refused; the
+  template must be the entire host component, exactly once), stored verbatim
+  and expanded per request through the oauth-provider's client-discovery
+  seam, which also keeps such rows out of the trusted-client cache. CORS and
+  `form-action` expand the template from the same per-request issuer. With
+  the flag off, a template in `oauth_clients.jsonc` is a startup error.
+- **Shipped-default secrets are now detectable** (warnings, never refusals):
+  a `secret` or database password matching the reference stack's dev values
+  (or carrying `change-me` / `dev-only` / `example` / `insecure`) logs
+  `secret.shipped_default` / `database.shipped_default_password` at startup
+  and shows on the admin system page. A warning by design — the remedy for a
+  shipped `secret` discovered after going https (rotating it) logs everyone
+  out and makes the stored signing keys undecryptable, so a boot refusal
+  would turn "insecure but working" into "broken".
+
+### Changed
+
+- **`jwt.audience`, per-client `audience` and `oauth.resources` accept any
+  absolute URI**, not only http(s) URLs — RFC 8707 resource indicators are
+  URIs, and a fixed identifier such as `semantius://api` is what keeps an
+  audience independent of the issuer host under `dynamicIssuer`.
+- **A configured relative `auth.defaultRedirect` is origin-relative.** `"/"`
+  now lands on the root of the host the user signed in on, not on `/idp/`
+  under a sub-path mount — which was the exact outcome the setting exists to
+  avoid. The schema default `/account` keeps naming the IdP's own account
+  page, mount path and all.
+
 ### Fixed
 
 - **"Sign out" on `/account/sessions` now revokes the OAuth tokens that

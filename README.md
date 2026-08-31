@@ -102,6 +102,11 @@ that resource servers validate through JWKS.
   health endpoints, structured logs with secret redaction, an operator CLI
 - Optional read-only or read-write SQL console over its own database
 - Deploys at a host root or under a sub-path; reference Caddyfiles included
+- Optional per-request issuer (`server.dynamicIssuer`): behind a trusted edge
+  that routes several hostnames — or hands the deployment a domain after it
+  booted — discovery, sign-in, tokens and redirect URIs (`https://{host}/…`
+  templates) follow the host each request arrived on, with no restart
+  ([details](#serving-more-than-one-hostname-serverdynamicissuer))
 - Brandable name, logo and favicon
 
 ### What it is not
@@ -275,11 +280,12 @@ The keys that decide what you can do on day one:
 | Key | Default | What it changes |
 | --- | --- | --- |
 | `server.baseUrl` | **required** | The issuer. Every absolute URL derives from it, never from the `Host` header. May carry a path (`https://apps.example.com/idp`). |
-| `jwt.audience` | **required** | What lands in `aud`. For Neon, the audience that project expects. |
+| `server.dynamicIssuer` | `false` | Derive the issuer per request from the arriving host instead — for a trusted edge that routes several hostnames. Opt-in with real preconditions; see [below](#serving-more-than-one-hostname-serverdynamicissuer). |
+| `jwt.audience` | **required** | What lands in `aud`. Any absolute URI — for Neon, the audience that project expects; with `dynamicIssuer`, a fixed identifier like `myapp://api` rather than a URL that goes stale with the host. |
 | `signUp.enabled` | `false` | Off means `/signup` is **404** and social sign-in works only for identities that already exist. |
 | `signUp.requireApproval` | `true` | Self-registrations land as `pending` until an administrator approves them. |
 | `email.resend.apiKey` | *(unset)* | Without it the IdP runs in **degraded mode**: no verification, no reset, no notifications, and `/forgot-password` is 404. Administrators set passwords directly instead. |
-| `auth.defaultRedirect` | `/account` | Where a completed sign-in lands. Point it at your product when the IdP is bundled beside one. |
+| `auth.defaultRedirect` | `/account` | Where a completed sign-in lands. Point it at your product when the IdP is bundled beside one — an absolute URL, or a relative path like `/`, which is **origin**-relative: it means the root of the host the user is on, never `/idp/` under a sub-path mount. |
 | `admin.adminRoles` | `["admin"]` | Which roles from `roles.jsonc` reach `/admin` and the admin API. |
 | `admin.database` | `disabled` | `read-only` or `read-write` adds `/admin/database`, a schema explorer and SQL console over the IdP's own Postgres. Off means no page, no nav entry and no endpoint. An administrator who can run SQL reads every row at rest, session tokens included. |
 
@@ -339,6 +345,14 @@ restart. Dynamic client registration (the protocol endpoint) remains off.
 }
 ```
 
+Redirect URIs are matched exactly — no wildcards. With
+[`server.dynamicIssuer`](#serving-more-than-one-hostname-serverdynamicissuer)
+on, a URI may instead carry the per-request host template,
+`"https://{host}/callback"`: the IdP substitutes the whole host of the request
+being authorized, so every hostname the trusted edge routes gets a matching
+redirect (and post-logout) URI. `{host}` must be the entire host component,
+exactly once; `*` stays refused.
+
 Worked examples for a public SPA, a confidential server application, a
 first-party app and a generic `openid-client` setup are in
 [docs/clients.md](docs/clients.md), along with the note about why there is no
@@ -386,6 +400,47 @@ To run the reference proxy alongside:
 cd docker
 docker compose --env-file ../.env --profile caddy up -d --wait
 ```
+
+### Serving more than one hostname (`server.dynamicIssuer`)
+
+By default the issuer is **one URL** — `server.baseUrl`, fixed at boot,
+whatever host a request arrives on. `server.dynamicIssuer: true` makes the IdP
+derive it **per request** from the host the request arrived on: discovery,
+sign-in, authorize, token, the `{host}` redirect-URI templates above and
+RP-initiated logout all follow every hostname your edge routes, with no
+restart. This is what lets a deployment behind a routing platform (Traefik on
+Dokploy, for instance) take a domain attached *after* deploy and just work.
+
+**What deliberately does not follow the request host: e-mail links.** Password
+reset and verification links are always built from `server.baseUrl` — that is
+the property that keeps a forged `Host` out of a reset link — so the canonical
+domain still needs one `baseUrl` edit when it changes.
+
+Turning it on is **your assertion** that all four of these hold for every path
+a request can take to the IdP:
+
+1. every hop in front of the IdP **overwrites** `X-Forwarded-Host` with the
+   host it matched;
+2. the edge forwards only Hosts matching a configured route;
+3. the edge serves a **closed set** of Host values;
+4. nothing reaches the container bypassing that edge.
+
+Condition (1) is the one that gets stated wrongly, and it is *not* "a proxy
+validates `Host`": the IdP reads `X-Forwarded-Host` first, and nginx, an AWS
+ALB and a GCP load balancer all **pass an inbound `X-Forwarded-Host` through
+untouched** unless configured. For nginx the required line is literally
+`proxy_set_header X-Forwarded-Host $host;`. A Caddy answering on a bare
+`:443`/`:80` site address fails condition (3) — it answers *every* Host — so
+the shipped single-hostname Caddyfile shape is not eligible.
+
+Contradictory configurations are refused at boot (`dynamicIssuer` with
+`trustProxy: false` or with `server.cookieDomain`; a `{host}` client with the
+flag off), and three consequences are by design: sessions and access tokens
+are **host-scoped** (each hostname signs in separately, and a token presented
+on another host answers 401 `invalid_token` for up to its 15-minute life),
+social callbacks stay on the canonical host (providers register one callback
+URL — a boot warning says so), and the admin pages keep showing the canonical
+issuer.
 
 ## E-mail
 
@@ -498,7 +553,12 @@ whoever clicks it. WebSockets are not proxied (`501`).
 ## Security notes
 
 - **Every absolute URL comes from `server.baseUrl`.** A poisoned `Host` header
-  changes nothing: not a redirect, not a link in an e-mail.
+  changes nothing: not a redirect, not a link in an e-mail. The one sanctioned,
+  opt-in exception is
+  [`server.dynamicIssuer`](#serving-more-than-one-hostname-serverdynamicissuer),
+  which follows the host a **trusted edge** vouched for — every candidate host
+  passes the same normalization gate the CSRF check trusts, the scheme still
+  comes from `baseUrl`, and e-mail links never move either way.
 - **Rate limits are on by default**, stored in the database so they survive a
   restart, with stricter rules for sign-in, reset, 2FA and the token endpoint.
 - **Passwords** are hashed with scrypt (Better Auth's default). Client secrets
@@ -566,7 +626,7 @@ set.
 | Symptom | Usually |
 | --- | --- |
 | `invalid_redirect_uri`, and no redirect | The URI is not in that client's `redirectUris`. Matching is exact: scheme, host, port, path, no trailing-slash forgiveness. |
-| A client rejects the tokens: issuer mismatch | `server.baseUrl` and what the client was configured with differ byte-for-byte. Discovery's `issuer` is the value to copy. |
+| A client rejects the tokens: issuer mismatch | `server.baseUrl` and what the client was configured with differ byte-for-byte. Discovery's `issuer` is the value to copy. Under `server.dynamicIssuer`, tokens carry the host they were minted on — a token from one hostname does not verify on another, and answers 401 until it expires (15 minutes). |
 | Neon rejects the token | The algorithm. Neon validates ES256 and RS256 only, and needs a `kid`; both are the default here, so check you are not overriding `jwt.algorithm`. |
 | Signed in, then immediately signed out | Secure cookies over plain HTTP. Either terminate TLS in front, or set `server.allowInsecureHttp` for local work. |
 | Start-up: "Environment variable … is not set" | A `${env:…}` placeholder with no value and no default. The message names the file and the JSON pointer. |

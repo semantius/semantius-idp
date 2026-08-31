@@ -26,12 +26,20 @@
  *   that one case is normalized, and every other error is passed through.
  *
  * Nothing here reads `Host` or `X-Forwarded-Host` (SEC-1): the forwarded URL
- * is rebuilt from `server.baseUrl`.
+ * is rebuilt from `server.baseUrl`. The one issuer-shaped exception is
+ * deliberate and indirect: under `server.dynamicIssuer` the request's
+ * *resolved* issuer — computed once at the edge through `normalizeHost`, see
+ * `request-issuer.ts` — is what discovery is rewritten to, read from the
+ * request context rather than from any header here.
  */
 
 import { createHash } from "node:crypto"
 
 import { PROTOCOL_ROUTES, createBasePaths } from "./base-path"
+import {
+  currentAuthApiError,
+  currentRequestIssuer,
+} from "../http/request-log"
 import type { Runtime } from "../runtime"
 
 /** How long a verifier may cache the key set (FR-OIDC-16). */
@@ -82,14 +90,60 @@ export async function forwardToAuth(
     case "/jwks":
       return withJwksHeaders(response)
     case "/oauth2/revoke":
-      return normalizeRevocation(response)
+      return normalizeRevocation(mapCrossHostTokenError(response))
     case "/oauth2/token":
+      return withNoStore(response)
     case "/oauth2/userinfo":
     case "/oauth2/introspect":
-      return withNoStore(response)
+      return withNoStore(mapCrossHostTokenError(response))
     default:
       return response
   }
+}
+
+/**
+ * A host-scoped access token presented on another host (`server.dynamicIssuer`).
+ *
+ * The provider verifies a JWT access token with `{ issuer: expectedIssuer }`
+ * from the same per-request getter that minted it, so a token from host A
+ * presented on host B fails jose's `iss` check. That error matches none of
+ * the provider's handled shapes and surfaces as a bare 500 on
+ * `/oauth2/userinfo`, `/oauth2/introspect` and `/oauth2/revoke` — an answer
+ * that reads as *our* outage when it is the caller's stale token. This maps
+ * exactly that shape to a 401 `invalid_token`.
+ *
+ * Deliberately narrow, twice over. Only a 500 is ever touched, and only when
+ * the stashed error is jose's `JWTClaimValidationFailed` **on `iss`** — a
+ * token that failed for any other reason, or one that would have validated as
+ * an *opaque* token (impossible here: the `iss` check only runs after the
+ * signature verified, so the credential is one of our JWTs), keeps whatever
+ * answer the provider gave. Tokens live 15 minutes, so this is also the whole
+ * blast radius of switching hosts: outstanding tokens 401 until they expire.
+ */
+function mapCrossHostTokenError(response: Response): Response {
+  if (response.status !== 500) return response
+  const error = currentAuthApiError()
+  if (
+    !(error instanceof Error) ||
+    error.name !== "JWTClaimValidationFailed" ||
+    (error as { claim?: unknown }).claim !== "iss"
+  ) {
+    return response
+  }
+  return Response.json(
+    {
+      error: "invalid_token",
+      error_description:
+        "The access token was issued for a different host of this deployment.",
+    },
+    {
+      status: 401,
+      headers: {
+        "cache-control": "no-store",
+        "www-authenticate": 'Bearer error="invalid_token"',
+      },
+    }
+  )
 }
 
 /**
@@ -112,35 +166,40 @@ export async function forwardDiscovery(
   })
   if (!response.ok) return response
 
+  // The issuer THIS request resolved to at the edge: the boot issuer, unless
+  // `server.dynamicIssuer` put the request's own host there. Outside a
+  // request scope (tests calling this directly, the CLI) it is the boot
+  // issuer, which is byte-for-byte the old behavior.
+  //
+  // `authBaseUrl` stays the STATIC one on purpose: the provider builds every
+  // endpoint URL from `ctx.context.baseURL`, which does not vary by request,
+  // and the rewrite below strips exactly that prefix. Passing a per-request
+  // auth base here would make the strip miss every URL and ship canonical
+  // `/api/auth` endpoints into the document.
+  const issuer = currentRequestIssuer() ?? paths.issuer
   const document = (await response.json()) as Record<string, unknown>
-  const rewritten = rewriteDiscovery(
-    document,
-    paths.issuer,
-    paths.authBaseUrl,
-    {
-      uiLocale: runtime.config.file.site.defaultLocale,
-    }
-  )
+  const rewritten = rewriteDiscovery(document, issuer, paths.authBaseUrl, {
+    uiLocale: runtime.config.file.site.defaultLocale,
+  })
 
-  // FR-OIDC-15: `iss` is compared as a string by every verifier, so it has to
-  // be byte-equal to what the deployment calls itself. A mismatch here is a
-  // configuration error worth failing loudly on rather than serving.
-  if (rewritten.issuer !== paths.issuer) {
-    runtime.logger.error("discovery issuer does not match server.baseUrl", {
-      advertised: String(rewritten.issuer),
-      expected: paths.issuer,
-    })
-    return Response.json(
-      { error: "server_error" },
-      { status: 500, headers: { "cache-control": "no-store" } }
-    )
-  }
-
+  // There is deliberately no issuer assertion here any more. The old guard
+  // compared `rewritten.issuer` to the expected issuer, and `rewriteDiscovery`
+  // assigns that field from this function's own argument — the branch was
+  // unreachable. Comparing the RAW `document.issuer` instead would break the
+  // one legitimate topology where the two differ: the provider https-coerces
+  // a non-loopback http issuer (`allowInsecureHttp` over a LAN IP), which the
+  // rewrite has always papered over. FR-OIDC-15's real guarantee — `iss`
+  // byte-equal to what this deployment calls itself — is the assignment in
+  // `rewriteDiscovery`, and the tests assert it on the document.
   return Response.json(rewritten, {
     headers: {
-      // Discovery is public and stable; five minutes keeps a restart visible
-      // without making every client fetch it per request.
-      "cache-control": `public, max-age=${JWKS_MAX_AGE_SECONDS}`,
+      // Five minutes still keeps a restart visible, but `private`, not
+      // `public`: the body varies by the host the request arrived on under
+      // `dynamicIssuer`, and a shared cache keyed loosely could hand host A's
+      // document to host B. (`Vary: Host` would be near-inert in caches keyed
+      // on the absolute URL, and names the wrong header anyway — the input is
+      // `X-Forwarded-Host`.)
+      "cache-control": `private, max-age=${JWKS_MAX_AGE_SECONDS}`,
     },
   })
 }

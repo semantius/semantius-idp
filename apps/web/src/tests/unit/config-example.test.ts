@@ -69,6 +69,7 @@ describe("config.example/", () => {
       origin: "https://apps.example.com",
       basePath: "/idp",
       cookiePath: "/",
+      dynamicIssuer: false,
       secure: true,
     })
     const firstParty = config.clients.find((client) => client.firstParty)!

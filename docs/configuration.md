@@ -23,6 +23,7 @@ the process; there is no hot reload and `SIGHUP` is ignored.
 | `server.host` | string | `0.0.0.0` | Listen address. Also settable with HOST. |
 | `server.port` | integer | `3000` | Listen port. Also settable with PORT. |
 | `server.trustProxy` | boolean \| string[] | `false` | Honor X-Forwarded-* from the immediate upstream (true) or from the listed CIDR ranges. Client IP is the rightmost untrusted hop. |
+| `server.dynamicIssuer` | boolean | `false` | Derive the issuer — and every browser-facing URL except e-mail links — per request, from the host the request arrived on, instead of always from `baseUrl`. Off by default, and off is the safe answer. Turning it on asserts four things about the ingress: every hop in front of the IdP OVERWRITES X-Forwarded-Host with the host it matched (nginx passes an inbound one through unless told `proxy_set_header X-Forwarded-Host $host;` — so do AWS ALBs and GCP LBs); the edge forwards only Hosts matching a configured route; the edge serves a CLOSED set of host values; and nothing reaches the container around that edge. Distinct from `trustProxy`, which asserts only the hop INTO the IdP. E-mail links always stay on `baseUrl` (SEC-1): that is what keeps a forged Host out of a password-reset link. |
 | `server.trustedOrigins` | string[] | — | CSRF origin allow-list. Empty by default, which trusts the address each request actually arrived on (its X-Forwarded-Host, or its Host) — what a deployment behind a reverse proxy needs when its public URL is not known at configuration time. Set it to pin the check to named origins instead; `https://*.example.com` matches a subdomain and `*` turns the check off. |
 | `server.allowInsecureHttp` | boolean | `false` | Permit a non-https baseUrl outside localhost. Development only. |
 | `server.shutdownTimeoutSeconds` | integer | `10` | SIGTERM drain budget. |
@@ -73,7 +74,7 @@ the process; there is no hot reload and `SIGHUP` is ignored.
 | `apiKeys.tokenClientId` | string | `idp` | `azp` of JWTs exchanged from an API key. |
 | `apiKeys.tokenTtl` | number \| string | `3600` | Lifetime of a JWT exchanged from a key. |
 | `jwt.algorithm` | `ES256` \| `RS256` | `ES256` | Neon validates ES256 and RS256 only; any other algorithm is rejected at startup. |
-| `jwt.audience` | string \| string[] | — **required** | Default RFC 8707 resource, applied whenever a client sends no `resource` parameter. Becomes the JWT `aud`. |
+| `jwt.audience` | string \| string[] | — **required** | Default RFC 8707 resource, applied whenever a client sends no `resource` parameter. Becomes the JWT `aud`. Any absolute URI — a fixed non-http identifier such as `semantius://api` keeps the audience independent of the issuer host, which matters under `server.dynamicIssuer`. |
 | `jwt.includeUserData` | boolean | `true` | Whether access tokens carry the user's name, address and roles at all. Off removes exactly that set. |
 | `jwt.userClaims` | `email` \| `name` \| `given_name` \| `family_name` \| `roles`[] | — | Subset selector over {email, name, given_name, family_name, roles}. Defaults to all of them. |
 | `jwt.claims` | { … } | `{}` | Static claims merged into access tokens, e.g. `{ "role": "authenticated" }` for Neon/PostgREST. |

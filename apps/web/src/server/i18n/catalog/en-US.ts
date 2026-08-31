@@ -663,6 +663,8 @@ export const enUS = {
         `${uri} must use https. Plain http is only allowed on loopback — http://localhost or http://127.0.0.1.`,
       uriPrivateScheme: (uri: string) =>
         `${uri} uses a private-use scheme, which only a mobile or desktop application may do.`,
+      uriHostTemplate: (uri: string) =>
+        `${uri} misuses the {host} template. {host} must stand for the entire host, exactly once — https://{host}/callback.`,
       endSessionNeedsUri:
         "RP-initiated logout needs at least one post-logout redirect URI. Add one, or turn the option off.",
     },

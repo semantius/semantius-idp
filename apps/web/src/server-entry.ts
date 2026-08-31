@@ -44,6 +44,7 @@ import { loadConfig } from "./server/config/loader"
 import { loadDevEnv } from "./server/dev-env"
 import { SOCKET_ADDRESS_HEADER, clientIpFrom } from "./server/http/client-ip"
 import { clientOrigins } from "./server/http/cors"
+import { resolveRequestIssuer } from "./server/oidc/request-issuer"
 import {
   buildLogEntry,
   isQuietPath,
@@ -176,10 +177,27 @@ const entry: ServerEntry = {
     const requestContext: RequestContext = {
       requestId,
       ipAddress: anonymizeIp(ipAddress),
+      // Resolved ONCE, here at the edge, so every issuer-derived answer this
+      // request produces — the JWT `iss`, discovery, the `{host}` expansions —
+      // reads the same value. The boot issuer unless `server.dynamicIssuer`
+      // is on (see `oidc/request-issuer.ts`).
+      ...(context
+        ? {
+            issuer: resolveRequestIssuer(context.config.base, request, {
+              trustProxy,
+            }),
+          }
+        : {}),
     }
-    const rendered = await withRequestContext(requestContext, () =>
-      handler(unmountServerFnRequest(request), ...rest)
-    )
+    // `clientOrigins` expands `{host}` redirect templates from the current
+    // request's issuer, so it must run INSIDE the request scope — computed
+    // here rather than at the `withSecurityHeaders` call below, which is
+    // after the scope has closed.
+    let formAction: string[] = []
+    const rendered = await withRequestContext(requestContext, () => {
+      formAction = context ? [...clientOrigins(context.config)] : []
+      return handler(unmountServerFnRequest(request), ...rest)
+    })
 
     // `renderRouterToStream` stamps the document with the *router's* status —
     // 404 for a `notFound()`, 500 for an errored match, 200 for everything
@@ -215,8 +233,9 @@ const entry: ServerEntry = {
         https: context?.config.base.secure ?? false,
         basePath: base,
         // The registered redirect origins, so a completed authorization can
-        // actually reach the client that asked for it (SEC-4, D46).
-        formAction: context ? [...clientOrigins(context.config)] : [],
+        // actually reach the client that asked for it (SEC-4, D46). Computed
+        // inside the request scope above, where `{host}` templates expand.
+        formAction,
       }
     )
     // Echoed so an operator reading a 500 in a browser can quote the id that

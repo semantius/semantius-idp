@@ -128,6 +128,42 @@ export function duration(constraints: { min?: number; max?: number } = {}) {
 }
 
 /**
+ * An absolute URI in **any** scheme, with no fragment and no trailing slash —
+ * the RFC 8707 resource-identifier shape. `jwt.audience` and
+ * `oauth.resources` take this rather than {@link absoluteUrl}: an audience is
+ * an identifier compared byte-for-byte, never fetched, and a fixed URI like
+ * `semantius://api` is exactly what keeps it independent of the issuer host —
+ * an audience derived from a URL goes stale the moment the deployment is
+ * reached under a new name.
+ */
+export function absoluteUri() {
+  return z.string().superRefine((value, ctx) => {
+    let url: URL
+    try {
+      url = new URL(value)
+    } catch {
+      ctx.addIssue({
+        code: "custom",
+        message: `\`${value}\` is not an absolute URI.`,
+      })
+      return
+    }
+    if (url.hash !== "") {
+      ctx.addIssue({
+        code: "custom",
+        message: `\`${value}\` must not contain a fragment.`,
+      })
+    }
+    if (value.endsWith("/") && url.pathname === "/") {
+      ctx.addIssue({
+        code: "custom",
+        message: `\`${value}\` must not end with a trailing slash.`,
+      })
+    }
+  })
+}
+
+/**
  * An absolute http(s) URL with no trailing slash and no query/fragment — the
  * shape every issuer, redirect URI and resource identifier must have (SEC-1).
  */

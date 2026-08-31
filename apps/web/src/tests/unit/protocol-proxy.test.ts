@@ -11,9 +11,11 @@
 import { describe, expect, it } from "vitest"
 
 import { clientOrigins, corsFor } from "@/server/http/cors"
-import { rewriteDiscovery } from "@/server/oidc/protocol-proxy"
-import { deriveConfig } from "@/server/config/derive"
+import { withRequestContext } from "@/server/http/request-log"
+import { forwardToAuth, rewriteDiscovery } from "@/server/oidc/protocol-proxy"
+import { deriveConfig, parseBasePath } from "@/server/config/derive"
 import type { IdpConfig } from "@/server/config/derive"
+import type { Runtime } from "@/server/runtime"
 import { clientSchema } from "@/server/config/schema/clients-schema"
 import { configFileSchema } from "@/server/config/schema/config-schema"
 import { BUILT_IN_ROLES } from "@/server/config/schema/roles-schema"
@@ -210,5 +212,116 @@ describe("corsFor", () => {
       corsFor(request(undefined, "OPTIONS"), configWith(), "public").preflight
     ).toBe(true)
     expect(corsFor(request(), configWith(), "public").preflight).toBe(false)
+  })
+})
+
+/**
+ * A host-scoped access token presented on another host (`server.dynamicIssuer`).
+ *
+ * The provider verifies a JWT access token against the issuer the *current*
+ * request resolved to, so a token minted on host A fails jose's `iss` check on
+ * host B — and that shape matches none of the provider's handled errors, so it
+ * surfaces as a bare 500 that reads as our outage. The mapping is deliberately
+ * narrow, and the narrowness is the part worth testing: everything that is not
+ * exactly this shape has to keep the answer the provider gave.
+ */
+
+function claimError(claim: string): Error {
+  // jose's shape, as `onAPIError.onError` stashes it — not an instance of the
+  // real class, because what the mapping keys on is the name and the claim.
+  const error = new Error("unexpected \"iss\" claim value")
+  error.name = "JWTClaimValidationFailed"
+  return Object.assign(error, { claim })
+}
+
+function runtimeAnswering(response: Response): Runtime {
+  return {
+    config: { base: parseBasePath(ISSUER) },
+    auth: { handler: () => Promise.resolve(response) },
+  } as unknown as Runtime
+}
+
+async function forwardWith(
+  response: Response,
+  error: unknown,
+  providerPath = "/oauth2/userinfo"
+): Promise<Response> {
+  return withRequestContext(
+    { requestId: "test", ...(error === undefined ? {} : { authApiError: error }) },
+    () =>
+      forwardToAuth(
+        runtimeAnswering(response),
+        new Request(`${ISSUER}${providerPath}`, {
+          method: "POST",
+          body: "token=x",
+        }),
+        { providerPath }
+      )
+  )
+}
+
+describe("mapCrossHostTokenError", () => {
+  const bare500 = () => new Response("", { status: 500 })
+
+  it("turns the 500 into a 401 invalid_token on userinfo", async () => {
+    const response = await forwardWith(bare500(), claimError("iss"))
+    expect(response.status).toBe(401)
+    expect(await response.json()).toMatchObject({ error: "invalid_token" })
+    expect(response.headers.get("www-authenticate")).toBe(
+      'Bearer error="invalid_token"'
+    )
+    expect(response.headers.get("cache-control")).toBe("no-store")
+  })
+
+  it("does the same on introspection and on revocation", async () => {
+    for (const path of ["/oauth2/introspect", "/oauth2/revoke"]) {
+      const response = await forwardWith(bare500(), claimError("iss"), path)
+      expect(response.status, path).toBe(401)
+    }
+  })
+
+  it("leaves the 500 alone when nothing was stashed", async () => {
+    expect((await forwardWith(bare500(), undefined)).status).toBe(500)
+  })
+
+  it("leaves the 500 alone when the stashed value is not an Error", async () => {
+    expect(
+      (await forwardWith(bare500(), { name: "JWTClaimValidationFailed" })).status
+    ).toBe(500)
+  })
+
+  it("leaves the 500 alone for another error name", async () => {
+    const other = Object.assign(new Error("boom"), { claim: "iss" })
+    expect((await forwardWith(bare500(), other)).status).toBe(500)
+  })
+
+  it("leaves the 500 alone for a claim that is not iss", async () => {
+    // An `aud` or `exp` failure is the caller's ordinary expired-token case
+    // and has nothing to do with which host it arrived on.
+    expect((await forwardWith(bare500(), claimError("aud"))).status).toBe(500)
+  })
+
+  it("never touches a status that is not 500", async () => {
+    // The provider's own 401 for a token it rejected properly, and the
+    // ordinary success both keep their answer even with the error stashed.
+    const unauthorized = await forwardWith(
+      new Response('{"error":"invalid_token"}', { status: 401 }),
+      claimError("iss")
+    )
+    expect(unauthorized.status).toBe(401)
+    const ok = await forwardWith(
+      new Response('{"sub":"u1"}', { status: 200 }),
+      claimError("iss")
+    )
+    expect(ok.status).toBe(200)
+    expect(await ok.json()).toMatchObject({ sub: "u1" })
+  })
+
+  it("is not applied to the token endpoint", async () => {
+    // `/oauth2/token` authenticates a client, not a bearer token; a 500 there
+    // is never this shape and must not be relabeled as a token problem.
+    expect(
+      (await forwardWith(bare500(), claimError("iss"), "/oauth2/token")).status
+    ).toBe(500)
   })
 })

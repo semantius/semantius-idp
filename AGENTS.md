@@ -394,6 +394,22 @@ plugin's `schema` from there; `getAuthTables()`, the DM-1 generator and the
 drift gate see no difference. `admin/endpoints.ts`'s header already said this
 about that file — believe it for schemas too.
 
+**`src/server/oidc/**` has an 85 % *branch* gate and no headroom, and the
+integration suite will not carry a new guard over it.** It sat at 84.82 % the
+day after `dynamicIssuer` landed and failed a release run, because the two new
+files went in with only integration coverage: an integration test drives the
+happy path, so a narrow guard's *refusal* arms stay untaken. The two that did
+it are the shape to watch for — `protocol-proxy.ts`'s `mapCrossHostTokenError`,
+a four-condition guard whose whole point is that it fires for exactly one error
+shape and for nothing else (72.5 %), and `host-template-clients.ts`'s
+fail-closed "no host, drop the template" path, which no request can reach
+because every request has a host (63.6 %). Both are unreachable from a test
+that goes through a real request and trivial from one that does not, so a new
+module here wants its own file in `src/tests/unit/` in the same commit. Note
+which way the arithmetic runs: the gate is over the *directory*, so a small
+well-covered file cannot rescue a big under-covered one, and the number to read
+in a failure is the per-file `% Branch` column, not the total.
+
 **`/gateway/*` is same-origin with the issuer, and everything odd about it
 follows from that** (**D91**, **D92**). It proxies an operator-named upstream on the
 IdP's own hostname, so: cookies are stripped outbound (a browser sends this

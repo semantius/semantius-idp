@@ -9,6 +9,11 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ## [Unreleased]
 
+## [0.6.5] — 2026-09-02
+
+Covers everything since v0.6.1 — v0.6.2 through v0.6.4 were tagged without a
+changelog section of their own.
+
 ### Added
 
 - **`server.dynamicIssuer` — serve a correct issuer on every host a trusted
@@ -1469,7 +1474,8 @@ were questions, and one was "polish every page".
   says where it came from, so it was sending anyone who inspected it to a
   repository that is not this one.
 
-[Unreleased]: https://github.com/semantius/semantius-idp/compare/v0.6.1...main
+[Unreleased]: https://github.com/semantius/semantius-idp/compare/v0.6.5...main
+[0.6.5]: https://github.com/semantius/semantius-idp/compare/v0.6.1...v0.6.5
 [0.6.1]: https://github.com/semantius/semantius-idp/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/semantius/semantius-idp/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/semantius/semantius-idp/compare/v0.4.0...v0.5.0

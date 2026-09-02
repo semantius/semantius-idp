@@ -164,6 +164,17 @@ Decisions that changed a numbered requirement carry their `D` number from
   TypeScript run by bun as CI gates, and this is the one script a human types
   by hand.
 
+### Security
+
+- **The nightly SEC-9 audit went red on two `high` browserslist advisories**
+  (GHSA-c83g-rgw3-j3cx, GHSA-73wf-gq98-2v4g; unbounded cache growth and a
+  prototype write via untrusted custom stats). One path, one major in the
+  tree — `@tanstack/react-start → … → @babel/core →
+  @babel/helper-compilation-targets → browserslist@4.28.2`, build-time only,
+  nothing in the image. Closed per **D85** with an exact global override,
+  `browserslist: 4.28.8`, not by raising `--audit-level`. The `low` on
+  `drizzle-kit>tsx>esbuild` remains the one advisory D85 leaves by name.
+
 ## [0.6.1] — 2026-08-29
 
 ### Added

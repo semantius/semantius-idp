@@ -440,8 +440,11 @@ round trip** from here — and every context it builds drops a schema and applie
 latency before a single assertion. Times a hundred-odd contexts, serialized by
 `fileParallelism: false`: **fifty-four minutes**. Against a container on
 loopback the identical suite is **three minutes**.
-`apps/web/scripts/test-database.ts` starts and reuses one (`idp-test-db`, port
-55432, fsync off) unless `IDP_TEST_DATABASE_URL` is set, which is how CI hands
+`apps/web/scripts/test-database.ts` starts one (`idp-test-db`, port 55432,
+fsync off) and **stops it again when the run that started it exits** — the
+container is kept, stopped, so the next start skips `initdb`; a container it
+found already running it leaves alone, because that one belongs to whoever
+started it. `IDP_TEST_DATABASE_URL` overrides all of it, which is how CI hands
 it the service container it already had. Do not point it back at a hosted
 database to be "production-like": it is a hundred milliseconds a query, and a
 test schema on *that* database is one typo away from the persistent `idp`

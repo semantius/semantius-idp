@@ -9,6 +9,15 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ## [Unreleased]
 
+### Changed
+
+- **The local test database container no longer outlives the test run.**
+  `test-database.ts` stops `idp-test-db` when the command it started it for
+  exits, instead of leaving it running indefinitely. The container is kept
+  (stopped) so the next run's start is a second or two rather than an
+  `initdb`; one that was already running when the script arrived — a
+  concurrent run, or a deliberate manual start — is left untouched.
+
 ## [0.6.5] — 2026-09-02
 
 Covers everything since v0.6.1 — v0.6.2 through v0.6.4 were tagged without a

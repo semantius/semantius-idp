@@ -21,10 +21,16 @@
  *  - **`IDP_TEST_DATABASE_URL` wins.** CI supplies a service container, and
  *    anyone who genuinely wants to run against a hosted database still can.
  *    Nothing here runs in that case.
- *  - **The container is reused, not recreated.** Starting Postgres costs a
- *    second or two; a suite that paid it on every invocation would tempt
- *    people back to the slow path. `docker stop idp-test-db` when you want it
- *    gone — the data is in the container, so stopping it is the reset.
+ *  - **The container is stopped when the run that started it ends, and kept.**
+ *    A run leaves the machine the way it found it: whichever branch below
+ *    started the container stops it again after the command exits. Stopped,
+ *    not removed — the preserved data directory makes the next start a second
+ *    or two instead of an `initdb`, and a stopped container holds no port and
+ *    no CPU. The one case that is left alone is a container that was already
+ *    running when this script arrived: that is either a concurrent run or a
+ *    deliberate manual start, and stopping it out from under either would
+ *    break something this script did not start. `docker rm -f idp-test-db`
+ *    when you want it gone entirely.
  *  - **No Docker is not a failure.** If the daemon is not there, this falls
  *    back to whatever `.env` provides and says so, because a machine without
  *    Docker should still be able to run the suite slowly rather than not at
@@ -90,6 +96,13 @@ async function waitForReady(): Promise<boolean> {
   return false
 }
 
+/**
+ * Whether this invocation is the one that started the container, and therefore
+ * the one responsible for stopping it. Left `false` when the container was
+ * already running — see the header: that one belongs to whoever started it.
+ */
+let startedHere = false
+
 async function ensureDatabase(): Promise<string | undefined> {
   if (!docker("version", "--format", "{{.Server.Version}}").ok) return undefined
 
@@ -98,6 +111,7 @@ async function ensureDatabase(): Promise<string | undefined> {
       break
     case "stopped": {
       if (!docker("start", CONTAINER).ok) return undefined
+      startedHere = true
       break
     }
     case "absent": {
@@ -129,6 +143,7 @@ async function ensureDatabase(): Promise<string | undefined> {
         return undefined
       }
       console.error(`test database: started ${CONTAINER} on port ${PORT}`)
+      startedHere = true
       break
     }
   }
@@ -161,5 +176,11 @@ if (env.IDP_TEST_DATABASE_URL) {
 
 const child = spawn(command, args, { stdio: "inherit", env, shell: true })
 child.on("exit", (code, signal) => {
+  if (startedHere) {
+    // With fsync off Postgres has nothing to flush, so the fast-shutdown grace
+    // of 2 s is generous; -t caps it in case the daemon has gone away.
+    docker("stop", "-t", "2", CONTAINER)
+    console.error(`test database: stopped ${CONTAINER}`)
+  }
   process.exit(signal ? 1 : (code ?? 1))
 })

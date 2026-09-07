@@ -19,8 +19,8 @@ export interface MakeConfigFolderOptions {
   clients?: Record<string, unknown> | null
   roles?: Record<string, unknown> | null
   /**
-   * Which spelling the folder is written in (**D60**). The default is `json`
-   * on purpose: the fallback is the path a folder written before D60 takes,
+   * Which spelling the folder is written in. The default is `json`
+   * on purpose: the fallback is the path a folder written before the `.jsonc` spelling takes,
    * and leaving the unit suite on it keeps that path exercised by everything
    * rather than by one test. The e2e stack and the smoke test write the
    * canonical `.jsonc` for the same reason from the other side — they build
@@ -82,7 +82,7 @@ export function makeConfigFolder(
   }
 }
 
-/** A confidential web client that passes every FR-OIDC-3 rule. */
+/** A confidential web client that passes every rule. */
 export function webClient(
   overrides: Record<string, unknown> = {}
 ): Record<string, unknown> {
@@ -90,14 +90,15 @@ export function webClient(
     clientId: "web-app",
     name: "Web App",
     type: "web",
-    clientSecret: "s".repeat(40),
+    // Generated-looking on purpose: a file secret has to be.
+    clientSecret: "4e1d9c7b2a6f8035e9d1c3b7a5f2e8d6c4b0a917",
     redirectUris: ["https://app.example.com/callback"],
     postLogoutRedirectUris: ["https://app.example.com/"],
     ...overrides,
   }
 }
 
-/** A public SPA client that passes every FR-OIDC-3 rule. */
+/** A public SPA client that passes every rule. */
 export function spaClient(
   overrides: Record<string, unknown> = {}
 ): Record<string, unknown> {

@@ -11,13 +11,13 @@ import { cn } from "@workspace/ui/lib/utils"
 import { usePendingForm } from "@/components/common/pending-form"
 
 /**
- * Form pieces shared by the public pages (FR-ACCT-2, WCAG 2.1 AA).
+ * Form pieces shared by the public pages (WCAG 2.1 AA).
  *
  * Every input is labeled, carries the right `autocomplete` token so password
  * managers behave, and describes its own hint and error through
  * `aria-describedby`. The password field's visibility toggle is a plain
  * checkbox, so the control is already correct on the first paint, before
- * hydration. It does not have to survive scripting being off (D31).
+ * hydration. It does not have to survive scripting being off.
  *
  * Inside a `PendingForm` both fields go `readOnly` while the post is in
  * flight. `readOnly` rather than `disabled`: a disabled field is dropped from
@@ -67,7 +67,7 @@ export function FormAlert({
 }
 
 /**
- * A refusal that arrives with the page, focused so it is heard (**D93**).
+ * A refusal that arrives with the page, focused so it is heard.
  *
  * `FormAlert` is an `<AlertDescription aria-live="polite">`, and **a live
  * region does not announce content that is already there on the first paint**.
@@ -157,7 +157,7 @@ export function TextField({
 }
 
 /**
- * A password field with an in-field visibility toggle (R-1, FR-ACCT-2).
+ * A password field with an in-field visibility toggle.
  *
  * The control is the conventional eye / eye-off button sitting inside the
  * field, right-aligned. Underneath it is a visually-hidden but focusable
@@ -194,7 +194,7 @@ export function TextField({
  *   therefore only ever worked in Firefox. It stays as a one-class fallback
  *   that covers Firefox before hydration; it is not the mechanism.
  *
- * Scripting being off is not a supported case (D31). The `<noscript>` rule
+ * Scripting being off is not a supported case. The `<noscript>` rule
  * below still withdraws the control, because it costs nothing and stops the
  * toggle renaming itself "Hide password" over a field that is still masked —
  * which would lie to a screen reader.

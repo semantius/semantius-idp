@@ -6,16 +6,16 @@ import { authRequest, createTestContext, sessionCookie } from "./harness"
 import type { TestContext } from "./harness"
 
 /**
- * SEC-6 — the trail exists in the database, not only in the mapping table.
+ * the trail exists in the database, not only in the mapping table.
  *
  * `audit-mapping.test.ts` asserts which endpoint produces which event; this
  * asserts the rows are actually written, with an actor where there is one and
  * without one where there must not be. The second half matters as much: a
  * failed sign-in must not record *who* failed, because that would turn the
- * audit log into the account-existence oracle SEC-7 keeps the response from
+ * audit log into the account-existence oracle the spec keeps the response from
  * being.
  */
-describe("audit trail (SEC-6)", () => {
+describe("audit trail", () => {
   let ctx: TestContext
   const password = "correct horse battery staple"
   const email = "audited@example.com"
@@ -45,7 +45,7 @@ describe("audit trail (SEC-6)", () => {
 
   it("records a self-registration, which nothing did before", async () => {
     // Only the bootstrap step ever wrote `signup.created`; a user signing
-    // themselves up left no row. Since D66 the name is the user's own:
+    // themselves up left no row. the name is the user's own:
     // `signup.created` means self-service and nothing else, and an account
     // made *for* somebody — by an administrator or by the first-run wizard —
     // is `user.created`.
@@ -80,7 +80,7 @@ describe("audit trail (SEC-6)", () => {
     expect(success[0]!.actorUserId).toBe(user!.id)
   })
 
-  it("records a failed sign-in without naming anyone (SEC-7)", async () => {
+  it("records a failed sign-in without naming anyone", async () => {
     for (const attempt of [
       { email, password: "not the right password at all" },
       { email: "nobody-here@example.com", password },
@@ -155,7 +155,7 @@ describe("audit trail (SEC-6)", () => {
  * anyway** — so an unconditional id would mint success rows naming a
  * victim's session for a revocation that never happened.
  */
-describe("what a session.revoked row says (SEC-6)", () => {
+describe("what a session.revoked row says", () => {
   let ctx: TestContext
   const password = "correct horse battery staple"
 

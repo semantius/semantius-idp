@@ -1,5 +1,5 @@
 /**
- * Refuses a Bun version that disagrees with itself (OPS-1, SEC-9).
+ * Refuses a Bun version that disagrees with itself.
  *
  * Bun is not a build tool here — it is **the runtime**. The final image is
  * `oven/bun:<version>-slim` with Bun as PID 1, the CLI and the server are
@@ -14,7 +14,7 @@
  *   .github/workflows/release.yml      the Bun that runs the smoke test
  *
  * Nothing checked that they agreed until a release workflow added the fifth
- * copy by hand (**D73**). Drift here is quiet and specific: the smoke test
+ * copy by hand. Drift here is quiet and specific: the smoke test
  * would pass on one Bun while the image shipped another, and the difference
  * only shows up as a runtime failure in a deployment nobody can reproduce —
  * on **arm64**, where Bun is a different binary altogether.

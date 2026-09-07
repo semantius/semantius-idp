@@ -1,5 +1,5 @@
 /**
- * A real OpenID Provider, on a real port (TST-7).
+ * A real OpenID Provider, on a real port.
  *
  * Social sign-in is the one flow that cannot be tested by calling our own
  * code: the value is in what happens when a *provider* answers. So this is a
@@ -27,7 +27,7 @@
  *
  * Identity is per call: {@link MockOidcProvider.setIdentity} decides who the
  * next callback returns, so one listener serves a whole suite — including the
- * D24 case where two different subjects claim the same address.
+ * The case where two different subjects claim the same address.
  */
 
 import { createServer } from "node:http"

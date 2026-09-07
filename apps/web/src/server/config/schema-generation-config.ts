@@ -1,6 +1,6 @@
 /**
  * A fixed, minimal configuration used only to build the auth *options* for
- * schema generation (DM-1).
+ * schema generation.
  *
  * The generated schema must depend on the plugin list and nothing else — if it
  * varied with an operator's `config.jsonc`, two deployments would need different

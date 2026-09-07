@@ -11,15 +11,15 @@ import type { Catalog } from "@/server/i18n"
 
 /**
  * A `PendingForm` that asks before its page is left with unsaved changes
- * (**D93**).
+ *.
  *
  * Not theoretical, and not a new hazard invented by the modal-to-page move —
  * a *bigger* one. Escape already discarded a dialog, so nothing protected is
- * being lost; what changes is exposure. Since **D82** the sidebar is
- * permanently on screen with eight one-click destinations, D93 adds a
+ * being lost; what changes is exposure. the sidebar is
+ * permanently on screen with eight one-click destinations, the spec adds a
  * breadcrumb with two more, and Back now means something. The twelve-field
  * client form is exactly the content that hurts: a redirect-URI list is copied
- * out of another system, and **D62** built an entire one-shot draft stash so a
+ * out of another system, and the spec built an entire one-shot draft stash so a
  * *server refusal* would not cost it. Losing the same form to a stray sidebar
  * click would be incoherent.
  *

@@ -1,5 +1,5 @@
 /**
- * Structured logging (SEC-5).
+ * Structured logging.
  *
  * One JSON object per line on stdout, or a readable form for development.
  * Hand-rolled rather than pulled from a library because the redaction rules are
@@ -81,22 +81,22 @@ const REDACTED_KEYS = [
 
 const REDACTION = "[redacted]"
 
-/** Paths whose query string is stripped before a URL is logged (SEC-5). */
+/** Paths whose query string is stripped before a URL is logged. */
 /**
- * Paths whose query string is dropped wholesale (SEC-5).
+ * Paths whose query string is dropped wholesale.
  *
  * Matched **anywhere in the path**, not only at the start, because under a
  * sub-path deployment the protocol endpoints are at `/idp/oauth2/...` — and a
  * prefix check would have quietly logged every authorization code the moment
- * the mount path was set (OPS-10).
+ * the mount path was set.
  *
- * The list covers more than SEC-5 names literally, and each addition is a
+ * The list covers more than the spec names literally, and each addition is a
  * parameter that is a credential in its own right:
  *
  *  - `/reset-password` and `/verify-email` carry single-use tokens;
  *  - `/change-password`, `/login`, `/two-factor` and `/consent` carry the
  *    signed `oauth_query` continuation, which is a bearer of the whole
- *    authorization request (FR-OIDC-9).
+ *    authorization request.
  *
  * Dropping the whole query rather than naming sensitive parameters is
  * deliberate: the set of parameters grows with every plugin, and a redaction
@@ -216,7 +216,7 @@ export function safeUrlForLog(url: string): string {
 }
 
 /**
- * Anonymizes a client IP for logging (SEC-5): the last octet of an IPv4 address
+ * Anonymizes a client IP for logging: the last octet of an IPv4 address
  * and everything below the /64 of an IPv6 address are dropped, which keeps the
  * value useful for rate-limit forensics without storing a personal identifier.
  */

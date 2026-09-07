@@ -1,4 +1,4 @@
-# The e2e overlay (TST-6, D30).
+# The e2e overlay.
 #
 #   docker compose -f docker-compose.yml -f docker-compose.e2e.yml up
 #
@@ -12,7 +12,7 @@
 services:
   idp:
     environment:
-      # D30. Swaps the Resend transport for one that writes each message to
+      # Swaps the Resend transport for one that writes each message to
       # disk as JSON instead of sending it. Honored only when e-mail would
       # otherwise work, so the config still needs an API key it never calls.
       IDP_EMAIL_TRANSPORT: capture
@@ -22,13 +22,13 @@ services:
       # Writable, and **not** under `/tmp`: `/tmp` is a tmpfs in the base file,
       # and a bind mount cannot be placed inside one. This is the only path in
       # the container the host can read afterwards, which is the entire point —
-      # the alternative D30 rejected was an HTTP endpoint that returns
+      # the alternative rejected was an HTTP endpoint that returns
       # password-reset links from the shipped image.
       - ${IDP_MAIL_HOST_DIR:?set IDP_MAIL_HOST_DIR for the e2e overlay}:/mail
 
   caddy:
     volumes:
-      # The sub-path project drives the OPS-10 deployment: `/idp/*` proxied
+      # The sub-path project drives the spec deployment: `/idp/*` proxied
       # without stripping, plus the origin-root RFC 8414 route. Swapping the
       # file here is what makes the second Playwright project a different
       # deployment rather than the same one on another port.

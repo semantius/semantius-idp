@@ -5,11 +5,11 @@ import { NoticeToast } from "@/components/common/notice-toast"
 
 /**
  * The first paint, which is the only half of this component a node-environment
- * test can see (**D71**).
+ * test can see.
  *
  * `NoticeToast` is deliberately client-only: it renders nothing on the server
  * and does all of its work — adding the toast, then stripping the parameter
- * from the address bar — in a mount effect. D31 allows that, because a success
+ * from the address bar — in a mount effect. The spec allows that, because a success
  * confirmation is not something the page needs before JavaScript arrives; what
  * would not be allowed is the *first paint* containing the sentence, because
  * then the toast that follows is a second copy of it.
@@ -30,7 +30,7 @@ describe("NoticeToast, before hydration", () => {
   })
 
   it("never server-renders the subject either", () => {
-    // **D78** put the account's address on the toast as its description. The
+    // An earlier fix put the account's address on the toast as its description. The
     // same rule applies to it as to the sentence: the first paint contains
     // neither, or the toast that follows is a second copy of both.
     const html = render(

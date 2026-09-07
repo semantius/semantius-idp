@@ -1,6 +1,5 @@
 /**
- * What the buttons on a user's admin page actually do (FR-ADMIN-2..6,
- * FR-KEY-1, FR-2FA-2, FR-OIDC-12).
+ * What the buttons on a user's admin page actually do.
  *
  * One dispatcher rather than a handler per action, for a reason that is about
  * safety and not tidiness: every one of these is a `POST` to the same URL, and
@@ -10,7 +9,7 @@
  *
  * Everything goes **through Better Auth's own endpoints**, never straight to
  * the database. That is what puts `admin/guard.ts` in front of the write and
- * the SEC-6 trail behind it; a direct `update` here would be a way to ban the
+ * the spec trail behind it; a direct `update` here would be a way to ban the
  * last administrator that the API refuses.
  */
 
@@ -26,7 +25,7 @@ export interface AdminActionInput {
   request: Request
   form: Record<string, string>
   /**
-   * The repeated fields, as `readFormMulti` reads them (**D93**).
+   * The repeated fields, as `readFormMulti` reads them.
    *
    * One field needs it — `roles`, which is a checkbox group — and the join
    * used to live in the route: `$userId.tsx` did `readFormMulti` *and*
@@ -50,7 +49,7 @@ export interface AdminActionOutcome {
   /** An error code for `messageForErrorCode` when it did not. */
   error?: string
   /**
-   * The account the notice is about, so the toast can name it (**D78**).
+   * The account the notice is about, so the toast can name it.
    *
    * Only ever set where the page the notice lands on cannot work the address
    * out for itself. Every action that comes back to `/admin/users/:id` can —
@@ -127,7 +126,7 @@ export async function runAdminAction(
       )
 
     case "delete": {
-      // Read **before** the removal (**D78**). "The account has been deleted."
+      // Read **before** the removal. "The account has been deleted."
       // lands on the list, where the row that could answer *which* account is
       // the one thing that is certainly gone — so the address is taken while
       // it still exists and carried to the toast. A read, not a write: the
@@ -157,7 +156,7 @@ export async function runAdminAction(
       )
       if (!result.ok) return failed(result)
       // Nothing else here. Both halves of "sign out everywhere" — the audit
-      // row (**D66**) and the OAuth revocation (**D67**) — belong to the
+      // row and the OAuth revocation — belong to the
       // guard's after-hook, which runs for every caller of the endpoint. This
       // is where the revocation used to live, which is exactly why a direct
       // API call did not get one.
@@ -196,9 +195,9 @@ export async function runAdminAction(
         input.request
       )
       if (!set.ok) return failed(set)
-      // FR-ADMIN-2: a password an administrator chose is temporary by
+      // a password an administrator chose is temporary by
       // definition — the user has to replace it before they can do anything
-      // else (FR-AUTH-4), and `endsForcedPasswordChange` already expects it.
+      // else, and `endsForcedPasswordChange` already expects it.
       const flag = await callAuth(
         input.runtime,
         "/admin/update-user",
@@ -207,7 +206,7 @@ export async function runAdminAction(
       )
       if (!flag.ok) return failed(flag)
       // `password.changed` comes from the guard's hook on
-      // `/admin/set-user-password` (**D66**). The `temporary: true` metadata
+      // `/admin/set-user-password`. The `temporary: true` metadata
       // this used to add is gone with it: it was true of *this route*, which
       // follows the password with a second call setting `mustChangePassword`,
       // and is not derivable from the endpoint. A flag that means "probably"
@@ -216,13 +215,13 @@ export async function runAdminAction(
     }
 
     /**
-     * FR-ADMIN-2's "edit (name, e-mail, verified flag)", which had no
+     * the spec's "edit (name, e-mail, verified flag)", which had no
      * implementation at all: the only `/admin/update-user` call in the codebase
      * set `mustChangePassword`, so an administrator could ban, delete and
      * re-role an account but not correct a typo in its address.
      *
      * The display name is **derived** from the two parts rather than typed
-     * (D49) — the same rule the account page and the sign-up form follow, so a
+     * — the same rule the account page and the sign-up form follow, so a
      * name an administrator fixes reads the same way as one its owner did.
      */
     case "edit-profile": {
@@ -258,6 +257,10 @@ export async function runAdminAction(
       await input.runtime.audit.record({
         action: "user.profile_changed",
         outcome: "success",
+        // A literal, not `actorTypeFor`: this file is reached only
+        // by the admin pages' own form posts, which `requireSession` admits
+        // on a cookie. A script calls `/admin/update-user` and is typed by
+        // the guard's hook.
         actorType: "session",
         actorUserId: input.actorId,
         target: { type: "user", id: input.userId },
@@ -268,7 +271,7 @@ export async function runAdminAction(
 
     case "set-roles": {
       // The checkbox group, read as a list rather than reassembled from a
-      // string the caller had to remember to build (**D93**). `/admin/set-role`
+      // string the caller had to remember to build. `/admin/set-role`
       // takes an array, so nothing is joined at all any more.
       const roles = input
         .list("roles")
@@ -294,7 +297,7 @@ export async function runAdminAction(
       if (!result.ok) return failed(result)
       // No audit row here: the guard's after-hook already writes
       // `impersonation.started` for `/admin/impersonate-user`, and this wrote
-      // a second one for the same event on the UI path (**D66**).
+      // a second one for the same event on the UI path.
       // Into the impersonated user's own account area, which is the only place
       // the session is useful — and which shows the banner on every page.
       return { redirect: "/account", cookies: result.cookies }
@@ -311,6 +314,7 @@ export async function runAdminAction(
       await input.runtime.audit.record({
         action: "apikey.revoked",
         outcome: "success",
+        // Same as `user.profile_changed` above: a form post, so a cookie.
         actorType: "session",
         actorUserId: input.actorId,
         // The **key** is what was acted on, and the owner is context. This
@@ -366,6 +370,6 @@ function failed(result: AuthCallResult): AdminActionOutcome {
   // a refusal explains itself instead of saying "something went wrong". The
   // admin variant because everything routed through here is an authenticated
   // administrator's action: an unrecognized refusal is a failed request, not a
-  // wrong password (**D70**).
+  // wrong password.
   return { error: adminErrorCodeFor(result) }
 }

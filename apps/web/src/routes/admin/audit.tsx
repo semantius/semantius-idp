@@ -30,7 +30,7 @@ import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 import { LocalTime } from "@/components/common/local-time"
 
 /**
- * `/admin/audit` — the trail (SEC-6).
+ * `/admin/audit` — the trail.
  *
  * Paged by cursor rather than by page number, and the "older events" link
  * carries the timestamp of the last row shown. An offset walk over a table

@@ -1,5 +1,5 @@
 /**
- * What `/banned` is told about a suspension (FR-ADMIN-4).
+ * What `/banned` is told about a suspension.
  *
  * The page has always had the wording for a reason and an expiry and was never
  * given either, so a suspended user saw a bare "this account is suspended" and
@@ -16,11 +16,11 @@
  * find the row; every value on the page comes from the database. This is not a
  * disclosure either: the ban is checked when the session is created, so the
  * password has already been verified and the only person who can reach it is
- * the account's owner — SEC-7's uniform refusals are untouched.
+ * the account's owner — the spec's uniform refusals are untouched.
  *
  * A server module rather than a function inside `routes/login.tsx`, because a
  * route file's imports are isomorphic: a top-level `drizzle-orm` import there
- * is one tree-shaking decision away from the client bundle, which is the R-4
+ * is one tree-shaking decision away from the client bundle, which is the spec
  * failure the bundle gate exists to catch.
  */
 

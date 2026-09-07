@@ -1,6 +1,6 @@
 /**
  * The refusals that keep an administrator from locking everyone out
- * (FR-ADMIN-3, FR-ROLE-3).
+ *.
  *
  * The matrix matters more than any single case: the rules interact, and the
  * interesting failures are the combinations — a lone admin who is also

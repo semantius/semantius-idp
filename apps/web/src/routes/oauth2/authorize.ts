@@ -9,14 +9,14 @@ import { getRuntime } from "@/server/runtime"
 import type { Runtime } from "@/server/runtime"
 
 /**
- * `{issuer}/oauth2/authorize` (FR-OIDC-4, FR-OIDC-9).
+ * `{issuer}/oauth2/authorize`.
  *
  * The gate chain runs **before** the request reaches the provider, because the
  * provider's own check is "is there a session" and nothing more. With
  * `skipConsent` on, a live session belonging to a suspended user — or to one
  * who has never completed a forced password change — would be handed an
  * authorization code. A session outlives the state that should have ended it,
- * and this is where that is caught (FR-AUTH-4, FR-SIGNUP-2).
+ * and this is where that is caught.
  *
  * A gated request comes back to *this URL*, query and all, so the flow
  * restarts with every precondition satisfied rather than being reconstructed

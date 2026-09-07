@@ -34,7 +34,7 @@ import type { Catalog } from "@/server/i18n"
 import type { UiContext } from "@/server/ui-context"
 
 /**
- * The chrome `/admin/*` and `/account/*` share (**D82**).
+ * The chrome `/admin/*` and `/account/*` share.
  *
  * It lives in the two **layout routes**, not in the page shells, and that is
  * the whole point of the change. `SidebarProvider` holds open/collapsed and
@@ -45,10 +45,10 @@ import type { UiContext } from "@/server/ui-context"
  * would remount the provider, snap the sidebar back open and stack another
  * listener.
  *
- * It also supersedes **D66**'s deliberate duplication of the impersonation
+ * It also supersedes **the spec's deliberate duplication of the impersonation
  * banner across the two shells. That was the right call while the two shells
  * were the two ways to reach a signed-in page; now there is one component and
- * FR-ADMIN-5 holds by construction rather than by both copies being kept.
+ * The impersonation banner rule holds by construction rather than by both copies being kept.
  */
 
 /** The cookie `ScopedSidebarProvider` writes; `http/sidebar-cookie.ts` reads it. */
@@ -70,7 +70,7 @@ export interface ShellNavItem {
  * never reads it; nothing here reads it either, and the file is registry
  * output, so that write is accepted rather than patched out. Ours is a
  * separate name **scoped to the mount path**, so a sub-path deployment
- * (OPS-10) and a root one on the same host keep their own preference instead
+ * and a root one on the same host keep their own preference instead
  * of overwriting each other's.
  *
  * The name is repeated as a literal rather than imported: `sidebar-cookie.ts`
@@ -254,9 +254,9 @@ function ShellSidebar({
 }
 
 /**
- * Focus the page heading on every route change but the first (**D93**).
+ * Focus the page heading on every route change but the first.
  *
- * Until D93 every admin action opened a dialog and Base UI focused into it.
+ * Before the full-page forms every admin action opened a dialog and Base UI focused into it.
  * The moment Edit becomes a `<Link>` inside a `DropdownMenuItem`, activating it
  * unmounts the focused element: focus falls to `<body>`, and a screen reader
  * announces nothing at all — on every one of the new routes at once.
@@ -315,7 +315,7 @@ export function SidebarLayout({
   indexTo: string
   user: { name: string; email: string }
   crossLink?: NavUserCrossLink
-  /** FR-ADMIN-5: an impersonated session says so on every page it renders. */
+  /** an impersonated session says so on every page it renders. */
   impersonated?: boolean
   /** Read from the browser's cookie on the server, so the first paint is right. */
   defaultOpen: boolean
@@ -324,14 +324,14 @@ export function SidebarLayout({
   // The brand is the trail's root in both areas, matching the reference app —
   // and it *is* a third copy of one string, after the sidebar header and the
   // document title. Kept deliberately: "identical to semantius-app" was the
-  // ask and this is the visible half of it (**D93**).
+  // ask and this is the visible half of it.
   const declared = useCrumbs()
   const crumbs: Crumb[] = [{ label: brand, to: indexTo }, ...declared]
   useRouteChangeFocus()
 
   return (
     /**
-     * **The shell is out of the document's flow** (**D95**).
+     * **The shell is out of the document's flow**.
      *
      * It was `h-svh` *in* the flow, which is a box exactly as tall as the
      * viewport sitting inside a document that is then exactly as tall as the
@@ -344,7 +344,7 @@ export function SidebarLayout({
      * the outer one. Fixed, the shell contributes nothing to the document's
      * scrollable area — a fixed box cannot make the viewport scroll — so
      * there is exactly one scrollbar on every page of both areas, and it is
-     * the one D87 put there.
+     * the one the console fix put there.
      *
      * `inset-x-0 top-0 h-svh` rather than `inset-0`: `inset-0` would resolve
      * against the *large* viewport, so on a phone the bottom of the shell
@@ -381,7 +381,7 @@ export function SidebarLayout({
         // are wider than the viewport and would otherwise push the whole shell
         // sideways instead of scrolling inside their own container.
         //
-        // **A definite height, not a minimum** (**D87**). A minimum leaves the
+        // **A definite height, not a minimum**. A minimum leaves the
         // box *indefinite*, and a percentage height resolves against nothing.
         // `/admin/database`'s panel groups set `height: 100%` on themselves;
         // against the registry's `min-h-svh` alone that computed to `auto`, so
@@ -389,7 +389,7 @@ export function SidebarLayout({
         // the SQL editor — two panes with `flex-basis: 0` inside a group with
         // no height — rendered at zero and disappeared. It used to be spelled
         // `h-svh` here, twice, with a `calc()` subtracting the banner. Since
-        // **D95** it is the remainder of a flex column whose height is the
+        // It is the remainder of a flex column whose height is the
         // viewport, which is definite in the same way and cannot disagree with
         // the banner's actual height. `min-h-0` is load-bearing and replaces
         // the registry's `min-h-svh`: a flex item's automatic minimum size is
@@ -420,10 +420,10 @@ export function SidebarLayout({
             finally gets one — it had no main landmark at all. `min-w-0` so a
             wide table shrinks the flex item instead of the shell. */}
           <SidebarInset className="min-w-0">
-            {/* **The breadcrumb goes here, not in the page** (**D93**).
+            {/* **The breadcrumb goes here, not in the page**.
                 Removing the area's `<h1>` from this row — so the page can own
                 it — would otherwise leave one 28-pixel button in a 64-pixel
-                bar. The stronger reason is D87: this header sits *outside* the
+                bar. The stronger reason is the console: this header sits *outside* the
                 scroll container below it, so a trail rendered in the page body
                 scrolls away exactly when a long form makes you want it. This
                 is also what the registry's own sidebar blocks do, and it is a
@@ -431,7 +431,7 @@ export function SidebarLayout({
                 in the page and whose pages do not fill the window. */}
             <header className="flex h-16 shrink-0 items-center gap-2 px-4 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
               {/* The catalog string wins over the registry component's own
-                sr-only "Toggle Sidebar" (FR-I18N-1). */}
+                sr-only "Toggle Sidebar". */}
               <SidebarTrigger aria-label={t.common.toggleSidebar} />
               <Separator
                 orientation="vertical"
@@ -439,7 +439,7 @@ export function SidebarLayout({
               />
               <ShellBreadcrumb label={t.common.breadcrumb} crumbs={crumbs} />
             </header>
-            {/* **The scroll container is here, not the document** (D87).
+            {/* **The scroll container is here, not the document**.
                 With the shell pinned to the viewport, a page taller than it
                 has to scroll somewhere, and this is the box that leaves the
                 sidebar and the header row where they are. `min-h-0` is what

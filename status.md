@@ -1,11 +1,10 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-08-30 · **Branch:** `main` · **Head:** the D101–D104 commit below
-(check it with `git log -1`; a SHA written here cannot name the commit that
-carries it), last tag **v0.6.2**
-**Plan:** `~/.claude/plans/strange-that-1-is-refactored-hamster.md`
-(session & token visibility/revocation)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D104**
+**As of:** 2026-09-02 · **Branch:** `main` · **Head:** the security-review
+working tree on top of `45e02da` (uncommitted, awaiting the owner's review —
+see "The pre-1.0 security review" below), last tag **v0.6.5**
+**Plan:** `~/.claude/plans/we-are-close-to-cozy-wand.md` (the security review)
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D127**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
 gate; API gateways (FR-GW, **D91**/**D92**) landed on 2026-08-29, and the
@@ -127,6 +126,223 @@ README quick start against it, and confirming `latest` from outside.
   next boot serves the first-run setup page, which is now the only way an
   administrator is ever created. No credential to recover, and no command that
   changes one.
+
+---
+
+## CI pins, a generated `.env`, and a Postgres role that is not a superuser (2026-09-02, **D109**, **D121**, **D122**)
+
+Three deployment-side findings from the security review, all proved rather than
+argued. **Every `uses:` in both workflows was a tag** — eleven floating majors —
+and the SEC-9 gate never read the files; resolving them found
+`anchore/sbom-action@v0` sitting on v0.24.0 five days after v0.24.2 shipped. All
+thirteen are commit SHAs now (tag in a trailing comment, each confirmed through
+`/commits/{sha}`), `check-pinned-deps.ts` refuses anything else on a `uses:`
+line, and both workflows open with `permissions: contents: read`.
+**`idp-create` shipped `IDP_SECRET=` empty** and the first `up --wait` failed on
+it; `docker/idp-setup-env.{sh,cmd,ps1}` (the sibling's scripts, ported)
+generate every secret, splice the database password into `DATABASE_URL`, and
+never touch an existing `.env`. **The compose Postgres ran the IdP as its
+bootstrap superuser**, and a `READ ONLY` transaction did not stop
+`COPY … TO PROGRAM` or `pg_read_file`; `initdb/10-idp-role.sh` creates `idp`
+NOSUPERUSER on a fresh volume, `IDP_DB_PASSWORD` (fallback `POSTGRES_PASSWORD`)
+keeps the smoke and e2e stacks unedited. Verified: `pnpm docker:smoke` green on
+the new compose; a throwaway project where the app migrated as `idp`,
+`rolsuper` = `f`, all three probes `permission denied`, volume removed after;
+the generator's create / no-op / missing-key runs on a scratch copy, both
+platforms, CRLF preserved.
+
+---
+
+## Security review, stream S2 — the admin API, the trail and the console (2026-09-02, **D108**, **D109**, **D113**)
+
+Three findings and three bug fixes, each with a test that failed first
+(`integration/security-review-admin.test.ts`, `unit/statement-scrub.test.ts`).
+**D108**: `/admin/update-user {status: "pending"}` parked the last
+administrator — the guard mapped only `rejected`, `isUsableAdmin` counts every
+non-`active` status — and the body reached every column of `user`. Any
+non-`active` status is a rejection now, and the endpoint writes an allow-list
+of twelve columns, refusing the rest by name. **D109**: the console's READ
+ONLY transaction is not a privilege boundary — `COPY … TO PROGRAM` ran as the
+compose bootstrap superuser — so start-up probes `pg_roles.rolsuper` and
+warns (`database.console_as_superuser`) into `runtime.warnings`; D83's
+comment in `database.ts` is rewritten. **D113**: the recorded statement was
+never scrubbed (`redactFields` keys on names, the field is `query`) and
+`actorType` was `"session"` at seventeen sites; `scrubStatementForAudit` and
+`actorTypeFor` fix both. Also: the setup log line drops the e-mail, the
+anonymous UI context drops `adminDatabaseEnabled`, `AuditEvent` drops
+`ipAddress`. Verified: the new file (13), the touched files, lint and tsc on
+every changed file. **Left open**: Better Auth's own `/admin/*` answer `401`
+to an API key (`adminMiddleware` discards the key-built session), which
+`docs/admin-api.md` contradicts.
+
+---
+
+## Security review, stream S5 — sign-up, the consent default, branding (2026-09-02, **D116**, **D120**, **D124**, **D126**)
+
+D-B landed as **D120** — `/admin/clients/new` ticks "Require consent" through
+`NEW_CLIENT_DEFAULTS` in `lib/client-rules.ts`; nothing stored or
+file-declared moves. D-C (**D116**) turned out to be half-closed already:
+Better Auth 1.7.1 answers a duplicate sign-up with a generic 200 whenever
+`autoSignIn` is off, which `instance.ts` sets for everyone, so the redirect
+shape was uniform in every mode and the fail-first run passed on HEAD. What
+was missing landed: the owner notice (template 11, throttled 1/hour per
+address), the `signup.duplicate` audit row, and the degraded-mode refusal the
+owner asked for. **D124** caps a trusted browser at three windows from first
+trust through `verification` database hooks; **D126** puts a no-op CSP on
+every branding response and memoizes the folder; F31 widens the draft
+stash's never-list to code/PIN/backup names. F18 is accepted (statement in
+SECURITY.md). Verified: five unit files (76) and the S5 integration file
+green; `e2e/admin.spec.ts` now expects **Yes** in "Consent required".
+
+---
+
+## The gateway, hardened three ways (2026-09-02, **D110**, **D111**, **D118**)
+
+**Traversal.** Nothing in the chain was wrong on its own: the URL parser
+resolves a literal `../` before routing, TanStack decodes the splat
+(`decodeURIComponent`), `fetch` normalizes again — and `..%2fadmin` on a
+gateway scoped to `…/v1` reached `…/admin`. The built target is now parsed
+and must sit under `<url>/`; anything else is `400 invalid_path`, and what
+passes is forwarded byte for byte. **Link-local.** D91's private-address
+reach stands (the sibling's upstream is a compose name); `169.254/16` and
+`fe80::/10` alone are refused — a literal at config time, a hostname per
+request against the resolved address, through an injectable `resolveImpl` so
+the unit suite never touches DNS. **D118**: the response deny-list grew by
+every origin-scoped header (`link` deliberately kept), `resource` is an
+opt-in `aud` per gateway carried into the mint by an `AsyncLocalStorage`
+scope (`/token` takes no parameters), and `server.maxRequestBodyBytes`
+caps forwarded bodies without buffering. Verified: 78 unit, 12 new
+integration, the three existing gateway suites green; migration `0003`.
+
+---
+
+## Rate limiting, the dynamic issuer and the role catalog (2026-09-02, security review S3, **D105**, **D106**, **D112**, **D114**, **D115**, **D119**, **D125**)
+
+Seven findings in the protocol and configuration layer, each fixed on a test
+that failed first. The two that mattered: `/oauth2/token` counted a client's
+bucket on the *client id in the request*, so anyone could name a client and
+take its token endpoint offline for as long as they cared to post (D112) —
+the bucket now counts only grants the provider honored, with a separate
+per-address bucket for refusals. And two address resolvers disagreed: behind
+Traefik → Caddy under `trustProxy: true`, Better Auth saw a two-hop chain,
+trusted none of it, and put every user in one `no-trusted-ip` sign-in bucket
+(D115) — the edge now resolves once and overwrites the private header every
+limiter reads, `true` still meaning leftmost, which the sibling depends on.
+Also: `server.allowedHosts` for `dynamicIssuer` (D106, optional; D105 belatedly
+records the flag), warnings for the two silent off-switches (D114), an
+indexable refresh-lifetime sweep (D119), generated-looking file secrets
+(D125 — a placeholder marker is a warning, so an old development `.env`
+still boots), RFC 7009 keyed on the error code, and the admin plugin handed
+the catalog. Verified: the new `security-review-protocol.test.ts` (7), unit
+(300 across 12 files), `tokens`/`dynamic-host`/`security`/`admin`/`setup`
+suites green.
+
+---
+
+## Security review, S1: sessions and CSRF (2026-09-02, **D107**, **D117**)
+
+Five findings from the pre-v1.0.0 review, one new test file
+(`security-review-session.test.ts`, 14 cases, each failing on the tree before
+its fix). **A forced password change was a page, not a wall** (D107): the
+cookie worked everywhere from `/login`'s first response, and a user on a
+temporary password could mint an API key. Three gates now — `requireSession`,
+the two layout loaders, and a before hook on every cookie-bearing write or
+mint — each from the row, never the cache. **The origin check is
+`requireSession`'s** (D117): three account pages had it, the profile, the API
+keys and every admin form did not, and the documented `*.example.com` pattern
+let a sibling subdomain post through. **The refresh grant did not re-check the
+owner** — it does now, answering `invalid_grant` without spending the token;
+the session read was refused only because the JWT plugin's `set-auth-jwt`
+hook happened to trip the gate, and `readSession` now does it on purpose.
+**Impersonation** cannot mint keys and every row it causes says who was there;
+**consent** rows name the client the provider verified. Verified: the new
+file, 283 neighboring integration cases, the unit set, lint, typecheck.
+
+---
+
+## The pre-1.0 security review (2026-09-02, **D105**–**D126**)
+
+**The whole of it is in the working tree, uncommitted, for the owner's
+review** — every fix, its test, its `D` row, its changelog line and its
+section below, written as if each were its own commit so they can be split
+at commit time. The record is
+[docs/security-review-2026-09.md](docs/security-review-2026-09.md): the
+threat model, ~56 candidates from three read-only sweeps, the verdict on
+each, the decision that closed it, the repository settings applied through
+the API, the vendored Better Auth 1.7.1 read against its fourteen 2026
+advisories, and the accepted-risk list that `SECURITY.md` now mirrors
+(**D123**).
+
+**Six that mattered.** A temporary password bought a working session and a
+long-lived API key (**D107**); `/admin/update-user {status:"pending"}` parked
+the last administrator (**D108**); the SQL console ran as the compose
+bootstrap superuser and `BEGIN READ ONLY` did not stop `COPY … TO PROGRAM`
+(**D109** — proved, then fixed with a NOSUPERUSER role and a start-up
+warning); an encoded slash climbed a gateway out of its target (**D110**); a
+gateway could reach the cloud metadata address (**D111**); and anyone who
+could *name* an OAuth client could exhaust its token-endpoint bucket
+(**D112**). The rest are the sections above, one per stream.
+
+**Two found by verifying rather than reading.** The sign-up redirect leak
+the plan set out to close did not exist — Better Auth 1.7.1 already answers a
+duplicate with a generic success — so D-C became the owner notice and the
+audit correction (**D116**). And probing D110 against the *built image*
+directly, not through Caddy, hit a bare 500: `serve.ts` handed `..%2f` to
+`Bun.file`, which throws on a `%2F` in a `file:` URL, before any route or
+the request log. Pre-existing, reachable by anyone, fixed, and the reason
+the sibling check goes around the front door as well as through it.
+
+**Owner decisions taken 2026-09-02**: force-push/deletion protection on
+`main` only (no PR, no required check — direct pushes unchanged);
+"Require consent" ticked for admin-created clients (**D120**); sign-up made
+uniform with e-mail on (**D116**). Applied through the API, reversible by the
+same call: secret scanning, push protection, Dependabot alerts (no PRs),
+private vulnerability reporting.
+
+**The sibling.** `semantius-self-hosted`'s Caddy did not trust Traefik, so
+under Dokploy every user shared one rate-limit bucket. Its source `Caddyfile`
+now reads `trusted_proxies static {$TRUSTED_PROXIES:127.0.0.1/32}` — nobody
+by default — and the Dokploy template sets `172.16.0.0/12`, with the advice
+to tighten it to `dokploy-network`'s subnet; the blueprint is regenerated.
+The owner committed it there as `214459d` on 2026-09-03; its `.env` and
+`idp-config/` were never touched.
+
+**What was verified**: lint, typecheck, 99 files / 1234 tests with every
+coverage threshold, the three `--check` gates, the pin gates, the build and
+the client-bundle gate, the container smoke test on the new compose (twice),
+101 end-to-end tests in a real browser against the rebuilt image, both deployment shapes, five runs on the final code — one stopped at the `/admin/database` accessibility scan because the vendored resizable handle had not yet set `aria-valuenow`, a race in the scan rather than in the code, and the re-run passed; `a11y.spec.ts` could wait for that attribute before scanning, which is left for the owner to decide, and an isolated copy of the sibling stack booted on the review
+image — wizard, sign-in, API key, `/gateway/rest` with PostgREST's
+`Content-Range` intact, link-local refused, dynamic issuer warning. Details
+and numbers in the review document's last section.
+
+**Two corrections the owner made during review, both applied.** The
+per-gateway audience field had been named `resource` after RFC 8707's request
+parameter; it is the `aud` the minted token gets, so it is `audience`
+everywhere — config key, column (migration 0003 regenerated in place, not a
+second migration), form field, catalog, docs — and the README's invented
+second example is gone. And every decision number and requirement identifier
+was swept out of the code, the tests, the scripts, the example config, the
+Docker files and every reader-facing document: a comment says why a thing is
+so, or it says nothing; an identifier that only the spec can resolve is not an
+explanation. The identifiers remain in this file, the spec's decision log,
+the changelog and `AGENTS.md`, which are the repository's own records.
+
+**The owner's review of `SECURITY.md` (2026-09-03, **D127**).** Every line
+under "What is not" was put to the owner one by one. Outcomes: the reset and
+invitation page no longer names its account (fixed, line removed); the
+rate-limiter line removed; self-service sign-up without e-mail refused on an
+https deployment (the enumeration line removed with it); a start-up warning
+when the SQL console and two-factor are both on; the console line reworded
+to "off by default, and on, it is the database role"; the standard behaviors
+(token validity, bearer keys, the trusted-device cookie, the environment as
+trust boundary) worded as standard; the link to the review document dropped.
+Nothing in that section is a risk somebody accepted on the owner's behalf any
+more.
+
+**Before committing**: `git update-index --chmod=+x docker/idp-setup-env.sh
+docker/initdb/10-idp-role.sh` (new shell scripts on a Windows checkout).
+**After committing**: the manual release checks in `docs/release.md` are
+unchanged and still the owner's.
 
 ---
 
@@ -3726,7 +3942,7 @@ Startup warns when the URL looks pooled and `directUrl` is unset.
 
 | Risk                         | Outcome                                                                                                                                                                                                                                                                                                                                           |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **R1** default audience      | Real — no `resource` parameter yields an _opaque_ token, not a JWT. Fixed by a `hooks.before` injection; **the pre-authorized `pnpm patch` is not needed**. The wrinkle it recorded — a second `aud` from the `openid` scope — could _not_ be normalized in the `jwt.sign` seam, because that seam requires a remote key set; settled as **D32**. |
+| **R1** default audience      | Real — no `audience` parameter yields an _opaque_ token, not a JWT. Fixed by a `hooks.before` injection; **the pre-authorized `pnpm patch` is not needed**. The wrinkle it recorded — a second `aud` from the `openid` scope — could _not_ be normalized in the `jwt.sign` seam, because that seam requires a remote key set; settled as **D32**. |
 | **R2** per-client resources  | Confirmed: `enforcePerClientResources` defaults to `true`. Kept on; reconcile owns the links.                                                                                                                                                                                                                                                     |
 | **R4** client-secret hashing | Resolved outright — `storeClientSecret` accepts our own `hash`/`verify` pair, so reconcile and the token endpoint use the same function object.                                                                                                                                                                                                   |
 | **R5** session JWT           | Half right. `definePayload` is the seam for the session JWT and one claims builder does cover all three FR-OIDC-7 paths — but **not** through `jwt.sign`, which the plugin refuses to accept without a remote key set (D32).                                                                                                                      |

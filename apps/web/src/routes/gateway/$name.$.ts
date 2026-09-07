@@ -5,7 +5,7 @@ import { getRuntime } from "@/server/runtime"
 
 /**
  * `/gateway/<name>/<rest>` — everything below the upstream's root
- * (FR-GW-3, **D91**).
+ *.
  *
  * See `$name.ts` for why there are two files and why all seven methods are
  * declared on each of them.

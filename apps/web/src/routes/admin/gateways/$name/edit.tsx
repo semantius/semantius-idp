@@ -35,7 +35,7 @@ const LIST = "/admin/gateways"
 const CONSUMED = ["error", "draft"] as const
 
 /**
- * "Edit the gateway", as a page (**D93**, FR-GW-7, **D91**, **D92**).
+ * "Edit the gateway", as a page.
  *
  * **The target is not prefilled when it is masked.** `fetchGateways` returns
  * the stored string byte for byte unless it carries a password, and says so in
@@ -83,7 +83,7 @@ export const Route = createFileRoute("/admin/gateways/$name/edit")({
         const base = runtime.config.base.basePath
         // `isValidGatewayName` already refuses everything that is not a plain
         // lower-case path segment — no dots, no slashes, no percent-encoding
-        // (**D91**) — so this is belt to the rule's braces rather than the
+        // — so this is belt to the rule's braces rather than the
         // rule itself.
         const here = `${base}/admin/gateways/${encodeURIComponent(
           params.name
@@ -96,7 +96,7 @@ export const Route = createFileRoute("/admin/gateways/$name/edit")({
         if (!signedIn.ok) return signedIn.response
 
         // `/idp/update-gateway` takes create's body, because a full replace
-        // *is* a create against a row that already exists (**D72**'s shape).
+        // *is* a create against a row that already exists (**the spec's shape).
         // The name comes from **the path**, never from the form — the form
         // carries a hidden one for the browser-side rule to read, and this is
         // what keeps the two from disagreeing about which row is being
@@ -108,6 +108,7 @@ export const Route = createFileRoute("/admin/gateways/$name/edit")({
             name: params.name,
             url: form.url ?? "",
             requireAuth: form.requireAuth === "on",
+            audience: form.audience ?? "",
           },
           request
         )
@@ -115,6 +116,7 @@ export const Route = createFileRoute("/admin/gateways/$name/edit")({
           const draft = await stashDraft(runtime, {
             url: form.url,
             requireAuth: form.requireAuth,
+            audience: form.audience,
           })
           return redirectWithCookies(
             withError(withDraft(here, draft), adminErrorCodeFor(result))
@@ -138,6 +140,7 @@ function EditGatewayPage() {
     // only honest prefill is none — with a sentence saying to retype it.
     url: gateway.urlMasked ? "" : gateway.url,
     requireAuth: gateway.requireAuth,
+    audience: gateway.audience ?? "",
   })
 
   return (

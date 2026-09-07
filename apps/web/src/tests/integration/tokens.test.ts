@@ -1,6 +1,6 @@
 /**
  * What the tokens actually contain, against a live provider
- * (FR-OIDC-5/6/7/8/12/13, FR-KEY-3, risks R1, R5, D32).
+ * (risks R1).
  *
  * These are the protocol proof points. Everything here is asserted against a
  * token that was really issued and really verifies against the published
@@ -192,9 +192,9 @@ async function jwks() {
   )
 }
 
-describe("access tokens (FR-OIDC-5/6, risk R1, D32)", () => {
+describe("access tokens", () => {
   it("is a JWT even though the client sent no resource", async () => {
-    // R1: without a `resource` the provider issues an *opaque* token. The
+    // without a `resource` the provider issues an *opaque* token. The
     // before-hook supplies `jwt.audience`, which is what makes this a JWT at
     // all — three dots is the entire assertion.
     const tokens = await exchange()
@@ -210,7 +210,7 @@ describe("access tokens (FR-OIDC-5/6, risk R1, D32)", () => {
       { issuer: ISSUER, audience: ISSUER }
     )
 
-    // FR-OIDC-5: Neon and PostgREST take ES256, and need a `kid` to select
+    // Neon and PostgREST take ES256, and need a `kid` to select
     // the key from the set.
     expect(protectedHeader.alg).toBe("ES256")
     expect(protectedHeader.kid).toBeTruthy()
@@ -218,7 +218,7 @@ describe("access tokens (FR-OIDC-5/6, risk R1, D32)", () => {
     expect(payload.iss).toBe(ISSUER)
   })
 
-  it("carries jwt.audience in aud, alongside the implicit userinfo one (D32)", async () => {
+  it("carries jwt.audience in aud, alongside the implicit userinfo one", async () => {
     const tokens = await exchange()
     const payload = decodeJwt(String(tokens.access_token))
     const aud = Array.isArray(payload.aud) ? payload.aud : [payload.aud]
@@ -227,12 +227,12 @@ describe("access tokens (FR-OIDC-5/6, risk R1, D32)", () => {
     // The provider appends its own userinfo endpoint whenever `openid` is
     // requested and offers no way to suppress it; `jwt.sign`, which S1
     // planned to normalize it in, cannot be used without moving the key set
-    // off this deployment. Recorded as D32 — every RFC 7519 §4.1.3 verifier
+    // off this deployment. Recorded in the spec — every RFC 7519 §4.1.3 verifier
     // checks `aud` by membership, which is what the test above proves.
     expect(aud).toContain(`${ISSUER}/api/auth/oauth2/userinfo`)
   })
 
-  it("is still accepted by userinfo (D32)", async () => {
+  it("is still accepted by userinfo", async () => {
     const tokens = await exchange()
     const response = await context.auth.handler(
       new Request(`${ISSUER}/api/auth/oauth2/userinfo`, {
@@ -261,7 +261,7 @@ describe("access tokens (FR-OIDC-5/6, risk R1, D32)", () => {
     expect(refused.body.error).toBe("invalid_target")
   })
 
-  it("uses the resource's own TTL when it declares one (FR-OIDC-13)", async () => {
+  it("uses the resource's own TTL when it declares one", async () => {
     const tokens = await exchange({ resource: "https://api.example.com" })
     const payload = decodeJwt(String(tokens.access_token))
     const lifetime = Number(payload.exp) - Number(payload.iat)
@@ -271,7 +271,7 @@ describe("access tokens (FR-OIDC-5/6, risk R1, D32)", () => {
   })
 })
 
-describe("user claims (FR-OIDC-7, FR-ROLE-2)", () => {
+describe("user claims", () => {
   it("carries exactly the configured claim set", async () => {
     const tokens = await exchange()
     const payload = decodeJwt(String(tokens.access_token))
@@ -293,7 +293,7 @@ describe("user claims (FR-OIDC-7, FR-ROLE-2)", () => {
     expect(payload.jti).toBeTruthy()
   })
 
-  it("keeps the ID token free of user claims unless asked (FR-OIDC-7)", async () => {
+  it("keeps the ID token free of user claims unless asked", async () => {
     const tokens = await exchange()
     const idToken = decodeJwt(String(tokens.id_token))
     // `claimsInIdToken` is false by default: an ID token is an assertion
@@ -307,7 +307,7 @@ describe("user claims (FR-OIDC-7, FR-ROLE-2)", () => {
   })
 })
 
-describe("the three token shapes (FR-OIDC-7, FR-KEY-3)", () => {
+describe("the three token shapes", () => {
   it("differ only in sub, sid, azp and scope", async () => {
     const tokens = await exchange()
     const access = decodeJwt(String(tokens.access_token))
@@ -351,7 +351,7 @@ describe("the three token shapes (FR-OIDC-7, FR-KEY-3)", () => {
   })
 })
 
-describe("refresh tokens (FR-OIDC-8/13)", () => {
+describe("refresh tokens", () => {
   it("is only issued for offline_access", async () => {
     const withoutOffline = await exchange()
     expect(withoutOffline.refresh_token).toBeUndefined()
@@ -406,7 +406,7 @@ describe("refresh tokens (FR-OIDC-8/13)", () => {
   })
 })
 
-describe("revocation (FR-OIDC-12, FR-AUTH-3)", () => {
+describe("revocation", () => {
   it("a password change kills the refresh token", async () => {
     const tokens = await exchange({
       scope: "openid profile email offline_access",
@@ -482,7 +482,7 @@ describe("revocation (FR-OIDC-12, FR-AUTH-3)", () => {
   })
 })
 
-describe("the absolute refresh lifetime (FR-OIDC-13)", () => {
+describe("the absolute refresh lifetime", () => {
   it("revokes a family that has outlived the maximum, however recently it rotated", async () => {
     const tokens = await exchange({
       scope: "openid profile email offline_access",
@@ -530,7 +530,7 @@ describe("the absolute refresh lifetime (FR-OIDC-13)", () => {
   })
 })
 
-describe("the session JWT from an API key (FR-KEY-3)", () => {
+describe("the session JWT from an API key", () => {
   it("carries the same user claims, and says who is presenting it", async () => {
     const created = await context.auth.handler(
       authRequest("/api-key/create", {
@@ -593,7 +593,7 @@ async function revoke(
   return { status: response.status, body: await response.text() }
 }
 
-describe("grants that do not exist (D26)", () => {
+describe("grants that do not exist", () => {
   it("refuses client_credentials", async () => {
     const result = await token({
       grant_type: "client_credentials",

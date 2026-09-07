@@ -19,6 +19,7 @@ import {
   withError,
 } from "@/server/http/auth-proxy"
 import { requireSession } from "@/server/http/require-session"
+import { actorMetadata } from "@/server/http/session"
 import { stash } from "@/server/http/one-shot"
 import {
   apiKeyBelongsTo,
@@ -32,11 +33,11 @@ import { LocalTime } from "@/components/common/local-time"
 const HERE = "/account/api-keys"
 
 /**
- * `/account/api-keys` (FR-KEY-1).
+ * `/account/api-keys`.
  *
  * A key authenticates **as its owner** with the same roles, so creating one is
  * as consequential as changing a password. Both were gated on a fresh session
- * until **D81**; both now require a session and no more than that. The secret
+ * until the freshness gate was removed; both now require a session and no more than that. The secret
  * is shown exactly once, in a dialog on the page the
  * creation redirects to, and never stored anywhere this page can read: the row
  * keeps a hash and the first few characters, which is all the list needs to be
@@ -52,7 +53,7 @@ const HERE = "/account/api-keys"
  */
 export const Route = createFileRoute("/account/api-keys")({
   loader: async ({ context, location }) => {
-    // FR-KEY-1: with API keys off there is no page, not a hidden button.
+    // with API keys off there is no page, not a hidden button.
     if (!context.ui.apiKeysEnabled) throw notFound()
 
     const search = location.search as Record<string, unknown>
@@ -113,8 +114,19 @@ export const Route = createFileRoute("/account/api-keys")({
             actorType: "session",
             actorUserId: signedIn.session.user.id,
             target: { type: "apikey", id: keyId },
+            metadata: actorMetadata(signedIn.session),
           })
           return redirectWithCookies(`${here}?notice=apikey_revoked`)
+        }
+
+        // an impersonation ends within the hour; a key minted
+        // under it would not. Revoking stays allowed — that takes access
+        // away, which is what an administrator signed in as the user is
+        // there to do. The raw endpoint refuses on the same rule
+        // (`auth/options/session-standing.ts`); this is the page's own
+        // answer, so the refusal reads as a sentence rather than a 403.
+        if (signedIn.session.session.impersonatedBy) {
+          return redirectWithCookies(withError(here, "impersonated_session"))
         }
 
         const days = Number(form.expiresInDays ?? "")
@@ -147,7 +159,10 @@ export const Route = createFileRoute("/account/api-keys")({
           actorType: "session",
           actorUserId: signedIn.session.user.id,
           target: { type: "apikey", id },
-          metadata: { name: (form.name ?? "").trim() },
+          metadata: {
+            name: (form.name ?? "").trim(),
+            ...actorMetadata(signedIn.session),
+          },
         })
         await runtime.mailer.send("apiKeyCreated", signedIn.session.user.email, {
           keyName: (form.name ?? "").trim(),

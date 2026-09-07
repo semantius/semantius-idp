@@ -12,7 +12,7 @@ import { expect, test } from "./fixtures"
 import { waitForMail } from "./stack"
 
 /**
- * The signed-in area (TST-6, FR-ACCT-1, FR-KEY-1).
+ * The signed-in area.
  *
  * Each test creates the person it needs. Sharing one account across the file
  * would be faster and would also mean that changing a password in one test
@@ -31,15 +31,15 @@ test.describe("the account area", () => {
     const user = await createVerifiedUser(page, app, stack, "profile")
     await signIn(page, app, user.email, user.password)
 
-    // Scoped to `main`, because since **D82** the sidebar's user menu carries
+    // Scoped to `main`, because the sidebar's user menu carries
     // the same address and the same display name in its footer — outside the
     // main landmark, and an unscoped `getByText` would match both and fail
     // strict mode rather than the application.
     await expect(page.locator("main").getByText(user.email)).toBeVisible()
     await expect(page.getByText("Confirmed")).toBeVisible()
 
-    // D49: the two parts are the inputs; the display name is derived from
-    // them, so there is nothing here to type it into — and since **D95** it is
+    // the two parts are the inputs; the display name is derived from
+    // them, so there is nothing here to type it into — and it is
     // not on the form at all, because the shell's footer already carries it.
     await page.getByLabel("First name").fill("Renamed")
     await page.getByLabel("Last name").fill("Person")
@@ -47,7 +47,7 @@ test.describe("the account area", () => {
 
     await expect(page.getByText("Profile updated.")).toBeVisible()
 
-    // **D71**: the confirmation is a toast that consumes its own parameter.
+    // the confirmation is a toast that consumes its own parameter.
     // The banner it replaced was seeded from `?notice=` and nothing ever
     // removed it, so the URL went on claiming the save had just happened —
     // a reload re-announced it, and so did coming Back to the page later.
@@ -59,7 +59,7 @@ test.describe("the account area", () => {
       "a reload does not re-announce a save from before it"
     ).toHaveCount(0)
     await expect(page.getByLabel("First name")).toHaveValue("Renamed")
-    // The derived name, in the one place that still shows it (**D95**). The
+    // The derived name, in the one place that still shows it. The
     // footer is outside `<main>`, which is why this is the one assertion in
     // the file that must *not* be scoped to it.
     await expect(
@@ -76,9 +76,9 @@ test.describe("the account area", () => {
     await signIn(page, app, user.email, user.password)
 
     await app.goto("/account/security")
-    // A dialog since D62/F5, like every other action on this page. The
+    // A dialog like every other action on this page. The
     // standalone `/change-password` page stays — it is the forced-change page
-    // (FR-AUTH-4) and what `/.well-known/change-password` redirects to.
+    // and what `/.well-known/change-password` redirects to.
     const form = await openDialog(page, "Change password")
     await form.getByLabel("Current password").fill(user.password)
     await form.getByLabel("New password", { exact: true }).fill(NEW_PASSWORD)
@@ -100,7 +100,7 @@ test.describe("the account area", () => {
     await expect(page).toHaveURL(app.url("/account"))
   })
 
-  test("a second browser shows up in the session list and can be signed out (FR-ACCT-1)", async ({
+  test("a second browser shows up in the session list and can be signed out", async ({
     page,
     app,
     stack,
@@ -118,7 +118,7 @@ test.describe("the account area", () => {
     await expect(page.getByText("This device")).toBeVisible()
     // Two sessions, and exactly one of them is this browser.
     //
-    // `[data-slot="session-list"] li`, not `main li`: since **D93** the
+    // `[data-slot="session-list"] li`, not `main li`: the
     // breadcrumb is an `<ol>` of `<li>` inside the same `<main>`, so the loose
     // locator counted the trail as well — five elements where there are two
     // sessions. The list has a hook of its own for that reason.
@@ -137,7 +137,7 @@ test.describe("the account area", () => {
     await other.close()
   })
 
-  test("an API key is shown once, listed, and revoked (FR-KEY-1)", async ({
+  test("an API key is shown once, listed, and revoked", async ({
     page,
     app,
     stack,
@@ -167,7 +167,7 @@ test.describe("the account area", () => {
     await page.keyboard.press("Escape")
     await expect(page.getByText("Deploy script")).toBeVisible()
 
-    // FR-MAIL-1: a credential that can act as you is announced.
+    // a credential that can act as you is announced.
     const notice = await waitForMail(stack, user.email, {
       template: "api-key-created",
     })

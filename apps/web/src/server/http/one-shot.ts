@@ -3,7 +3,7 @@
  *
  * Some flows have to hand a value from a form POST to the page the browser
  * lands on afterwards — a TOTP secret and its backup codes, most obviously
- * (FR-2FA-1). Putting those in the redirect URL is what a query parameter
+ *. Putting those in the redirect URL is what a query parameter
  * looks like it is for, and it is wrong: the URL survives in browser history,
  * in `Referer` on the next outbound request, and in any proxy log between
  * here and the user. So the redirect carries an opaque handle and the value

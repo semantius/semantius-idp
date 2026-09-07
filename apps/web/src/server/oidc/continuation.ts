@@ -1,5 +1,5 @@
 /**
- * Resuming an interrupted authorization (FR-OIDC-9).
+ * Resuming an interrupted authorization.
  *
  * **The mechanism, which is the provider's and not ours.** When
  * `/oauth2/authorize` needs the user to do something first, 1.7.1 redirects to
@@ -21,7 +21,7 @@
  * carrying `oauth_query` sets a session cookie. That is one gate too few: a
  * user with a temporary password gets a session on sign-in, so the automatic
  * resume would hand out an authorization code before the forced change
- * (FR-AUTH-4). Calling `/oauth2/continue` ourselves, after the gate chain is
+ *. Calling `/oauth2/continue` ourselves, after the gate chain is
  * satisfied, is what keeps the order the spec describes.
  */
 

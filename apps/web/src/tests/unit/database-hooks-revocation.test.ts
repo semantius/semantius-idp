@@ -1,6 +1,6 @@
 /**
  * The two revocation hooks, in the states a live database cannot easily be put
- * into (FR-AUTH-3, FR-AUTH-6, FR-OIDC-12).
+ * into.
  *
  * Both are "never allowed to break the thing they hang off": a password change
  * must complete even if the revocation query fails, and a sign-out must sign
@@ -109,7 +109,7 @@ describe("revoking after a password write", () => {
   })
 })
 
-describe("revoking on sign-out (FR-AUTH-6)", () => {
+describe("revoking on sign-out", () => {
   const SESSION = { id: "session-1", userId: "user-1" }
 
   it("does nothing when the option is off", async () => {

@@ -1,5 +1,5 @@
 /**
- * The order the interstitials happen in (FR-OIDC-9, FR-AUTH-4, FR-SIGNUP-2).
+ * The order the interstitials happen in.
  *
  * An authorization request can be interrupted by four different things, and
  * the order is not arbitrary — each one is a precondition for the next being
@@ -7,9 +7,9 @@
  *
  *  1. **No session** → sign in. Nothing else can be decided about a stranger.
  *  2. **Not approved, or suspended** → the status page. A `pending` user must
- *     not obtain an authorization code on any path (FR-SIGNUP-2), and this is
+ *     not obtain an authorization code on any path, and this is
  *     the path a naive implementation forgets, because the *session* is valid.
- *  3. **Must change the password** → the forced change (FR-AUTH-4). A
+ *  3. **Must change the password** → the forced change. A
  *     temporary password is changed "before anything else completes,
  *     including an OAuth continuation" — the spec says so in as many words.
  *  4. Otherwise the provider takes over, and decides consent for itself.
@@ -55,7 +55,7 @@ export function nextGate({ user }: GateInput): Gate | undefined {
 
   const status = user.status ?? "pending"
   if (status === "pending") return { kind: "pending" }
-  // A rejected account is refused the same way a suspended one is: SEC-7
+  // A rejected account is refused the same way a suspended one is: anti-enumeration
   // keeps the two indistinguishable from outside.
   if (status === "rejected") return { kind: "banned" }
 

@@ -1,6 +1,5 @@
 /**
- * The claims builder and the default-resource injection (FR-OIDC-6/7,
- * FR-ROLE-2, risk R1).
+ * The claims builder and the default-resource injection.
  *
  * Both are pure, and both decide something a resource server will act on: what
  * a token says about a user, and whether the token is a JWT at all.
@@ -94,7 +93,7 @@ describe("buildUserClaims", () => {
     })
   })
 
-  it("drops a role that is no longer in the catalog (FR-ROLE-2)", () => {
+  it("drops a role that is no longer in the catalog", () => {
     // The column still says `legacy`; the catalog does not. A resource server
     // authorizing on a role this deployment no longer defines is exactly what
     // the catalog exists to prevent.
@@ -140,10 +139,10 @@ const CLIENT = {
   enableEndSession: false,
 }
 
-describe("injectDefaultResource (risk R1)", () => {
+describe("injectDefaultResource", () => {
   it("supplies the default audience when authorize names none", () => {
     // Without a resource the provider issues an *opaque* token, which is the
-    // failure FR-OIDC-5/6 exists to prevent.
+    // failure the audience rules exist to prevent.
     const query: Record<string, unknown> = { client_id: "app" }
     injectDefaultResource({ path: "/oauth2/authorize", query }, configWith())
     expect(query.resource).toBe("https://idp.example.com")

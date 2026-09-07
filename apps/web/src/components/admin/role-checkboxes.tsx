@@ -2,17 +2,17 @@ import { Checkbox } from "@workspace/ui/components/checkbox"
 import { Label } from "@workspace/ui/components/label"
 
 /**
- * One checkbox per catalog role (item 11b, FR-ROLE-2).
+ * One checkbox per catalog role (item 11b).
  *
  * Both places that assign roles — creating a user, and editing one — used a
  * comma-separated text field, which asked the administrator to know the catalog
  * by heart and spell it correctly. A typo produced a role nobody holds, which
- * the FR-ROLE-2 check then reported as a warning at the next boot. The catalog
+ * the spec check then reported as a warning at the next boot. The catalog
  * is already on the page, so it may as well be the control.
  *
  * The field name repeats, once per ticked box, so the handler reads it with
  * `readFormMulti` — and the list reaches `/admin/set-role` through
- * `runAdminAction`, which is where the reassembly lives since **D93**. It used
+ * `runAdminAction`, which is where the reassembly lives . It used
  * to be three lines in the route, and a second route naming the reader without
  * them would have stored one role of two under a success toast.
  */
@@ -27,7 +27,7 @@ export function RoleCheckboxes({
   /** Role names to tick. Absent on a creation, where nothing is held yet. */
   checked?: readonly string[]
   /**
-   * Your own account (**D93**, FR-ADMIN-3).
+   * Your own account.
    *
    * **On each `Checkbox`, not only on the `<fieldset>`.** A disabled fieldset
    * disables the *form controls* inside it, and the control a user operates

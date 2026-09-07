@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest"
 import { LocalTime } from "@/components/common/local-time"
 
 /**
- * The server half of `LocalTime` (FR-I18N-1).
+ * The server half of `LocalTime`.
  *
  * What matters here is that the *first paint* is deterministic. If this render
  * ever called `Intl`, the string would depend on the server's ICU data,

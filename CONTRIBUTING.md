@@ -5,7 +5,7 @@
 ```bash
 pnpm install
 cp -r config.example config
-cp .env.example .env          # set IDP_SECRET, and DATABASE_URL if not Docker
+docker/idp-setup-env.sh       # .env with generated secrets; set DATABASE_URL if not Docker
 pnpm dev
 ```
 
@@ -13,16 +13,17 @@ You need **Bun** (the runtime — pinned in `.bun-version`), **pnpm** (the
 package manager; Node is only used by tooling) and a **Postgres**. Everything
 lives in one schema, so an existing database is fine.
 
-The shipped `DATABASE_URL` points at the Postgres `docker compose` starts, on
-the compose network — running outside Docker means pointing it at something
-your host can reach.
+The generated `DATABASE_URL` points at the Postgres `docker compose` starts, on
+the compose network, as the `idp` application role, not the superuser
+— running outside Docker means pointing it at something your host can reach.
+`idp-setup-env` never touches an existing `.env`; delete it to regenerate.
 
 There is nothing to generate first: the Drizzle schema and the SQL migrations
 are committed, drift-gated in CI, and applied at boot. The generators below are
 for when you *change* the schema.
 
 Then open the app. A database with no users serves the first-run setup page and
-whoever completes it is the first administrator (**D52**) — there is no
+whoever completes it is the first administrator — there is no
 bootstrap account and no password in `.env`. Working against a schema that
 already has one and want the wizard back? Drop the schema; the next boot
 migrates a fresh one.
@@ -94,7 +95,8 @@ A route `loader` runs on the client as well as the server, so one careless
 import puts Better Auth, Drizzle and the `postgres` driver in the browser
 bundle. `check-client-bundle.ts` catches it. Reads go through a server function
 in `src/server/functions/`; mutations go through a route's own
-`server.handlers`, where the freshness gate and the audit trail live.
+`server.handlers`, where the origin check and the audit trail live (the
+freshness gate is gone).
 
 ## Testing
 
@@ -138,15 +140,17 @@ failure message does not tell you what broke is half a test.
   changes. Most of the comments in this repository exist because something went
   wrong once.
 - **Prettier decides formatting** (`pnpm format`); do not argue with it.
-- **Requirement ids in comments** — `FR-OIDC-9`, `SEC-4`, `D46` — tie code to
-  [spec-v1.md](spec-v1.md). Use them when a line exists because the spec says
-  so.
-- **US English** throughout — prose, comments and identifiers alike (**D94**).
-  Not a preference: the message catalog is `en-US.ts` and FR-I18N-1's default
+- **No requirement ids or decision numbers in comments.** A comment says why
+  the code is the way it is, in words; the spec's decision log holds the
+  numbers and is the only place that resolves them. `FR-OIDC-9`, `SEC-4` or
+  `D46` in a comment is an address nobody outside this repository can follow
+  and no substitute for the reason.
+- **US English** throughout — prose, comments and identifiers alike.
+  Not a preference: the message catalog is `en-US.ts` and the default
   locale *is* `en-US`, so a user-facing string spelled `recognise` under that
   name is wrong rather than merely foreign. `packages/ui/src/components/**` and
   `packages/ui/src/styles/globals.css` are out of scope, being registry and
-  preset output used verbatim. This line said the opposite until D94; the
+  preset output used verbatim. This line said the opposite once; the
   sweep it names is in [AGENTS.md](AGENTS.md).
 
 ## Changing behavior the spec describes

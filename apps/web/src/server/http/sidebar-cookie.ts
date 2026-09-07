@@ -1,5 +1,5 @@
 /**
- * Whether the admin/account sidebar starts expanded (**D82**).
+ * Whether the admin/account sidebar starts expanded.
  *
  * The collapse state has to be known **before** the first paint, or every
  * navigation renders an expanded sidebar and then snaps it shut once React
@@ -14,7 +14,7 @@
  * Our own name, not the registry's. `sidebar.tsx`'s `SidebarProvider` writes
  * `sidebar_state` at `path=/` unconditionally and nothing here reads it; that
  * write is accepted rather than patched out, because the file is registry
- * output. Ours is scoped to the mount path so a sub-path deployment (OPS-10)
+ * output. Ours is scoped to the mount path so a sub-path deployment
  * and a root one on the same host do not overwrite each other's preference.
  *
  * The writer is `ScopedSidebarProvider` in `components/common/sidebar-layout.tsx`,

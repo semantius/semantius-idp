@@ -49,7 +49,7 @@ import { LocalTime } from "@/components/common/local-time"
 
 /**
  * `/admin/users/:id` — everything about one account, and everything that can
- * be done to it (FR-ADMIN-2..5, FR-KEY-1, FR-2FA-2, FR-ROLE-2).
+ * be done to it.
  *
  * All the buttons post to this one URL with an `action` field, and the
  * dispatcher in `http/admin-actions.ts` is what turns each into a call to
@@ -61,7 +61,7 @@ import { LocalTime } from "@/components/common/local-time"
  * Every write on this page requires a session, read authoritatively so a
  * suspension or a revocation bites on the next write rather than whenever the
  * cookie cache happens to expire. It used to require a *fresh* one as well;
- * **D81** removed that.
+ * Removing the freshness gate took that away.
  *
  * **The actions are links that open dialogs** (item 11). Eleven inline forms in
  * one column is a wall of controls where the important ones — suspend, delete —
@@ -70,7 +70,7 @@ import { LocalTime } from "@/components/common/local-time"
  * the form it has always had; the POST bodies, the `action` values and the
  * dispatcher underneath them are unchanged.
  *
- * **Two of them became one link** (**D93**). Edit profile and Roles are two
+ * **Two of them became one link**. Edit profile and Roles are two
  * halves of one record, not two actions, and they are `/admin/users/$userId/
  * edit` now — one form with one Save. Everything else on this page is a
  * confirmation with at most two inputs and stays exactly where it is: the
@@ -93,14 +93,14 @@ export const Route = createFileRoute("/admin/users/$userId/")({
       ui: context.ui,
       gate: context.gate,
       // The trail ends at the account, and its label is the address — which is
-      // also this page's `<h1>` (**D93**). The list crumb above it is what a
+      // also this page's `<h1>`. The list crumb above it is what a
       // route nested one level deeper cannot supply for itself.
       crumbs: crumbTrail(context.ui, (t) => [
         { label: t.admin.nav.users, to: "/admin/users" },
         { label: user.email },
       ]),
       user,
-      // The role catalog went with the form (**D93**): the checkboxes are on
+      // The role catalog went with the form: the checkboxes are on
       // `$userId/edit` now, and this page shows the roles it holds as badges.
       notice: searchString(search.notice),
       error: searchString(search.error),
@@ -122,7 +122,7 @@ export const Route = createFileRoute("/admin/users/$userId/")({
 
         // `readFormMulti`, because a checkbox group repeats its field and the
         // plain reader keeps only the last ticked box. The **join moved into
-        // the dispatcher** (**D93**): it used to be three lines here, and a
+        // the dispatcher**: it used to be three lines here, and a
         // second route dispatching `set-roles` without them would have stored
         // one role of several under a success toast.
         const { fields: form, list: valuesOf } = await readFormMulti(request)
@@ -138,11 +138,11 @@ export const Route = createFileRoute("/admin/users/$userId/")({
         const query = new URLSearchParams()
         if (outcome.notice) query.set("notice", outcome.notice)
         if (outcome.error) query.set("error", outcome.error)
-        // **D78**: a handle, never the address. `safeUrlForLog` keeps the query
+        // a handle, never the address. `safeUrlForLog` keeps the query
         // string of everything outside `/oauth2/*` and `/api/auth/*`, so
         // `?subject=jane@example.com` would put a deleted account's address in
         // the request log — in a codebase that anonymizes IP addresses for
-        // exactly that reason (SEC-5). Two minutes is a redirect's worth of
+        // exactly that reason. Two minutes is a redirect's worth of
         // life; the claim consumes it either way.
         if (outcome.subject) {
           query.set(
@@ -181,8 +181,8 @@ function UserDetailPage() {
 
   return (
     /*
-     * No "Users" button beside the heading (**D95**). It was the way back to
-     * the list before there was a breadcrumb; since **D93** the trail above
+     * No "Users" button beside the heading. It was the way back to
+     * the list before there was a breadcrumb; the trail above
      * this page ends `User Manager › Users › <address>` and its middle crumb
      * is that link — in a row that is always on screen, because the header
      * sits outside the scroll container. The `actions` slot is for what a
@@ -195,7 +195,7 @@ function UserDetailPage() {
       <FormRefusal>
         {messageForErrorCode(error, t, ui.passwordMinLength)}
       </FormRefusal>
-      {/* **D78**: which account, taken straight from the loader — every
+      {/* which account, taken straight from the loader — every
           action on this page comes back to this page, so there is nothing to
           carry across a redirect. `delete` is the exception and lands on the
           list, which is why the dispatcher hands *that* one its subject. */}
@@ -419,7 +419,7 @@ function UserDetailPage() {
                   <Separator className="my-1" />
                 </>
               ) : null}
-              {/* **D93**: Edit profile and Roles were two dialogs with two
+              {/* Edit profile and Roles were two dialogs with two
                   Saves over two halves of one record. An administrator who
                   corrected an address *and* granted a role, then pressed the
                   Profile save, got "Profile updated." in a toast and lost the

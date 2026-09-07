@@ -1,5 +1,5 @@
 /**
- * Placeholder grammar for config files (CFG-2, decision D18).
+ * Placeholder grammar for config files .
  *
  * Placeholders are expanded inside JSON **string values only** — never inside
  * keys — in a single, non-recursive pass that runs before schema validation.
@@ -19,7 +19,7 @@
  * A string consisting of exactly one placeholder is recorded in
  * {@link SubstitutionResult.placeholderPointers}; the schema layer then coerces
  * it to the declared type (`"true"` → `true`, `"42"` → `42`, `"[…]"` → array)
- * and the production-literal-secret check (CFG-5) uses the same set to tell a
+ * and the production-literal-secret check uses the same set to tell a
  * real secret in a file apart from one injected from the environment.
  */
 
@@ -126,7 +126,7 @@ interface Segment {
   /**
    * The placeholder resolved from an actual environment variable or secret
    * file, not from its inline `:-default`. An inline default is literal text in
-   * the config file, so it must not satisfy the production-secret rule (CFG-5).
+   * the config file, so it must not satisfy the production-secret rule.
    */
   fromSource: boolean
 }

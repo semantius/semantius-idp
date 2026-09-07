@@ -1,5 +1,5 @@
 /**
- * The OAuth-client rules both sides need (FR-OIDC-3, **D62**).
+ * The OAuth-client rules both sides need.
  *
  * `/admin/clients`'s registration form and `oauth_clients.jsonc`'s zod schema
  * apply the same constraints, and until now only the schema knew them: the
@@ -17,13 +17,13 @@
  *
  * The answers are **codes, not sentences**. The schema turns them into the
  * operator-facing messages a startup failure has always printed; the dialog
- * turns them into catalog strings (FR-I18N-1). Neither wording travels.
+ * turns them into catalog strings. Neither wording travels.
  */
 
 export const CLIENT_TYPES = ["web", "spa", "native"] as const
 export type ClientType = (typeof CLIENT_TYPES)[number]
 
-/** Public client types cannot keep a secret, so they must use PKCE (FR-OIDC-3). */
+/** Public client types cannot keep a secret, so they must use PKCE. */
 export const PUBLIC_CLIENT_TYPES: readonly ClientType[] = ["spa", "native"]
 
 export type RedirectUriProblem =
@@ -68,7 +68,7 @@ export function expandHostTemplate(uri: string, host: string): string {
 
 /**
  * A redirect URI must be absolute and exactly matched at authorize time
- * (FR-OIDC-3/4). Wildcards and fragments are rejected outright; plain http is
+ *. Wildcards and fragments are rejected outright; plain http is
  * only allowed on loopback, and private-use schemes only for native clients.
  * The `{host}` template is substituted with a placeholder host BEFORE the
  * wildcard check, so a templated URI validates like the URI it expands to —
@@ -119,12 +119,12 @@ export function checkRedirectUri(
   return type === "native" ? undefined : "private_scheme"
 }
 
-/** `clientId` may only contain letters, digits and `. _ ~ -` (FR-OIDC-3). */
+/** `clientId` may only contain letters, digits and `. _ ~ -`. */
 export const CLIENT_ID_PATTERN = "[A-Za-z0-9._~\\-]+"
 
 /**
  * The two ids that are legal characters and unusable as a path segment
- * (**D93**).
+ *.
  *
  * The client id is part of this application's own address for the row —
  * `/admin/clients/<id>/edit` — and a browser resolves `/admin/clients/../edit`
@@ -162,7 +162,7 @@ export function uriLines(value: string): string[] {
 
 /**
  * The registration form asks "Require consent"; the wire field is
- * `skipConsent` (FR-OIDC-3, and **D50** for the history).
+ * `skipConsent` (and the spec for the history).
  *
  * The inversion is deliberate and is the owner's call: the column and the
  * checkbox both read as the thing an administrator is deciding — *does this
@@ -170,12 +170,41 @@ export function uriLines(value: string): string[] {
  * It is a real triple negative in the making, which is exactly why the mapping
  * is one exported function with a test on it rather than a `!` in a handler.
  *
- * An unticked box means "do not ask", which is FR-OIDC-3's documented default
- * of `skipConsent: true` and what a file-declared client gets.
+ * An unticked box means "do not ask", which is the spec's documented default
+ * of `skipConsent: true` and what a file-declared client gets. Where a **new**
+ * admin-registered client starts is a separate decision, and it is
+ * {@link NEW_CLIENT_DEFAULTS}'s.
  */
 export function skipConsentFromForm(requireConsent: string | undefined): boolean {
   return requireConsent !== "on"
 }
+
+/**
+ * Where `/admin/clients/new` starts.
+ *
+ * **"Require consent" is ticked.** A file client defaults to `skipConsent:
+ * true` because an operator wrote the entry down and can read the default
+ * beside it; a client registered from a form reached the same
+ * answer through a box nobody had to look at, and the two are not the same
+ * decision. The form is where a third-party integration is added on the day
+ * someone asks for it, and the consent screen is the one place the user is
+ * told what that application will see — so the default is to ask, and an
+ * administrator adding a first-party application unticks it. The edit form is
+ * untouched: it shows the stored value, and an existing row keeps what it has.
+ *
+ * `enableEndSession` stays off: `clients-schema.ts` refuses it with no
+ * post-logout URI, so defaulting it on would fail every plain create. `spa`
+ * because a public client is the shape most registrations take, and a
+ * confidential one is a deliberate choice.
+ *
+ * Here rather than in the route so the default is one exported value with a
+ * test on it, the way {@link skipConsentFromForm} is.
+ */
+export const NEW_CLIENT_DEFAULTS = {
+  type: "spa",
+  requireConsent: true,
+  enableEndSession: false,
+} as const
 
 export interface ClientFormValues {
   clientId: string

@@ -1,5 +1,5 @@
 /**
- * Gateway reconciliation against a real database (FR-GW-2, **D91**).
+ * Gateway reconciliation against a real database.
  *
  * The shape is `reconcile.test.ts`'s, because the rules are the same rules:
  * the file is the source of truth, absence is a decision, and the sweep must
@@ -139,7 +139,7 @@ describe("gateway reconciliation", () => {
   })
 
   it("re-enables a config gateway an administrator switched off", async () => {
-    // File-owned end to end (**D91**): a config gateway is switched off by
+    // File-owned end to end: a config gateway is switched off by
     // removing it from the file, not by a toggle the next restart would
     // silently reverse.
     const context = await contextWith("gw_reconcile_reenable", {
@@ -259,7 +259,7 @@ describe("gateway reconciliation", () => {
     expect(rows[0]?.actorType).toBe("system")
     expect(rows[0]?.metadata).toMatchObject({ created: ["data"] })
     // Never the target URL: it can carry a host an operator would rather not
-    // publish on a page an administrator reads (SEC-6).
+    // publish on a page an administrator reads.
     expect(JSON.stringify(rows[0]?.metadata)).not.toContain("postgrest")
   })
 })

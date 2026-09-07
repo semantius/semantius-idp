@@ -1,4 +1,4 @@
-# The IdP under a path on a hostname it shares (OPS-10, risk R3).
+# The IdP under a path on a hostname it shares.
 #
 # `https://apps.example.com/idp` — the rest of the hostname belongs to another
 # application. Two rules make this work, and both are easy to get wrong in ways

@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import { serveBrandingFile } from "@/server/branding"
 
 /**
- * The operator's logo and favicon, out of the config folder (CFG-1).
+ * The operator's logo and favicon, out of the config folder.
  *
  * `site.logo` and `site.favicon` name files the deployment supplies, and the
  * only place a read-only container has them is the folder already mounted at

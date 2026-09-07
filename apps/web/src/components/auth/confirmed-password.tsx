@@ -6,7 +6,7 @@ import { PasswordField } from "./form-parts"
 import type { Catalog } from "@/server/i18n"
 
 /**
- * "Type it twice", checked before the form is posted (**D62**).
+ * "Type it twice", checked before the form is posted.
  *
  * Three forms ask for a new password and a confirmation — `/setup`,
  * `/reset-password` and `/change-password` — and until now all three learned
@@ -19,7 +19,7 @@ import type { Catalog } from "@/server/i18n"
  * gates, not a replacement for one: the handler still compares the two values
  * and still redirects with `password_mismatch`, because a form is whatever the
  * caller posts and a check that lives only in the browser is not a check.
- * Requiring JavaScript for the *convenience* is sanctioned by D31.
+ * Requiring JavaScript for the *convenience* is sanctioned by the spec.
  *
  * Interception has to happen at the `PendingForm`'s own `onSubmit` — that is
  * the only handler in the chain, and it already calls the prop first and

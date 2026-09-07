@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import { parseInviteLink } from "@/lib/invite-link"
 
 /**
- * The one-time set-password link's stash shape (**D65**).
+ * The one-time set-password link's stash shape.
  *
  * It became `{url, email}` so the dialog can say whose account it is for. The
  * bare-URL case is kept on purpose: a handle stashed by an older process is

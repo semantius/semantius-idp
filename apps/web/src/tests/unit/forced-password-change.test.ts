@@ -6,10 +6,10 @@ import {
 } from "@/server/auth/options/database-hooks"
 
 /**
- * FR-AUTH-4: which password writes end a forced change, and which must not.
+ * which password writes end a forced change, and which must not.
  *
  * The distinction is not cosmetic. An administrator assigning a temporary
- * password (FR-ADMIN-2, M10) writes a credential password *and* raises the
+ * password writes a credential password *and* raises the
  * same flag, so a rule of "any credential password write clears it" would race
  * that and hand the user an unforced sign-in.
  */
@@ -45,7 +45,7 @@ describe("endsForcedPasswordChange", () => {
 })
 
 /**
- * FR-AUTH-3 / FR-OIDC-12: which writes revoke the user's OAuth tokens.
+ * which writes revoke the user's OAuth tokens.
  *
  * A wider set than the one above, and deliberately so — an administrator
  * assigning a temporary password does *not* end a forced change, but it does

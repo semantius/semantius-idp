@@ -10,18 +10,17 @@ import { createTestContext } from "./harness"
 import type { TestContext } from "./harness"
 
 /**
- * OPS-2 and FR-ADMIN-1.
  *
  * The harness already migrates, so these tests exercise the steps that run
  * after the auth instance exists: the signing key, the role check and the
  * first-run check. The migration step itself is covered implicitly by every
  * other integration file, each of which migrates into its own schema.
  *
- * Nothing here creates an administrator any more. D52 replaced the bootstrap
+ * Nothing here creates an administrator any more. the spec replaced the bootstrap
  * step with a page (`integration/setup.test.ts`), and what start-up does now is
  * say that the deployment has no users yet.
  */
-describe("startup sequence (OPS-2)", () => {
+describe("startup sequence", () => {
   const contexts: TestContext[] = []
 
   afterEach(async () => {
@@ -60,16 +59,19 @@ describe("startup sequence (OPS-2)", () => {
     expect(result.steps.map((step) => step.name)).toEqual([
       "signing key",
       "reconcile clients",
-      // FR-GW-2: beside the client reconcile, under a lock of its own.
+      // beside the client reconcile, under a lock of its own.
       "reconcile gateways",
-      // D50: after the reconcile, because it reads the rows it just wrote.
+      // after the reconcile, because it reads the rows it just wrote.
       "client origins",
       "validate roles",
       "first-run check",
+      // skipped here, because the harness leaves the console disabled;
+      // `security-review-admin.test.ts` drives the case where it runs.
+      "database role",
     ])
   })
 
-  it("skips the gateway sweep only when there is nothing to sweep (FR-GW-2)", async () => {
+  it("skips the gateway sweep only when there is nothing to sweep", async () => {
     // The skip is a real decision rather than an optimization: an empty
     // `gateways` block with rows still in the table is exactly the case the
     // sweep exists for, so it must not be skipped then.
@@ -101,7 +103,7 @@ describe("startup sequence (OPS-2)", () => {
     expect(swept.result.gateways?.disabled).toEqual(["left-behind"])
   })
 
-  it("generates exactly one signing key and reuses it on the next boot (FR-OIDC-16)", async () => {
+  it("generates exactly one signing key and reuses it on the next boot", async () => {
     const ctx = await createTestContext("startup-signing-key")
     contexts.push(ctx)
 
@@ -109,7 +111,7 @@ describe("startup sequence (OPS-2)", () => {
     const first = await ctx.database.db.select().from(ctx.database.schema.jwks)
     expect(first).toHaveLength(1)
     expect(first[0]!.alg).toBe("ES256")
-    // SEC-10: the private half is encrypted at rest, so it must not be a bare JWK.
+    // the private half is encrypted at rest, so it must not be a bare JWK.
     expect(first[0]!.privateKey).not.toContain('"d"')
 
     await start(ctx)
@@ -118,7 +120,7 @@ describe("startup sequence (OPS-2)", () => {
     expect(second[0]!.id).toBe(first[0]!.id)
   })
 
-  describe("first-run check (FR-ADMIN-1, D52)", () => {
+  describe("first-run check", () => {
     it("says where to finish setup while the user table is empty", async () => {
       const ctx = await createTestContext("startup-first-run")
       contexts.push(ctx)
@@ -173,7 +175,7 @@ describe("startup sequence (OPS-2)", () => {
     })
   })
 
-  describe("role catalog validation (FR-ROLE-2)", () => {
+  describe("role catalog validation", () => {
     it("warns about a stored role that is no longer in the catalog", async () => {
       const ctx = await createTestContext("startup-unknown-role")
       contexts.push(ctx)
@@ -234,7 +236,7 @@ describe("startup sequence (OPS-2)", () => {
     )
     await ctx.database.sql.unsafe(`drop table "${ctx.schemaName}"."audit_log"`)
 
-    // SEC-6: an audit outage must not become an authentication outage.
+    // an audit outage must not become an authentication outage.
     await expect(
       audit.record({
         action: "signin.success",
@@ -246,7 +248,7 @@ describe("startup sequence (OPS-2)", () => {
   })
 })
 
-describe("splitRoles (FR-ROLE-2)", () => {
+describe("splitRoles", () => {
   it("splits the comma-separated column and trims", () => {
     expect(splitRoles("admin, billing ,user")).toEqual([
       "admin",

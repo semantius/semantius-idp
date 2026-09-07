@@ -4,7 +4,7 @@ import { reconfigure, resetConfig } from "./stack"
 
 /**
  * `/admin/database` — the console, and the flag that decides it exists
- * (FR-ADMIN-7, TST-6).
+ *.
  *
  * Its own file rather than a block in `admin.spec.ts` for one reason: two of
  * these tests change `admin.database` and restart the container, so the whole
@@ -59,7 +59,7 @@ test.describe("the database console", () => {
     ).toBeVisible()
   })
 
-  test("a table row's run button queries that table (D84)", async ({
+  test("a table row's run button queries that table", async ({
     page,
     app,
   }) => {
@@ -69,13 +69,13 @@ test.describe("the database console", () => {
     // **Wait for the editor before clicking.** Both panes are lazy and the
     // tree is 25 kB against the editor's 830, so a click in that window is a
     // run request the runner is not mounted for yet. The page holds the
-    // request until it is (D84) -- this wait is about testing the button, not
+    // request until it is -- this wait is about testing the button, not
     // the race, which has its own reason to be right.
     await expect(page.getByRole("textbox", { name: "SQL query" })).toBeVisible()
 
     // The button is an icon, so its accessible name is the whole of what a
     // screen reader gets -- and it is the catalog's string, not the vendored
-    // component's, because the fork added the control (D84).
+    // component's, because the fork added the control.
     await page
       .getByRole("button", {
         name: "Show the first 100 rows of user",
@@ -100,7 +100,7 @@ test.describe("the database console", () => {
     ).toBeVisible()
   })
 
-  test("the schema selector moves the tree (D84)", async ({ page, app }) => {
+  test("the schema selector moves the tree", async ({ page, app }) => {
     await signInAsAdmin(page, app)
     await app.goto("/admin/database")
 

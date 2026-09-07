@@ -1,14 +1,18 @@
 /**
- * What a reset link is for, before it is spent (**D65**).
+ * What a reset link is for, before it is spent.
  *
  * `/reset-password` used to know nothing at all: it read the token out of the
  * query string, rendered a form, and found out whether the link was any good
  * only after a password had been typed and posted. So an invite that had
  * expired, or a link that had already been used, looked exactly like a working
- * one — and the page could not say whose account it was about, which is the
- * first thing anyone with two addresses wants to know. The loader's old JSDoc
- * said a lookup "would burn the token"; that is true of the POST, and not of
- * a read.
+ * one. The loader's old JSDoc said a lookup "would burn the token"; that is
+ * true of the POST, and not of a read.
+ *
+ * **It answers validity and nothing else.** For a while it also returned the
+ * account's address and display name so the page could say whose link it was;
+ * the security review removed that. A link forwarded to the wrong person then
+ * told them exactly which account it opened, and a page that shows only a
+ * password form gives a token holder nothing they did not already have.
  *
  * **This is a validity oracle, deliberately.** It answers valid / expired /
  * unknown for a token somebody already holds. Better Auth's own
@@ -34,10 +38,6 @@ export type ResetTokenState = "valid" | "expired" | "invalid"
 
 export interface ResetTokenView {
   state: ResetTokenState
-  /** The account the link belongs to. Only for a link that still works. */
-  email?: string
-  /** Their display name, when there is one worth greeting them by. */
-  name?: string
 }
 
 export const fetchResetToken = createServerFn({ method: "GET" })
@@ -61,9 +61,10 @@ export const fetchResetToken = createServerFn({ method: "GET" })
       return { state: "expired" }
     }
 
-    // The stored value *is* the user id (`reset-link.ts`).
+    // The stored value *is* the user id (`reset-link.ts`); a row whose user
+    // is gone is a dead link, whatever its expiry says.
     const user = await context.internalAdapter.findUserById(verification.value)
     if (!user) return { state: "invalid" }
 
-    return { state: "valid", email: user.email, name: user.name }
+    return { state: "valid" }
   })

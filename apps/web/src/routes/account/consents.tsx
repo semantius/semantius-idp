@@ -17,7 +17,7 @@ import {
   withError,
 } from "@/server/http/auth-proxy"
 import { requireSession } from "@/server/http/require-session"
-import { assertSameOrigin } from "@/server/http/request-origin"
+import { actorMetadata } from "@/server/http/session"
 import { fetchGrants } from "@/server/functions/account"
 import { revokeForClient } from "@/server/oidc/revoke-user-tokens"
 import { getRuntime } from "@/server/runtime"
@@ -27,9 +27,9 @@ import { LocalTime } from "@/components/common/local-time"
 const HERE = "/account/consents"
 
 /**
- * `/account/consents` — the applications you are connected to (FR-OIDC-10).
+ * `/account/consents` — the applications you are connected to.
  *
- * **What this page can list, and what it cannot** (**D102**). A connection is
+ * **What this page can list, and what it cannot**. A connection is
  * durable in one of two ways, and it shows both: a stored consent — the user
  * was asked and said yes — and a live refresh token, which lets an application
  * obtain new access tokens without the user being present. It used to list
@@ -43,9 +43,9 @@ const HERE = "/account/consents"
  *
  *  - a `skipConsent` client that never asked for `offline_access` leaves no
  *    row at all. Its access token is a stateless JWT and its ability to act
- *    ends when that token expires — fifteen minutes by default (FR-OIDC-5);
+ *    ends when that token expires — fifteen minutes by default;
  *  - an already-issued JWT access token cannot be recalled by anything here,
- *    for the same reason (FR-OIDC-12's documented caveat);
+ *    for the same reason (the spec's documented caveat);
  *  - a consumer reaching a `/gateway/*` upstream, or one presenting an API
  *    key, holds no grant row either. An API key is revoked on
  *    `/account/api-keys`; the gateway's own key-to-JWT cache is reset on every
@@ -78,13 +78,12 @@ export const Route = createFileRoute("/account/consents")({
         const base = runtime.config.base.basePath
         const here = `${base}${HERE}`
 
-        // Two gates this page never had. It writes to the database directly —
-        // no `callAuth`, so Better Auth's origin check has never stood in
-        // front of it — and it authorized that write from the cookie cache,
-        // which answers with the session as it was up to five minutes ago.
-        if (!assertSameOrigin(request)) {
-          return redirectWithCookies(withError(here, "untrusted_origin"))
-        }
+        // Two gates this page never had. It writes to the database
+        // directly — no `callAuth`, so Better Auth's origin check has never
+        // stood in front of it — and it authorized that write from the cookie
+        // cache, which answers with the session as it was up to five minutes
+        // ago. Both are `requireSession`'s now: the origin check
+        // runs first, before the read.
         const signedIn = await requireSession(runtime, request, HERE)
         if (!signedIn.ok) return signedIn.response
         const userId = signedIn.session.user.id
@@ -106,7 +105,7 @@ export const Route = createFileRoute("/account/consents")({
           )
           .returning({ id: oauthConsent.id })
 
-        // FR-OIDC-10's other half, and **not** conditional on the delete
+        // the spec's other half, and **not** conditional on the delete
         // above having found anything: a `skipConsent` client has tokens and
         // no consent row, and this used to return `not_found` before reaching
         // here. Scoped to (user, client) — the other applications the user has
@@ -119,7 +118,7 @@ export const Route = createFileRoute("/account/consents")({
 
         // Nothing of either kind existed: an unknown id, a client that was
         // never connected, or a second submit of a form that already
-        // succeeded. SEC-7 keeps the three indistinguishable. A partial
+        // succeeded. The spec keeps the three indistinguishable. A partial
         // failure — the delete lands, the revoke throws — self-heals on the
         // retry, which sees no consent and live tokens and succeeds.
         if (
@@ -140,6 +139,7 @@ export const Route = createFileRoute("/account/consents")({
             consentRows: deleted.length,
             refreshTokens: revoked.refreshTokens,
             accessTokens: revoked.accessTokens,
+            ...actorMetadata(signedIn.session),
           },
         })
 

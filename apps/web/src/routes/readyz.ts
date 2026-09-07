@@ -30,10 +30,10 @@ function logReadinessFailure(error: unknown): void {
 }
 
 /**
- * Readiness (OPS-3): config loaded, database reachable, migrations current,
+ * Readiness: config loaded, database reachable, migrations current,
  * signing key present.
  *
- * Building the runtime *is* the OPS-2 sequence, so awaiting it here is the
+ * Building the runtime *is* the spec sequence, so awaiting it here is the
  * honest readiness signal: a boot that is still migrating reports not-ready
  * rather than a half-answer.
  *
@@ -41,7 +41,7 @@ function logReadinessFailure(error: unknown): void {
  * an operator needs that, but never why in a way that leaks a hostname, a
  * connection string or a stack trace.
  *
- * A draining process answers not-ready *before* any check runs (OPS-4). The
+ * A draining process answers not-ready *before* any check runs. The
  * checks would all still pass — the pool is open and the migrations are
  * current, right up until the moment they are not — and answering 200 for
  * those last seconds is exactly how a rolling deploy sends requests to a

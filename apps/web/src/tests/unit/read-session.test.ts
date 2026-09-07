@@ -6,7 +6,7 @@ import type { Runtime } from "@/server/runtime"
 
 /**
  * `readSession` telling "nobody is signed in" apart from "the database did not
- * answer" (**D59**).
+ * answer".
  *
  * It used to say `.catch(() => null)`, so both came out as an anonymous
  * visitor. On 2026-08-26 a schema was dropped under a running dev server and
@@ -32,7 +32,7 @@ function runtimeThatThrows(error: unknown): Runtime {
 
 const request = new Request("https://idp.example.com/account")
 
-describe("readSession (D59)", () => {
+describe("readSession", () => {
   it("answers null for a refusal, which is still nobody signed in", async () => {
     // A dead, revoked or banned session. The caller belongs on the login page,
     // not on an error page, so this is the case the original catch got right.

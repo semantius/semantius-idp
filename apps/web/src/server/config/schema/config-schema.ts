@@ -1,8 +1,8 @@
 /**
- * zod schema for `config.jsonc` — the full CFG-4 key inventory.
+ * zod schema for `config.jsonc` — the full key inventory.
  *
  * Rules that hold across the whole file:
- * - every object is strict (`additionalProperties: false`, CFG-5) except the
+ * - every object is strict (`additionalProperties: false`) except the
  *   social-provider entries, which pass provider-specific options through;
  * - keys with a default are optional here and resolved in `derive.ts`, because
  *   several defaults depend on other keys (`trustedOrigins` ← `baseUrl`,
@@ -23,12 +23,13 @@ import {
   flexRecord,
 } from "../zod-helpers"
 import {
+  checkGatewayAudience,
   checkGatewayUrl,
   isValidGatewayName,
 } from "../../../lib/gateway-rules"
 
 /**
- * Claim names the IdP owns. `jwt.claims` may not redefine them (FR-OIDC-8):
+ * Claim names the IdP owns. `jwt.claims` may not redefine them:
  * they are either protocol-reserved or produced by the claims builder.
  */
 export const RESERVED_CLAIM_NAMES = [
@@ -51,7 +52,7 @@ export const RESERVED_CLAIM_NAMES = [
   "family_name",
 ] as const
 
-/** Optional user claims selectable through `jwt.userClaims` (FR-OIDC-7). */
+/** Optional user claims selectable through `jwt.userClaims`. */
 export const USER_CLAIM_NAMES = [
   "email",
   "name",
@@ -61,10 +62,10 @@ export const USER_CLAIM_NAMES = [
 ] as const
 export type UserClaimName = (typeof USER_CLAIM_NAMES)[number]
 
-/** Signing algorithms Neon accepts (V5). Anything else fails validation (FR-OIDC-5). */
+/** Signing algorithms Neon accepts (V5). Anything else fails validation. */
 export const SUPPORTED_JWT_ALGORITHMS = ["ES256", "RS256"] as const
 
-/** Entra pseudo-tenants that would defeat the FR-SOC-5 tenant lock. */
+/** Entra pseudo-tenants that would defeat the spec tenant lock. */
 export const REJECTED_ENTRA_TENANTS = [
   "common",
   "organizations",
@@ -82,7 +83,7 @@ const cidr = z
  * An entry of `server.trustedOrigins`: an absolute origin, a wildcard pattern
  * Better Auth understands (`https://*.example.com` — `absoluteUrl` parses one,
  * because `URL` accepts `*` in a hostname), or the bare `*` that turns the
- * origin check off entirely (**D68**).
+ * origin check off entirely.
  *
  * `*` is spelled out here rather than through a union so the exported JSON
  * schema stays a plain `string[]`, which is what an editor's completion and
@@ -96,6 +97,21 @@ const trustedOrigin = z.string().superRefine((value, ctx) => {
     ctx.addIssue({ code: "custom", message: issue.message })
   }
 })
+
+/**
+ * An entry of `server.allowedHosts`: a host — `idp.example.com`,
+ * with a port when the request's must match it — or a suffix pattern,
+ * `*.example.com`, which matches any subdomain at any depth and never the bare
+ * domain. Lower-case, because `normalizeHost` lower-cases what it compares
+ * against. No scheme and no path: the value is compared with a `Host`, and a
+ * `Host` never carries either.
+ */
+const allowedHost = z
+  .string()
+  .regex(
+    /^(?:\*\.)?[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*(?::\d{1,5})?$/,
+    "Expected a host such as `idp.example.com` (optionally `:port`) or a suffix pattern such as `*.example.com`."
+  )
 
 /**
  * `server.cookiePath`: the `Path` attribute every session cookie carries.
@@ -147,7 +163,12 @@ const serverSchema = z.strictObject({
   dynamicIssuer: flexBoolean()
     .default(false)
     .describe(
-      "Derive the issuer — and every browser-facing URL except e-mail links — per request, from the host the request arrived on, instead of always from `baseUrl`. Off by default, and off is the safe answer. Turning it on asserts four things about the ingress: every hop in front of the IdP OVERWRITES X-Forwarded-Host with the host it matched (nginx passes an inbound one through unless told `proxy_set_header X-Forwarded-Host $host;` — so do AWS ALBs and GCP LBs); the edge forwards only Hosts matching a configured route; the edge serves a CLOSED set of host values; and nothing reaches the container around that edge. Distinct from `trustProxy`, which asserts only the hop INTO the IdP. E-mail links always stay on `baseUrl` (SEC-1): that is what keeps a forged Host out of a password-reset link."
+      "Derive the issuer — and every browser-facing URL except e-mail links — per request, from the host the request arrived on, instead of always from `baseUrl`. Off by default, and off is the safe answer. Turning it on asserts four things about the ingress: every hop in front of the IdP OVERWRITES X-Forwarded-Host with the host it matched (nginx passes an inbound one through unless told `proxy_set_header X-Forwarded-Host $host;` — so do AWS ALBs and GCP LBs); the edge forwards only Hosts matching a configured route; the edge serves a CLOSED set of host values; and nothing reaches the container around that edge. Distinct from `trustProxy`, which asserts only the hop INTO the IdP. E-mail links always stay on `baseUrl`: that is what keeps a forged Host out of a password-reset link."
+    ),
+  allowedHosts: flexArray(allowedHost, { min: 1 })
+    .optional()
+    .describe(
+      "The hosts `dynamicIssuer` may follow: exact hosts (`idp.example.com`; add `:port` when the request's port must match) and `*.example.com` suffix patterns, which match any subdomain and never the bare domain. Optional, because a deployment behind a routing platform may not know its host until after it boots — unset, every host the trusted edge forwards is followed and start-up says so. A request on a host outside the list is answered as `baseUrl`, never refused. Ignored when `dynamicIssuer` is off."
     ),
   trustedOrigins: flexArray(trustedOrigin)
     .optional()
@@ -162,6 +183,11 @@ const serverSchema = z.strictObject({
   shutdownTimeoutSeconds: flexInt({ min: 0, max: 300 })
     .default(10)
     .describe("SIGTERM drain budget."),
+  maxRequestBodyBytes: flexInt({ min: 1 })
+    .default(64 * 1024 * 1024)
+    .describe(
+      "Largest request body `/gateway/*` forwards, in bytes; 64 MiB by default. A body that declares more is refused with `413 payload_too_large` before the upstream is called, and one that streams past it without a declared length is cut off at the cap — the bytes are counted on the way through, never buffered. Bodies to the IdP's own endpoints are not affected."
+    ),
   cookiePath: cookiePath
     .default("/")
     .describe(
@@ -170,7 +196,7 @@ const serverSchema = z.strictObject({
   cookieDomain: cookieDomain
     .optional()
     .describe(
-      "`Domain` of every session cookie. Unset by default, which makes the cookie host-only — the safe default, and what FR-OIDC-14's first-party rule assumes. Set it to a registrable domain (`example.com`) to share the session across that domain's subdomains; every host under it can then read and set the session, so set it only across hosts you control."
+      "`Domain` of every session cookie. Unset by default, which makes the cookie host-only — the safe default, and what the spec's first-party rule assumes. Set it to a registrable domain (`example.com`) to share the session across that domain's subdomains; every host under it can then read and set the session, so set it only across hosts you control."
     ),
 })
 
@@ -180,7 +206,7 @@ const databaseSchema = z.strictObject({
     .min(1)
     .optional()
     .describe(
-      "Connection string for ordinary application traffic. A transaction-mode pooler belongs here and nowhere else. Optional: when it is absent, `directUrl` serves both roles, which is the single-endpoint deployment (**D74**). Fallback env: DATABASE_URL."
+      "Connection string for ordinary application traffic. A transaction-mode pooler belongs here and nowhere else. Optional: when it is absent, `directUrl` serves both roles, which is the single-endpoint deployment. Fallback env: DATABASE_URL."
     ),
   directUrl: z
     .string()
@@ -211,7 +237,7 @@ const databaseSchema = z.strictObject({
   poolMax: flexInt({ min: 1, max: 200 })
     .default(10)
     .describe(
-      "Maximum pooled connections. One instance is the supported topology, so this is the whole deployment's budget." // OPS-11
+      "Maximum pooled connections. One instance is the supported topology, so this is the whole deployment's budget."
     ),
   connectTimeoutSeconds: flexInt({ min: 1, max: 300 })
     .default(30)
@@ -222,7 +248,7 @@ const databaseSchema = z.strictObject({
 }).superRefine((database, ctx) => {
   // Both fields are optional individually and at least one is mandatory
   // together, because which of the two a deployment has depends on its
-  // Postgres and not on this schema (**D74**). Neon hands out a pooled and a
+  // Postgres and not on this schema. Neon hands out a pooled and a
   // direct endpoint; a plain Postgres or the bundled compose one is a single
   // endpoint that is already direct. Making `url` the required field — as it
   // was — meant an operator who had only the direct endpoint had to put it
@@ -249,7 +275,7 @@ const siteSchema = z.strictObject({
     .min(1)
     .optional()
     .describe(
-      "What the administration area calls itself, when that is not `site.name` — a deployment whose users think of it as \"User Manager\" rather than as the identity provider (D61). Branding only: it never reaches the TOTP issuer label, the e-mails or anything a token carries. Defaults to `site.name`."
+      "What the administration area calls itself, when that is not `site.name` — a deployment whose users think of it as \"User Manager\" rather than as the identity provider. Branding only: it never reaches the TOTP issuer label, the e-mails or anything a token carries. Defaults to `site.name`."
     ),
   logo: z
     .string()
@@ -259,7 +285,7 @@ const siteSchema = z.strictObject({
     .string()
     .optional()
     .describe(
-      "As `site.logo`. Both `icon.png` and `branding/icon.png` name the same file (D44)."
+      "As `site.logo`. Both `icon.png` and `branding/icon.png` name the same file."
     ),
   supportEmail: z
     .email()
@@ -282,12 +308,12 @@ const siteSchema = z.strictObject({
   defaultLocale: z
     .string()
     .default("en-US")
-    .describe("Only `en-US` ships in v1."), // FR-I18N-1
+    .describe("Only `en-US` ships in v1."),
   nameFormat: z
     .enum(["first-last", "last-first"])
     .default("first-last")
     .describe(
-      'How a display name is composed from the first and last name that were captured (D49). `first-last` gives "Jane Smith"; `last-first` gives "Smith, Jane". The name itself is never an input field.'
+      'How a display name is composed from the first and last name that were captured. `first-last` gives "Jane Smith"; `last-first` gives "Smith, Jane". The name itself is never an input field.'
     ),
 })
 
@@ -298,7 +324,7 @@ const emailSchema = z.strictObject({
         .string()
         .optional()
         .describe(
-          "Absent ⇒ degraded mode: every e-mail feature is disabled." // FR-MAIL-2
+          "Absent ⇒ degraded mode: every e-mail feature is disabled."
         ),
     })
     .prefault({}),
@@ -317,23 +343,23 @@ const emailSchema = z.strictObject({
 const signUpSchema = z.strictObject({
   enabled: flexBoolean()
     .default(false)
-    .describe("Governs password and social registration alike."), // FR-SIGNUP-1
+    .describe("Governs password and social registration alike. On may be combined with a missing e-mail configuration only on a development deployment: without e-mail no address is verified and no password can be reset, so an https `baseUrl` refuses the combination at start-up."),
   requireApproval: flexBoolean()
     .default(true)
-    .describe("Self-registrations land as `pending`."), // FR-SIGNUP-2
+    .describe("Self-registrations land as `pending`."),
   allowedEmailDomains: flexArray(z.string().min(1))
     .default([])
     .describe("Empty = no restriction. Admin-created users always bypass it."),
 })
 
 /**
- * `auth.defaultRedirect` (D28) — a same-origin relative path, or an absolute
+ * `auth.defaultRedirect` — a same-origin relative path, or an absolute
  * http(s) URL on any origin.
  *
  * Cross-origin is allowed here and nowhere else: this value comes from the
  * operator's own configuration file, not from a request, so it cannot be an
  * open redirect. The runtime `returnTo` parameter is a different thing
- * entirely and stays same-origin-relative-only — see `safeReturnTo` (SEC-3).
+ * entirely and stays same-origin-relative-only — see `safeReturnTo`.
  *
  * A bare hostname (`example.com`) is the trap this guards: it is neither, and
  * silently resolving it as a relative path would send everyone to
@@ -420,18 +446,18 @@ const sessionSchema = z.strictObject({
     .describe("A session older than this is extended on the next request."),
   cookieCacheMinutes: flexInt({ min: 0, max: 5 })
     .default(5)
-    .describe("Capped at 5 so revocations bite quickly."), // FR-AUTH-5
+    .describe("Capped at 5 so revocations bite quickly."),
   revokeOAuthTokensOnLogout: flexBoolean()
     .default(false)
     .describe(
-      "Whether ending a session also kills the OAuth tokens it obtained. Off by default: a user closing this tab does not usually mean to sign out of every application they use. It governs sign-out, RP-initiated logout and the lazy delete of an expired session; the hourly retention sweep deletes expired sessions in raw SQL and triggers nothing. Explicit revocation always revokes the tokens whatever this says - the account page's own sign-out, `Sign out everywhere else`, and an administrator's revoke-all." // FR-AUTH-6, D101
+      "Whether ending a session also kills the OAuth tokens it obtained. Off by default: a user closing this tab does not usually mean to sign out of every application they use. It governs sign-out, RP-initiated logout and the lazy delete of an expired session; the hourly retention sweep deletes expired sessions in raw SQL and triggers nothing. Explicit revocation always revokes the tokens whatever this says - the account page's own sign-out, `Sign out everywhere else`, and an administrator's revoke-all."
     ),
 })
 
 /**
  * Social providers are loose objects: `enabled`/`clientId`/`clientSecret` and
  * the IdP's own knobs are typed, everything else is passed to the Better Auth
- * provider verbatim (FR-SOC-1).
+ * provider verbatim.
  */
 const socialProviderSchema = z.looseObject({
   enabled: flexBoolean().default(true),
@@ -443,7 +469,7 @@ const socialProviderSchema = z.looseObject({
   syncProfile: flexBoolean()
     .default(true)
     .describe(
-      "Refresh profile fields from the provider on every sign-in." // FR-SOC-4
+      "Refresh profile fields from the provider on every sign-in."
     ),
   allowedEmailDomains: flexArray(z.string().min(1))
     .default([])
@@ -454,7 +480,7 @@ const socialProviderSchema = z.looseObject({
     .string()
     .optional()
     .describe(
-      "Required for `microsoft`: a tenant GUID or verified domain." // FR-SOC-5
+      "Required for `microsoft`: a tenant GUID or verified domain."
     ),
 })
 
@@ -462,7 +488,7 @@ const twoFactorSchema = z.strictObject({
   enabled: flexBoolean()
     .default(true)
     .describe(
-      "Whether users may enroll at all. Enrollment is per user and always optional; turning this off hides the whole feature." // FR-2FA-1
+      "Whether users may enroll at all. Enrollment is per user and always optional; turning this off hides the whole feature."
     ),
   issuer: z
     .string()
@@ -471,14 +497,14 @@ const twoFactorSchema = z.strictObject({
   trustDeviceDays: flexInt({ min: 0, max: 365 })
     .default(30)
     .describe(
-      "How long a device stays trusted after a successful challenge. `0` asks every time and removes the checkbox."
+      "How long a device stays trusted after a successful challenge. Every sign-in renews the window, and a trust also ends three windows after it was first granted, whatever its renewals. `0` asks every time and removes the checkbox."
     ),
 })
 
 const apiKeysSchema = z.strictObject({
   enabled: flexBoolean()
     .default(true)
-    .describe("Off hides the account page and 404s its route."), // FR-KEY-1
+    .describe("Off hides the account page and 404s its route."),
   defaultExpiresIn: duration({ min: 60 })
     .prefault("365d")
     .describe("Pre-filled expiry on the create form."),
@@ -489,10 +515,10 @@ const apiKeysSchema = z.strictObject({
     .string()
     .min(1)
     .default("idp")
-    .describe("`azp` of JWTs exchanged from an API key."), // FR-KEY-3
+    .describe("`azp` of JWTs exchanged from an API key."),
   tokenTtl: duration({ min: 60, max: 86400 })
     .prefault(3600)
-    .describe("Lifetime of a JWT exchanged from a key."), // FR-KEY-3
+    .describe("Lifetime of a JWT exchanged from a key."),
 })
 
 const jwtSchema = z.strictObject({
@@ -510,7 +536,7 @@ const jwtSchema = z.strictObject({
   includeUserData: flexBoolean()
     .default(true)
     .describe(
-      "Whether access tokens carry the user's name, address and roles at all. Off removes exactly that set." // FR-OIDC-7
+      "Whether access tokens carry the user's name, address and roles at all. Off removes exactly that set."
     ),
   userClaims: flexArray(z.enum(USER_CLAIM_NAMES))
     .optional()
@@ -530,7 +556,7 @@ const jwtSchema = z.strictObject({
   rotationInterval: duration({ min: 3600 })
     .prefault("90d")
     .describe(
-      "How often a new signing key is created. The old one keeps verifying for `jwt.gracePeriod`." // FR-OIDC-16
+      "How often a new signing key is created. The old one keeps verifying for `jwt.gracePeriod`."
     ),
   gracePeriod: duration({ min: 60 })
     .optional()
@@ -542,7 +568,7 @@ const jwtSchema = z.strictObject({
       ttl: duration({ min: 60, max: 86400 })
         .prefault(3600)
         .describe(
-          "Lifetime of a JWT from `GET /api/auth/token`, the first-party session exchange." // FR-OIDC-14
+          "Lifetime of a JWT from `GET /api/auth/token`, the first-party session exchange."
         ),
     })
     .prefault({}),
@@ -562,7 +588,7 @@ const oauthSchema = z.strictObject({
   accessTokenTtl: duration({ min: 60 })
     .prefault("15m")
     .describe(
-      "Also the window in which a revoked token still verifies for a stateless resource server." // FR-OIDC-12
+      "Also the window in which a revoked token still verifies for a stateless resource server."
     ),
   idTokenTtl: duration({ min: 60 }).prefault("1h"),
   codeTtl: duration({ min: 10, max: 600 })
@@ -591,14 +617,14 @@ const oauthSchema = z.strictObject({
       prune: flexBoolean()
         .default(false)
         .describe(
-          "Delete rows for clients no longer in the file instead of disabling them." // FR-OIDC-2
+          "Delete rows for clients no longer in the file instead of disabling them."
         ),
     })
     .prefault({}),
 })
 
 /**
- * One entry of the `gateways` block (FR-GW-1, **D91**).
+ * One entry of the `gateways` block.
  *
  * An object rather than a bare URL string, so a per-target option can be added
  * without a migration of everybody's configuration file — `requireAuth` is the
@@ -606,7 +632,7 @@ const oauthSchema = z.strictObject({
  *
  * The URL rules are `lib/gateway-rules.ts`, shared with the admin form and
  * with `/idp/create-gateway`, so the file path and the database path refuse
- * exactly the same targets (**D62**'s pattern). That is what stops `file://`
+ * exactly the same targets (**the spec's pattern). That is what stops `file://`
  * from being configurable under either name.
  */
 export const gatewayTargetSchema = z.strictObject({
@@ -623,7 +649,24 @@ export const gatewayTargetSchema = z.strictObject({
   requireAuth: flexBoolean()
     .default(false)
     .describe(
-      "Refuse a request that carries neither `Authorization`, `x-api-key` nor a session cookie instead of forwarding it anonymously. For an upstream that has no anonymous role of its own." // FR-GW-4
+      "Refuse a request that carries neither `Authorization`, `x-api-key` nor a session cookie instead of forwarding it anonymously. For an upstream that has no anonymous role of its own."
+    ),
+  audience: z
+    .string()
+    .superRefine((value, ctx) => {
+      const problem = checkGatewayAudience(value)
+      if (problem === undefined) return
+      ctx.addIssue({
+        code: "custom",
+        message:
+          problem === "fragment"
+            ? `\`${value}\` must not contain a \`#\` fragment (RFC 8707).`
+            : `\`${value}\` is not an absolute URI. An audience indicator is a URL or URN with a scheme, such as \`https://api.internal\` or \`urn:example:api\`.`,
+      })
+    })
+    .optional()
+    .describe(
+      "Optional audience for the minted token (an RFC 8707 resource indicator): an absolute URI or URN. When set, the JWT minted for an API key or a session presented to this gateway carries it as `aud` instead of `jwt.audience`, for an upstream that checks `aud` against its own identifier. Leave it unset to keep `jwt.audience`, which is what a key holder calling `GET /api/auth/token` directly always gets."
     ),
 })
 
@@ -642,6 +685,8 @@ function gatewayUrlMessage(value: string, problem: string): string {
       return `\`${value}\` must not contain a query string; the caller's own query is forwarded unchanged.`
     case "fragment":
       return `\`${value}\` must not contain a fragment.`
+    case "link_local":
+      return `\`${value}\` is a link-local address (169.254.0.0/16 or fe80::/10) — the range the cloud metadata service answers on — and a gateway may not point there.`
     default:
       return `\`${value}\` is not an absolute URL.`
   }
@@ -656,13 +701,13 @@ const adminSchema = z.strictObject({
   allowImpersonation: flexBoolean()
     .default(false)
     .describe(
-      "Lets an administrator act as another user, ≤ 1 h, never against another administrator, every action audited." // FR-ADMIN-5
+      "Lets an administrator act as another user, ≤ 1 h, never against another administrator, every action audited."
     ),
   database: z
     .enum(["disabled", "read-only", "read-write"])
     .default("disabled")
     .describe(
-      "`/admin/database`, a schema explorer and SQL console over this deployment's own Postgres. `read-only` runs every statement in a READ ONLY transaction; `read-write` adds a mode toggle and commits when it is set. `disabled` removes the page, the nav entry and both endpoints. One statement per run, 10 s timeout, 500-row cap, every execution audited as `database.queried`. An administrator who can run SQL can read every row at rest — password hashes and session tokens included — so leave it off unless that is intended." // FR-ADMIN-7
+      "`/admin/database`, a schema explorer and SQL console over this deployment's own Postgres. `read-only` runs every statement in a READ ONLY transaction; `read-write` adds a mode toggle and commits when it is set. `disabled` removes the page, the nav entry and both endpoints. One statement per run, 10 s timeout, 500-row cap, every execution audited as `database.queried`. An administrator who can run SQL can read every row at rest — password hashes and session tokens included — so leave it off unless that is intended."
     ),
 })
 
@@ -671,7 +716,7 @@ const rateLimitSchema = z.strictObject({
     .default(true)
     .describe(
       "Turning this off removes the rate limits on sign-in, reset, 2FA and the token endpoint. For tests."
-    ), // SEC-2
+    ),
   storage: z
     .enum(["database", "memory"])
     .default("database")
@@ -710,7 +755,7 @@ export const configFileSchema = z.strictObject({
     .record(z.string(), socialProviderSchema)
     .prefault({})
     .describe(
-      "Keyed by provider id — `google`, `github`, `microsoft`. Each entry needs `clientId` and `clientSecret`; `microsoft` also needs `tenantId`." // FR-SOC-5
+      "Keyed by provider id — `google`, `github`, `microsoft`. Each entry needs `clientId` and `clientSecret`; `microsoft` also needs `tenantId`."
     ),
   twoFactor: twoFactorSchema.prefault({}),
   apiKeys: apiKeysSchema.prefault({}),
@@ -730,7 +775,7 @@ export const configFileSchema = z.strictObject({
       }
     })
     .describe(
-      "Authenticating reverse proxies, keyed by name: `/gateway/<name>[/<rest>]` streams every method to `<url>/<rest>`. A request carrying `x-api-key` and no `Authorization` has the key exchanged for a session JWT — the same exchange `GET /api/auth/token` performs, with the same ban re-check and the same `azp` — and the JWT is injected as `Authorization: Bearer`, which is what lets a client holding only an API key reach a resource server that validates JWTs against the JWKS. The result is cached for ten minutes, so a revocation takes up to that long to bite unless it goes through this process's admin API. Entries are reconciled into the `gateway` table at start-up under `oauth.reconcile.prune` semantics; rows added on `/admin/gateways` are never touched by that sweep. Each entry is `{ \"url\": \"https://api.internal\", \"requireAuth\": false }`. An upstream reached over plain http receives the minted bearer token in clear." // FR-GW-1..7, D91
+      "Authenticating reverse proxies, keyed by name: `/gateway/<name>[/<rest>]` streams every method to `<url>/<rest>`. A request carrying `x-api-key` and no `Authorization` has the key exchanged for a session JWT — the same exchange `GET /api/auth/token` performs, with the same ban re-check and the same `azp` — and the JWT is injected as `Authorization: Bearer`, which is what lets a client holding only an API key reach a resource server that validates JWTs against the JWKS. The result is cached for ten minutes, so a revocation takes up to that long to bite unless it goes through this process's admin API. Entries are reconciled into the `gateway` table at start-up under `oauth.reconcile.prune` semantics; rows added on `/admin/gateways` are never touched by that sweep. Each entry is `{ \"url\": \"https://api.internal\", \"requireAuth\": false }`. An upstream reached over plain http receives the minted bearer token in clear."
     ),
   admin: adminSchema.prefault({}),
   rateLimit: rateLimitSchema.prefault({}),
@@ -740,7 +785,7 @@ export const configFileSchema = z.strictObject({
       intervalMinutes: flexInt({ min: 1, max: 1440 })
         .default(60)
         .describe(
-          "How often the retention job runs: expired sessions, spent verification rows, dead tokens, stale rate-limit rows and retired keys." // OPS-8, DM-5
+          "How often the retention job runs: expired sessions, spent verification rows, dead tokens, stale rate-limit rows and retired keys."
         ),
     })
     .prefault({}),

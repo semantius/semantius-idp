@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 #
-# The image (OPS-1).
+# The image.
 #
 # Three stages, and the split is not decorative: `deps` holds the pnpm store
 # and `node_modules`, `build` holds the toolchain, and `runtime` holds neither.
@@ -10,7 +10,7 @@
 #
 # **Bun runs the application; Node never appears at runtime.** pnpm needs Node
 # to install, so the build stages have both; the final stage has only Bun,
-# which is also why the HEALTHCHECK is a Bun one-liner (OPS-3) — a slim image
+# which is also why the HEALTHCHECK is a Bun one-liner — a slim image
 # has no curl and adding one to run a health check is 10 MB for an HTTP GET
 # that Bun already does.
 #
@@ -29,7 +29,7 @@
 # lives in `.bun-version` and is copied into four other files;
 # `scripts/check-bun-version.ts` refuses a build where they disagree, because
 # the smoke test passing on one Bun while the image ships another is a failure
-# that only appears in somebody's deployment (**D73**).
+# that only appears in somebody's deployment.
 ARG BUN_VERSION=1.3.12
 ARG NODE_VERSION=22
 
@@ -119,10 +119,10 @@ RUN cd apps/web \
     && bun build src/serve.ts --target=bun --outfile=/repo/apps/web/dist/serve.js
 
 # Only what runtime needs: the `dist` output, the production dependency tree,
-# and the migrations the entrypoint applies (OPS-5).
+# and the migrations the entrypoint applies.
 RUN pnpm --filter web deploy --legacy --prod /prod/web
 
-# **`--prod` above does nothing, and `--legacy` is not optional** (**D76**).
+# **`--prod` above does nothing, and `--legacy` is not optional**.
 #
 # pnpm 10 refuses a non-injected workspace deploy without `--legacy`
 # (`ERR_PNPM_DEPLOY_NONINJECTED_WORKSPACE`), and the legacy path copies the
@@ -134,14 +134,14 @@ RUN pnpm --filter web deploy --legacy --prod /prod/web
 # So the build tooling is removed by name. Every entry is a compiler, a
 # formatter, a test runner or a types package; none is reachable from what
 # actually runs, because Vite and `bun build` have already produced it. The
-# TST-8 smoke test is what proves that claim on every build — it starts the
+# The smoke test is what proves that claim on every build — it starts the
 # image, migrates, signs somebody in and mints a token, and a module this
 # deleted would fail it.
 #
 # **`@hugeicons+*` is on the list and `lucide-react` deliberately is not**
-# (**D86**). The free icon set is **148 MB** — one module per icon, several
+#. The free icon set is **148 MB** — one module per icon, several
 # thousand of them — and it took the image to 374.8 MiB on the runner, 25 MiB
-# over OPS-13's ceiling, on the first release that contained the database
+# over the spec's ceiling, on the first release that contained the database
 # console. Vite *inlines* what the two components use: the built server chunk
 # holds `Database01Icon`'s path data and imports nothing from the package, so
 # in the image it is 148 MB of files nothing can reach. `lucide-react` is the
@@ -170,7 +170,7 @@ RUN set -eu; cd /prod/web/node_modules/.pnpm; \
 # ------------------------------------------------------------- runtime --
 FROM oven/bun:${BUN_VERSION}-slim AS runtime
 
-# OCI labels (OPS-1). `revision` and `version` are per-build; the rest are not.
+# OCI labels. `revision` and `version` are per-build; the rest are not.
 ARG IDP_VERSION=0.0.0-dev
 ARG IDP_REVISION=
 LABEL org.opencontainers.image.title="semantius-idp" \
@@ -191,16 +191,16 @@ WORKDIR /app
 COPY --from=build /prod/web/node_modules ./node_modules
 COPY --from=build /repo/apps/web/dist ./dist
 COPY --from=build /repo/apps/web/drizzle ./drizzle
-# CFG-1: the annotated defaults ship *inside* the image, so an operator can
+# the annotated defaults ship *inside* the image, so an operator can
 # copy them out of a running container rather than hunting for the repository.
-# The generated schemas come too, from their own folder — CFG-1 says they ship
+# The generated schemas come too, from their own folder — the spec says they ship
 # in the repository *and* the image, and they stopped being siblings of the
 # examples when a copied `config/` proved to be the wrong place for a
 # generated file.
 COPY --from=build /repo/config.example ./config.example
 COPY --from=build /repo/config-schema ./config-schema
 
-# `idp` on the PATH, so `docker run <image> idp migrate` reads the way OPS-6
+# `idp` on the PATH, so `docker run <image> idp migrate` reads the way the spec
 # writes it.
 RUN printf '#!/bin/sh\nexec bun /app/dist/idp.js "$@"\n' > /usr/local/bin/idp \
     && chmod 0755 /usr/local/bin/idp
@@ -212,13 +212,13 @@ USER bun
 
 EXPOSE 3000
 
-# OPS-3. `IDP_HEALTH_URL` is derived by the compose file when the deployment
+# `IDP_HEALTH_URL` is derived by the compose file when the deployment
 # sits under a sub-path; the default is the host root on the default port.
 ENV IDP_HEALTH_URL=http://127.0.0.1:3000/healthz
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
     CMD bun -e 'const r = await fetch(process.env.IDP_HEALTH_URL); process.exit(r.ok ? 0 : 1)'
 
-# Bun is PID 1 so SIGTERM reaches the drain (OPS-4). No shell form, no init
+# Bun is PID 1 so SIGTERM reaches the drain. No shell form, no init
 # wrapper: an `sh -c` in between would swallow the signal, which is the classic
 # way a container that implements graceful shutdown never performs one.
 ENTRYPOINT []

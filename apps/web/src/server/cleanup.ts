@@ -1,5 +1,5 @@
 /**
- * The retention job (OPS-8, DM-5).
+ * The retention job.
  *
  * Nine tables in this schema grow without bound and nothing has ever emptied
  * them. Most are small; two are not. `verification` takes a row for every
@@ -19,7 +19,7 @@
  * | `oauth_access_token`       | dead ≥ 30 days (expired or revoked)             |
  * | `oauth_refresh_token`      | dead ≥ 30 days (expired or revoked)             |
  * | `oauth_client_assertion`   | expired — the JTI replay window is over         |
- * | `pending_authorization`    | expired (D33: written by nothing, swept anyway) |
+ * | `pending_authorization`    | expired (written by nothing, swept anyway) |
  * | `rate_limit`               | untouched for a day, so past every window       |
  * | `jwks`                     | expired **plus** `jwt.gracePeriod`              |
  * | `audit_log`                | older than `audit.retentionDays`                |
@@ -27,7 +27,7 @@
  * **The 30-day delay on token rows is not caution, it is evidence.** A revoked
  * token that is still in the table is the answer to "was this token revoked,
  * or did it never exist?" — which is the first question asked after a
- * suspected leak. Delete the row and both cases look identical. DM-5 names 30
+ * suspected leak. Delete the row and both cases look identical. The spec names 30
  * days; that is the window in which someone is still investigating.
  *
  * **`jwks` is the one row that must not be deleted early.** A key stops
@@ -38,7 +38,7 @@
  * alone would invalidate live tokens on a schedule.
  *
  * Under `LOCK_KEYS.cleanup` on the **direct** connection, with `skipIfLocked`:
- * if another instance is already sweeping there is nothing to wait for (D27).
+ * if another instance is already sweeping there is nothing to wait for.
  */
 
 import { and, isNotNull, lt, or, sql } from "drizzle-orm"
@@ -48,7 +48,7 @@ import { withAdvisoryLock } from "./db/advisory-lock"
 import type { DbHandle } from "./db/client"
 import type { Logger } from "./logger"
 
-/** DM-5: how long a dead token row is kept as evidence. */
+/** how long a dead token row is kept as evidence. */
 export const TOKEN_GRACE_DAYS = 30
 
 /**
@@ -78,7 +78,7 @@ export interface CleanupDeps {
   config: IdpConfig
   /** The pooled handle: the deletes run here. */
   database: DbHandle
-  /** Direct, non-pooled: the advisory lock lives on this one (D27). */
+  /** Direct, non-pooled: the advisory lock lives on this one. */
   locking: DbHandle
   logger: Logger
 }
@@ -105,7 +105,7 @@ function minus(now: Date, seconds: number): Date {
 }
 
 /**
- * Deletes everything DM-5 names, and returns what it removed.
+ * Deletes everything the spec names, and returns what it removed.
  *
  * Returns `undefined` when another instance holds the lock — the caller logs
  * nothing in that case, because "someone else is doing it" is not an event.
@@ -244,7 +244,7 @@ export interface CleanupJob {
 }
 
 /**
- * Runs {@link runCleanup} on a schedule (OPS-8).
+ * Runs {@link runCleanup} on a schedule.
  *
  * **Not `setInterval`.** A sweep can outlast its own interval on a large
  * database, and `setInterval` would then queue the next one behind it and the

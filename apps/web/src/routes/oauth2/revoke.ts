@@ -5,7 +5,7 @@ import { forwardToAuth } from "@/server/oidc/protocol-proxy"
 import { getRuntime } from "@/server/runtime"
 
 /**
- * `{issuer}/oauth2/revoke` (FR-OIDC-4, FR-OIDC-17, RFC 7009).
+ * `{issuer}/oauth2/revoke` (RFC 7009).
  *
  * The proxy normalizes the one case the provider gets wrong: an unknown token
  * is a success, so the endpoint cannot be used to discover which tokens exist.

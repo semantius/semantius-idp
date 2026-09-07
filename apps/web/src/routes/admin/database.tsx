@@ -28,7 +28,7 @@ import {
 } from "@/server/functions/admin"
 
 /**
- * `/admin/database` — the schema, and a SQL console (FR-ADMIN-7).
+ * `/admin/database` — the schema, and a SQL console.
  *
  * Off by default and absent when it is off: `admin.database` at `disabled`
  * takes the nav entry, this route and both endpoints with it. The endpoints go
@@ -45,7 +45,7 @@ import {
  */
 export const Route = createFileRoute("/admin/database")({
   loader: async ({ context }) => {
-    // FR-ADMIN-7: with the console off there is no page, not a hidden panel.
+    // with the console off there is no page, not a hidden panel.
     if (!context.ui.adminDatabaseEnabled) throw notFound()
     return {
       ui: context.ui,
@@ -92,7 +92,7 @@ const quoted = (name: string) => `"${name.replace(/"/g, '""')}"`
 const SIDE_BY_SIDE = 1024
 
 /**
- * Whether the two panes fit beside each other (**D87**).
+ * Whether the two panes fit beside each other.
  *
  * The layout used to be `lg:grid-cols-…`, and a media query in CSS cannot
  * reach a prop. This is `use-mobile.ts`'s shape — the registry hook the
@@ -128,7 +128,7 @@ function DatabasePage() {
   // `SQLResult` has no truncation flag, so the caption is the page's job.
   const [truncatedRows, setTruncatedRows] = useState<number | null>(null)
   /**
-   * The selector's answer, once the operator has used it (D84), and `null`
+   * The selector's answer, once the operator has used it, and `null`
    * until then — the loader's document is what the page opens on. An override
    * rather than state seeded from the loader: seeded state would go stale the
    * moment the route was invalidated, and this way there is one source of
@@ -188,7 +188,7 @@ function DatabasePage() {
   const writable = schema.mode === "read-write"
 
   /**
-   * Fetch another schema's tree (D84).
+   * Fetch another schema's tree.
    *
    * The endpoint is the same one the loader used, so a switch costs one round
    * trip and no navigation: the URL does not carry the schema, because the
@@ -211,7 +211,7 @@ function DatabasePage() {
   }
 
   /**
-   * The run button on a table row (D84).
+   * The run button on a table row.
    *
    * **Schema-qualified on purpose.** The search path is the *deployment's*
    * schema, so `select * from "user"` reads `idp.user` whatever the tree is
@@ -269,14 +269,14 @@ function DatabasePage() {
 
   return (
     <AdminShell
-      // D87: the console is the page, so it takes the height the window has
+      // the console is the page, so it takes the height the window has
       // left rather than the height its widest result happens to want, and
       // its one-sentence subtitle is not held to a paragraph's measure.
       fill
       wideDescription
       title={t.admin.database.title}
       // The mode is in the opening sentence rather than a paragraph of its
-      // own beneath it (D84): a `read-only` console says so where the page
+      // own beneath it: a `read-only` console says so where the page
       // introduces itself, and a writable one keeps the line below, which is
       // an instruction rather than a restatement.
       description={
@@ -291,7 +291,7 @@ function DatabasePage() {
         </p>
       ) : null}
 
-      {/* **A resizable group, not a grid** (D87). The tree column was
+      {/* **A resizable group, not a grid**. The tree column was
           `minmax(0,20rem)` and the two panes were fixed-height cards inside
           it: nothing followed the window, and the operator could not spend a
           wide screen on whichever half they were reading. The defaults are
@@ -319,7 +319,7 @@ function DatabasePage() {
           className="flex min-h-0 min-w-0 flex-col gap-2"
           defaultSize={320}
           // The grid capped this column at `20rem` and gave every extra pixel
-          // to the runner, which is still the right split (D84: a table name
+          // to the runner, which is still the right split (a table name
           // and a column count do not want the width; a result grid does).
           // `preserve-pixel-size` is that cap, now movable.
           groupResizeBehavior="preserve-pixel-size"
@@ -335,7 +335,7 @@ function DatabasePage() {
           <Suspense
             fallback={<Skeleton className="min-h-0 flex-1 rounded-lg" />}
           >
-            {/* **The selector *is* the card's header line** (D84, second
+            {/* **The selector *is* the card's header line** (second
                 pass). It sat above the card at first, under its own label,
                 with the header showing the database name beside a "/ to
                 search" hint — a strip 20rem wide, and every pixel of it
@@ -412,7 +412,7 @@ function DatabasePage() {
                 usefully. The pin is a *display* choice and stops here:
                 `onExecute` above sends `read` regardless, because the endpoint
                 refuses a requested `read-write` on a `read-only` deployment.
-                Recorded as D83. */}
+                Recorded in the spec. */}
             <SQLRunner
               database={schema.database}
               onExecute={onExecute}
@@ -424,7 +424,7 @@ function DatabasePage() {
                 ? { defaultMode: "read" as const }
                 : { mode: "read-write" as const })}
               // **After the spread, and merged rather than passed twice**
-              // (D87). The `read-only` arm used to carry a `className` of its
+              // . The `read-only` arm used to carry a `className` of its
               // own, so a second one written above the spread was silently
               // replaced: the card lost `flex-1`, stopped filling its panel,
               // and the editor and the grid — two panes of a group with no

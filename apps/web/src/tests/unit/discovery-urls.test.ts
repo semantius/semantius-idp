@@ -5,7 +5,7 @@ import { getCatalog } from "@/server/i18n"
 import { createBasePaths, discoveryUrls } from "@/server/oidc/base-path"
 
 /**
- * The well-known URLs the admin system page lists (**D55**, FR-ADMIN-2).
+ * The well-known URLs the admin system page lists.
  *
  * The sub-path shape is the whole reason this exists. Two metadata URLs are
  * correct for an issuer with a path and neither is guessable from the issuer:

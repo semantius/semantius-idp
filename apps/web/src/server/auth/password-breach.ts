@@ -1,5 +1,5 @@
 /**
- * Refusing passwords that are already in a breach corpus (FR-AUTH-1, SEC-8).
+ * Refusing passwords that are already in a breach corpus.
  *
  * `auth.password.breachCheck` has been in the configuration schema since M2
  * and has never done anything. This is what it does.
@@ -17,7 +17,7 @@
  *
  * **Turning this on adds one egress origin** — `api.pwnedpasswords.com` — to a
  * deployment that otherwise talks to nothing but its database and, optionally,
- * Resend. That is why it is off by default and why DOC-4 has to say so: an
+ * Resend. That is why it is off by default and why the runbook has to say so: an
  * operator running in a network with no outbound access needs to know that
  * enabling this makes every sign-up depend on reaching the internet.
  *

@@ -1,6 +1,6 @@
 /**
  * Keeping CORS and the CSP `form-action` list in step with the database
- * (**D50**, FR-OIDC-17, SEC-4, D46).
+ *.
  *
  * `clientOrigins()` used to read the configuration file and nothing else, which
  * was correct while `oauth_clients.jsonc` was the only way a client could exist.
@@ -15,7 +15,7 @@
  * an administrator switched off should stop being an allowed origin, not merely
  * stop receiving tokens.
  *
- * Refreshed at start-up and after every client mutation. OPS-11 (single
+ * Refreshed at start-up and after every client mutation. The supported topology (single
  * instance) is what makes a process-local cache the right shape; the cost of
  * being wrong is bounded by a restart.
  */

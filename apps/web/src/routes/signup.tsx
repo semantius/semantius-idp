@@ -16,13 +16,20 @@ import {
   redirectWithCookies,
   withError,
 } from "@/server/http/auth-proxy"
+import { consume } from "@/server/http/rate-limit"
+import {
+  DUPLICATE_NOTICE_RULE,
+  duplicateNoticeBucket,
+  signUpCreatedNothing,
+} from "@/server/auth/sign-up-outcome"
 import { displayName } from "@/server/display-name"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
+import type { Runtime } from "@/server/runtime"
 import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 /**
- * `/signup` — self-registration (FR-SIGNUP-1..5).
+ * `/signup` — self-registration.
  *
  * **404 when `signUp.enabled` is false**, not a disabled form: the requirement
  * is that the page does not exist, so an invite-only deployment gives a curious
@@ -30,10 +37,19 @@ import { PendingForm, SubmitButton } from "@/components/common/pending-form"
  *
  * Where the new account lands depends on configuration, and the page says which
  * before the user commits: approval pending, confirm your address, or straight in.
+ *
+ * **With e-mail on, an address that already has an account lands on the same
+ * page, and its owner is told**. Better Auth 1.7.1 answers
+ * that sign-up with a generic success — see `auth/sign-up-outcome.ts` for
+ * how the page tells the two apart — so the *shape* was already uniform; what
+ * was missing was the "someone tried to register with your address" notice to
+ * the existing owner and an honest audit row (`signup.duplicate`). Without
+ * e-mail there is no owner to tell and no verification step to hide behind,
+ * so the page **refuses** with `signup_failed` — the message of which is
+ * "Account created." either way — and SECURITY.md says so.
  */
 export const Route = createFileRoute("/signup")({
   loader: ({ context, location }) => {
-    // FR-SIGNUP-1.
     if (!context.ui.signUpEnabled) throw notFound()
 
     const search = location.search as Record<string, unknown>
@@ -50,7 +66,7 @@ export const Route = createFileRoute("/signup")({
         const base = runtime.config.base.basePath
 
         if (!runtime.config.file.signUp.enabled) {
-          // FR-SIGNUP-1: the endpoint is as absent as the page.
+          // the endpoint is as absent as the page.
           return new Response("Not found", { status: 404 })
         }
 
@@ -65,7 +81,7 @@ export const Route = createFileRoute("/signup")({
           {
             email: form.email ?? "",
             password: form.password ?? "",
-            // FR-SIGNUP-5 / D49: derived from the parts, in `site.nameFormat`
+            // derived from the parts, in `site.nameFormat`
             // order. The database hook composes the same fallback; sending it
             // here keeps Better Auth's own validation happy.
             name:
@@ -85,23 +101,75 @@ export const Route = createFileRoute("/signup")({
           return redirectWithCookies(withError(here, errorCodeFor(result)))
         }
 
-        // FR-SIGNUP-2: approval comes after verification, so the page the user
-        // lands on is whichever gate is actually next.
-        if (runtime.config.file.signUp.requireApproval) {
-          return redirectWithCookies(`${base}${APP_ROUTES.pendingApproval}`)
-        }
-        if (runtime.config.requireEmailVerification) {
-          return redirectWithCookies(
-            `${base}${APP_ROUTES.verifyEmail}?sent=1&email=${encodeURIComponent(form.email ?? "")}`
+        if (await signUpCreatedNothing(runtime.database, result.body)) {
+          // Better Auth has already run every validation a new
+          // address would meet, hashed the password for timing parity and
+          // answered 200 for a user it did not write. The trail gets the
+          // truth; the caller gets what a new address gets, or — without an
+          // owner to tell — the refusal.
+          const email = String(
+            (result.body.user as { email?: unknown } | undefined)?.email ??
+              form.email ??
+              ""
           )
+          await runtime.audit.record({
+            action: "signup.duplicate",
+            outcome: "denied",
+            actorType: "anonymous",
+            userAgent: request.headers.get("user-agent"),
+            // The address is the whole event, and it is one the trail already
+            // carries for the account it names.
+            metadata: { email },
+          })
+          if (!runtime.config.emailEnabled) {
+            return redirectWithCookies(withError(here, "signup_failed"))
+          }
+          await notifyExistingOwner(runtime, email)
+          // No cookie either way: the success path below has never replayed
+          // Better Auth's, and there is none on the generic answer.
+          return redirectWithCookies(landingAfterSignUp(runtime, form.email))
         }
-        return redirectWithCookies(
-          `${base}${APP_ROUTES.login}?notice=account_created`
-        )
+
+        return redirectWithCookies(landingAfterSignUp(runtime, form.email))
       },
     },
   },
 })
+
+/**
+ * The notice to the existing owner, at most once an hour per address
+ *: a notice per attempt would make the feature a way to fill an
+ * inbox from this deployment's sender. Same dev switch as `/setup`'s bucket.
+ */
+async function notifyExistingOwner(runtime: Runtime, email: string) {
+  if (runtime.config.file.rateLimit.enabled) {
+    const decision = await consume(
+      { database: runtime.database, logger: runtime.logger },
+      duplicateNoticeBucket(email),
+      DUPLICATE_NOTICE_RULE
+    )
+    if (!decision.allowed) return
+  }
+  await runtime.mailer.send("signUpExistingAccount", email)
+}
+
+/**
+ * Where a registration lands, as one function so a taken address and a new
+ * one cannot drift apart.
+ *
+ * approval comes after verification, so the page the user lands
+ * on is whichever gate is actually next.
+ */
+function landingAfterSignUp(runtime: Runtime, email: string | undefined): string {
+  const base = runtime.config.base.basePath
+  if (runtime.config.file.signUp.requireApproval) {
+    return `${base}${APP_ROUTES.pendingApproval}`
+  }
+  if (runtime.config.requireEmailVerification) {
+    return `${base}${APP_ROUTES.verifyEmail}?sent=1&email=${encodeURIComponent(email ?? "")}`
+  }
+  return `${base}${APP_ROUTES.login}?notice=account_created`
+}
 
 function SignUpPage() {
   const { ui, error } = Route.useLoaderData()

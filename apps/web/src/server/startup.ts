@@ -1,10 +1,11 @@
 /**
- * Startup sequence (OPS-2).
+ * Startup sequence.
  *
  * ```
  * load + validate config → connect DB → migrate → ensure signing key
  *   → reconcile clients/resources → refresh client origins
- *   → validate roles against the DB → first-run check → listen → ready
+ *   → validate roles against the DB → first-run check
+ *   → database role check → listen → ready
  * ```
  *
  * Two rules hold throughout:
@@ -12,8 +13,8 @@
  * - **Every shared-state step runs under a Postgres advisory lock** on the
  *   *direct* connection (`database.directUrl`), because a session lock does not
  *   hold through a transaction pooler — two connections through a pooled
- *   endpoint can both believe they hold it (**D27**).
- *   Single-instance is the supported topology (OPS-11), but two containers
+ *   endpoint can both believe they hold it.
+ *   Single-instance is the supported topology, but two containers
  *   restarting together is ordinary, and neither may half-apply anything.
  *
  * - **Any failure exits non-zero with one actionable error.** Not a stack
@@ -27,6 +28,7 @@ import { isSetupPending } from "./admin/first-user"
 import { createAudit } from "./audit"
 import type { IdpConfig } from "./config/derive"
 import { ConfigError } from "./config/errors"
+import type { ConfigWarning } from "./config/errors"
 import type { DbHandle } from "./db/client"
 import { withAdvisoryLock } from "./db/advisory-lock"
 import { migrationsAreCurrent, runMigrations } from "./db/migrate"
@@ -52,15 +54,15 @@ export interface StartupDeps {
 export interface StartupResult {
   /** Steps that ran, in order, for the log and the admin system page. */
   steps: { name: string; skipped?: string }[]
-  /** What the FR-OIDC-2 sync did, for `/admin/system` (M10). */
+  /** What the profile sync did, for `/admin/system`. */
   reconcile?: ReconcileDiff
-  /** What the FR-GW-2 sync did, for `/admin/system` (**D91**). */
+  /** What the profile sync did, for `/admin/system`. */
   gateways?: GatewayReconcileDiff
   /**
-   * Roles stored on users that the catalog does not contain (FR-ROLE-2).
+   * Roles stored on users that the catalog does not contain.
    *
    * Rendered on `/admin/roles`, which is the page that can do something about
-   * them, and which FR-ADMIN-2 asks for "warnings" on. Deliberately *not*
+   * them, and which the spec asks for "warnings" on. Deliberately *not*
    * `runtime.warnings`: those are configuration-load problems and are already
    * on `/admin` and `/admin/system`, so putting them here too would show the
    * same red box three times while the one warning that is actually about
@@ -68,9 +70,20 @@ export interface StartupResult {
    */
   roleWarnings: string[]
   /**
+   * Non-fatal problems only a live connection can find.
+   *
+   * The loader's `ConfigWarning` shape on purpose: `runtime.ts` appends these
+   * to `runtime.warnings`, so they reach the log, `/admin` and `/admin/system`
+   * through the one path configuration warnings already have, rather than a
+   * fourth list to render. Today there is one — the database console on a
+   * superuser connection — and it belongs here and not in `cross-checks.ts`
+   * because the answer is in `pg_roles`, not in the file.
+   */
+  warnings: ConfigWarning[]
+  /**
    * When the sequence finished, ISO-8601 UTC.
    *
-   * FR-ADMIN-2 asks the roles page for a "last reconcile" timestamp, and
+   * the spec asks the roles page for a "last reconcile" timestamp, and
    * reconciliation happens exactly once, here — the process has been up since
    * this instant, so this *is* the answer. There is no per-step time because
    * there is no case where one step's time and another's differ usefully.
@@ -88,7 +101,7 @@ export type StartupStep = StartupResult["steps"][number]
  * runs as soon as the instance is built. On a fresh database that is a query
  * against a table that does not exist yet, and the process dies before it can
  * migrate. So migrations come first, on the direct connection, under the lock —
- * which is the order OPS-2 states anyway.
+ * which is the order the spec states anyway.
  */
 export async function runMigrationPhase(deps: {
   config: IdpConfig
@@ -133,12 +146,12 @@ export async function runStartup(
   let lastReconcile: ReconcileDiff | undefined
   let lastGatewayReconcile: GatewayReconcileDiff | undefined
 
-  // -- signing key (FR-OIDC-16, risk R11) ----------------------------------
+  // -- signing key ----------------------------------
   await step(steps, "signing key", async () => {
     await ensureSigningKey(deps, locking)
   })
 
-  // -- clients and resources (FR-OIDC-2) -----------------------------------
+  // -- clients and resources -----------------------------------
   // After the auth instance exists, because the OAuth provider seeds
   // `oauth_resource` in its own `init()` and the per-client links point at
   // those rows.
@@ -156,7 +169,7 @@ export async function runStartup(
     })
   }
 
-  // -- gateways (FR-GW-2, **D91**) -----------------------------------------
+  // -- gateways -----------------------------------------
   // Skipped only when there is nothing to do *and* nothing to undo: an empty
   // `gateways` block with rows still in the table is exactly the case the
   // sweep exists for — a target removed from the file has to stop answering.
@@ -177,7 +190,7 @@ export async function runStartup(
     })
   }
 
-  // -- client origins (D50, FR-OIDC-17, SEC-4) -----------------------------
+  // -- client origins -----------------------------
   // After the reconcile, because it reads the rows the reconcile just wrote.
   // Admin-registered clients are not in the configuration file, so without
   // this their origins are missing from CORS and from the CSP `form-action`
@@ -187,13 +200,13 @@ export async function runStartup(
     await refreshDatabaseClientOrigins(deps.database, logger)
   })
 
-  // -- roles vs. the database (FR-ROLE-2) ----------------------------------
+  // -- roles vs. the database ----------------------------------
   let roleWarnings: string[] = []
   await step(steps, "validate roles", async () => {
     roleWarnings = await warnAboutUnknownRoles(deps)
   })
 
-  // -- first-run check (FR-ADMIN-1, D52) -----------------------------------
+  // -- first-run check -----------------------------------
   // Nothing is created here. The IdP no longer provisions an administrator
   // from configuration — an empty `user` table opens `/setup` instead — so
   // start-up's job is to say so, once, in the place an operator is already
@@ -201,6 +214,19 @@ export async function runStartup(
   await step(steps, "first-run check", async () => {
     await announceSetupIfPending(deps)
   })
+
+  // -- database role ----------------------------------
+  // Only when the console exists: with it off the connection's privileges
+  // are the IdP's own business, and a superuser is a common and harmless
+  // choice for a database nobody types SQL into.
+  const warnings: ConfigWarning[] = []
+  if (config.file.admin.database === "disabled") {
+    steps.push({ name: "database role", skipped: "admin.database is disabled" })
+  } else {
+    await step(steps, "database role", async () => {
+      warnings.push(...(await warnAboutSuperuserConsole(deps)))
+    })
+  }
 
   logger.info("startup complete", {
     steps: steps.map((entry) =>
@@ -213,6 +239,7 @@ export async function runStartup(
   return {
     steps,
     roleWarnings,
+    warnings,
     completedAt: new Date().toISOString(),
     ...(lastReconcile ? { reconcile: lastReconcile } : {}),
     ...(lastGatewayReconcile ? { gateways: lastGatewayReconcile } : {}),
@@ -243,11 +270,11 @@ function describe(error: unknown): string {
 }
 
 /**
- * Ensures a signing key exists before anything can need one (FR-OIDC-16).
+ * Ensures a signing key exists before anything can need one.
  *
  * Generating it lazily on the first token request would mean two concurrent
  * requests could each generate one, and the first client to fetch the JWKS
- * might see a key that is not yet the signing key (risk R11). Creating it here,
+ * might see a key that is not yet the signing key. Creating it here,
  * under a lock, means a key is always *published before it signs*.
  */
 async function ensureSigningKey(
@@ -283,13 +310,13 @@ async function ensureSigningKey(
 }
 
 /**
- * FR-ROLE-2: a role that is stored on a user but no longer in `roles.jsonc` is
+ * a role that is stored on a user but no longer in `roles.jsonc` is
  * dropped from their claims. That is a silent behavior change for whoever
  * holds it, so it is warned about at boot and flagged in the admin UI.
  */
 /** Returns what it logged, so `/admin/roles` can show the same thing. */
 /**
- * Whether the table still holds a file-owned gateway (FR-GW-2).
+ * Whether the table still holds a file-owned gateway.
  *
  * The reason the step is not simply skipped on an empty `gateways` block: a
  * target removed from the file has to *stop answering*, and the sweep that
@@ -337,7 +364,66 @@ async function warnAboutUnknownRoles(deps: StartupDeps): Promise<string[]> {
 }
 
 /**
- * Says, at boot, that nobody can sign in yet — and where to fix that (D52).
+ * Says, at boot, that the SQL console is running as a Postgres superuser
+ * — which the console's READ ONLY transaction does
+ * nothing about.
+ *
+ * The transaction refuses writes to tables. It does not take a privilege
+ * away from the role, and a superuser inside a READ ONLY transaction still
+ * runs `pg_read_file('/etc/passwd')` and `COPY (select 1) TO PROGRAM 'id'`:
+ * confirmed on 2026-09-02 against the reference compose file's own bootstrap
+ * user, which every quick-start deployment until then connected as. So the
+ * role is the boundary, and this is the process telling the operator which
+ * side of it they are on.
+ *
+ * A warning and not a refusal, deliberately: an existing deployment has to
+ * keep booting through the upgrade that adds this check, and the fix — a
+ * NOSUPERUSER role — is a provisioning change nobody can make from inside a
+ * container that will not start. `read` runs over `database.url` and
+ * `read-write` over `database.directUrl`, and the request handle
+ * and the locking handle are built on exactly those two, so asking them is
+ * asking the console's own connections without opening more.
+ */
+async function warnAboutSuperuserConsole(
+  deps: StartupDeps
+): Promise<ConfigWarning[]> {
+  const mode = deps.config.file.admin.database
+  const handles =
+    mode === "read-write" ? [deps.database, deps.locking] : [deps.database]
+
+  const warnings: ConfigWarning[] = []
+  const seen = new Set<string>()
+  for (const handle of handles) {
+    const [row] = await handle.sql<{ role: string; superuser: boolean }[]>`
+      select current_user::text as role, rolsuper as superuser
+      from pg_roles where rolname = current_user`
+    if (!row?.superuser || seen.has(row.role)) continue
+    seen.add(row.role)
+
+    const hint =
+      "Connect the IdP as a NOSUPERUSER application role that is not a member of " +
+      "pg_read_server_files, pg_write_server_files or pg_execute_server_program, " +
+      "or set `admin.database` to `disabled`."
+    deps.logger.warn("the database console runs as a Postgres superuser", {
+      role: row.role,
+      mode,
+      hint,
+    })
+    warnings.push({
+      code: "database.console_as_superuser",
+      message:
+        `\`admin.database\` is \`${mode}\` and the IdP connects as "${row.role}", a Postgres superuser. ` +
+        "The console's READ ONLY transaction refuses writes to tables; it does not stop a superuser " +
+        "from reading files or running programs on the database host (`pg_read_file`, " +
+        "`COPY … TO PROGRAM`). " +
+        hint,
+    })
+  }
+  return warnings
+}
+
+/**
+ * Says, at boot, that nobody can sign in yet — and where to fix that.
  *
  * The old sequence created an administrator here from `admin.bootstrap`. That
  * meant a password in an environment file, a forced change at the first

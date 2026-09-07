@@ -14,11 +14,10 @@ import { expect, test } from "./fixtures"
 import { reconfigure, resetConfig, waitForMail } from "./stack"
 
 /**
- * Registration, verification and the approval queue (TST-6, FR-SIGNUP-1/2,
- * FR-AUTH-2).
+ * Registration, verification and the approval queue.
  *
  * **Serial, and it reconfigures the stack.** Sign-up on/off and approval
- * on/off are configuration, read once at start-up with no hot reload (CFG-5),
+ * on/off are configuration, read once at start-up with no hot reload,
  * so the honest way to drive both is to write a different `config.jsonc` and
  * restart the container — which is also what an operator does. The database
  * survives the restart, so an account registered under one configuration is
@@ -36,7 +35,7 @@ test.describe("signing up", () => {
     await resetConfig(stack)
   })
 
-  test("register, confirm the address, sign in (FR-SIGNUP-1, FR-AUTH-2)", async ({
+  test("register, confirm the address, sign in", async ({
     page,
     app,
     stack,
@@ -52,7 +51,7 @@ test.describe("signing up", () => {
     await expect(page).toHaveURL(/verify-email/)
     await expect(page.getByText(email)).toBeVisible()
 
-    // SEC-1: the link in the message is built from `server.baseUrl`, so it
+    // the link in the message is built from `server.baseUrl`, so it
     // points back at this deployment including its mount path.
     const mail = await waitForMail(stack, email, { template: "verify-email" })
     expect(mail.subject).toContain("E2E IdP")
@@ -65,12 +64,12 @@ test.describe("signing up", () => {
 
     await signIn(page, app, email, PASSWORD)
     await expect(page).toHaveURL(app.url("/account"))
-    // FR-SIGNUP-5 / D49: the parts are prefilled, and the display name is
+    // the parts are prefilled, and the display name is
     // derived from them rather than being a field of its own.
     await expect(page.getByLabel("First name")).toHaveValue("Sam")
     await expect(page.getByLabel("Last name")).toHaveValue("Signup")
-    // The footer, not `main`: **D95** took the read-only display name off the
-    // form, because since **D82** the shell already carries it on every page
+    // The footer, not `main`: **the spec took the read-only display name off the
+    // form, because the shell already carries it on every page
     // of the area. `account.spec.ts` moved with it and this assertion — the
     // same one, made about a self-registered account — was missed.
     await expect(
@@ -79,7 +78,7 @@ test.describe("signing up", () => {
     await signOut(page, app)
   })
 
-  test("with sign-up off there is no link, no page and no endpoint (FR-SIGNUP-1)", async ({
+  test("with sign-up off there is no link, no page and no endpoint", async ({
     page,
     app,
     stack,
@@ -107,7 +106,7 @@ test.describe("signing up", () => {
     expect(posted.status()).toBe(404)
   })
 
-  test("with approval on the account waits, and an administrator lets it in (FR-SIGNUP-2)", async ({
+  test("with approval on the account waits, and an administrator lets it in", async ({
     page,
     app,
     stack,
@@ -130,7 +129,7 @@ test.describe("signing up", () => {
     await signIn(page, app, email, PASSWORD)
     await expect(page).toHaveURL(new RegExp(`${app.basePath}/pending-approval`))
 
-    // The administrators were told there is something to look at (FR-MAIL-1).
+    // The administrators were told there is something to look at.
     const notice = await waitForMail(stack, "e2e-admin@example.com", {
       template: "pending-signup",
     })

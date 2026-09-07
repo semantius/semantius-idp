@@ -1,5 +1,5 @@
 /**
- * The gateway's data path against a live auth instance (FR-GW-3..6, **D91**).
+ * The gateway's data path against a live auth instance.
  *
  * The unit suite stubs `auth.handler` and `fetchImpl`, so it proves the
  * decisions and nothing about the exchange. This file proves the exchange: a
@@ -10,7 +10,7 @@
  * server that has never heard of keys — and it is not observable anywhere
  * else.
  *
- * It also pins the D91 trade-off in both directions, because "the ban is
+ * It also pins the cache trade-off in both directions, because "the ban is
  * re-checked on every use except for up to ten minutes" is the kind of
  * sentence that quietly stops being true: a banned owner's *fresh* mint is
  * refused, a cached one is not, and the admin punch-through closes it.
@@ -81,7 +81,7 @@ beforeAll(async () => {
       response.writeHead(200, {
         "content-type": "application/json",
         // Stripped on the way back: the gateway is same-origin with the
-        // issuer, so an upstream must not set a cookie here (**D91**).
+        // issuer, so an upstream must not set a cookie here.
         "set-cookie": "upstream=1; Path=/",
       })
       response.end(
@@ -243,7 +243,7 @@ async function setBanned(banned: boolean): Promise<void> {
     .where(eq(ctx.database.schema.user.id, userId))
 }
 
-describe("the key → JWT exchange (FR-GW-4, FR-KEY-3)", () => {
+describe("the key → JWT exchange", () => {
   it("hands the upstream a bearer token that verifies against the JWKS", async () => {
     const key = await createKey()
     const response = await proxy(
@@ -291,7 +291,7 @@ describe("the key → JWT exchange (FR-GW-4, FR-KEY-3)", () => {
       .select()
       .from(ctx.database.schema.apikey)
       .where(eq(ctx.database.schema.apikey.name, "Accounted key"))
-    // FR-KEY-1's last-used accounting is one of the things that lives only in
+    // the spec's last-used accounting is one of the things that lives only in
     // Better Auth's own endpoint, which is why the mint goes through it.
     expect(row?.lastRequest).toBeTruthy()
     expect(row?.requestCount ?? 0).toBeGreaterThan(0)
@@ -311,7 +311,7 @@ describe("the key → JWT exchange (FR-GW-4, FR-KEY-3)", () => {
     }
   })
 
-  it("pins the D91 window in both directions", async () => {
+  it("pins the cache window in both directions", async () => {
     const key = await createKey("Cached key")
 
     // Warm the cache while the owner is fine.
@@ -324,7 +324,7 @@ describe("the key → JWT exchange (FR-GW-4, FR-KEY-3)", () => {
     try {
       // **The cost.** Inside the TTL the exchange is not repeated, so the ban
       // re-check does not run and the call still goes through. This is the
-      // trade-off D91 records, and it is asserted rather than described so
+      // trade-off recorded, and it is asserted rather than described so
       // that a change to it is visible in a diff.
       const cached = await proxy(
         new Request(`${ISSUER}/gateway/data`, {
@@ -350,7 +350,7 @@ describe("the key → JWT exchange (FR-GW-4, FR-KEY-3)", () => {
 
   it("clears the cache when an administrator bans the owner", async () => {
     // The punch-through end to end, on the **API** path rather than the
-    // button: the hook runs for every caller (**D67**), which is the whole
+    // button: the hook runs for every caller, which is the whole
     // reason it lives in `admin/guard.ts` and not in a route handler.
     //
     // A second account, because the last-administrator invariant protects the
@@ -379,7 +379,7 @@ describe("the key → JWT exchange (FR-GW-4, FR-KEY-3)", () => {
     expect(banned.status).toBe(200)
 
     // Without `resetGatewayTokenCache()` in the after-hook this is a 200 for
-    // the next ten minutes, which is precisely the window D91 records.
+    // the next ten minutes, which is precisely the recorded window.
     const after = await proxy(
       new Request(`${ISSUER}/gateway/data`, { headers: { "x-api-key": key } })
     )
@@ -418,7 +418,7 @@ describe("the key → JWT exchange (FR-GW-4, FR-KEY-3)", () => {
   })
 })
 
-describe("the session cookie as a credential (FR-GW-4, **D92**)", () => {
+describe("the session cookie as a credential", () => {
   it("exchanges it for a JWT the upstream can verify, and never forwards it", async () => {
     const response = await proxy(
       new Request(`${ISSUER}/gateway/data/me`, {
@@ -481,7 +481,7 @@ describe("the session cookie as a credential (FR-GW-4, **D92**)", () => {
     expect(out.status).toBe(200)
 
     // Without `/sign-out` in `ENDS_CREDENTIAL_ACCESS` this is still a 200 for
-    // the next ten minutes, on a session that no longer exists (**D92**).
+    // the next ten minutes, on a session that no longer exists.
     forgetUpstream()
     const after = await proxy(
       new Request(`${ISSUER}/gateway/data`, {
@@ -496,7 +496,7 @@ describe("the session cookie as a credential (FR-GW-4, **D92**)", () => {
   })
 })
 
-describe("routing and streaming (FR-GW-3, FR-GW-6)", () => {
+describe("routing and streaming", () => {
   it("answers 404 for a disabled gateway", async () => {
     const response = await proxy(
       new Request(`${ISSUER}/gateway/off`),

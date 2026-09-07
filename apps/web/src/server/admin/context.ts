@@ -1,6 +1,6 @@
 /**
  * The things `/admin/system` and the key-rotation button need but cannot be
- * handed at construction time (FR-ADMIN-2, FR-OIDC-16).
+ * handed at construction time.
  *
  * The order of construction is fixed and awkward: migrations run, then the
  * Better Auth instance is built, then startup runs against that instance. So
@@ -24,10 +24,10 @@ import type { StartupResult } from "../startup"
 export interface AdminContext {
   /** Set immediately after `createAuth`; needed to rotate signing keys. */
   auth?: Auth
-  /** Set once startup finishes; the step list and the FR-OIDC-2 diff. */
+  /** Set once startup finishes; the step list and the spec diff. */
   startup?: StartupResult
   /**
-   * Whether `security.txt` exists in the config folder (**D55**).
+   * Whether `security.txt` exists in the config folder.
    *
    * Filled in by `runtime.ts` rather than read here: the answer needs
    * `node:fs` and the config directory, and an endpoint that reached for

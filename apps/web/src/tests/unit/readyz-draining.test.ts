@@ -1,5 +1,5 @@
 /**
- * `/readyz` while draining (OPS-3, OPS-4).
+ * `/readyz` while draining.
  *
  * The flag has its own test; this asserts the thing that actually matters to
  * an orchestrator — that the *route* short-circuits on it, and answers 503

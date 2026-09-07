@@ -1,5 +1,5 @@
 /**
- * Bringing an IdP stack up and down for the e2e run (TST-6).
+ * Bringing an IdP stack up and down for the e2e run.
  *
  * One compose project per Playwright project, each with a **generated** config
  * folder and its own Postgres volume. Nothing here reads the operator's
@@ -8,15 +8,15 @@
  * nothing that points at it.
  *
  * The captured mail directory is bind-mounted out of the container so the
- * specs can read a verification or reset link from the host (D30). That is the
+ * specs can read a verification or reset link from the host. That is the
  * whole reason the capture transport writes files at all.
  *
- * Each stack also gets a generated `.env` (D48): whole connection strings, in
+ * Each stack also gets a generated `.env`: whole connection strings, in
  * the two roles a real one has — compose's interpolation source, and the
  * `env_file` the IdP container reads `DATABASE_URL` out of.
  *
  * And each stack is **taken through the first-run wizard in a real browser**
- * before any spec runs (D52). There is no bootstrap account any more, so a
+ * before any spec runs. There is no bootstrap account any more, so a
  * stack that skipped it would have nobody to sign in as; driving it with
  * Chromium here rather than with `fetch` means the page every operator meets
  * first is exercised by the suite exactly once, deterministically, instead of
@@ -38,7 +38,7 @@ import { chromium } from "@playwright/test"
 
 const REPO_ROOT = join(import.meta.dirname, "..", "..", "..")
 
-/** D51: the compose files live in `docker/`, alongside the Dockerfile. */
+/** the compose files live in `docker/`, alongside the Dockerfile. */
 const COMPOSE_FILES = [
   "-f",
   "docker/docker-compose.yml",
@@ -71,11 +71,11 @@ const PG_PASSWORD = "e2e-postgres-password"
 const SECRET = "e2e-secret-of-at-least-thirty-two-characters"
 
 /**
- * The administrator this run creates at the first-run wizard (FR-ADMIN-1, D52).
+ * The administrator this run creates at the first-run wizard.
  *
  * Per-run throwaway credentials, typed into the setup page by
  * {@link completeSetup} — not read from an environment variable, because there
- * is no longer one to read (P0'.2).
+ * is no longer one to read.
  */
 export const ADMIN = {
   email: "e2e-admin@example.com",
@@ -93,7 +93,7 @@ export const ADMIN = {
  */
 export const RP_PORT = 4571
 
-/** A confidential client for the OIDC specs. Consent is skipped (FR-OIDC-10). */
+/** A confidential client for the OIDC specs. Consent is skipped. */
 export const CLIENT = {
   clientId: "e2e-app",
   clientSecret: "e2e-client-secret-of-at-least-32-chars",
@@ -106,7 +106,7 @@ export const CLIENT = {
  *
  * A separate client rather than a reconfiguration of the first: consent is a
  * per-client property, and two clients is how a real deployment expresses
- * "this one asks and that one does not" (FR-OIDC-10).
+ * "this one asks and that one does not".
  */
 export const CONSENT_CLIENT = {
   clientId: "e2e-consent",
@@ -131,7 +131,7 @@ function docker(args: string[], env: Record<string, string>) {
 
 const behindProxy = (stack: Stack) => stack.basePath !== ""
 
-/** The generated environment file — compose's, and the container's (D48). */
+/** The generated environment file — compose's, and the container's. */
 function envFile(stack: Stack): string {
   return join(stack.workDir, "stack.env")
 }
@@ -205,7 +205,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 /**
  * Writes the config folder this stack runs on.
  *
- * Sign-up is **on** and approval **off**: TST-6 drives registration,
+ * Sign-up is **on** and approval **off**: the spec drives registration,
  * verification and reset, and a queue in front of them would only test the
  * queue. The approval spec turns it back on for itself, through
  * {@link reconfigure}.
@@ -219,8 +219,8 @@ function writeConfig(
   mkdirSync(stack.mailDir, { recursive: true })
 
   // **The container has to be able to write here, and by default it cannot on
-  // Linux** (**D77**). `/mail` is this directory bind-mounted in, the image
-  // runs as `bun` (uid 1000, OPS-1), and this process creates the directory as
+  // Linux**. `/mail` is this directory bind-mounted in, the image
+  // runs as `bun` (uid 1000), and this process creates the directory as
   // whoever runs the suite — uid 1001 on a GitHub runner. A bind mount carries
   // the host's ownership straight through, so the capture transport had
   // nowhere to write and every test that waits for a verification link failed
@@ -236,7 +236,7 @@ function writeConfig(
   // test and defeats the point of driving the published image.
   chmodSync(stack.mailDir, 0o777)
 
-  // D48: whole connection strings, in the file compose reads and the container
+  // whole connection strings, in the file compose reads and the container
   // inherits. `postgres` is the service name on the compose network.
   writeFileSync(
     envFile(stack),
@@ -260,7 +260,7 @@ function writeConfig(
             allowInsecureHttp: true,
             shutdownTimeoutSeconds: 10,
             // Behind Caddy the client address arrives in a header, and without
-            // this every caller shares one rate-limit bucket (D38).
+            // this every caller shares one rate-limit bucket.
             trustProxy: stack.basePath !== "",
           },
           secret: SECRET,
@@ -270,9 +270,9 @@ function writeConfig(
             migrateOnBoot: true,
           },
           site: { name: "E2E IdP", theme: "light" },
-          // A key the capture transport never calls: D30 only replaces the
+          // A key the capture transport never calls: the spec only replaces the
           // transport when e-mail would otherwise work, so this is what takes
-          // the deployment out of degraded mode (FR-MAIL-2).
+          // the deployment out of degraded mode.
           email: {
             resend: { apiKey: "re_e2e_never_used" },
             from: "E2E <idp@example.test>",
@@ -281,12 +281,12 @@ function writeConfig(
           auth: { requireEmailVerification: true },
           twoFactor: { enabled: true },
           apiKeys: { enabled: true },
-          // FR-ADMIN-7. `read-only` suite-wide so `/admin/database` exists for
+          // `read-only` suite-wide so `/admin/database` exists for
           // the a11y scan and the admin walkthrough; the flag's own three
           // states are driven by a serial block in `admin.spec.ts`.
           admin: { database: "read-only" },
-          // FR-GW-1. One config-declared gateway, so `/admin/gateways` has a
-          // file-owned row to be read-only about — the half of D50's client
+          // One config-declared gateway, so `/admin/gateways` has a
+          // file-owned row to be read-only about — the half of the spec's client
           // test that a manual row cannot prove. Its target is never called:
           // the suite drives the page, not the data path, because a data-path
           // test needs a live upstream in the stack.
@@ -294,10 +294,10 @@ function writeConfig(
             fromfile: { url: "http://upstream.invalid" },
           },
           jwt: { audience: stack.baseURL },
-          // No `admin.bootstrap`: it no longer exists (D52). The first
+          // No `admin.bootstrap`: it no longer exists. The first
           // administrator is created by `completeSetup` below, at the page.
           //
-          // The suite signs in far more often than a person does; the SEC-2
+          // The suite signs in far more often than a person does; the spec
           // limits have their own integration suite.
           rateLimit: { enabled: false },
           logging: { level: "info", format: "json" },
@@ -331,7 +331,7 @@ function writeConfig(
             clientSecret: CONSENT_CLIENT.clientSecret,
             redirectUris: [CONSENT_CLIENT.redirectUri],
             scopes: ["openid", "profile", "email", "offline_access"],
-            // The whole reason this client exists (FR-OIDC-10).
+            // The whole reason this client exists.
             skipConsent: false,
             enableEndSession: true,
             postLogoutRedirectUris: [CONSENT_CLIENT.postLogoutRedirectUri],
@@ -390,7 +390,7 @@ export async function startStack(stack: Stack): Promise<void> {
 }
 
 /**
- * Creates the administrator every other spec signs in as, at the page (D52).
+ * Creates the administrator every other spec signs in as, at the page.
  *
  * **In a real browser**, because that is the whole point: the first-run wizard
  * is the first thing an operator ever sees, and driving it with `fetch` would
@@ -409,7 +409,7 @@ async function completeSetup(stack: Stack): Promise<void> {
     const page = await browser.newPage()
 
     // The root, not `/setup` directly: the redirect is half of what makes the
-    // wizard reachable at all, and it is deployment-shape-sensitive (OPS-10).
+    // wizard reachable at all, and it is deployment-shape-sensitive.
     await page.goto(`${stack.baseURL}/`)
     await page.waitForURL(`${stack.baseURL}/setup`, { timeout: 30_000 })
 
@@ -417,7 +417,7 @@ async function completeSetup(stack: Stack): Promise<void> {
     await page.getByLabel("Last name").fill(ADMIN.lastName)
     await page.getByLabel("E-mail address").fill(ADMIN.email)
     await page.getByLabel("Password", { exact: true }).fill(ADMIN.password)
-    // D54: typed twice, and both names are required.
+    // typed twice, and both names are required.
     await page.getByLabel("Confirm password").fill(ADMIN.password)
     await page
       .getByRole("button", { name: "Create first admin account" })
@@ -451,7 +451,7 @@ async function waitForReady(stack: Stack): Promise<boolean> {
 }
 
 /**
- * Restarts the IdP on a changed `config.jsonc` (CFG-5).
+ * Restarts the IdP on a changed `config.jsonc`.
  *
  * Configuration is read once at start-up and there is no hot reload, so a spec
  * that needs different settings — sign-up off, approval on — has to restart
@@ -534,7 +534,7 @@ export async function waitForMail(
   }
 
   const all = readMail(stack).map((m) => `${m.template} → ${m.to}`)
-  // **An empty directory and a missing message are different faults** (D77).
+  // **An empty directory and a missing message are different faults**.
   // "Captured: nothing" was the whole of what twenty simultaneous failures
   // said, and the cause was that the container could not write to this
   // directory at all — a fact this message now offers, because the difference

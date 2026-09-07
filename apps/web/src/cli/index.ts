@@ -1,5 +1,5 @@
 /**
- * `idp` — the operator CLI (OPS-6).
+ * `idp` — the operator CLI.
  *
  * A skeleton, deliberately. `package.json`'s `db:migrate` script has pointed
  * at `src/cli/index.ts migrate` since M1 and the file did not exist, so the
@@ -8,17 +8,17 @@
  * shape M12 fills in: argv dispatch, one function per command, a single exit
  * path, and a usage line that lists what is real rather than what is planned.
  *
- * All six OPS-6 commands are here. Each is a thin wrapper: the rules live in
+ * All six operator commands are here. Each is a thin wrapper: the rules live in
  * the module that owns them (`server/oidc/rotate-keys.ts`,
  * `server/cleanup.ts`), so `docker run <image> idp <cmd>` and the running
  * process do the same thing rather than two similar things.
  *
  * `reset-admin` was the seventh and is gone with the env bootstrap it
- * recovered from (**D52**). Lockout recovery is now another administrator, the
+ * recovered from. Lockout recovery is now another administrator, the
  * password-reset e-mail, or the one SQL statement in `docs/runbooks.md`.
  *
  * **Every mutating command runs on the direct connection under its own
- * advisory lock** (D27). A session lock does not hold through a transaction
+ * advisory lock**. A session lock does not hold through a transaction
  * pooler, so two containers starting together would each believe they held
  * the migration lock and both apply the same SQL.
  *
@@ -42,8 +42,6 @@ import { rotateKeys } from "../server/oidc/rotate-keys"
 import { revision, version } from "../server/version"
 
 // Requirement IDs stay out of this text: it is what an operator reads.
-// config validate CFG-5; migrate DM-1, OPS-6; reconcile-clients FR-OIDC-2;
-// rotate-keys FR-OIDC-16; cleanup DM-5, OPS-8; the config dir is CFG-1.
 const USAGE = `idp ${version}
 
 Usage:
@@ -80,7 +78,7 @@ function prepare(): { config: IdpConfig; logger: Logger } {
 async function migrate(): Promise<void> {
   const { config, logger } = prepare()
 
-  // Direct, never the pooled URL: this takes a session advisory lock (D27).
+  // Direct, never the pooled URL: this takes a session advisory lock.
   //
   // `runMigrations` takes `LOCK_KEYS.migrate` itself. Wrapping it in another
   // `withAdvisoryLock` deadlocks the process against its own lock — the outer
@@ -96,7 +94,7 @@ async function migrate(): Promise<void> {
 }
 
 /**
- * `idp reconcile-clients` — the same sync startup runs, on demand (OPS-6).
+ * `idp reconcile-clients` — the same sync startup runs, on demand.
  *
  * Useful when `oauth_clients.jsonc` changed and restarting the container is
  * more disruptive than running one command. It takes the same advisory lock
@@ -107,7 +105,7 @@ async function migrate(): Promise<void> {
  *
  * One consequence of not building that instance: the OAuth provider seeds
  * `oauth_resource` from its own `init()`, so on a database that has never
- * booted there are no resources yet and the per-client links (FR-OIDC-6) come
+ * booted there are no resources yet and the per-client links come
  * out empty. The next start-up reconcile creates them. Running this against a
  * database an IdP has already started against — the case it exists for — is
  * unaffected.
@@ -165,7 +163,7 @@ function sslSource(config: IdpConfig): string {
 }
 
 /**
- * `idp config validate` — the whole of CFG-5, and nothing else (OPS-6).
+ * `idp config validate` — the whole, and nothing else.
  *
  * It touches no database. That is the point: an operator changing
  * `config.jsonc` wants to know whether the file is wrong *before* restarting
@@ -173,7 +171,7 @@ function sslSource(config: IdpConfig): string {
  * validation that needed a connection would be useless in exactly the
  * situation it exists for.
  *
- * Non-fatal problems print as warnings and still exit 0 — they are what CFG-5
+ * Non-fatal problems print as warnings and still exit 0 — they are what the validation
  * calls warnings, and a deployment runs with them. A malformed file throws,
  * and the top-level handler prints the one actionable sentence.
  */
@@ -189,7 +187,7 @@ function validateConfig(): void {
     `Configuration in ${dir} is valid.\n` +
       `  issuer      ${config.base.origin}${config.base.basePath}\n` +
       `  database    ${maskConnectionString(config.databaseUrl)}\n` +
-      // D74: the two endpoints are separate settings and collapse to one when
+      // the two endpoints are separate settings and collapse to one when
       // a deployment has one. Printing the direct one only when it *differs*
       // says which shape this is without adding a line that repeats itself.
       (config.databaseDirectUrl === config.databaseUrl
@@ -212,12 +210,12 @@ function validateConfig(): void {
 
 /**
  * `idp rotate-keys` — publish a successor now, rather than waiting for the
- * interval (FR-OIDC-16, OPS-6).
+ * interval.
  *
  * The command does not make the successor sign. `rotateKeys` publishes it and
  * backdates it behind the live key, and it takes over an hour later — long
  * enough for Neon's JWKS cache to have seen it. That hour is the entire point
- * of the mechanism (risk R11), so the output says when it happens rather than
+ * of the mechanism, so the output says when it happens rather than
  * reporting a rotation that has not finished.
  */
 async function rotate(): Promise<void> {
@@ -252,7 +250,7 @@ async function rotate(): Promise<void> {
 }
 
 /**
- * `idp cleanup` — the retention sweep, on demand (OPS-8).
+ * `idp cleanup` — the retention sweep, on demand.
  *
  * Waits for the lock rather than skipping. The in-process job skips, because
  * it will run again in an hour and has nowhere to be; an operator who typed

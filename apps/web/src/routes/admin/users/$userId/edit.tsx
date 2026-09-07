@@ -38,8 +38,7 @@ const LIST = "/admin/users"
 const CONSUMED = ["error", "draft"] as const
 
 /**
- * "Edit the account" — **one form with one Save** (**D93**, FR-ADMIN-2,
- * FR-ROLE-2, **D49**).
+ * "Edit the account" — **one form with one Save**.
  *
  * The profile and the roles were two dialogs with two Saves on the detail
  * page, and that is the arrangement this replaces rather than reproduces. An
@@ -50,7 +49,7 @@ const CONSUMED = ["error", "draft"] as const
  *
  * **The composition is the handler's, not a new server action.** It calls
  * `runAdminAction("edit-profile", …)` and then `runAdminAction("set-roles",
- * …)` and composes the two outcomes — which is what **D70** is the pattern
+ * …)` and composes the two outcomes — which is what the spec is the pattern
  * *for*: "wrap the tail, log it, and land … with a notice that names the
  * recovery". A profile refusal has written nothing, so it comes back here with
  * the draft; a roles refusal *after* the profile was written lands on the
@@ -61,7 +60,7 @@ const CONSUMED = ["error", "draft"] as const
  * second factor — not two halves of one record.
  *
  * **The roles fieldset is disabled on your own account**, and so is the
- * `set-roles` call. FR-ADMIN-3 refuses it server-side too
+ * `set-roles` call. The invariants refuse it server-side too
  * (`admin_cannot_change_own_roles`, `admin/invariants.ts`), which is why the
  * call has to be *skipped* rather than merely hidden: a disabled fieldset
  * submits nothing, so dispatching it anyway would ask the server to set the
@@ -77,7 +76,7 @@ export const Route = createFileRoute("/admin/users/$userId/edit")({
       ui: context.ui,
       gate: context.gate,
       // The trail ends at the account and the `<h1>` names the operation, so
-      // nothing is said twice (**D93**).
+      // nothing is said twice.
       crumbs: crumbTrail(context.ui, (t) => [
         { label: t.admin.nav.users, to: LIST },
         { label: user.email },
@@ -102,7 +101,7 @@ export const Route = createFileRoute("/admin/users/$userId/edit")({
         const record = `${base}/admin/users/${encodeURIComponent(userId)}`
         const here = `${record}/edit`
 
-        // Read before the gate (**D63**, **D81**), and `readFormMulti`
+        // Read before the gate, and `readFormMulti`
         // because the roles control repeats its field.
         const { fields: form, list: valuesOf } = await readFormMulti(request)
 
@@ -121,7 +120,7 @@ export const Route = createFileRoute("/admin/users/$userId/edit")({
         const profile = await runAdminAction("edit-profile", shared)
         if (profile.error) {
           // Nothing has been written, so this is an ordinary refusal: back to
-          // the form, with what was typed (**D62**). The roles come with it,
+          // the form, with what was typed. The roles come with it,
           // because they are part of the same submission.
           const draft = await stashDraft(runtime, {
             firstName: form.firstName,
@@ -136,7 +135,7 @@ export const Route = createFileRoute("/admin/users/$userId/edit")({
         }
 
         // Skipped on your own account: the fieldset is disabled, so the body
-        // carries no roles at all, and FR-ADMIN-3 would refuse the write
+        // carries no roles at all, and the invariants would refuse the write
         // anyway. See the note at the top of the file.
         if (signedIn.session.user.id === userId) {
           return redirectWithCookies(`${record}?notice=accountSaved`)
@@ -144,7 +143,7 @@ export const Route = createFileRoute("/admin/users/$userId/edit")({
 
         const roles = await runAdminAction("set-roles", shared)
         if (roles.error) {
-          // **D70**: the profile is already written, so this must not throw
+          // the profile is already written, so this must not throw
           // its way to an error page and must not look like a clean failure
           // either. Both halves are reported — the notice says which one
           // succeeded and where to finish, the error says why the other did
@@ -246,10 +245,10 @@ function EditUserPage() {
           description={t.admin.actions.setRolesHelp}
           className="gap-4"
         >
-          {/* **D93**: the guard is on the *roles*, not on the Save button.
+          {/* the guard is on the *roles*, not on the Save button.
               There is one Save now, and disabling it would stop an
               administrator fixing their own name as well as their own roles —
-              which is not what FR-ADMIN-3 refuses. `RoleCheckboxes` puts
+              which is not what the invariants refuse. `RoleCheckboxes` puts
               `disabled` on each control as well as on its fieldset, because
               the control is a `role="checkbox"` span that a disabled fieldset
               does not reach. */}

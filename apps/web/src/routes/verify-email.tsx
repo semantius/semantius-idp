@@ -14,12 +14,12 @@ import { getRuntime } from "@/server/runtime"
 import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 /**
- * `/verify-email` (FR-AUTH-2, FR-ACCT-2).
+ * `/verify-email`.
  *
  * Three states on one route, because the user arrives here from three
  * directions: told to check their inbox, back from a link that worked, or back
  * from one that did not. The resend form is the only action, and — like
- * `/forgot-password` — it answers identically whatever happened (SEC-7).
+ * `/forgot-password` — it answers identically whatever happened.
  *
  * The link itself is consumed by Better Auth's own endpoint; this page shows
  * the outcome it redirected to.
@@ -55,7 +55,7 @@ export const Route = createFileRoute("/verify-email")({
 
         const form = await readForm(request)
 
-        // SEC-7: the result is not inspected, so the response cannot reveal
+        // the result is not inspected, so the response cannot reveal
         // whether that address exists or still needs confirming.
         await callAuth(
           runtime,

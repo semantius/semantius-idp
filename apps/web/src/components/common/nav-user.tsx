@@ -20,7 +20,7 @@ import { cn } from "@workspace/ui/lib/utils"
 import type { Catalog } from "@/server/i18n"
 
 /**
- * The sidebar footer's identity block and its menu (**D82**).
+ * The sidebar footer's identity block and its menu.
  *
  * Adapted from semantius-app's `NavUser`, which is why the trigger, the
  * `w-(--anchor-width)` popup and the mobile/desktop `side` are copied rather
@@ -34,7 +34,7 @@ import type { Catalog } from "@/server/i18n"
  *
  * And **sign-out is a link, not a form**. The header's old control posted
  * straight to `/logout`; inside a Base UI menu that would mean a `<form>` in a
- * portalled popup which the menu unmounts as the item is activated — the D80
+ * portalled popup which the menu unmounts as the item is activated — the earlier
  * problem, one layer further in. `GET /logout` is the branded confirmation
  * page that already exists for exactly this, so the menu links to it and the
  * page carries the POST. Signing out becomes two steps, which for a
@@ -44,7 +44,7 @@ import type { Catalog } from "@/server/i18n"
 /**
  * One letter from each end of the name, or the address' first letter.
  *
- * `name` is derived (D49) and can be empty for an account created with neither
+ * `name` is derived and can be empty for an account created with neither
  * part filled in, so the address is the fallback rather than a literal "U":
  * every account has one, and an initial the user recognizes beats a
  * placeholder that is the same for everybody.
@@ -62,7 +62,7 @@ function initialsOf(name: string, email: string): string {
  * **Not `bg-sidebar-primary`**, which is what semantius-app's tile and this
  * plan both said. That pairing carries a white *icon* there; here it carries
  * *text*, and `--sidebar-primary` against `--sidebar-primary-foreground`
- * measures **3.07:1 in the light theme and 2.12:1 in the dark** — under R-1's
+ * measures **3.07:1 in the light theme and 2.12:1 in the dark** — under the spec's
  * 4.5:1 floor, and an axe finding on every admin and account page. The
  * accent surface is `AvatarFallback`'s own idea of a fallback anyway, and it
  * measures **16.04:1** and **14.56:1**. Re-measure if a preset is applied.
@@ -107,7 +107,7 @@ export function NavUser({
 }) {
   const { isMobile } = useSidebar()
   const initials = initialsOf(user.name, user.email)
-  // An account can have neither part of a name (D49 derives it from the two),
+  // An account can have neither part of a name (the display name is derived from the two),
   // and then the address is the only thing there is to call it — printed once,
   // not stacked above itself.
   const displayName = user.name.trim() || user.email
@@ -159,7 +159,7 @@ export function NavUser({
                 {/* A plain anchor, never a `<Link>`: the other area is a
                     separate route subtree, and a client-side navigation would
                     pull its whole bundle in to find out whether the visitor is
-                    allowed there (FR-ACCT-1). */}
+                    allowed there. */}
                 <DropdownMenuItem render={<a href={crossLink.href} />}>
                   {crossLink.label}
                 </DropdownMenuItem>

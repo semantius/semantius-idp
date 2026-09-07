@@ -17,7 +17,7 @@ function capture(options: Parameters<typeof createLogger>[0] = {}) {
   return { logger, lines, records: () => lines.map((line) => JSON.parse(line)) }
 }
 
-describe("SEC-5 redaction", () => {
+describe("redaction", () => {
   it("never emits a password, token, secret or link", () => {
     const { logger, lines } = capture()
     logger.info("sign-in attempt", {
@@ -97,7 +97,7 @@ describe("SEC-5 redaction", () => {
   })
 })
 
-describe("safeUrlForLog (SEC-5)", () => {
+describe("safeUrlForLog", () => {
   it("drops the query string of protocol endpoints", () => {
     expect(
       safeUrlForLog(
@@ -119,7 +119,7 @@ describe("safeUrlForLog (SEC-5)", () => {
     expect(safeUrlForLog("/oauth2/token")).toBe("/oauth2/token")
   })
 
-  it("still redacts under a sub-path mount (OPS-10)", () => {
+  it("still redacts under a sub-path mount", () => {
     // A prefix check passed at the host root and silently logged every
     // authorization code the moment `server.baseUrl` grew a path.
     expect(safeUrlForLog("/idp/oauth2/authorize?client_id=a&code=b")).toBe(
@@ -132,7 +132,7 @@ describe("safeUrlForLog (SEC-5)", () => {
 
   it("redacts our own pages that carry a credential in the query", () => {
     // Each of these is a bearer of something: a single-use token, or the
-    // signed authorization request of FR-OIDC-9.
+    // signed authorization request.
     for (const path of [
       "/reset-password?token=abc",
       "/verify-email?token=abc",
@@ -147,7 +147,7 @@ describe("safeUrlForLog (SEC-5)", () => {
   })
 })
 
-describe("anonymizeIp (SEC-5)", () => {
+describe("anonymizeIp", () => {
   it("drops the last IPv4 octet", () => {
     expect(anonymizeIp("203.0.113.42")).toBe("203.0.113.0")
   })

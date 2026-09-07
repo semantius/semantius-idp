@@ -1,5 +1,5 @@
 /**
- * Which address a request came from (SEC-2, SEC-5).
+ * Which address a request came from.
  *
  * The cases that matter are the adversarial ones. `X-Forwarded-For` is a list
  * anyone can prepend to, so every test here asks the same question in a
@@ -11,10 +11,13 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  SOCKET_ADDRESS_HEADER,
   clientIpFrom,
   inCidr,
   isTrusted,
   normalizeIp,
+  rateLimitKeyAddress,
+  resolveClientAddress,
 } from "@/server/http/client-ip"
 
 function request(forwarded?: string, header = "x-forwarded-for"): Request {
@@ -189,5 +192,83 @@ describe("CIDR arithmetic", () => {
     for (const range of ["", "/8", "10.0.0.0/33", "10.0.0.0/-1", "nope/8"]) {
       expect(inCidr("10.0.0.1", range), range).toBe(false)
     }
+  })
+})
+
+describe("rateLimitKeyAddress", () => {
+  it("keeps an IPv4 address as it is", () => {
+    expect(rateLimitKeyAddress("203.0.113.7")).toBe("203.0.113.7")
+  })
+
+  it("masks IPv6 to its /64, whatever the low bits say", () => {
+    // A /64 is one subscriber; the low 64 bits are theirs to rotate through,
+    // and a bucket per low value is no bucket at all.
+    expect(rateLimitKeyAddress("2001:db8:1:2:aaaa:bbbb:cccc:dddd")).toBe(
+      "2001:db8:1:2::/64"
+    )
+    expect(rateLimitKeyAddress("2001:db8:1:2::1")).toBe(
+      rateLimitKeyAddress("2001:db8:1:2::2")
+    )
+    expect(rateLimitKeyAddress("2001:DB8::1")).toBe("2001:db8:0:0::/64")
+  })
+
+  it("unwraps a v4-mapped address and strips a port", () => {
+    expect(rateLimitKeyAddress("::ffff:203.0.113.7")).toBe("203.0.113.7")
+    expect(rateLimitKeyAddress("[2001:db8::1]:443")).toBe("2001:db8:0:0::/64")
+  })
+
+  it("has no answer for nothing or for garbage", () => {
+    expect(rateLimitKeyAddress(undefined)).toBeUndefined()
+    expect(rateLimitKeyAddress("")).toBeUndefined()
+    expect(rateLimitKeyAddress("not-an-address")).toBeUndefined()
+  })
+})
+
+describe("resolveClientAddress — the edge's one resolution", () => {
+  function inbound(forwarded: string | undefined, socket: string): Request {
+    return new Request("https://idp.example.com/login", {
+      headers: {
+        [SOCKET_ADDRESS_HEADER]: socket,
+        ...(forwarded === undefined ? {} : { "x-forwarded-for": forwarded }),
+      },
+    })
+  }
+
+  it("overwrites the private header with the leftmost hop under true", () => {
+    const { request: stamped, ipAddress } = resolveClientAddress(
+      inbound("203.0.113.5, 10.0.0.2", "10.0.0.1"),
+      true
+    )
+    expect(ipAddress).toBe("203.0.113.5")
+    expect(stamped.headers.get(SOCKET_ADDRESS_HEADER)).toBe("203.0.113.5")
+    // The forwarded chain itself is left for anything that still reads it.
+    expect(stamped.headers.get("x-forwarded-for")).toBe("203.0.113.5, 10.0.0.2")
+  })
+
+  it("overwrites it with the rightmost untrusted hop under a CIDR list", () => {
+    const { request: stamped, ipAddress } = resolveClientAddress(
+      inbound("1.2.3.4, 203.0.113.5, 10.0.0.2", "10.0.0.1"),
+      ["10.0.0.0/8"]
+    )
+    expect(ipAddress).toBe("203.0.113.5")
+    expect(stamped.headers.get(SOCKET_ADDRESS_HEADER)).toBe("203.0.113.5")
+  })
+
+  it("keeps the socket address and ignores the chain when no proxy is trusted", () => {
+    const { request: stamped, ipAddress } = resolveClientAddress(
+      inbound("1.2.3.4", "203.0.113.9"),
+      false
+    )
+    expect(ipAddress).toBe("203.0.113.9")
+    expect(stamped.headers.get(SOCKET_ADDRESS_HEADER)).toBe("203.0.113.9")
+  })
+
+  it("removes the header when nothing resolves, so nothing downstream invents one", () => {
+    const bare = new Request("https://idp.example.com/login", {
+      headers: { [SOCKET_ADDRESS_HEADER]: "garbage" },
+    })
+    const { request: stamped, ipAddress } = resolveClientAddress(bare, false)
+    expect(ipAddress).toBeUndefined()
+    expect(stamped.headers.has(SOCKET_ADDRESS_HEADER)).toBe(false)
   })
 })

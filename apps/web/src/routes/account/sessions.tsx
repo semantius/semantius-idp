@@ -19,7 +19,6 @@ import {
   withError,
 } from "@/server/http/auth-proxy"
 import { requireSession } from "@/server/http/require-session"
-import { assertSameOrigin } from "@/server/http/request-origin"
 import { fetchSessions } from "@/server/functions/account"
 import {
   revokeForOtherSessions,
@@ -34,21 +33,21 @@ import { LocalTime } from "@/components/common/local-time"
 const HERE = "/account/sessions"
 
 /**
- * `/account/sessions` — every live session, and how to end one (FR-ACCT-1).
+ * `/account/sessions` — every live session, and how to end one.
  *
  * Both scopes require a session; neither requires a recent one. Signing out
  * **everywhere else** used to sit behind the freshness gate, on the reasoning
  * that it is the move someone makes to lock the real owner out — but the gate
- * itself is gone (**D81**), and the read is authoritative rather than cached,
+ * itself is gone, and the read is authoritative rather than cached,
  * which is the property that actually mattered here.
  *
  * **Signing a session out revokes the OAuth tokens it obtained, always**
- * (**D101**). `session.revokeOAuthTokensOnLogout` governs *logout* — closing
+ *. `session.revokeOAuthTokensOnLogout` governs *logout* — closing
  * the tab on a laptop is not a statement about every application the user
  * signed in to, which is the whole SSO argument for its `false` default. This
  * page is the opposite statement: it exists to cut a device off, and a device
  * whose app goes on refreshing tokens for another thirty days is not cut off.
- * The administrator's equivalent has cascaded since **D67**, and self-service
+ * The administrator's equivalent has cascaded and self-service
  * being weaker than admin for the same act is not a defensible split.
  *
  * The revocation runs **before** Better Auth deletes the row. Both token
@@ -85,10 +84,9 @@ export const Route = createFileRoute("/account/sessions")({
         const base = runtime.config.base.basePath
         const here = `${base}${HERE}`
 
-        // Before a form field is read, let alone a row written.
-        if (!assertSameOrigin(request)) {
-          return redirectWithCookies(withError(here, "untrusted_origin"))
-        }
+        // Before a form field is read, let alone a row written: the origin
+        // check and the authoritative read, both inside `requireSession`
+        // so no handler can have one without the other.
         const signedIn = await requireSession(runtime, request, HERE)
         if (!signedIn.ok) return signedIn.response
         const userId = signedIn.session.user.id
@@ -170,7 +168,7 @@ function SessionsPage() {
         ) : (
           // A hook of its own, because `main li` is no longer only these:
           // the breadcrumb is an `<ol>` of `<li>` inside the same `<main>`
-          // (**D93**), the way the sidebar footer is inside the same page.
+          // , the way the sidebar footer is inside the same page.
           <ul data-slot="session-list" className="grid gap-3">
             {sessions.map((session) => (
               <li
@@ -189,7 +187,7 @@ function SessionsPage() {
                         {t.account.sessions.current}
                       </span>
                     ) : null}
-                    {/* FR-ADMIN-5 from the user's side: an administrator
+                    {/* Impersonation from the user's side: an administrator
                         signed in as them is a session on this list, and
                         without this it reads as an unrecognized device. */}
                     {session.impersonated ? (

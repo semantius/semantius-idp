@@ -13,7 +13,7 @@ import { baseConfig, VALID_SECRET } from "@/tests/fixtures/config-files"
 const parse = (overrides: Record<string, unknown> = {}) =>
   configFileSchema.parse({ ...baseConfig(), ...overrides })
 
-describe("mask.ts (CFG-5, SEC-5)", () => {
+describe("mask.ts", () => {
   it("masks every secret-bearing pointer", () => {
     const masked = maskConfig({
       secret: VALID_SECRET,
@@ -56,7 +56,7 @@ describe("mask.ts (CFG-5, SEC-5)", () => {
   })
 
   /**
-   * The bug this function exists for (**D93**). `maskConnectionString` ends in
+   * The bug this function exists for. `maskConnectionString` ends in
    * `url.toString()`, and `URL` supplies the empty path — so every bare-origin
    * gateway target came back with a trailing slash, `checkGatewayUrl` answered
    * `trailing_slash`, and the edit form refused a save that changed only a
@@ -105,7 +105,7 @@ describe("mask.ts (CFG-5, SEC-5)", () => {
     expect(masked.database.schema).toBe("idp")
   })
 
-  // directUrl (D27) shipped unmasked: it was in neither the pointer list nor
+  // directUrl shipped unmasked: it was in neither the pointer list nor
   // the connection-string branch, which was a literal `=== "/database/url"`.
   it("masks database.directUrl the same way as database.url", () => {
     const masked = maskConfig({
@@ -134,8 +134,8 @@ describe("derive.ts", () => {
     })
   })
 
-  it("parses a sub-path base URL (OPS-10)", () => {
-    // The cookie no longer follows the mount (**D97**) — `/idp` mounts the app,
+  it("parses a sub-path base URL", () => {
+    // The cookie no longer follows the mount — `/idp` mounts the app,
     // `/` scopes the session.
     expect(parseBasePath("https://apps.example.com/idp")).toEqual({
       origin: "https://apps.example.com",
@@ -146,7 +146,7 @@ describe("derive.ts", () => {
     })
   })
 
-  it("takes the cookie path and domain from configuration (**D97**)", () => {
+  it("takes the cookie path and domain from configuration", () => {
     expect(
       parseBasePath("https://apps.example.com/idp", {
         path: "/idp",
@@ -162,7 +162,7 @@ describe("derive.ts", () => {
     })
   })
 
-  it("forces email verification off in degraded mode (FR-MAIL-2)", () => {
+  it("forces email verification off in degraded mode", () => {
     const config = deriveConfig(
       parse({ auth: { requireEmailVerification: true } }),
       [],
@@ -193,7 +193,7 @@ describe("derive.ts", () => {
     ).toBe("Acme")
   })
 
-  it("defaults the JWKS grace period to the longest token lifetime + 1 h (FR-OIDC-16)", () => {
+  it("defaults the JWKS grace period to the longest token lifetime + 1 h", () => {
     // refreshTokenMaxLifetime 90d is the longest default lifetime.
     expect(
       deriveConfig(parse(), [], BUILT_IN_ROLES).jwksGracePeriodSeconds
@@ -209,7 +209,7 @@ describe("derive.ts", () => {
     ).toBe(7200)
   })
 
-  it("selects user claims per includeUserData / userClaims (FR-OIDC-7)", () => {
+  it("selects user claims per includeUserData / userClaims", () => {
     expect(deriveConfig(parse(), [], BUILT_IN_ROLES).userClaims).toEqual([
       "email",
       "name",

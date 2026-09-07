@@ -4,7 +4,7 @@ import { cn } from "@workspace/ui/lib/utils"
 
 /**
  * The page's own heading, its description and the buttons beside it
- * (**D93**).
+ *.
  *
  * The area name used to be the chrome's `<h1>` and the page's name an `<h2>`
  * beneath it. The breadcrumb took the chrome's row, so the `<h1>` is the
@@ -16,13 +16,13 @@ import { cn } from "@workspace/ui/lib/utils"
  * - **`text-2xl`, not `text-3xl`.** The chrome breadcrumb already gives the
  *   page its identity, and 30 px bold plus a description costs
  *   `/admin/database`'s SQL runner about 40 px of the only definite height it
- *   has (**D87**).
+ *   has.
  * - **`fill` keeps `shrink-0`.** `AdminShell` renders this inside
  *   `flex min-h-0 flex-1 flex-col` when a page fills the window; a header
  *   without it is a flex item that *shrinks*, so the heading compresses
- *   instead of the panes — the D87 failure mode, one level up.
+ *   instead of the panes — the resizable-console failure mode, one level up.
  * - **`tabIndex={-1}`.** `SidebarLayout` focuses this on every route change,
- *   because since D93 an Edit is a `<Link>` inside a menu item: activating it
+ *   because an Edit is a `<Link>` inside a menu item: activating it
  *   unmounts the focused element, focus falls to `<body>`, and a screen reader
  *   announces nothing. `outline-none` because the focus is programmatic and a
  *   ring around a heading nobody clicked reads as a bug.
@@ -37,7 +37,7 @@ export function PageHeader({
   title: string
   description?: ReactNode
   /**
-   * Drop the `max-w-2xl` measure — see `AdminShell` (**D87**, **D95**). Set
+   * Drop the `max-w-2xl` measure — see `AdminShell`. Set
    * by every page whose body is full width, which is all four list pages and
    * the database console; the form pages keep it, because their body is
    * `max-w-3xl` and a subtitle wider than the form it introduces overhangs it.
@@ -45,7 +45,7 @@ export function PageHeader({
   wideDescription?: boolean
   /** Buttons that belong beside the heading rather than in the body. */
   actions?: ReactNode
-  /** The page owns the rest of the viewport (**D87**). */
+  /** The page owns the rest of the viewport. */
   fill?: boolean
 }) {
   return (

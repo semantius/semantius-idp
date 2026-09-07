@@ -16,29 +16,29 @@ import {
   redirectWithCookies,
   withError,
 } from "@/server/http/auth-proxy"
-import { readSession } from "@/server/http/session"
+import { requireSession } from "@/server/http/require-session"
 import { displayName } from "@/server/display-name"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
 import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 /**
- * `/account` — name and address (FR-ACCT-1).
+ * `/account` — name and address.
  *
  * Only the display fields are editable here. The address is a *security*
  * change (it is what a reset link goes to), so it lives on `/account/security`
  * with the rest of them; changing a first name does not.
  *
- * **The display name is not one of them** (**D49**). It is derived from the
+ * **The display name is not one of them**. It is derived from the
  * first and last name in `site.nameFormat` order, so a deployment's user list
  * sorts and reads one way rather than however each person happened to type
  * their own name in. Saving recomputes it.
  *
- * **And it is not shown here either** (**D95**). It used to be, as a read-only
+ * **And it is not shown here either**. It used to be, as a read-only
  * row directly under the two fields it is built from, with a sentence
  * underneath explaining the derivation — three lines saying what "First name"
  * and "Last name" say by sitting above them, on the one page where the derived
- * value is also on screen anyway: since **D82** the shell's footer carries it
+ * value is also on screen anyway: the shell's footer carries it
  * on every page of both signed-in areas, and it updates with the rest of the
  * page when a save re-mints the session cookie.
  */
@@ -62,19 +62,20 @@ export const Route = createFileRoute("/account/")({
         const base = runtime.config.base.basePath
         const here = `${base}${APP_ROUTES.account}`
 
-        const session = await readSession(runtime, request)
-        if (!session) {
-          return redirectWithCookies(
-            `${base}${APP_ROUTES.login}?notice=signin_required`
-          )
-        }
+        // The same gate every other form post has: this
+        // one read the cookie cache and checked nothing about where the post
+        // came from, which made the profile the one account page a sibling
+        // subdomain could submit.
+        const signedIn = await requireSession(runtime, request, APP_ROUTES.account)
+        if (!signedIn.ok) return signedIn.response
+        const { session } = signedIn
 
         const form = await readForm(request)
         const firstName = (form.firstName ?? "").trim()
         const lastName = (form.lastName ?? "").trim()
         // The two parts feed the `given_name`/`family_name` claims
-        // (FR-SIGNUP-5, FR-OIDC-7); `name` is what applications display and is
-        // recomputed from them here rather than accepted from the form (D49).
+        // ; `name` is what applications display and is
+        // recomputed from them here rather than accepted from the form.
         // A person with neither part keeps their address as the display name,
         // because a blank one renders as an empty row in every admin table.
         const result = await callAuth(
@@ -117,7 +118,7 @@ function ProfilePage() {
       title={t.account.profile.title}
       description={t.account.profile.description}
     >
-      {/* **D78**: whose account. Redundant when it is your own and your own
+      {/* whose account. Redundant when it is your own and your own
           only — and not, the moment an administrator is impersonating, which
           is the one time "Profile updated." needs to say *whose*. */}
       <NoticeToast

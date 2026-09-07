@@ -20,7 +20,7 @@ import { baseConfig } from "@/tests/fixtures/config-files"
  * `approval-gate.test.ts` in the integration suite proves no session is
  * created for a non-`active` user on the password path. This is the same rule
  * viewed from underneath: the refusal itself, including the ban-expiry
- * arithmetic (FR-ADMIN-4), which a live test can only exercise by backdating
+ * arithmetic, which a live test can only exercise by backdating
  * rows.
  */
 function codeOf(run: () => void): string | undefined {
@@ -32,7 +32,7 @@ function codeOf(run: () => void): string | undefined {
   }
 }
 
-describe("assertUserMaySignIn (FR-SIGNUP-2, FR-ADMIN-4)", () => {
+describe("assertUserMaySignIn", () => {
   it("lets an active, unbanned user through", () => {
     expect(codeOf(() => assertUserMaySignIn({ status: "active" }))).toBeUndefined()
   })
@@ -77,7 +77,7 @@ describe("assertUserMaySignIn (FR-SIGNUP-2, FR-ADMIN-4)", () => {
         })
       )
     ).toBe(GATE_ERROR_CODES.banned)
-    // FR-ADMIN-4: a lapsed ban restores access without an admin touching it.
+    // a lapsed ban restores access without an admin touching it.
     expect(
       codeOf(() =>
         assertUserMaySignIn({ status: "active", banned: true, banExpires: past })
@@ -111,7 +111,7 @@ describe("assertUserMaySignIn (FR-SIGNUP-2, FR-ADMIN-4)", () => {
   })
 })
 
-describe("the local plugin's audit_log table (SEC-6, DM-1)", () => {
+describe("the local plugin's audit_log table", () => {
   const config = deriveConfig(
     configFileSchema.parse(baseConfig()),
     [],
@@ -123,7 +123,7 @@ describe("the local plugin's audit_log table (SEC-6, DM-1)", () => {
   >
 
   it("declares the table the generator emits", () => {
-    // DM-1: the custom table is the schema of a local Better Auth plugin, so
+    // the custom table is the schema of a local Better Auth plugin, so
     // one generator pass covers it along with everything else.
     expect(Object.keys(schema)).toContain("auditLog")
   })
@@ -132,7 +132,7 @@ describe("the local plugin's audit_log table (SEC-6, DM-1)", () => {
     // The generator now *evaluates* this thunk to decide whether to emit
     // `.defaultNow()`, rather than matching its source text — 1.7.1 stringifies
     // `() => new Date` without parentheses, so the old test never matched
-    // (D29). If this stops returning a Date the column silently loses its
+    // . If this stops returning a Date the column silently loses its
     // default.
     const createdAt = schema.auditLog!.fields.createdAt!
     expect(typeof createdAt.defaultValue).toBe("function")
@@ -144,7 +144,7 @@ describe("the local plugin's audit_log table (SEC-6, DM-1)", () => {
       expect(schema.auditLog!.fields[field]!.required).toBe(true)
     }
     // And leaves optional the ones a system or anonymous event has no value
-    // for (SEC-7: a failed sign-in names nobody).
+    // for (a failed sign-in names nobody).
     for (const field of ["actorUserId", "actorType", "ipAddress"]) {
       expect(schema.auditLog!.fields[field]!.required).toBe(false)
     }

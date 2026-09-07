@@ -1,5 +1,5 @@
 /**
- * The two pure parts of `/admin/database`'s server side (FR-ADMIN-7).
+ * The two pure parts of `/admin/database`'s server side.
  *
  * `buildSchemaTables` is where every introspection edge case lands — a table
  * `ANALYZE` has never visited, an index over an expression, a foreign key

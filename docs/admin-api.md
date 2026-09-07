@@ -34,14 +34,14 @@ every endpoint below; an anonymous caller gets 401.
 | --- | --- | --- |
 | `POST` | `/admin/create-user` | Creates an account, pre-approved and confirmed |
 | `GET` | `/admin/list-users` | Searches, filters, sorts and pages |
-| `POST` | `/admin/update-user` | Name, address, verified flag |
+| `POST` | `/admin/update-user` | `name`, `firstName`, `lastName`, `email`, `emailVerified`, `image`, `role`, `banned`, `banReason`, `banExpires`, `status`, `mustChangePassword` — anything else is `400 UPDATE_USER_FIELD_NOT_ALLOWED`; a `status` other than `active` is treated as a rejection by the invariants |
 | `POST` | `/admin/set-role` | Replaces the user's roles |
 | `POST` | `/admin/set-user-password` | Sets a password |
 | `POST` | `/admin/ban-user` | Suspends, with a reason and optional expiry |
 | `POST` | `/admin/unban-user` | Lifts a suspension |
 | `POST` | `/admin/remove-user` | Deletes the account and everything attached |
 | `POST` | `/admin/revoke-user-sessions` | Signs them out everywhere |
-| `POST` | `/admin/impersonate-user` | Only when `admin.allowImpersonation` is on |
+| `POST` | `/admin/impersonate-user` | Only when `admin.allowImpersonation` is on. The impersonated session cannot create API keys (`403 IMPERSONATED_SESSION`), and every audit row written under it carries `impersonatedBy` |
 
 Creating a user:
 
@@ -94,8 +94,7 @@ the sign-in page and they start again from the application.
 
 ## The database console
 
-Two endpoints, and **only when `admin.database` is not `disabled`** (FR-ADMIN-7,
-**D83**). With the flag off they are not registered at all, so an administrator
+Two endpoints, and **only when `admin.database` is not `disabled`**. With the flag off they are not registered at all, so an administrator
 calling them gets a plain `404` — the feature is absent, not refused.
 
 | Method | Path | Does |
@@ -123,7 +122,7 @@ way out of the transaction.
 
 The other limits: 10 s per statement (`57014` on a timeout), 500 rows,
 ~10 kB per cell and ~5 MB per response, with `"truncated": true` when any of
-them bit. Every call is audited as `database.queried`, success or not.
+them bit. Every call is audited as `database.queried`, success or not, with the first 500 characters of the statement after scrubbing: string literals longer than eight characters, every literal after a `password`/`secret`/`token` keyword, dollar-quoted bodies and comments are replaced with `[redacted]`; table and column names stay.
 
 A failure is a `400` carrying everything the editor needs to point at it:
 
@@ -139,8 +138,12 @@ A failure is a `400` carrying everything the editor needs to point at it:
 
 **This reads everything.** An admin API key that can call this endpoint can
 select password hashes, session tokens and the JWKS rows. That is what the
-console is for; leave `admin.database` at `disabled` if it is not what you
-want.
+console is for. If the connection is a Postgres superuser, or a member of
+`pg_read_server_files`, `pg_write_server_files` or `pg_execute_server_program`,
+the same key reads files and runs programs on the database host, because a
+READ ONLY transaction takes nothing away from the role. Connect the IdP as a
+NOSUPERUSER application role (the reference `docker-compose.yml` does), or leave `admin.database` at `disabled`. Start-up says which case
+you are in.
 
 ## The rest
 
@@ -149,15 +152,15 @@ want.
 | `POST` | `/idp/reset-two-factor` | Turns 2FA off, signs them out, tells them |
 | `GET` | `/idp/admin-stats` | The dashboard counts |
 | `GET` | `/idp/audit` | The audit trail, filterable and cursor-paged |
-| `GET` | `/idp/system` | Version, issuer, the well-known **discovery URLs** (**D55**), e-mail transport, keys, migrations, last reconcile, effective configuration with secrets masked |
+| `GET` | `/idp/system` | Version, issuer, the well-known **discovery URLs**, e-mail transport, keys, migrations, last reconcile, effective configuration with secrets masked |
 | `POST` | `/idp/rotate-keys` | Creates a successor signing key |
-| `POST` | `/idp/create-client` | Registers an OAuth client (**D50**) |
-| `POST` | `/idp/update-client` | Replaces one's fields, except its id (**D72**) |
-| `POST` | `/idp/rotate-client-secret` | Issues a new secret and returns it once (**D72**) |
+| `POST` | `/idp/create-client` | Registers an OAuth client |
+| `POST` | `/idp/update-client` | Replaces one's fields, except its id |
+| `POST` | `/idp/rotate-client-secret` | Issues a new secret and returns it once |
 | `POST` | `/idp/set-client-disabled` | Switches one off, or back on |
 | `POST` | `/idp/delete-client` | Removes one, with its tokens and consents |
-| `POST` | `/idp/create-gateway` | Adds an API gateway (**D91**) |
-| `POST` | `/idp/update-gateway` | Replaces its target and auth rule, not its name |
+| `POST` | `/idp/create-gateway` | Adds an API gateway |
+| `POST` | `/idp/update-gateway` | Replaces its target, auth rule and audience, not its name; also clears the token cache |
 | `POST` | `/idp/set-gateway-disabled` | Switches one off, or back on |
 | `POST` | `/idp/delete-gateway` | Removes one |
 
@@ -170,7 +173,7 @@ passes through whatever you send, so a *defined* `false` wins over the default.
 `enableEndSession: true` is refused unless the client also has at least one
 `postLogoutRedirectUris` entry.
 
-Clients are **half** read-only (**D50**). The ones in `oauth_clients.jsonc` are
+Clients are **half** read-only. The ones in `oauth_clients.jsonc` are
 reconciled at start-up and refused by the five endpoints above with
 `CLIENT_MANAGED_BY_FILE`, because a change here is a change the next restart
 would silently undo. Clients registered *through* the API are stored with the
@@ -200,7 +203,7 @@ get none. `enableEndSession` defaults to true and then requires at least one
 A created client works immediately: nothing needs a restart, and the CORS and
 `form-action` origin sets are refreshed before the call returns.
 
-### Editing one (**D72**)
+### Editing one
 
 `/idp/update-client` takes the **same body as `create`** and is a **full
 replace**: whatever you send is what the client becomes, so read the row first
@@ -227,7 +230,7 @@ revoked **only when the public/confidential flip happens**: a renamed client or
 an edited redirect URI revokes nothing, matching what reconciliation does for
 an edited file entry. The origin sets are refreshed before the call returns.
 
-### Rotating a secret (**D72**)
+### Rotating a secret
 
 ```bash
 curl -X POST https://idp.example.com/api/auth/idp/rotate-client-secret \
@@ -245,7 +248,7 @@ client instead; both of those do revoke. A public client (`spa`, `native`) has
 no secret and is refused with `CLIENT_HAS_NO_SECRET` rather than quietly given
 one — that is an edit, and `/idp/update-client` is where an edit belongs.
 
-## API gateways (**D91**)
+## API gateways
 
 A gateway is a named reverse proxy: `/gateway/<name>[/<rest>]` is streamed to
 `<url>/<rest>` with the caller's method, headers, query and body unchanged. A
@@ -302,7 +305,7 @@ deployment out of itself:
 | `GATEWAY_MANAGED_BY_FILE` | That gateway comes from `config.jsonc`. Edit the file and restart. |
 | `GATEWAY_ALREADY_EXISTS` | A gateway with that name already exists. |
 | `GATEWAY_NOT_FOUND` | No gateway by that name. |
-| `INVALID_GATEWAY_DEFINITION` | The name is not a usable URL segment, or the target is not an absolute http(s) URL without a trailing slash, query, fragment or userinfo; the message names which. |
+| `INVALID_GATEWAY_DEFINITION` | The name is not a usable URL segment, the target is not an absolute http(s) URL without a trailing slash, query, fragment or userinfo — or is a link-local address — or the audience is not an absolute URI without a fragment; the message names which. |
 
 The last-administrator rule is checked **before** the self-action rules. When
 both fit, "give another account an admin role first" is the useful answer:
@@ -311,7 +314,7 @@ ever reaches the one person who has nobody to ask.
 
 If every administrator is somehow locked out anyway, see
 [locked out](../README.md#if-you-get-locked-out) — there is no
-`reset-admin` command any more (**D52**), and the recoveries are another
+`reset-admin` command any more, and the recoveries are another
 administrator, the password-reset e-mail, or the SQL promotion in
 [runbooks](runbooks.md#promoting-a-user-when-nobody-can-sign-in).
 
@@ -319,7 +322,9 @@ administrator, the password-reset e-mail, or the SQL promotion in
 
 Every call here writes an audit row with the actor, the target, the outcome and
 a request id that also appears on the log line. An API key does not make an
-action anonymous: the row names the key's owner, and `actorType` says the call
-came from a key rather than a browser.
+action anonymous: the row names the key's owner, and `actorType` is `api-key`
+for a call made with one and `session` for a browser — on every
+`/idp/*` endpoint; Better Auth's own `/admin/*` endpoints currently answer `401`
+to a key and are reachable only with a cookie.
 
 Read them back through `GET /idp/audit`, or at `/admin/audit`.

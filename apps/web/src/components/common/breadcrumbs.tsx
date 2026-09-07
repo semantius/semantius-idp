@@ -16,7 +16,7 @@ import { getCatalog } from "@/server/i18n"
 import type { Catalog } from "@/server/i18n"
 
 /**
- * The trail in the chrome header row (**D93**).
+ * The trail in the chrome header row.
  *
  * **It is composed from the route matches, never passed down as a prop.**
  * `SidebarLayout` sits above every page in its subtree and cannot receive data
@@ -61,7 +61,7 @@ export interface Crumb {
  * A route's crumbs, built from the catalog its own locale resolves to.
  *
  * A loader helper rather than a component one: the wording has to come from
- * the catalog (FR-I18N-1) and the trail has to be plain serializable data by
+ * the catalog and the trail has to be plain serializable data by
  * the time it reaches the client, so the catalog is read where the loader is
  * and only strings travel.
  */
@@ -103,7 +103,7 @@ export function ShellBreadcrumb({
   /**
    * The landmark's accessible name, from the catalog. The registry component
    * hard-codes `aria-label="breadcrumb"`; a passed one wins over it, which is
-   * how `SidebarTrigger` gets its name too (FR-I18N-1).
+   * how `SidebarTrigger` gets its name too.
    */
   label: string
   crumbs: Crumb[]

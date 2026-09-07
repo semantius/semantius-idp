@@ -12,6 +12,7 @@ import { getCatalog } from "@/server/i18n"
 import { createFirstUser, isSetupPending } from "@/server/admin/first-user"
 import { validateSetupForm } from "@/server/admin/setup-form"
 import { createDb } from "@/server/db/client"
+import { rateLimitKeyAddress } from "@/server/http/client-ip"
 import {
   callAuth,
   readForm,
@@ -27,7 +28,7 @@ import { fetchSetupPending } from "@/server/functions/setup"
 import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 /**
- * `/setup` — the first-run wizard (FR-ADMIN-1, **D52**).
+ * `/setup` — the first-run wizard.
  *
  * **While the `user` table is empty, this is the deployment.** `/` and `/login`
  * both redirect here, and whoever fills the form in becomes the first
@@ -71,11 +72,15 @@ export const Route = createFileRoute("/setup")({
           return redirectWithCookies(`${login}?notice=already_setup`)
         }
 
-        // SEC-2, D37: the only unauthenticated write on the deployment while
+        // the only unauthenticated write on the deployment while
         // it is in this state, so it gets the same table-backed limiter every
-        // other credential endpoint uses.
+        // other credential endpoint uses. Keyed on `clientIp`, never on
+        // `ipAddress`: that one is anonymized to a /24 by the time it
+        // is on the context, so a whole subnet shared one bucket and a
+        // runtime that resolved nothing put the internet in `unknown`.
         if (runtime.config.file.rateLimit.enabled) {
-          const bucket = currentRequest()?.ipAddress ?? "unknown"
+          const bucket =
+            rateLimitKeyAddress(currentRequest()?.clientIp) ?? "unknown"
           const decision = await consume(
             { database: runtime.database, logger: runtime.logger },
             `setup:${bucket}`,
@@ -94,7 +99,7 @@ export const Route = createFileRoute("/setup")({
         const { email, firstName, lastName, password } = valid.values
 
         // A direct, non-pooled handle for the advisory lock: a session lock
-        // does not hold through a transaction pooler (D27), and the runtime's
+        // does not hold through a transaction pooler, and the runtime's
         // own locking handle is closed once start-up finishes.
         //
         // **Two connections, not one.** `withAdvisoryLock` reserves one for the
@@ -164,7 +169,8 @@ export const Route = createFileRoute("/setup")({
  * Ten attempts an hour, per caller.
  *
  * Keyed on the address the edge resolved (`server.trustProxy` decides what that
- * is), like every other bucket here. Wider than a sign-in limit because a first
+ * is), IPv6 masked to its /64, like every other bucket here. Wider than a
+ * sign-in limit because a first
  * run is genuinely fiddly — a rejected password, a typo in the address — and
  * narrow enough that the deployment's one unauthenticated account-creating
  * endpoint cannot be hammered while it is open.

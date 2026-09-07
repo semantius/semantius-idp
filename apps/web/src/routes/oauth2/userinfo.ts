@@ -4,7 +4,7 @@ import { corsFor, preflightResponse, withCors } from "@/server/http/cors"
 import { forwardToAuth } from "@/server/oidc/protocol-proxy"
 import { getRuntime } from "@/server/runtime"
 
-/** `{issuer}/oauth2/userinfo` (FR-OIDC-4, FR-OIDC-17). */
+/** `{issuer}/oauth2/userinfo`. */
 const handle = async ({ request }: { request: Request }) => {
   const runtime = await getRuntime()
   const cors = corsFor(request, runtime.config, "clients")

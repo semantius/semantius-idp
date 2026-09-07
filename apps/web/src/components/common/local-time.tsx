@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react"
 
 /**
- * A timestamp in the *browser's* locale and timezone (FR-I18N-1).
+ * A timestamp in the *browser's* locale and timezone.
  *
  * The requirement has always said "dates render in the browser locale"; the
  * code was the deviation, in two different directions at once. The admin pages

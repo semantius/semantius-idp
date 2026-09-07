@@ -1,9 +1,9 @@
 /**
- * The nine e-mail templates (FR-MAIL-1).
+ * The eleven e-mail templates.
  *
  * Every template produces HTML **and** text, is branded from `site.*`, and
  * builds every link from `server.baseUrl` only — never from a request header
- * (SEC-1). Strings come from the catalog (FR-I18N-1); nothing here is a literal
+ *. Strings come from the catalog; nothing here is a literal
  * a translator cannot reach.
  *
  * Templates are not user-customisable in v1, so the layout is one shared
@@ -29,7 +29,7 @@ interface Layout {
   footnotes?: string[]
 }
 
-/** Minimal, self-contained HTML: no external stylesheet, no remote images (SEC-8). */
+/** Minimal, self-contained HTML: no external stylesheet, no remote images. */
 function render(
   context: TemplateContext,
   layout: Layout
@@ -104,7 +104,7 @@ function escapeHtml(value: string): string {
     .replace(/"/g, "&quot;")
 }
 
-/** Every link in every template goes through here (SEC-1). */
+/** Every link in every template goes through here. */
 function link(
   config: IdpConfig,
   route: string,
@@ -120,7 +120,7 @@ function link(
 type Built = Omit<EmailMessage, "to">
 
 export const templates = {
-  /** 1 — confirm a new address (FR-AUTH-2). */
+  /** 1 — confirm a new address. */
   verifyEmail(context: TemplateContext, input: { url: string }): Built {
     const { t, config } = context
     const body = render(context, {
@@ -136,7 +136,7 @@ export const templates = {
     }
   },
 
-  /** 2 — password reset (FR-AUTH-3). */
+  /** 2 — password reset. */
   resetPassword(context: TemplateContext, input: { url: string }): Built {
     const { t, config } = context
     const body = render(context, {
@@ -157,7 +157,7 @@ export const templates = {
     }
   },
 
-  /** 3 — an admin created the account (FR-ADMIN-2). */
+  /** 3 — an admin created the account. */
   setPassword(context: TemplateContext, input: { url: string }): Built {
     const { t, config } = context
     const body = render(context, {
@@ -177,7 +177,7 @@ export const templates = {
     }
   },
 
-  /** 4 — to every admin, when someone signs up (FR-SIGNUP-2). */
+  /** 4 — to every admin, when someone signs up. */
   pendingSignUp(
     context: TemplateContext,
     input: { applicantEmail: string }
@@ -198,7 +198,7 @@ export const templates = {
     }
   },
 
-  /** 5 — approved (FR-SIGNUP-2). */
+  /** 5 — approved. */
   accountApproved(context: TemplateContext): Built {
     const { t, config } = context
     const body = render(context, {
@@ -216,7 +216,7 @@ export const templates = {
     }
   },
 
-  /** 6 — rejected (FR-SIGNUP-2, optional). */
+  /** 6 — rejected (optional). */
   accountRejected(context: TemplateContext): Built {
     const { t, config } = context
     const support = config.file.site.supportEmail
@@ -232,7 +232,7 @@ export const templates = {
     }
   },
 
-  /** 7 — the password changed (FR-AUTH-3). */
+  /** 7 — the password changed. */
   passwordChanged(context: TemplateContext): Built {
     const { t, config } = context
     const body = render(context, {
@@ -253,7 +253,7 @@ export const templates = {
     }
   },
 
-  /** 8 — second factor turned on or off (FR-2FA-1). */
+  /** 8 — second factor turned on or off. */
   twoFactorChanged(
     context: TemplateContext,
     input: { enabled: boolean }
@@ -279,7 +279,7 @@ export const templates = {
   },
 
   /**
-   * 9 — an administrator reset the second factor (FR-2FA-2).
+   * 9 — an administrator reset the second factor.
    *
    * Sent to the user rather than to the administrator, because the user is the
    * only person who can tell whether the reset was legitimate — and if it was
@@ -303,7 +303,41 @@ export const templates = {
     }
   },
 
-  /** 10 — an API key was created (FR-KEY-1). */
+  /**
+   * 11 — someone tried to register with an address that already has an
+   * account.
+   *
+   * Sent to the **existing** owner, never to whoever typed the address: with
+   * e-mail on, `/signup` answers a taken address exactly as it answers a new
+   * one, and this message is the only thing that distinguishes the two — in
+   * the one inbox that was going to hear about it either way. No link into
+   * the account, and the reset link is the ordinary forgot-password page: if
+   * it was the owner who forgot they had an account, that is the way back in,
+   * and if it was not, the message is the tip-off that someone knows the
+   * address.
+   */
+  signUpExistingAccount(context: TemplateContext): Built {
+    const { t, config } = context
+    const body = render(context, {
+      heading: t.email.signUpExisting.heading,
+      paragraphs: [
+        t.email.signUpExisting.body(config.file.site.name),
+        t.email.signUpExisting.hint,
+      ],
+      action: {
+        label: t.email.signUpExisting.action,
+        url: link(config, APP_ROUTES.forgotPassword),
+      },
+      footnotes: [t.email.signUpExisting.ignore],
+    })
+    return {
+      subject: t.email.signUpExisting.subject(config.file.site.name),
+      template: "signup-existing-account",
+      ...body,
+    }
+  },
+
+  /** 10 — an API key was created. */
   apiKeyCreated(context: TemplateContext, input: { keyName: string }): Built {
     const { t, config } = context
     const body = render(context, {

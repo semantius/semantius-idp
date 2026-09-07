@@ -13,14 +13,14 @@ import { getRuntime } from "@/server/runtime"
 import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 /**
- * `/logout` (FR-AUTH-6).
+ * `/logout`.
  *
  * **POST only** for the actual sign-out. A GET that ended a session would let
  * any page log a user out with an `<img>` tag, so the GET renders a button
  * instead — which also gives the "signed out" confirmation somewhere to live.
  *
- * `returnTo` must be a same-origin relative path (SEC-3). RP-initiated logout
- * is a different thing entirely and lives at `/oauth2/end-session` (FR-OIDC-11).
+ * `returnTo` must be a same-origin relative path. RP-initiated logout
+ * is a different thing entirely and lives at `/oauth2/end-session`.
  */
 export const Route = createFileRoute("/logout")({
   loader: ({ context, location }) => {

@@ -1,5 +1,5 @@
 @echo off
-REM The operator CLI (OPS-6), inside the running container:
+REM The operator CLI, inside the running container:
 REM
 REM   idp-cli.cmd config validate
 REM   idp-cli.cmd migrate

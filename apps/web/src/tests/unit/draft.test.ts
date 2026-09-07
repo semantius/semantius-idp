@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import { draftFields, parseDraft, withDraft } from "@/server/http/draft"
 
 /**
- * The draft carrier (**D62**), asserted without a database.
+ * The draft carrier, asserted without a database.
  *
  * The one guarantee worth a test of its own is the negative: **no password
  * ever reaches the store**. It is a `verification` row, and a mistyped form is
@@ -29,6 +29,34 @@ describe("draftFields", () => {
         token: "t".repeat(40),
       })
     ).toEqual({ email: "someone@example.com" })
+  })
+
+  it("never keeps a second-factor code, a PIN or a backup code either", () => {
+    // Matched as a name *segment*, so `backupCode`, `otpCode`, `totpCode`,
+    // `confirmPin` and `backup_codes` are all covered while `pinned`,
+    // `shipping` and `postcode` are ordinary words that still travel.
+    expect(
+      draftFields({
+        name: "Example",
+        pin: "1234",
+        confirmPin: "1234",
+        otp: "123456",
+        otpCode: "123456",
+        totpCode: "123456",
+        code: "123456",
+        backupCode: "abcd-efgh",
+        backup_codes: "abcd-efgh",
+        backupCodes: "abcd-efgh",
+        pinned: "yes",
+        shipping: "express",
+        postcode: "12345",
+      })
+    ).toEqual({
+      name: "Example",
+      pinned: "yes",
+      shipping: "express",
+      postcode: "12345",
+    })
   })
 
   it("flattens a repeated field one per line", () => {

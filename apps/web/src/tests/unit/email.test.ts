@@ -31,11 +31,11 @@ const withEmail = (extra: Record<string, unknown> = {}) =>
 
 const silent = () => createLogger({ level: "error", write: () => {} })
 
-describe("FR-MAIL-1 templates", () => {
+describe("templates", () => {
   const config = withEmail()
   const context = { config, t: getCatalog() }
 
-  it("builds all nine templates with HTML and text", () => {
+  it("builds every template with HTML and text", () => {
     const built = [
       templates.verifyEmail(context, {
         url: "https://idp.example.com/verify-email?token=t",
@@ -52,21 +52,22 @@ describe("FR-MAIL-1 templates", () => {
       templates.passwordChanged(context),
       templates.twoFactorChanged(context, { enabled: true }),
       templates.apiKeyCreated(context, { keyName: "deploy bot" }),
+      templates.signUpExistingAccount(context),
     ]
 
-    expect(built).toHaveLength(9)
+    expect(built).toHaveLength(10)
     for (const message of built) {
       expect(message.subject).toBeTruthy()
       expect(message.html).toContain("<!doctype html>")
       expect(message.text.length).toBeGreaterThan(0)
       expect(message.template).toBeTruthy()
-      // Branded from site.* (FR-MAIL-1).
+      // Branded from site.*.
       expect(message.html).toContain("Test IdP")
       expect(message.text).toContain("Test IdP")
     }
   })
 
-  it("builds every link from server.baseUrl only (SEC-1)", () => {
+  it("builds every link from server.baseUrl only", () => {
     const message = templates.pendingSignUp(context, {
       applicantEmail: "new@example.com",
     })
@@ -78,7 +79,7 @@ describe("FR-MAIL-1 templates", () => {
       expect(url.startsWith("http://localhost:3000")).toBe(true)
   })
 
-  it("honors a sub-path issuer in its links (OPS-10)", () => {
+  it("honors a sub-path issuer in its links", () => {
     const subPath = withEmail({
       server: { baseUrl: "https://apps.example.com/idp" },
       jwt: { audience: "https://apps.example.com/idp" },
@@ -226,7 +227,7 @@ describe("transports", () => {
 })
 
 describe("mailer", () => {
-  it("is disabled in degraded mode and sends nothing (FR-MAIL-2)", async () => {
+  it("is disabled in degraded mode and sends nothing", async () => {
     const mailer = createMailer({ config: makeConfig(), logger: silent() })
     expect(mailer.enabled).toBe(false)
     await expect(

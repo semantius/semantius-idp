@@ -146,28 +146,37 @@ cd docker
 ./idp-create.sh         # idp-create.cmd on Windows
 ```
 
-On a clean checkout that creates `.env` and `config/` from the shipped examples,
+On a clean checkout that creates `config/` from the shipped example and
+**generates** `.env` — a fresh `IDP_SECRET`, both database passwords and the
+example-client secrets, nothing to edit —
 builds the image, brings the stack up and waits for it to report healthy. Then
 open <http://localhost:3000/>.
 
 **The first thing you will see is a setup page**, because a fresh database has
 no accounts at all. Fill in your name, address and password and you are the
 first administrator, signed in. There is no bootstrap password and nothing to
-unset afterwards.
+unset afterwards. **Until that page is completed, whoever reaches the address
+first becomes the administrator.** Run the first `idp-create` where only you can
+reach port 3000 — a workstation, or a server whose firewall is still closed —
+and complete the wizard before you open it up; on a database with no users
+there is nothing else to protect, but that one form is the whole deployment.
 
-Before a real run, put your own values in `.env` at the repository root:
+`.env` at the repository root already holds generated values; the two it cannot
+start without are there:
 
 ```bash
-IDP_SECRET=…            # ≥ 32 random bytes: openssl rand -base64 48
-DATABASE_URL=…          # only to point somewhere other than the bundled Postgres
+IDP_SECRET=…            # generated: ≥ 32 random bytes. Rotating it invalidates every session and the stored signing keys
+DATABASE_URL=…          # generated password for the `idp` role; change it only to point somewhere other than the bundled Postgres
 ```
 
-`IDP_SECRET` is the one value with no sensible default: it encrypts the signing
-keys and signs every session. `DATABASE_URL` already points at the Postgres
-compose starts. A whole connection string is the contract (**D48**):
-nothing is assembled from a password and there is no secrets file to keep in
-step. Point it at your own Postgres or at Neon and the bundled one becomes
-irrelevant.
+A whole connection string is the contract: nothing is assembled from
+a password and there is no secrets file to keep in step. `POSTGRES_PASSWORD`
+(the superuser the IdP never uses) and `IDP_DB_PASSWORD` (the `idp` role, the
+same value as inside `DATABASE_URL`) are read by Postgres once, at first
+start. Point `DATABASE_URL` at your own Postgres or at Neon and the bundled
+one becomes irrelevant. `docker/idp-setup-env` never rewrites an existing
+`.env`; delete it to generate a new one — and `./idp-destroy.sh` first, because
+a kept database volume holds the old passwords.
 
 The rest of the verbs read the same way:
 
@@ -287,7 +296,7 @@ The keys that decide what you can do on day one:
 | `email.resend.apiKey` | *(unset)* | Without it the IdP runs in **degraded mode**: no verification, no reset, no notifications, and `/forgot-password` is 404. Administrators set passwords directly instead. |
 | `auth.defaultRedirect` | `/account` | Where a completed sign-in lands. Point it at your product when the IdP is bundled beside one — an absolute URL, or a relative path like `/`, which is **origin**-relative: it means the root of the host the user is on, never `/idp/` under a sub-path mount. |
 | `admin.adminRoles` | `["admin"]` | Which roles from `roles.jsonc` reach `/admin` and the admin API. |
-| `admin.database` | `disabled` | `read-only` or `read-write` adds `/admin/database`, a schema explorer and SQL console over the IdP's own Postgres. Off means no page, no nav entry and no endpoint. An administrator who can run SQL reads every row at rest, session tokens included. |
+| `admin.database` | `disabled` | `read-only` or `read-write` adds `/admin/database`, a schema explorer and SQL console over the IdP's own Postgres. Off means no page, no nav entry and no endpoint. An administrator who can run SQL reads every row at rest, session tokens included. The reference deployment connects as a role without SUPERUSER, so the console cannot reach the host through `COPY … TO PROGRAM` or `pg_read_file`; on a database where the IdP's role *is* a superuser, start-up warns, and `read-only` is a promise about the database only. |
 
 If a page you expect is missing, it is almost always one of these two: sign-up
 is off, or e-mail is not configured. That is deliberate: a control that cannot
@@ -324,7 +333,7 @@ and reconciles it into the database, disabling anything that has disappeared.
 Those rows are read-only in the admin UI, because a change there is a change the
 next restart would silently undo.
 
-Clients can also be **registered from `/admin/clients`** (**D50**). They are
+Clients can also be **registered from `/admin/clients`**. They are
 stored with the creating administrator as their owner, which is exactly the
 marker reconciliation's sweep skips, so the two kinds coexist and neither
 disturbs the other. A client registered that way works immediately, with no
@@ -390,7 +399,11 @@ file, started by a profile, and two shapes ship as working Caddyfiles:
   prefix**, and route the origin-root RFC 8414 document back to the IdP.
 
 Set `server.trustProxy` when there is a proxy in front, or every caller shares
-one rate-limit bucket. `server.baseUrl` must also resolve **from inside the
+one rate-limit bucket. `true` trusts every hop and takes the **leftmost**
+`X-Forwarded-For` entry — right behind Traefik → Caddy, wrong on a port anything
+else can reach; a CIDR list takes the rightmost hop outside those ranges. The
+address is resolved once at the edge and every limiter reads that one answer,
+IPv6 keyed by /64. `server.baseUrl` must also resolve **from inside the
 deployment**: RP-initiated logout verifies an `id_token_hint` against the key
 set fetched from that URL.
 
@@ -433,9 +446,16 @@ untouched** unless configured. For nginx the required line is literally
 `:443`/`:80` site address fails condition (3) — it answers *every* Host — so
 the shipped single-hostname Caddyfile shape is not eligible.
 
+**Name the hosts as soon as you know them.** `server.allowedHosts` lists what
+the flag may follow — exact hosts (`idp.example.com`) and `*.example.net`
+suffix patterns (any subdomain, never the bare domain). It is optional,
+because a platform that attaches the domain after deploy cannot know it yet,
+and start-up warns while it is unset; a request on a host outside the list is
+answered as `server.baseUrl` rather than refused.
+
 Contradictory configurations are refused at boot (`dynamicIssuer` with
 `trustProxy: false` or with `server.cookieDomain`; a `{host}` client with the
-flag off), and three consequences are by design: sessions and access tokens
+flag off; a malformed `allowedHosts` entry), and three consequences are by design: sessions and access tokens
 are **host-scoped** (each hostname signs in separately, and a token presented
 on another host answers 401 `invalid_token` for up to its 15-minute life),
 social callbacks stay on the canonical host (providers register one callback
@@ -524,20 +544,31 @@ cookie, an expired session) is forwarded anonymously.
 
 Add `"requireAuth": true` to refuse a call carrying no credential at all
 instead of forwarding it anonymously; leave it off for a target with an
-anonymous role of its own, which is PostgREST's usual shape.
+anonymous role of its own, which is PostgREST's usual shape. Add `"audience"`
+— an absolute URI or URN — to have the minted token carry it as `aud` instead
+of the deployment's default `jwt.audience`, for a target that checks `aud`
+against its own identifier; leave it out to keep the default.
 
 Every gateway sends the target `X-Forwarded-For` / `-Host` / `-Proto`, written
 from this hop's own resolved view of the caller — never relayed from the
 inbound request. Whether a reverse proxy in front of the IdP is believed about
 those values is `server.trustProxy`, the same setting that governs the rest of
-the server: it is a fact about what sits in front of this process, not about
-where a gateway points.
+the server — the address is resolved once, at the edge, and the gateway
+forwards that resolution: it is a fact about what sits in front of this process, not about
+where a gateway points. A target may be any address on your network; the one
+range it may not be is link-local (`169.254.0.0/16`, `fe80::/10`, where the
+cloud metadata service answers), refused when configured and again per request
+against what the name resolves to. A request whose path would climb
+out of the target is refused with `400`, and a body larger than
+`server.maxRequestBodyBytes` (64 MiB) with `413`.
 
 Gateways can also be added on **`/admin/gateways`**, where they survive
 restarts; the ones from the file are shown there read-only, because an edit
 would be a change the next restart undoes. Either way the caller's cookies
-never reach the target, the target's `Set-Cookie` never reaches the browser,
-and every gateway response carries a sandboxing `Content-Security-Policy`:
+never reach the target; the target's `Set-Cookie`, CORS grants, HSTS, framing
+and permissions policies, `Clear-Site-Data`, `Refresh` and reporting headers
+never reach the browser; and every gateway response carries a sandboxing
+`Content-Security-Policy`:
 the endpoint is same-origin with the issuer, so upstream content must not be
 able to act as though it belongs here.
 
@@ -596,7 +627,7 @@ cd docker
 ### If you get locked out
 
 There is no `reset-admin` command and no bootstrap password to fall back on:
-both went with the environment bootstrap they belonged to (**D52**). In
+both went with the environment bootstrap they belonged to. In
 descending order of preference:
 
 1. **Another administrator.** Give a second account an admin role before you
@@ -654,9 +685,9 @@ pnpm drizzle:reset  # start over: drop the schema and everything in it
 `IDP_SCHEMA_NAME=idp_scratch pnpm drizzle:studio` aims it at a throwaway.
 It is a full read-write editor on a live schema; for browsing a running
 deployment there is `/admin/database`, which is admin-gated, can be held at
-`read-only`, and writes an audit row per statement (**D83**).
+`read-only`, and writes an audit row per statement.
 
-`pnpm drizzle:reset` is how you get back to a clean database (**D56**).
+`pnpm drizzle:reset` is how you get back to a clean database.
 Migrations are forward-only and there is no seed step, so the reset is the
 schema going away: it drops `database.schema` (read from the same
 configuration the app loads, on `database.directUrl`, and never `public` or

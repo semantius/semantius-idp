@@ -1,5 +1,5 @@
 /**
- * The mailer: templates + transport, with the FR-MAIL-2 degraded-mode rule in
+ * The mailer: templates + transport, with the spec degraded-mode rule in
  * one place.
  *
  * Callers ask for a named message and a recipient; whether anything is
@@ -48,7 +48,7 @@ export interface CreateMailerOptions {
   transport?: EmailTransport
   /** Locale for the message. Defaults to `site.defaultLocale`. */
   locale?: string
-  /** Injected by tests so D30's env switch can be exercised without setting it. */
+  /** Injected by tests so the spec's env switch can be exercised without setting it. */
   env?: Record<string, string | undefined>
 }
 
@@ -63,7 +63,7 @@ export function createMailer(options: CreateMailerOptions): Mailer {
     transport,
     send: async (name, to, ...args) => {
       if (!enabled) {
-        // FR-MAIL-2: nothing is sent, and the affected UI is hidden anyway.
+        // nothing is sent, and the affected UI is hidden anyway.
         logger.debug("e-mail suppressed: degraded mode", {
           template: String(name),
         })
@@ -95,17 +95,17 @@ export function createMailer(options: CreateMailerOptions): Mailer {
 /**
  * Where captured mail is written when the capture transport is switched on.
  *
- * `/tmp` because it is the image's **only** writable path (OPS-1: read-only
+ * `/tmp` because it is the image's **only** writable path (read-only
  * root filesystem, `/config` mounted read-only). Overridable so a run outside a
  * container can put it somewhere it can reach.
  */
 export const DEFAULT_CAPTURE_DIR = "/tmp/idp-mail"
 
 /**
- * D30: `IDP_EMAIL_TRANSPORT=capture` swaps the real transport for one that
+ * `IDP_EMAIL_TRANSPORT=capture` swaps the real transport for one that
  * writes every message to disk instead of sending it.
  *
- * **Environment-only, and deliberately not a config-file setting** (CFG-3's
+ * **Environment-only, and deliberately not a config-file setting** (the spec's
  * env-only class). A `config.jsonc` key would be a durable, copy-pasteable way
  * to turn a production deployment into one that silently swallows every
  * password-reset e-mail and writes it to a file. An environment variable is set
@@ -113,7 +113,7 @@ export const DEFAULT_CAPTURE_DIR = "/tmp/idp-mail"
  * deserves.
  *
  * It is honored **only when e-mail would otherwise work**: with no Resend key
- * the deployment is in degraded mode (FR-MAIL-2), and capturing there would
+ * the deployment is in degraded mode, and capturing there would
  * make "nothing is sent" untestable — which is the one behavior where nothing
  * being sent is the requirement.
  */
@@ -158,7 +158,7 @@ function defaultTransport(
  * inspected.
  *
  * It still honors degraded mode. A capture mailer that sent regardless would
- * make FR-MAIL-2 untestable — the one behavior where "nothing is sent" is the
+ * make degraded mode untestable — the one behavior where "nothing is sent" is the
  * requirement.
  */
 export function createCaptureMailer(

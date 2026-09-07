@@ -1,5 +1,5 @@
 /**
- * Who may call which protocol endpoint from a browser (FR-OIDC-17).
+ * Who may call which protocol endpoint from a browser.
  *
  * CORS on an identity provider is an authorization decision, not a
  * convenience. Three different answers, for three different reasons:
@@ -22,7 +22,7 @@
  * Session endpoints and `GET /api/auth/token` get no CORS headers either:
  * they authenticate with the session cookie, so a permissive header would be
  * the difference between "cookies are same-origin" and "any page can read
- * this user's token" (SEC-3).
+ * this user's token".
  */
 
 import { expandHostTemplate, hasHostTemplate } from "../../lib/client-rules"
@@ -41,16 +41,16 @@ export interface CorsDecision {
 }
 
 /**
- * Origins contributed by **enabled database clients** (D50).
+ * Origins contributed by **enabled database clients**.
  *
  * Registered through `/admin/clients`, so they are not in the configuration
  * file this module can see. Kept in the process rather than queried per
  * request: `clientOrigins` is called on every protocol request *and* on every
- * response, to build the CSP `form-action` list (D46), and a database round
+ * response, to build the CSP `form-action` list, and a database round
  * trip in that path would be a query per asset.
  *
  * Refreshed at start-up and by every client mutation — see
- * `server/oidc/client-origins.ts`. OPS-11's single-instance topology is what
+ * `server/oidc/client-origins.ts`. the spec's single-instance topology is what
  * makes a process-local cache correct; a second replica would see its own
  * clients and not the other's until the next restart, which is the same
  * limitation every other cached decision in this codebase has.

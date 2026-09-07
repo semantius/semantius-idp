@@ -1,5 +1,5 @@
 /**
- * The interrupted authorization, end to end (FR-OIDC-9/10/11).
+ * The interrupted authorization, end to end.
  *
  * The mechanism under test is the provider's: an authorization that needs the
  * user to do something first is carried to the interstitial page as a signed,
@@ -160,7 +160,7 @@ function destinationOf(body: Record<string, unknown>): string {
   return ""
 }
 
-describe("an authorization that needs a sign-in first (FR-OIDC-9)", () => {
+describe("an authorization that needs a sign-in first", () => {
   it("carries the whole request to the login page", async () => {
     const ctx = await context("authorize_to_login")
     try {
@@ -243,7 +243,7 @@ describe("an authorization that needs a sign-in first (FR-OIDC-9)", () => {
   })
 })
 
-describe("consent (FR-OIDC-9/10)", () => {
+describe("consent", () => {
   it("asks when the client does not skip it", async () => {
     const ctx = await context("consent_asked")
     try {
@@ -267,7 +267,7 @@ describe("consent (FR-OIDC-9/10)", () => {
         cookie,
       })
       // An administrator configured this client in the file, so the decision
-      // was already made (FR-OIDC-3).
+      // was already made.
       expect(attempt.location).toContain("code=")
     } finally {
       await ctx.teardown()
@@ -358,7 +358,7 @@ describe("consent (FR-OIDC-9/10)", () => {
   })
 })
 
-describe("prompt (FR-OIDC-9)", () => {
+describe("prompt", () => {
   it("answers prompt=none with login_required when nobody is signed in", async () => {
     const ctx = await context("prompt_none_anon")
     try {

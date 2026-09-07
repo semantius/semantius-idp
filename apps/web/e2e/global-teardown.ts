@@ -5,7 +5,7 @@ import { stopStack } from "./stack"
 import type { Stack } from "./stack"
 
 /**
- * Takes both stacks down, whatever happened (TST-6).
+ * Takes both stacks down, whatever happened.
  *
  * `-v` on the way out: each stack owns a Postgres volume, and leaving them
  * behind means the next run starts against a database that already has the

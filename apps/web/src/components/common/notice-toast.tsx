@@ -27,13 +27,13 @@ const BACKSTOP_RETRY_MS = 1_000
 
 /**
  * The query parameter that carries a one-shot handle to the notice's subject
- * (**D78**).
+ *.
  *
  * A handle rather than the address itself: `safeUrlForLog` keeps the query
  * string of every path that is not `/oauth2/*` or `/api/auth/*`, so
  * `?subject=jane@example.com` would write one deleted account's address into
  * the request log on every admin action — a personal identifier in a log the
- * same codebase anonymizes IP addresses for (SEC-5). The stash is
+ * same codebase anonymizes IP addresses for. The stash is
  * `server/http/one-shot.ts`, the same one the client secret and the
  * set-password link use.
  */
@@ -41,7 +41,7 @@ export const SUBJECT_PARAM = "subject"
 
 /**
  * A one-shot success confirmation, shown as a toast and then forgotten
- * (**D71**).
+ *.
  *
  * Every mutation here is a real form post followed by a 303, so the
  * confirmation has to survive a navigation — it arrives as `?notice=<code>`
@@ -75,7 +75,7 @@ export const SUBJECT_PARAM = "subject"
  *    happens after the parameter is already gone, so nothing later cancels it.
  *
  * 4. **The subject is the toast's description, not part of the sentence**
- *    (**D78**). "The account has been deleted." does not say *which* account,
+ *. "The account has been deleted." does not say *which* account,
  *    and an administrator working through a list of them has no way to check
  *    afterwards — the row is gone. Putting the address in the catalog sentence
  *    instead would mean a second wording for every notice and a translator
@@ -83,17 +83,17 @@ export const SUBJECT_PARAM = "subject"
  *    neither, because an e-mail address is the same in every language.
  *
  * 5. **A wall-clock backstop closes the toast even when Base UI's timer is
- *    frozen** (**D78**). The library pauses every running timer when the
+ *    frozen**. The library pauses every running timer when the
  *    *window* loses focus and only resumes them when it comes back — so a
  *    confirmation left behind a switched-away window is pinned to the corner
  *    of the screen for as long as the absence lasts, which is minutes or hours
- *    and is exactly the outliving-its-truth that D71 set out to end. The
+ *    and is exactly the outliving-its-truth that the spec set out to end. The
  *    backstop is deliberately *not* a replacement for the library's timer:
  *    that one still runs, still pauses on hover and on keyboard focus, and
  *    still wins whenever it is running. This only steps in when it is not.
  *
  * Rendering nothing on the server is the point: the toast is a client-side
- * affordance, which D31 permits, and a first paint that contains the
+ * affordance, which the spec permits, and a first paint that contains the
  * confirmation *and* then animates a second copy of it is worse than either.
  */
 export function NoticeToast({
@@ -105,7 +105,7 @@ export function NoticeToast({
   message: string | undefined
   /**
    * Who the notice is about — an e-mail address, shown beneath the sentence
-   * (**D78**). Absent where a notice is not about one account.
+   *. Absent where a notice is not about one account.
    */
   subject?: string
   /** The query parameter to strip; `rotated` on `/admin/system`. */

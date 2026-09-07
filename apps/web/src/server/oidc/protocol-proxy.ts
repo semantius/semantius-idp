@@ -1,5 +1,5 @@
 /**
- * The issuer-root protocol endpoints (FR-OIDC-4/15/16/17).
+ * The issuer-root protocol endpoints.
  *
  * Better Auth mounts its OAuth endpoints under its own `basePath`
  * (`{issuer}/api/auth/oauth2/*`). The protocol says they belong at the issuer
@@ -20,12 +20,14 @@
  *   credentials and personal data; JWKS is cached for five minutes with an
  *   ETag, because a verifier that refetches it on every request turns key
  *   distribution into a load-bearing dependency.
- * - **RFC 7009.** A revocation request for an unknown token is a *success* —
+ * - **RFC 7009.** A revocation request for an invalid token is a *success* —
  *   §2.2 is explicit — so a client cannot use the endpoint to find out which
- *   tokens exist. 1.7.1 answers `400 invalid_request "token not found"`;
- *   that one case is normalized, and every other error is passed through.
+ *   tokens exist. 1.7.1 answers `400 invalid_request` for one; that case is
+ *   normalized on the error code and on what the proxy knows about the
+ *   request, never on the description's wording, and every other error is
+ *   passed through.
  *
- * Nothing here reads `Host` or `X-Forwarded-Host` (SEC-1): the forwarded URL
+ * Nothing here reads `Host` or `X-Forwarded-Host`: the forwarded URL
  * is rebuilt from `server.baseUrl`. The one issuer-shaped exception is
  * deliberate and indirect: under `server.dynamicIssuer` the request's
  * *resolved* issuer — computed once at the edge through `normalizeHost`, see
@@ -42,7 +44,7 @@ import {
 } from "../http/request-log"
 import type { Runtime } from "../runtime"
 
-/** How long a verifier may cache the key set (FR-OIDC-16). */
+/** How long a verifier may cache the key set. */
 const JWKS_MAX_AGE_SECONDS = 300
 
 export interface ForwardOptions {
@@ -73,15 +75,16 @@ export async function forwardToAuth(
 
   const base = issuerRelative ? paths.issuer : paths.authBaseUrl
   const target = new URL(`${base}${providerPath}${incoming.search}`)
+  const body =
+    request.method === "GET" || request.method === "HEAD"
+      ? undefined
+      : await request.arrayBuffer()
 
   const response = await runtime.auth.handler(
     new Request(target, {
       method: request.method,
       headers: request.headers,
-      body:
-        request.method === "GET" || request.method === "HEAD"
-          ? undefined
-          : await request.arrayBuffer(),
+      body,
       redirect: "manual",
     })
   )
@@ -90,7 +93,10 @@ export async function forwardToAuth(
     case "/jwks":
       return withJwksHeaders(response)
     case "/oauth2/revoke":
-      return normalizeRevocation(mapCrossHostTokenError(response))
+      return normalizeRevocation(
+        mapCrossHostTokenError(response),
+        revocationFacts(request, body)
+      )
     case "/oauth2/token":
       return withNoStore(response)
     case "/oauth2/userinfo":
@@ -188,7 +194,7 @@ export async function forwardDiscovery(
   // unreachable. Comparing the RAW `document.issuer` instead would break the
   // one legitimate topology where the two differ: the provider https-coerces
   // a non-loopback http issuer (`allowInsecureHttp` over a LAN IP), which the
-  // rewrite has always papered over. FR-OIDC-15's real guarantee — `iss`
+  // rewrite has always papered over. the spec's real guarantee — `iss`
   // byte-equal to what this deployment calls itself — is the assignment in
   // `rewriteDiscovery`, and the tests assert it on the document.
   return Response.json(rewritten, {
@@ -211,13 +217,13 @@ export async function forwardDiscovery(
  * Pure and exported so the mapping is testable without a server.
  */
 export interface DiscoveryFacts {
-  /** `site.defaultLocale`, advertised so a client can ask for it (FR-I18N-1). */
+  /** `site.defaultLocale`, advertised so a client can ask for it. */
   uiLocale: string
 }
 
 /**
  * The token-endpoint authentication methods this deployment really accepts
- * (FR-OIDC-3).
+ *.
  *
  * 1.7.1 advertises `private_key_jwt`, which §1.3 deliberately does not use,
  * and omits `none`, which every public client needs. Both matter: a client
@@ -251,7 +257,7 @@ export function rewriteDiscovery(
     ...TOKEN_ENDPOINT_AUTH_METHODS,
   ]
 
-  // Advertised as *unsupported* rather than omitted (FR-OIDC-15). A client
+  // Advertised as *unsupported* rather than omitted. A client
   // that reads an absent field may assume either answer; saying `false`
   // settles it, and these three are the request-object parameters §1.3
   // leaves out of v1.
@@ -304,18 +310,66 @@ function withNoStore(response: Response): Response {
 }
 
 /**
- * RFC 7009 §2.2: an unknown token is a success.
- *
- * Only that one shape is normalized. A malformed request, an unauthenticated
- * client or an unsupported token type is still an error, because each of those
- * is the *client's* mistake and hiding it would make integration harder for no
- * security gain.
+ * What the proxy can see about a revocation request for itself, so the
+ * normalization below never has to read the provider's prose.
  */
-async function normalizeRevocation(response: Response): Promise<Response> {
+interface RevocationFacts {
+  /** The request carried a non-empty `token`. */
+  carriedToken: boolean
+  /**
+   * Client authentication was a shape the provider could have accepted: no
+   * `Authorization` header (credentials in the body, or a public client) or a
+   * Basic one. Any other scheme is refused as `invalid_request` before the
+   * token is looked at, and that refusal is the client's to see.
+   */
+  acceptableAuthorization: boolean
+}
+
+function revocationFacts(
+  request: Request,
+  body: ArrayBuffer | undefined
+): RevocationFacts {
+  const token = body
+    ? new URLSearchParams(new TextDecoder().decode(body)).get("token")
+    : null
+  const authorization = request.headers.get("authorization")
+  return {
+    carriedToken: token !== null && token !== "",
+    acceptableAuthorization:
+      authorization === null || /^basic\s/i.test(authorization),
+  }
+}
+
+/**
+ * RFC 7009 §2.2: an invalid token is a success.
+ *
+ * Only that one shape is normalized. An unauthenticated client (401) or an
+ * unsupported token type is still an error, because each of those is the
+ * *client's* mistake and hiding it would make integration harder for no
+ * security gain.
+ *
+ * **What "invalid token" is keyed on.** The provider answers
+ * `400 invalid_request`, and the only stable thing about that answer is the
+ * `error` code: the `error_description` is prose it already spells three
+ * ways ("token not found", "opaque access token not found", "Invalid access
+ * token"), and the first version of this function matched one of them with a
+ * regex — so a revoked or malformed token answered 400 and the endpoint was
+ * an oracle after all. What separates "invalid token" from "malformed
+ * request" is not in the response; it is in the request, and the proxy can
+ * see it: after client authentication has succeeded, every 400
+ * `invalid_request` the provider produces is about the token (not found,
+ * revoked, unparseable), and the two it produces *before* authentication —
+ * no token, an `Authorization` scheme it does not speak — are
+ * {@link RevocationFacts} the proxy establishes for itself.
+ */
+async function normalizeRevocation(
+  response: Response,
+  facts: RevocationFacts
+): Promise<Response> {
   if (response.status !== 400) return withNoStore(response)
 
   const body = await response.text()
-  let parsed: { error?: unknown; error_description?: unknown } = {}
+  let parsed: { error?: unknown } = {}
   try {
     parsed = JSON.parse(body) as typeof parsed
   } catch {
@@ -325,12 +379,12 @@ async function normalizeRevocation(response: Response): Promise<Response> {
     })
   }
 
-  const unknownToken =
+  const invalidToken =
     parsed.error === "invalid_request" &&
-    typeof parsed.error_description === "string" &&
-    /token not found/i.test(parsed.error_description)
+    facts.carriedToken &&
+    facts.acceptableAuthorization
 
-  if (!unknownToken) {
+  if (!invalidToken) {
     return new Response(body, {
       status: response.status,
       headers: response.headers,

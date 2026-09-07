@@ -1,5 +1,5 @@
 /**
- * The display name, derived rather than typed (FR-SIGNUP-5, **D49**).
+ * The display name, derived rather than typed.
  *
  * `user.name` is a Better-Auth-fixed column and every claim builder, e-mail
  * template and admin table reads it — but nobody should be *editing* it. Two

@@ -1,6 +1,5 @@
 /**
- * `/gateway/<name>` — an authenticating reverse proxy (FR-GW-3..6, **D91**,
- * **D92**).
+ * `/gateway/<name>` — an authenticating reverse proxy.
  *
  * **What it is for.** A backend resource server — PostgREST, Neon's Data API —
  * validates this IdP's JWTs against the JWKS and knows nothing about its
@@ -9,7 +8,7 @@
  * request through to a configured upstream and turns whatever credential the
  * caller arrived with into an `Authorization: Bearer` the upstream can verify.
  *
- * **Three credentials, in a fixed order** ({@link translateAuth}, **D92**):
+ * **Three credentials, in a fixed order** ({@link translateAuth}):
  *
  *  1. `Authorization` — forwarded untouched. The caller said what they want
  *     presented and this is not the place to second-guess it.
@@ -21,8 +20,8 @@
  * **Every exchange rides Better Auth's own token endpoint, and must.**
  * `GET {authBaseUrl}/token` already does the whole job for both: with
  * `x-api-key` it resolves the key, runs `gateApiKeyPlugin`'s ban/approval
- * re-check (FR-KEY-2), updates `lastRequest` / `requestCount` and the per-key
- * limiter, and mints a JWT whose `azp` is `apiKeys.tokenClientId` (FR-KEY-3);
+ * re-check, updates `lastRequest` / `requestCount` and the per-key
+ * limiter, and mints a JWT whose `azp` is `apiKeys.tokenClientId`;
  * with a cookie it validates the session and mints one whose `azp` is the
  * IdP's own id. Every one of those lives *only* there. Re-implementing a mint
  * here would be a second copy of the gate, and the second copy is the one that
@@ -34,18 +33,18 @@
  * mint is several database round trips — ~100 ms each against a hosted
  * Postgres — so doing it per request would put that on every call through the
  * gateway. Caching it means a cache hit skips the ban re-check, which relaxes
- * FR-KEY-2's "asked on every use" for up to the TTL. Two things blunt that,
+ * the spec's "asked on every use" for up to the TTL. Two things blunt that,
  * and both are deliberate: the TTL is `min(600 s, jwt.sessionToken.ttl − 60 s)`
  * so a cached token is never served near its own expiry, and the admin
  * ban/revoke/sign-out paths call {@link resetGatewayTokenCache}
  * (`admin/guard.ts`), so a revocation made through this process punches
  * straight through the window. What is left is a revocation made *elsewhere* —
- * `psql`, a second replica — taking up to ten minutes. D91 records that as the
+ * `psql`, a second replica — taking up to ten minutes. The gateway design records that as the
  * accepted cost.
  *
  * **Cookies never cross in either direction.** Outbound, because a browser
  * hitting `/gateway/x` sends this IdP's session cookie and an upstream must
- * never receive it — reading it as a credential (D92) does not change that.
+ * never receive it — reading it as a credential does not change that.
  * Inbound, because the gateway is *same-origin with the issuer*: an upstream
  * `Set-Cookie` would land on the IdP's own origin and path. For the same
  * same-origin reason every gateway response carries a forced
@@ -58,7 +57,10 @@
  */
 
 import { createHash } from "node:crypto"
+import { lookup } from "node:dns/promises"
 
+import { isLinkLocalAddress } from "../../lib/gateway-rules"
+import { withRequestedAudience } from "../auth/requested-audience"
 import type { IdpConfig } from "../config/derive"
 import type { DbHandle } from "../db/client"
 import { SOCKET_ADDRESS_HEADER, clientIpFrom } from "../http/client-ip"
@@ -76,6 +78,12 @@ type AuthHandler = (request: Request) => Promise<Response>
 /** The fetch shape used for the upstream call; injectable for tests. */
 type FetchImpl = (input: string, init: RequestInit) => Promise<Response>
 
+/**
+ * Hostname → every address it resolves to; injectable for tests, which
+ * otherwise would hit real DNS for `upstream.example` on every call.
+ */
+type ResolveImpl = (hostname: string) => Promise<string[]>
+
 export interface GatewayProxyDeps {
   config: IdpConfig
   /** `handler()`, for the key → JWT exchange. */
@@ -85,6 +93,8 @@ export interface GatewayProxyDeps {
   logger?: Logger
   /** `password-breach.ts`'s precedent: the network is a dependency. */
   fetchImpl?: FetchImpl
+  /** The resolver behind {@link upstreamAddressProblem}. */
+  resolveImpl?: ResolveImpl
   now?: () => number
   /**
    * The socket address, when something upstream of the router knows it.
@@ -101,10 +111,10 @@ export const TOKEN_CACHE_MAX_SECONDS = 600
  * How long a refused credential is remembered as refused.
  *
  * Short on purpose: a key created a moment ago must start working promptly,
- * and ten seconds is the documented worst case (**D91**). Its job is to blunt
+ * and ten seconds is the documented worst case. Its job is to blunt
  * a repeat — the same wrong key sent a thousand times a second is otherwise a
  * thousand database lookups. A fresh sign-in is unaffected either way: a new
- * session is a new token, so it is a different cache entry (**D92**).
+ * session is a new token, so it is a different cache entry.
  */
 export const NEGATIVE_CACHE_MS = 10_000
 
@@ -112,7 +122,7 @@ export const NEGATIVE_CACHE_MS = 10_000
 export const TOKEN_CACHE_MAX_ENTRIES = 5_000
 
 /**
- * The mint-miss limiter (**D91**, review finding S3).
+ * The mint-miss limiter (review finding S3).
  *
  * Better Auth's per-key limit of 120/min only throttles keys that *resolve to
  * a row*; an invalid-key flood never reaches it and is a database
@@ -151,7 +161,7 @@ const mintMisses = new Map<string, { count: number; resetAt: number }>()
  * Empties the credential → JWT caches.
  *
  * Called by `admin/guard.ts` after a ban, a removal, an API-key revocation or
- * a sign-out, which is what makes the D91 window closable from inside this
+ * a sign-out, which is what makes the cache window closable from inside this
  * process. Also the reset every test needs, because these maps are
  * module-level by design.
  */
@@ -184,7 +194,7 @@ const HOP_BY_HOP = new Set([
  * `cookie` is the one worth pausing on: `/gateway/*` is on the issuer's own
  * origin and inside the session cookie's `Path`, so a browser attaches this
  * IdP's session cookie to every gateway request automatically. It is read
- * here — {@link translateAuth} exchanges it for a JWT (**D92**) — and it is
+ * here — {@link translateAuth} exchanges it for a JWT — and it is
  * never passed on.
  */
 const NEVER_FORWARDED = new Set([
@@ -214,6 +224,78 @@ function isForwardingHeader(lower: string): boolean {
 const NO_STORE = { "cache-control": "no-store" } as const
 
 /**
+ * Upstream response headers that never reach the caller.
+ *
+ * The test for membership is one question: **does a browser honor this per
+ * origin, or does it state a policy the IdP's own `security-headers.ts`
+ * already sets for its origin?** `/gateway/*` *is* the issuer's origin, so an
+ * upstream that could set any of these would be setting it for the IdP —
+ * and `withSecurityHeaders` uses `setUnlessPresent`, so an upstream's value
+ * would win over the IdP's own. A deny-list rather than an allow-list on
+ * purpose: PostgREST answers with `Content-Range`, `Content-Location`,
+ * `Preference-Applied`, `Content-Profile` and `Proxy-Status`, a REST upstream
+ * paginates with `Link`, and an allow-list is the list that forgets the next
+ * one of those. Each entry, and why:
+ *
+ *  - `set-cookie` (and the ancient `set-cookie2`): a cookie on the issuer's
+ *    origin and path.
+ *  - `content-security-policy(-report-only)`: replaced by the forced
+ *    sandbox policy below; an upstream's would be OR-ed with it in the
+ *    browser and could add a reporting endpoint.
+ *  - `access-control-*`: a CORS grant is a statement about who may read
+ *    responses from *this* origin, and `http/cors.ts` is the only thing
+ *    entitled to make one.
+ *  - `strict-transport-security`: per host, persisted — `max-age=0` from an
+ *    upstream would clear the IdP's own.
+ *  - `x-frame-options`, `permissions-policy`, `feature-policy`: the IdP sets
+ *    these for its origin; an upstream `X-Frame-Options: ALLOWALL` or
+ *    `Permissions-Policy: camera=*` would replace them on that response.
+ *  - `clear-site-data`: `"*"` on a same-origin response wipes the IdP's
+ *    cookies and storage — every session on that browser, signed out by an
+ *    upstream.
+ *  - `refresh`: an HTTP `Refresh` is a navigation the browser performs, to
+ *    any URL, which is the open redirect the `Location` check below exists
+ *    to stop, through a header that check does not read.
+ *  - `report-to`, `reporting-endpoints`, `nel`: origin-scoped reporting
+ *    registrations; NEL in particular persists and would ship the IdP's own
+ *    network-error reports — URLs included — to a collector the upstream
+ *    chose.
+ *  - `alt-svc`: an alternative *service* for the origin; the browser would
+ *    connect there for the issuer's later requests.
+ *  - `public-key-pins(-report-only)`: obsolete, and the one header that can
+ *    lock a browser out of a host for its `max-age`.
+ *
+ * **Deliberately not here**: `link` (inert under `default-src 'none'`, and
+ * how REST APIs paginate), `www-authenticate` (an upstream 401 has to be
+ * able to say what it wants), `referrer-policy`, `x-content-type-options`
+ * and the `cross-origin-*-policy` trio (each restricts rather than grants),
+ * and `location`, which has its own origin check.
+ */
+const RESPONSE_DENY = new Set([
+  "strict-transport-security",
+  "x-frame-options",
+  "permissions-policy",
+  "feature-policy",
+  "clear-site-data",
+  "refresh",
+  "report-to",
+  "reporting-endpoints",
+  "nel",
+  "alt-svc",
+])
+const RESPONSE_DENY_PREFIXES = [
+  "set-cookie",
+  "content-security-policy",
+  "access-control-",
+  "public-key-pins",
+]
+
+function isDeniedResponseHeader(lower: string): boolean {
+  if (RESPONSE_DENY.has(lower)) return true
+  return RESPONSE_DENY_PREFIXES.some((prefix) => lower.startsWith(prefix))
+}
+
+/**
  * The policy every gateway response carries, set **explicitly** so that
  * `withSecurityHeaders`'s `setUnlessPresent` leaves it alone.
  */
@@ -240,7 +322,7 @@ export async function proxyGatewayRequest(
     { database: deps.database, ...(deps.logger ? { logger: deps.logger } : {}) },
     name
   )
-  // FR-GW-6: unknown and disabled are the *same* answer. A 403 for a disabled
+  // unknown and disabled are the *same* answer. A 403 for a disabled
   // one would confirm that a gateway by that name exists, which is a fact an
   // anonymous caller has no business learning.
   if (!row || !row.enabled) return refuse(404, "unknown_gateway")
@@ -248,6 +330,26 @@ export async function proxyGatewayRequest(
   // WebSockets need a hijacked socket that this handler never has. 501 rather
   // than a silent downgrade, so a client that asked for one is told.
   if (wantsUpgrade(request)) return refuse(501, "upgrade_not_supported")
+
+  const incoming = new URL(request.url)
+  const target = resolveTarget(row.url, subPath, incoming.search)
+  // A sub-path that climbs out of the target is a request this proxy does
+  // not have an upstream for. 400 rather than 404: The spec keeps
+  // 404 for "no such gateway", and an upstream's own 404 passes through, so
+  // a third meaning on the same status would leave an operator unable to
+  // tell which of the three they are looking at.
+  if (target === undefined) return refuse(400, "invalid_path")
+
+  // Before anything is minted or connected: a body that says it is too big
+  // is refused on its word.
+  const limit = deps.config.file.server.maxRequestBodyBytes
+  const declared = request.headers.get("content-length")
+  if (declared !== null && Number(declared) > limit) {
+    return refuse(413, "payload_too_large")
+  }
+
+  const address = await upstreamAddressProblem(deps, row)
+  if (address) return badGateway(deps, name, address, "link_local")
 
   const outbound = new Headers()
   const dropped = connectionTokens(request)
@@ -273,11 +375,14 @@ export async function proxyGatewayRequest(
 
   applyForwardedHeaders(deps, request, outbound, clientIp)
 
-  const incoming = new URL(request.url)
-  const target = `${row.url}${subPath === "" ? "" : `/${subPath}`}${incoming.search}`
-
   const bodiless = request.method === "GET" || request.method === "HEAD"
   const controller = new AbortController()
+  // Set by the counting stream the moment the cap is passed, before it
+  // aborts the upstream call — so the catch below can tell a 413 from a 502.
+  // An object rather than a `let`: the assignment happens inside a closure,
+  // which TypeScript's narrowing cannot see, and a plain boolean reads as
+  // "always false" at the catch.
+  const cap = { exceeded: false }
   // TTFB only. `request.signal` propagates a client disconnect so the upstream
   // connection does not outlive the caller.
   const onAbort = () => {
@@ -293,11 +398,18 @@ export async function proxyGatewayRequest(
     upstream = await (deps.fetchImpl ?? globalThis.fetch)(target, {
       method: request.method,
       headers: outbound,
-      ...(bodiless ? {} : { body: request.body }),
+      ...(bodiless || request.body === null
+        ? {}
+        : {
+            body: cappedBody(request.body, limit, () => {
+              cap.exceeded = true
+              controller.abort()
+            }),
+          }),
       // Required by the platform for a streamed request body.
       duplex: "half",
       // A 3xx is the upstream's answer to the caller, not an instruction to
-      // this proxy (FR-GW-3).
+      // this proxy.
       redirect: "manual",
       // The bytes are shovelled untouched: `accept-encoding` passed through,
       // `content-encoding` forwarded verbatim. Decompressing here would burn
@@ -307,6 +419,7 @@ export async function proxyGatewayRequest(
       signal: controller.signal,
     } as RequestInit)
   } catch (error) {
+    if (cap.exceeded) return refuse(413, "payload_too_large")
     return badGateway(deps, name, error)
   } finally {
     clearTimeout(timer)
@@ -314,6 +427,145 @@ export async function proxyGatewayRequest(
   }
 
   return buildResponse(request, upstream, row)
+}
+
+/**
+ * `${url}/${subPath}${search}`, or `undefined` when the sub-path would leave
+ * the target.
+ *
+ * **The router hands over a decoded splat.** TanStack runs
+ * `decodeURIComponent` on it, so `..%2fadmin` arrives here as `../admin` —
+ * the WHATWG parser had already resolved a literal `../` (and `%2e%2e/`)
+ * before the router saw the path, but an *encoded* slash survives the parser
+ * and is decoded by the router, and the string this builds is then parsed
+ * and normalized a second time by `fetch`. `https://api.internal/v1/../admin`
+ * reaches `https://api.internal/admin`. Nothing in the chain was wrong;
+ * three correct components composed into a traversal.
+ *
+ * So the built string is parsed here first and the result has to sit under
+ * `${url}/` — compared on the parser's normalized `href`, because
+ * `row.url` may spell the host in upper case or carry a default port and
+ * the parser folds both. `row.url` never ends in `/` (`lib/gateway-rules.ts`
+ * refuses one), so the prefix is unambiguous. Two more things the parse
+ * catches for free: a backslash, which is a slash in a special scheme, and a
+ * decoded `?` or `#` that would turn the tail of the path into a query or a
+ * fragment ahead of the caller's own.
+ *
+ * What is forwarded is the **original** string, not the normalized one:
+ * `a/./b` and `//odd/path` go through byte for byte, because whatever
+ * `fetch` normalizes them to is under the prefix as well, and the upstream
+ * is the one entitled to decide what its own odd paths mean. An empty
+ * sub-path is the target itself, untouched — there is nothing to climb.
+ */
+function resolveTarget(
+  url: string,
+  subPath: string,
+  search: string
+): string | undefined {
+  if (subPath === "") return `${url}${search}`
+
+  const candidate = `${url}/${subPath}`
+  let base: URL
+  let parsed: URL
+  try {
+    base = new URL(url)
+    parsed = new URL(candidate)
+  } catch {
+    return undefined
+  }
+  if (parsed.search !== "" || parsed.hash !== "") return undefined
+  const prefix = base.href.endsWith("/") ? base.href : `${base.href}/`
+  if (!parsed.href.startsWith(prefix)) return undefined
+  return `${candidate}${search}`
+}
+
+/**
+ * Refuses an upstream that lives at a link-local address, against
+ * the address it resolves to *now*.
+ *
+ * Returns the reason as an `Error` (for the log) or `undefined` to proceed.
+ * An address literal is judged directly and never resolved — that is the
+ * integration suite's `127.0.0.1`, and the sibling deployment's
+ * `postgrest` is a name Docker's embedded DNS answers in well under a
+ * millisecond. A name that resolves to *any* link-local address is refused,
+ * because a mixed answer is one whose next lookup may pick the other entry.
+ *
+ * What this does **not** do is pin the address `fetch` then connects to:
+ * `fetch` resolves the name again, and a record that changes between the two
+ * lookups is a rebinding this check cannot see. Pinning would mean
+ * connecting by address and carrying the name in `Host` and SNI ourselves,
+ * which is a second HTTP client. Recorded as the accepted residue of the
+ * same trade already made about admin-defined targets: the operator who
+ * names the upstream is trusted; the network they name it on is not.
+ */
+async function upstreamAddressProblem(
+  deps: GatewayProxyDeps,
+  row: GatewayRow
+): Promise<Error | undefined> {
+  let hostname: string
+  try {
+    hostname = new URL(row.url).hostname
+  } catch (error) {
+    return error instanceof Error ? error : new Error(String(error))
+  }
+  // `URL` keeps the brackets on an IPv6 literal; the rule strips them.
+  if (isLinkLocalAddress(hostname)) {
+    return new Error("upstream address is link-local")
+  }
+  if (isAddressLiteral(hostname)) return undefined
+
+  let addresses: string[]
+  try {
+    addresses = await (deps.resolveImpl ?? defaultResolve)(hostname)
+  } catch (error) {
+    return error instanceof Error ? error : new Error(String(error))
+  }
+  if (addresses.some(isLinkLocalAddress)) {
+    return new Error("upstream resolves to a link-local address")
+  }
+  return undefined
+}
+
+/** Dotted IPv4, or a bracketed IPv6 literal — what `URL.hostname` yields. */
+function isAddressLiteral(hostname: string): boolean {
+  return /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname) || hostname.startsWith("[")
+}
+
+async function defaultResolve(hostname: string): Promise<string[]> {
+  const records = await lookup(hostname, { all: true })
+  return records.map((record) => record.address)
+}
+
+/**
+ * The request body with a byte counter in the pipe.
+ *
+ * Nothing is buffered: every chunk is passed straight through, and the first
+ * chunk that carries the running total past `limit` errors the stream — so
+ * the upstream sees a truncated body, never a complete oversize one — and
+ * calls `onExceeded`, which aborts the upstream call. The proxy answers 413
+ * from the abort. A body that already finished streaming when the upstream
+ * answered early is the one case this cannot revoke, and that is fine: the
+ * cap bounds what is *forwarded*, and by then nothing more will be.
+ */
+function cappedBody(
+  body: ReadableStream<Uint8Array>,
+  limit: number,
+  onExceeded: () => void
+): ReadableStream<Uint8Array> {
+  let seen = 0
+  return body.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        seen += chunk.byteLength
+        if (seen > limit) {
+          onExceeded()
+          controller.error(new Error("request body exceeds the cap"))
+          return
+        }
+        controller.enqueue(chunk)
+      },
+    })
+  )
 }
 
 /** `Connection: x, y` names further headers that must not be forwarded. */
@@ -339,7 +591,7 @@ interface Translation {
 }
 
 /**
- * FR-GW-4, the whole of it.
+ * The forwarded-header contract, the whole of it.
  *
  * `Authorization` present wins outright — even alongside `x-api-key`. A caller
  * who sent a bearer token of their own has said what they want presented, and
@@ -359,6 +611,7 @@ async function translateAuth(
     const exchanged = await exchange(
       deps,
       { kind: "key", secret: key, headers: { [API_KEY_HEADER]: key } },
+      row,
       clientIp
     )
     // A key is a credential the caller **chose** to present. Refusing it out
@@ -376,10 +629,11 @@ async function translateAuth(
         secret: session.token,
         headers: { cookie: session.header },
       },
+      row,
       clientIp
     )
     if (exchanged) return exchanged
-    // **Falls through on a refusal, unlike the key above** (**D92**). The
+    // **Falls through on a refusal, unlike the key above**. The
     // browser attached this cookie by itself; the caller did not choose to
     // present it. An expired session turning a working anonymous call into a
     // 401 would be this endpoint inventing a failure out of a cookie nobody
@@ -412,10 +666,11 @@ interface Credential {
 async function exchange(
   deps: GatewayProxyDeps,
   credential: Credential,
+  row: GatewayRow,
   clientIp: string | undefined
 ): Promise<Translation | undefined> {
   const now = deps.now ?? Date.now
-  const hash = hashCredential(credential)
+  const hash = hashCredential(credential, row)
 
   const cached = tokenCache.get(hash)
   if (cached && cached.expiresAt > now()) {
@@ -433,7 +688,7 @@ async function exchange(
     return { refusal: refuse(429, "too_many_mint_attempts") }
   }
 
-  const minted = await mint(deps, credential.headers, clientIp)
+  const minted = await mint(deps, credential.headers, row, clientIp)
   if (minted.status === 429) {
     // Better Auth's own per-key limit. Passed through rather than translated:
     // the caller is being told to slow down and that is exactly true.
@@ -457,10 +712,22 @@ async function exchange(
  * restart, which it is not anyway. The `kind:` prefix is what makes a key and
  * a session token with the same bytes — impossible, but free to rule out —
  * two different cache entries.
+ *
+ * **A gateway with a `audience` gets entries of its own**: the
+ * token it minted names that audience as `aud`, and must not be handed to a
+ * gateway that wants another — or the default. The gateway's *name* goes
+ * into the key rather than the audience string, so an edit to one gateway's
+ * audience cannot hand a second gateway with the same value a token minted
+ * for the old one; `/idp/update-gateway` clears the cache as well, so the
+ * edited gateway itself re-mints at once. Without a audience the key is
+ * byte-for-byte what it was, so every such gateway keeps sharing one entry
+ * per credential. `kind@name` cannot collide with a bare `kind`.
  */
-function hashCredential(credential: Credential): string {
+function hashCredential(credential: Credential, row: GatewayRow): string {
+  const namespace =
+    row.audience === null ? credential.kind : `${credential.kind}@${row.name}`
   return createHash("sha256")
-    .update(`${credential.kind}:${credential.secret}`)
+    .update(`${namespace}:${credential.secret}`)
     .digest("base64url")
 }
 
@@ -475,7 +742,7 @@ function hashCredential(credential: Credential): string {
 const SESSION_COOKIE_SUFFIX = "session_token"
 
 /**
- * The session cookie, if this request may use one (**D92**).
+ * The session cookie, if this request may use one.
  *
  * **The Fetch-Metadata check is the load-bearing half.** `/gateway/*` is on
  * the issuer's origin, so the browser attaches the session cookie by itself —
@@ -541,6 +808,7 @@ interface MintResult {
 async function mint(
   deps: GatewayProxyDeps,
   credential: Record<string, string>,
+  row: GatewayRow,
   clientIp: string | undefined
 ): Promise<MintResult> {
   // Runs INSIDE the request scope, so under `server.dynamicIssuer` the minted
@@ -552,19 +820,21 @@ async function mint(
   const headers = new Headers(credential)
   // The address the auth instance's own resolver trusts, so Better Auth
   // buckets this mint per caller instead of collapsing every one of them into
-  // the shared `no-trusted-ip|/token` bucket (`auth/instance.ts`).
-  if (clientIp) {
-    headers.set(
-      deps.config.file.server.trustProxy === false
-        ? SOCKET_ADDRESS_HEADER
-        : "x-forwarded-for",
-      clientIp
-    )
-  }
+  // the shared `no-trusted-ip|/token` bucket. that resolver reads
+  // the private header and nothing else, whatever `trustProxy` is
+  // (`auth/instance.ts`): the address is already the resolved one.
+  if (clientIp) headers.set(SOCKET_ADDRESS_HEADER, clientIp)
 
-  const response = await deps.auth.handler(
-    new Request(`${paths.authBaseUrl}/token`, { headers })
-  )
+  // `/token` takes no parameters, and `definePayload` sees only the session
+  // — so a gateway's `audience` reaches the payload through a scope around
+  // the call (`auth/requested-audience.ts`). Without one the
+  // plugin signs `jwt.audience`, which is every other mint.
+  const call = () =>
+    deps.auth.handler(new Request(`${paths.authBaseUrl}/token`, { headers }))
+  const response =
+    row.audience === null
+      ? await call()
+      : await withRequestedAudience(row.audience, call)
   if (response.status !== 200) return { status: response.status }
 
   try {
@@ -582,7 +852,7 @@ async function mint(
  *
  * `apiKeys.tokenTtl` is deliberately **not** what bounds this: it feeds the
  * JWKS grace period, and the token's real lifetime is `jwt.sessionToken.ttl`
- * (FR-OIDC-14). The minus-sixty is so a cached token is never handed out in
+ *. The minus-sixty is so a cached token is never handed out in
  * the last minute of its own life, where a slow upstream would receive an
  * expired bearer.
  */
@@ -616,11 +886,11 @@ function storeToken(
 /**
  * `X-Forwarded-For` / `-Host` / `-Proto`, from **the inbound hop**.
  *
- * Not from `server.baseUrl`: SEC-1 governs the URLs the IdP *emits* — issuer,
+ * Not from `server.baseUrl`: The spec governs the URLs the IdP *emits* — issuer,
  * discovery documents, e-mail links — and this is the opposite direction. An
  * upstream that builds its own links needs to know the address the caller
  * actually used, and inventing the configured one would break exactly the
- * sub-path and reverse-proxy deployments SEC-1 exists to make work.
+ * sub-path and reverse-proxy deployments the base-URL rule exists to make work.
  *
  * **`server.trustProxy` is the only input.** Whether the edge's account of
  * the caller is credible is a fact about what sits in front of this process,
@@ -666,14 +936,24 @@ function applyForwardedHeaders(
 function badGateway(
   deps: GatewayProxyDeps,
   name: string,
-  error: unknown
+  error: unknown,
+  reason: "unreachable" | "link_local" = "unreachable"
 ): Response {
   // The name and the cause, never the URL: a target can carry a host an
-  // operator would rather not have in a log aggregator (SEC-5).
-  deps.logger?.warn("gateway upstream did not answer", {
-    gateway: name,
-    error: error instanceof Error ? error.message : String(error),
-  })
+  // operator would rather not have in a log aggregator. A refused
+  // address gets its own line, because "did not answer" would
+  // send an operator to check the upstream's health rather than its address
+  // — and the caller gets the same 502 either way, so the log is the only
+  // place the difference is visible.
+  deps.logger?.warn(
+    reason === "link_local"
+      ? "gateway upstream refused: link-local address"
+      : "gateway upstream did not answer",
+    {
+      gateway: name,
+      error: error instanceof Error ? error.message : String(error),
+    }
+  )
   return refuse(502, "bad_gateway")
 }
 
@@ -690,11 +970,9 @@ function buildResponse(
   for (const [key, value] of upstream.headers) {
     const lower = key.toLowerCase()
     if (HOP_BY_HOP.has(lower) || dropped.has(lower)) continue
-    // Same-origin with the issuer: an upstream must not be able to set a
-    // cookie on this host and path (**D91**, review finding S2).
-    if (lower === "set-cookie") continue
-    if (lower === "content-security-policy") continue
-    if (lower === "content-security-policy-report-only") continue
+    // Same-origin with the issuer: nothing an upstream says about *this*
+    // origin crosses (the list says why for each).
+    if (isDeniedResponseHeader(lower)) continue
     headers.append(key, value)
   }
 

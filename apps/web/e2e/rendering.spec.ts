@@ -2,7 +2,7 @@ import { expect, test } from "./fixtures"
 
 /**
  * The gate that did not exist when the sign-in page lost its stylesheet
- * (TST-6).
+ *.
  *
  * For four milestones every page in `vite dev` arrived with no stylesheet, no
  * client entry and no hot reload, and the whole board stayed green — because
@@ -92,7 +92,7 @@ test.describe("the sign-in page is actually rendered", () => {
     expect(await page.title()).toContain("E2E IdP")
 
     // 6. And the mount path did not leak: every stylesheet and script the page
-    //    loaded is under this deployment's own base URL (OPS-10).
+    //    loaded is under this deployment's own base URL.
     const assets = await page.evaluate(() => [
       ...[...document.querySelectorAll("link[rel=stylesheet]")].map(
         (node) => (node as HTMLLinkElement).href
@@ -121,7 +121,7 @@ test.describe("the sign-in page is actually rendered", () => {
     // checkbox is `sr-only`: it is the mechanism, and the eye icon painted over
     // it is the control — so a pointer click on the input is intercepted by the
     // label, exactly as it would be for a person. Tab-then-Space is what the
-    // control is actually for, and it asserts the two things R-1 asked for at
+    // control is actually for, and it asserts the two things the accessibility review asked for at
     // once: that it is reachable in the natural tab order, and that the toggle
     // works.
     await app.goto("/login")
@@ -152,7 +152,7 @@ test.describe("the sign-in page is actually rendered", () => {
 
     expect(response?.status()).toBe(404)
     await expect(page.getByText(/not found/i).first()).toBeVisible()
-    // FR-ACCT-2: nothing about what does exist, and no framework internals.
+    // nothing about what does exist, and no framework internals.
     expect(await page.content()).not.toMatch(/at \w+ \(.*:\d+:\d+\)/)
   })
 })

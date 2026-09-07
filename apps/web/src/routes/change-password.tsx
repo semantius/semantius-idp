@@ -25,12 +25,12 @@ import { getRuntime } from "@/server/runtime"
 import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 /**
- * `/change-password` — including the forced variant (FR-AUTH-4).
+ * `/change-password` — including the forced variant.
  *
  * A user flagged `mustChangePassword` is interposed here before anything else
  * completes, and `returnTo` carries where they were going — including an OAuth
  * continuation, which is why the parameter is validated as a same-origin
- * relative path rather than trusted (SEC-3).
+ * relative path rather than trusted.
  *
  * The forced variant has no way out: no cancel link, no navigation. Leaving it
  * available would make the flag advisory.
@@ -42,7 +42,7 @@ export const Route = createFileRoute("/change-password")({
       ui: context.ui,
       forced: searchFlag(search.forced),
       // Empty, not `/account`: an absent value has to fall through to
-      // `auth.defaultRedirect` when the form is submitted (D28).
+      // `auth.defaultRedirect` when the form is submitted.
       returnTo: safeReturnTo(searchString(search.returnTo), ""),
       oauthQuery: readOauthQuery({ search }),
       error: searchString(search.error),
@@ -60,7 +60,7 @@ export const Route = createFileRoute("/change-password")({
         const oauthQuery = form[OAUTH_QUERY_FIELD]
 
         // Built from parts because `returnTo` is now optional — an absent one
-        // must not leave a stray `?&` behind (D28).
+        // must not leave a stray `?&` behind.
         const params = new URLSearchParams()
         if (returnTo) params.set("returnTo", returnTo)
         if (oauthQuery) params.set(OAUTH_QUERY_FIELD, oauthQuery)
@@ -71,17 +71,17 @@ export const Route = createFileRoute("/change-password")({
 
         // The rules — the mismatch, the refusal mapping, the revocation and
         // the notification — are shared with `/account/security`'s dialog
-        // (D62). Only the destination is this page's own.
+        // . Only the destination is this page's own.
         const result = await changePassword(runtime, request, form)
         if (!result.ok) {
           return redirectWithCookies(withError(here, result.code))
         }
 
         // Re-resolved rather than round-tripped: this is the far end of the
-        // FR-AUTH-4 interposition, and an absolute `auth.defaultRedirect`
-        // never travelled through the query to get here (D28). The forced
+        // The forced-change interposition, and an absolute `auth.defaultRedirect`
+        // never travelled through the query to get here. The forced
         // change is also the last gate before an authorization may proceed,
-        // so this is where a waiting request resumes (FR-OIDC-9).
+        // so this is where a waiting request resumes.
         const resumed = await resumeAuthorization(
           runtime,
           request,

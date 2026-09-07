@@ -19,10 +19,10 @@ import { expect, test } from "./fixtures"
 import { waitForMail } from "./stack"
 
 /**
- * The administrative surface (TST-6, FR-ADMIN-2/3, FR-ROLE-2/3).
+ * The administrative surface.
  *
  * Every test signs in as the administrator the first-run wizard created
- * (D52) through the sign-in form, which also means the gate on `/admin/*` is
+ * through the sign-in form, which also means the gate on `/admin/*` is
  * exercised on every one of them rather than in a test of its own.
  *
  * The per-user *confirmations* are dialogs (item 11), so anything after one of
@@ -30,13 +30,13 @@ import { waitForMail } from "./stack"
  * usually share a name, and an unscoped match would find whichever the DOM
  * happened to order first.
  *
- * **Creates and edits are pages** (**D93**), so those flows navigate and then
+ * **Creates and edits are pages**, so those flows navigate and then
  * fill the page. That is the difference the specs are asserting as much as the
  * outcome: an address that can be linked to, reloaded and come back to.
  */
 
 test.describe("the admin area", () => {
-  test("an ordinary user is refused, and told why (FR-ROLE-3)", async ({
+  test("an ordinary user is refused, and told why", async ({
     page,
     app,
     stack,
@@ -49,7 +49,7 @@ test.describe("the admin area", () => {
     await expect(
       page.getByRole("heading", { name: "You do not have access to this" })
     ).toBeVisible()
-    // FR-ROLE-3 says 403, and the page used to render with 200 — asserted at
+    // the spec says 403, and the page used to render with 200 — asserted at
     // the layer that sees a real document response, the way the 404 is.
     expect(response?.status()).toBe(403)
 
@@ -68,7 +68,7 @@ test.describe("the admin area", () => {
     await signInAsAdmin(page, app)
 
     await app.goto("/admin")
-    // **D93**: the page's own name, not the area's. "Administration" was the
+    // the page's own name, not the area's. "Administration" was the
     // chrome's `<h1>`; the breadcrumb has that row now and no page carries
     // that string — `t.admin.title` survives only as the nav's `aria-label`.
     await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible()
@@ -87,7 +87,7 @@ test.describe("the admin area", () => {
     // Paging needs more rows than the smallest page the server will serve —
     // `pageSize` is clamped to a floor of ten, so `pageSize=1` quietly returns
     // ten and proves nothing. Twelve accounts are seeded through the admin API
-    // (FR-ADMIN-6) rather than the form: the assertion is still about the
+    // rather than the form: the assertion is still about the
     // rendered list, and driving the create page twelve times would spend a
     // minute re-testing what the test above already covers.
     const prefix = uniqueEmail("paging").split("@")[0]!
@@ -141,7 +141,7 @@ test.describe("the admin area", () => {
     )
   })
 
-  test("creating a user lands on the list and e-mails them a link (FR-ADMIN-2, FR-SIGNUP-5)", async ({
+  test("creating a user lands on the list and e-mails them a link", async ({
     page,
     app,
     stack,
@@ -150,16 +150,16 @@ test.describe("the admin area", () => {
     const email = uniqueEmail("created")
 
     await app.goto("/admin/users")
-    // **D93**: the form is a page again, with one address to look at, link to
-    // and bookmark. D64's actual finding is untouched and asserted below —
+    // the form is a page again, with one address to look at, link to
+    // and bookmark. the spec's actual finding is untouched and asserted below —
     // both outcomes of the action still land on the list.
     await page.getByRole("link", { name: "Create a user" }).click()
     await expect(page).toHaveURL(new RegExp(`${app.basePath}/admin/users/new`))
-    // FR-SIGNUP-5 / D49: two parts, never a free-text display name.
+    // two parts, never a free-text display name.
     await page.getByLabel("First name").fill("Created")
     await page.getByLabel("Last name").fill("Person")
     await page.getByLabel("E-mail address").fill(email)
-    // D64's *other* half, which D93 does not reverse: the default role arrives
+    // the spec's *other* half, which the spec does not reverse: the default role arrives
     // ticked, because an unticked form got it anyway — the server falls back
     // to `defaultRole`. Asserted rather than clicked: clicking it now
     // *un*-ticks it.
@@ -169,7 +169,7 @@ test.describe("the admin area", () => {
     // Item 10: both outcomes land on the list the account was created for.
     await expect(page).toHaveURL(new RegExp(`${app.basePath}/admin/users`))
     await expect(page.getByText("The account has been created.")).toBeVisible()
-    // **D78**: and *which* account. That sentence is identical for every
+    // and *which* account. That sentence is identical for every
     // creation, so an administrator adding several in a row had nothing to
     // tell one confirmation from the next.
     await expect(toast(page).getByText(email)).toBeVisible()
@@ -181,7 +181,7 @@ test.describe("the admin area", () => {
     await page.getByLabel("Search by name or e-mail").fill(email)
     await submit(page, "Search")
     await expect(page.getByRole("link", { name: email })).toBeVisible()
-    // The derived name, in `site.nameFormat` order (D49).
+    // The derived name, in `site.nameFormat` order.
     await expect(page.getByText("Created Person")).toBeVisible()
     // "It is you doing the vouching": approved and confirmed on creation.
     // Scoped to the table: "Active" is also an <option> in the status filter,
@@ -196,7 +196,7 @@ test.describe("the admin area", () => {
     expect(invite.text).toContain(stack.baseURL)
   })
 
-  test("a duplicate address is named, not blamed on a password (D70)", async ({
+  test("a duplicate address is named, not blamed on a password", async ({
     page,
     app,
     stack,
@@ -214,8 +214,8 @@ test.describe("the admin area", () => {
     await page.getByLabel("E-mail address").fill(user.email)
     await submit(page, "Create")
 
-    // D62: the form comes back with what was typed still in it — at its own
-    // address now (**D93**), rather than as a dialog reopened over the list.
+    // the form comes back with what was typed still in it — at its own
+    // address now, rather than as a dialog reopened over the list.
     await expect(page).toHaveURL(new RegExp(`${app.basePath}/admin/users/new`))
     await expect(page.getByLabel("E-mail address")).toHaveValue(user.email)
     await expect(
@@ -225,9 +225,9 @@ test.describe("the admin area", () => {
       page.getByText(/e-mail address and password combination/i)
     ).toHaveCount(0)
 
-    // **D93**: and a reload shows a clean, empty form rather than the same
+    // and a reload shows a clean, empty form rather than the same
     // message over fields whose values are gone. The draft is single-use, so
-    // leaving `?error=` and `?draft=` in the address bar was the D71 defect
+    // leaving `?error=` and `?draft=` in the address bar was the defect
     // one parameter over: they are stripped once the loader has claimed them.
     await expect(page).not.toHaveURL(/error=|draft=/)
     await page.reload()
@@ -237,7 +237,7 @@ test.describe("the admin area", () => {
     ).toHaveCount(0)
   })
 
-  test("an administrator can correct a profile (FR-ADMIN-2, D49)", async ({
+  test("an administrator can correct a profile", async ({
     page,
     app,
     stack,
@@ -248,7 +248,7 @@ test.describe("the admin area", () => {
     await app.goto(`/admin/users?q=${encodeURIComponent(user.email)}`)
     await page.getByRole("link", { name: user.email }).click()
 
-    // **D93**: Edit profile is a link to a page, and the page holds the roles
+    // Edit profile is a link to a page, and the page holds the roles
     // as well — one record, one form, one Save.
     await page.getByRole("link", { name: "Edit profile" }).click()
     await expect(page).toHaveURL(/\/edit$/)
@@ -266,7 +266,7 @@ test.describe("the admin area", () => {
     await expect(page.getByText("Corrected Name")).toBeVisible()
   })
 
-  test("roles are assigned from the catalog and reach the account (FR-ROLE-2)", async ({
+  test("roles are assigned from the catalog and reach the account", async ({
     page,
     app,
     stack,
@@ -279,14 +279,14 @@ test.describe("the admin area", () => {
 
     // Item 11b: one checkbox per catalog role rather than a comma-separated
     // field an administrator has to spell from memory. On the edit page since
-    // **D93**, beside the profile fields and under the same Save.
+    // Beside the profile fields and under the same Save.
     await page.getByRole("link", { name: "Edit profile" }).click()
     await page.getByRole("checkbox", { name: "admin" }).click()
     await expect(page.getByRole("checkbox", { name: "user" })).toBeChecked()
     await submit(page, "Save")
     await expect(page.getByText("The account has been updated.")).toBeVisible()
 
-    // **D93**: *both* roles survive one save. The join that turns the repeated
+    // *both* roles survive one save. The join that turns the repeated
     // checkbox field into what `/admin/set-role` takes used to live in the
     // route rather than in the dispatcher, so a second route dispatching
     // `set-roles` without it would have stored one role of two — a silent
@@ -299,18 +299,18 @@ test.describe("the admin area", () => {
 
     await signOut(page, app)
     await signIn(page, app, user.email, user.password)
-    // FR-ROLE-2: the claim set is the catalog-filtered list **in catalog
+    // the claim set is the catalog-filtered list **in catalog
     // order**, whatever order they were typed in — so "user, admin" going in
     // comes back as "admin, user", and a downstream application reading the
     // `roles` claim gets a stable order.
     await expect(page.getByText("admin, user")).toBeVisible()
     // And the role is real: the admin area now opens. The dashboard's own
-    // heading, not the area's — see D93 above.
+    // heading, not the area's.
     await app.goto("/admin")
     await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible()
   })
 
-  test("suspending an account stops the sign-in and says so (FR-ADMIN-4)", async ({
+  test("suspending an account stops the sign-in and says so", async ({
     page,
     app,
     stack,
@@ -333,7 +333,7 @@ test.describe("the admin area", () => {
     await expect(
       page.getByRole("heading", { name: "This account is suspended" })
     ).toBeVisible()
-    // FR-ADMIN-4: told, not stonewalled — otherwise the answer to a password
+    // told, not stonewalled — otherwise the answer to a password
     // that is perfectly correct is to keep retrying it.
     await expect(page.getByText("Reason: Testing the suspension")).toBeVisible()
 
@@ -353,7 +353,7 @@ test.describe("the admin area", () => {
     expect(onLogin(page, app)).toBe(false)
   })
 
-  test("an administrator cannot demote the last one (FR-ADMIN-3, D34)", async ({
+  test("an administrator cannot demote the last one", async ({
     page,
     app,
   }) => {
@@ -363,7 +363,7 @@ test.describe("the admin area", () => {
     await page.getByRole("link", { name: "e2e-admin@example.com" }).click()
 
     // Both rules fit this account, and the last-administrator one is the
-    // answer that names something the reader can do (D34). The controls live
+    // answer that names something the reader can do. The controls live
     // inside their dialogs now, so the refusal is asserted where it is shown.
     const ban = await openDialog(page, "Suspend")
     await expect(ban.getByRole("button", { name: "Suspend" })).toBeDisabled()
@@ -378,10 +378,10 @@ test.describe("the admin area", () => {
     await expect(remove.getByText("This cannot be undone.")).toBeVisible()
     await page.keyboard.press("Escape")
 
-    // **D93**: on your own edit page the roles fieldset is disabled and says
+    // on your own edit page the roles fieldset is disabled and says
     // why, while the profile half still saves. The guard is on the fieldset
     // and not on the Save, because there is one Save now and disabling it
-    // would stop an administrator fixing their own name — which FR-ADMIN-3
+    // would stop an administrator fixing their own name — which the last-admin rule
     // does not refuse. There was no assertion on any of this before.
     await page.getByRole("link", { name: "Edit profile" }).click()
     await expect(page.getByRole("checkbox", { name: "admin" })).toBeDisabled()
@@ -392,18 +392,18 @@ test.describe("the admin area", () => {
     await expect(page.getByText("The account has been updated.")).toBeVisible()
   })
 
-  test("a client can be registered, disabled and removed — and file ones cannot (D50)", async ({
+  test("a client can be registered, disabled and removed — and file ones cannot", async ({
     page,
     app,
   }) => {
     await signInAsAdmin(page, app)
     await app.goto("/admin/clients")
 
-    // FR-OIDC-2: a file-managed row is labeled and carries no controls, because
+    // a file-managed row is labeled and carries no controls, because
     // an edit here is one the next restart would silently undo.
     const fileRow = page.locator("tbody tr").filter({ hasText: "e2e-app" })
     await expect(fileRow.getByText("From the file")).toBeVisible()
-    // **D80**: the four controls are behind one menu now, so the assertion is
+    // the four controls are behind one menu now, so the assertion is
     // that the row has no menu at all rather than that it is missing four
     // buttons — a file row must not offer an edit the next restart undoes,
     // and an empty menu would be a worse answer than no menu.
@@ -411,7 +411,7 @@ test.describe("the admin area", () => {
       fileRow.getByRole("button", { name: /^Actions for / })
     ).toHaveCount(0)
 
-    // Registering one: a page since **D93**, and the secret is still
+    // Registering one: a page and the secret is still
     // generated by the server and shown once in a dialog on the list — never
     // in the address bar.
     await page.getByRole("link", { name: "Add an application" }).click()
@@ -421,7 +421,7 @@ test.describe("the admin area", () => {
     await page.getByLabel("Name").fill("Registered Here")
     await page.getByLabel("Client ID").fill("e2e-registered")
     // Explicitly confidential: the form defaults to a single-page app now
-    // (round 2, finding 10), and a public client has no secret to show — which
+    // (finding 10), and a public client has no secret to show — which
     // is the whole subject of the next twenty lines.
     await page.getByLabel("Type").selectOption("web")
     // `exact`: "Post-logout redirect URIs" contains this label as a substring,
@@ -443,12 +443,12 @@ test.describe("the admin area", () => {
     const row = page.locator("tbody tr").filter({ hasText: "e2e-registered" })
     await expect(row.getByText("Added here")).toBeVisible()
     await expect(row.getByText("Enabled")).toBeVisible()
-    // FR-OIDC-3's default, restored: the create handler used to send a defined
-    // `false` from a checkbox that did not exist, so every client added here
-    // asked for consent. The column exists so that is visible at all — and
-    // since round 3 it is headed "Consent required" and reads the way round
-    // an administrator thinks, so the default now shows as **No**.
-    await expect(row.getByText("No")).toBeVisible()
+    // the create form ticks "Require consent" to begin with — the
+    // form is where a third-party integration is added, and the consent screen
+    // is where the user learns what it will see — so a client registered with
+    // the checkboxes untouched shows **Yes** here. File clients and the API's
+    // own default are unchanged.
+    await expect(row.getByText("Yes")).toBeVisible()
 
     // A reload cannot show it again: claiming the stash consumed it.
     await app.goto("/admin/clients")
@@ -475,7 +475,7 @@ test.describe("the admin area", () => {
     ).toHaveCount(0)
   })
 
-  test("a registered application can be edited and its secret rotated (D72)", async ({
+  test("a registered application can be edited and its secret rotated", async ({
     page,
     app,
   }) => {
@@ -498,7 +498,7 @@ test.describe("the admin area", () => {
 
     const row = page.locator("tbody tr").filter({ hasText: "e2e-editable" })
 
-    // **D93**: the row's *name* is the way in, not only the menu. That is the
+    // the row's *name* is the way in, not only the menu. That is the
     // whole point of an addressable record — Edit used to exist solely inside
     // the per-row menu, which is the first, pinned column.
     await row.getByRole("link", { name: "Editable App" }).click()
@@ -565,16 +565,16 @@ test.describe("the admin area", () => {
     ).toHaveCount(0)
   })
 
-  test("a gateway can be added, disabled and removed — and file ones cannot (D91)", async ({
+  test("a gateway can be added, disabled and removed — and file ones cannot", async ({
     page,
     app,
   }) => {
     await signInAsAdmin(page, app)
     await app.goto("/admin/gateways")
 
-    // FR-GW-2: the config-declared row is labeled and carries no menu at all,
+    // the config-declared row is labeled and carries no menu at all,
     // because an edit here is one the next restart would silently undo. The
-    // same assertion D50's client test makes, and for the same reason.
+    // same assertion the spec's client test makes, and for the same reason.
     const fileRow = page.locator("tbody tr").filter({ hasText: "fromfile" })
     await expect(fileRow.getByText("From the file")).toBeVisible()
     await expect(
@@ -634,14 +634,14 @@ test.describe("the admin area", () => {
     ).toHaveCount(0)
   })
 
-  test("a file-managed row's edit URL lands on the list with a reason (D93)", async ({
+  test("a file-managed row's edit URL lands on the list with a reason", async ({
     page,
     app,
   }) => {
     // Not `notFound()`, which is a centered page with no sidebar and no link
     // out, replying "this does not exist" about a row that is visible on the
     // list. The write itself must still be impossible — the next restart would
-    // undo it (FR-OIDC-2, FR-GW-2) — so the refusal is a redirect carrying the
+    // undo it — so the refusal is a redirect carrying the
     // reason, which is the shape every other refusal on those pages uses.
     await signInAsAdmin(page, app)
 
@@ -656,20 +656,20 @@ test.describe("the admin area", () => {
     await expect(page.getByText(/comes from config\.jsonc/)).toBeVisible()
   })
 
-  test("leaving a form with unsaved changes asks first (D93)", async ({
+  test("leaving a form with unsaved changes asks first", async ({
     page,
     app,
   }) => {
     // The hazard the move to pages makes bigger rather than creates: Escape
-    // already discarded a dialog, but since **D82** the sidebar is permanently
-    // on screen with eight one-click destinations, D93 adds a breadcrumb with
+    // already discarded a dialog, but the sidebar is permanently
+    // on screen with eight one-click destinations, the spec adds a breadcrumb with
     // two more, and Back now means something. A redirect-URI list is copied
-    // out of another system, and **D62** built an entire one-shot draft stash
+    // out of another system, and the spec built an entire one-shot draft stash
     // so a *server refusal* would not cost it.
     await signInAsAdmin(page, app)
     await app.goto("/admin/clients/new")
 
-    // **Scoped to the sidebar's landmark.** Since **D93** the breadcrumb
+    // **Scoped to the sidebar's landmark.** the breadcrumb
     // carries a link with the same name on this very page — `t.admin.title`
     // survives exactly here, as the navigation's `aria-label`, so it is what
     // tells the two apart.
@@ -713,10 +713,10 @@ test.describe("the admin area", () => {
     await app.goto("/admin/system")
     await expect(page.getByText(stack.baseURL).first()).toBeVisible()
     // `.first()`: the algorithm is also inside the masked effective
-    // configuration further down the page (FR-ADMIN-2).
+    // configuration further down the page.
     await expect(page.getByText("ES256").first()).toBeVisible()
 
-    // D55: the discovery URLs, absolute. This assertion is why the test runs
+    // the discovery URLs, absolute. This assertion is why the test runs
     // in both deployment shapes — under a sub-path *two* metadata URLs are
     // correct and they are not the same one, and only one of them is
     // derivable from the issuer by appending to it.
@@ -748,7 +748,7 @@ test.describe("the admin area", () => {
     }
 
     await app.goto("/admin/audit")
-    // SEC-6: sign-ins are on the record, and this run has made plenty.
+    // sign-ins are on the record, and this run has made plenty.
     // Scoped to the table: the same string is also an <option> in the filter,
     // which is present and invisible, so an unscoped match found that instead.
     await expect(
@@ -756,7 +756,7 @@ test.describe("the admin area", () => {
     ).toBeVisible()
   })
 
-  test("a temporary password forces a change at the next sign-in (FR-AUTH-4)", async ({
+  test("a temporary password forces a change at the next sign-in", async ({
     page,
     app,
     stack,
@@ -776,7 +776,7 @@ test.describe("the admin area", () => {
     await expect(page).toHaveURL(/change-password\?forced=1/)
   })
 
-  test("a deleted account is named, and the confirmation does not outlive it (D78)", async ({
+  test("a deleted account is named, and the confirmation does not outlive it", async ({
     page,
     app,
     stack,
@@ -802,10 +802,10 @@ test.describe("the admin area", () => {
     await expect(confirmation.getByText(user.email)).toBeVisible()
     await expect(page).not.toHaveURL(/notice=|subject=/)
 
-    // **D78**, the other half. Base UI freezes every auto-dismiss timer while
+    // The other half. Base UI freezes every auto-dismiss timer while
     // the *window* is unfocused and thaws it only on the way back, so a
     // confirmation left behind a switched-away window stays on screen for as
-    // long as the absence lasts — the outliving-its-truth D71 set out to end,
+    // long as the absence lasts — the outliving-its-truth the spec set out to end,
     // reintroduced by the component that replaced the banner. Only a browser
     // can see this: the blur is a real window event and the dismissal is a
     // real timer.
@@ -818,7 +818,7 @@ test.describe("the admin area", () => {
     ).toHaveCount(0, { timeout: 25_000 })
   })
 
-  test("a public client says why it has no secret, and how to get one (D78)", async ({
+  test("a public client says why it has no secret, and how to get one", async ({
     page,
     app,
   }) => {
@@ -866,7 +866,7 @@ test.describe("the admin area", () => {
     // grows the rotate control it did not have.
     await openRowLink(page, row, "Public Only", "Edit")
     // Scoped to `main`: the creation's confirmation toast is still on screen
-    // for ten seconds (**D71**), its accessible name is the whole sentence,
+    // for ten seconds, its accessible name is the whole sentence,
     // and "Change its **type** to Web to issue one" makes `getByLabel("Type")`
     // match the toast as well as the field. The toast is portalled outside
     // `<main>`; the form is not.

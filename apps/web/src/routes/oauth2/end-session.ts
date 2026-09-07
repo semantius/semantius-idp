@@ -6,7 +6,7 @@ import { forwardToAuth } from "@/server/oidc/protocol-proxy"
 import { getRuntime } from "@/server/runtime"
 
 /**
- * `{issuer}/oauth2/end-session` — RP-initiated logout (FR-OIDC-11).
+ * `{issuer}/oauth2/end-session` — RP-initiated logout.
  *
  * The provider validates `id_token_hint`, exact-matches
  * `post_logout_redirect_uri` against the client's registered list and echoes
@@ -18,7 +18,7 @@ import { getRuntime } from "@/server/runtime"
  *
  * **When it asks, the question has to be ours.** The provider's own
  * confirmation is unbranded, unstyled HTML served straight from the library
- * (`<h1>Confirm logout</h1>`), and FR-OIDC-11's confirmation page is
+ * (`<h1>Confirm logout</h1>`), and the spec's confirmation page is
  * `/sign-out` — this deployment's wording, on this deployment's pages. So an
  * HTML answer is turned into a redirect to that page, carrying the request
  * untouched **and the provider's `Set-Cookie` with it**: that cookie is the

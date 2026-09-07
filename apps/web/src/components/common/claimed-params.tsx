@@ -4,18 +4,18 @@ import { hrefWithoutParam } from "@/lib/search-params"
 
 /**
  * Takes parameters the loader has already consumed out of the address bar
- * (**D93**).
+ *.
  *
  * `claimAdminDraft` is **single-use** (`server/http/draft.ts`), and nothing
  * stripped `?error=` and `?draft=` after it. So reloading a refused form — the
  * state where a reload is most tempting, because the page looks like it did
  * nothing — rendered twelve *empty* fields under a live error message about
- * values that no longer exist anywhere. That is the defect **D71** diagnosed
- * for `?notice=`, on the parameters D71 deliberately left alone: an error
+ * values that no longer exist anywhere. That is the defect the notice-toast fix diagnosed
+ * for `?notice=`, on the parameters that fix deliberately left alone: an error
  * beside its restored draft is right, and an error beside a draft that has
  * been spent is not.
  *
- * The mechanism is D71's, and its first two mechanics are the reason it is
+ * The mechanism is the spec's, and its first two mechanics are the reason it is
  * `history.replaceState` rather than a navigation. Read `notice-toast.tsx`
  * before changing this:
  *

@@ -1,5 +1,5 @@
 /**
- * What configuration turns into for a social provider (FR-SOC-1/3/4).
+ * What configuration turns into for a social provider.
  *
  * The interesting parts are the two that were silently wrong: `syncProfile`
  * had no effect at all because nothing mapped it onto Better Auth's
@@ -35,11 +35,11 @@ const GOOGLE = {
 }
 
 describe("buildSocialProviders", () => {
-  it("registers nothing when no provider is configured (FR-SOC-1)", () => {
+  it("registers nothing when no provider is configured", () => {
     expect(buildSocialProviders(configWith({}))).toBeUndefined()
   })
 
-  it("maps syncProfile onto overrideUserInfoOnSignIn (FR-SOC-4)", () => {
+  it("maps syncProfile onto overrideUserInfoOnSignIn", () => {
     const on = buildSocialProviders(
       configWith({ social: { google: { ...GOOGLE, syncProfile: true } } })
     )
@@ -64,13 +64,13 @@ describe("buildSocialProviders", () => {
       })
     )
     // `enabled`, `syncProfile` and `allowedEmailDomains` are ours; anything
-    // else the operator wrote belongs to the provider (FR-SOC-1).
+    // else the operator wrote belongs to the provider.
     expect(providers?.google).not.toHaveProperty("enabled")
     expect(providers?.google).not.toHaveProperty("allowedEmailDomains")
     expect(providers?.google?.prompt).toBe("consent")
   })
 
-  it("refuses implicit registration when sign-up is off (FR-SIGNUP-1)", () => {
+  it("refuses implicit registration when sign-up is off", () => {
     const closed = buildSocialProviders(
       configWith({
         signUp: { enabled: false },
@@ -97,7 +97,7 @@ describe("isSocialEmailAllowed", () => {
     )
   })
 
-  it("applies the global sign-up list (FR-SIGNUP-3)", () => {
+  it("applies the global sign-up list", () => {
     const config = configWith({
       signUp: { allowedEmailDomains: ["example.com"] },
     })
@@ -109,7 +109,7 @@ describe("isSocialEmailAllowed", () => {
     )
   })
 
-  it("narrows further per provider, never widens (FR-SOC-3)", () => {
+  it("narrows further per provider, never widens", () => {
     const config = configWith({
       signUp: { allowedEmailDomains: ["example.com", "partner.test"] },
     })

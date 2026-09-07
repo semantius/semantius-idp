@@ -5,7 +5,7 @@ import { forwardDiscovery } from "@/server/oidc/protocol-proxy"
 import { getRuntime } from "@/server/runtime"
 
 /**
- * `{issuer}/.well-known/openid-configuration` (FR-OIDC-15, FR-OIDC-17).
+ * `{issuer}/.well-known/openid-configuration`.
  *
  * Public and readable from anywhere: every client has to fetch this before it
  * can do anything, and restricting it protects nothing.

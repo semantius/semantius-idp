@@ -1,10 +1,10 @@
 /**
- * Reading `security.txt` out of the config folder (FR-OIDC-15, RFC 9116).
+ * Reading `security.txt` out of the config folder (RFC 9116).
  *
  * A server function rather than a direct read in the route so the `node:fs`
  * import cannot reach the client bundle, and cached for the life of the
- * process because the config folder is mounted read-only (CFG-1) and read
- * once (CFG-5) — a per-request `readFile` on a path an operator controls is
+ * process because the config folder is mounted read-only and read
+ * once — a per-request `readFile` on a path an operator controls is
  * an easy denial-of-service surface for no benefit.
  */
 

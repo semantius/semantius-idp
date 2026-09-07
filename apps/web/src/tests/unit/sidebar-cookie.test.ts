@@ -1,5 +1,5 @@
 /**
- * The sidebar's collapse state, read on the server (**D82**).
+ * The sidebar's collapse state, read on the server.
  *
  * Small, but it decides the *first paint* of every page under `/admin` and
  * `/account`: get it wrong and the sidebar renders open and then snaps shut

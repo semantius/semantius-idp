@@ -1,6 +1,5 @@
 /**
- * A minimal relying party, for driving a real OIDC login end to end (TST-4,
- * TST-6, DOC-3).
+ * A minimal relying party, for driving a real OIDC login end to end.
  *
  * Run it against any deployment of this IdP:
  *
@@ -13,7 +12,7 @@
  * flow with PKCE, the token exchange, and RP-initiated logout — nothing else.
  * `openid-client` is doing all of the protocol work; what is worth reading
  * here is how little configuration this deployment needs, which is the point
- * DOC-3 makes with it.
+ * the spec makes with it.
  *
  * **`e2e/oidc.spec.ts` drives this exact file**, so the sample cannot rot into
  * something that no longer works: the suite fails if it does.
@@ -49,7 +48,7 @@ interface RpSession {
    *
    * Not from the ID token: `jwt.claimsInIdToken` is false by default, because
    * an ID token is an assertion about *authentication* and profile data
-   * belongs at userinfo (FR-OIDC-7). An application that reads `email` off the
+   * belongs at userinfo. An application that reads `email` off the
    * ID token gets nothing from a default deployment, which is exactly the
    * mistake a sample should not teach.
    */
@@ -71,7 +70,7 @@ const config = await client.discovery(
   new URL(ISSUER),
   CLIENT_ID,
   CLIENT_SECRET,
-  // The IdP registers `web` clients as `client_secret_basic` (FR-OIDC-3);
+  // The IdP registers `web` clients as `client_secret_basic`;
   // openid-client would otherwise send the secret in the body.
   client.ClientSecretBasic(CLIENT_SECRET),
   { execute: [client.allowInsecureRequests] }
@@ -170,7 +169,7 @@ const server = Bun.serve({
       }
 
       case "/login": {
-        // PKCE on a confidential client too: FR-OIDC-1 defaults it on, and
+        // PKCE on a confidential client too: the spec defaults it on, and
         // there is no reason to opt out of it.
         session.verifier = client.randomPKCECodeVerifier()
         session.state = client.randomState()
@@ -192,7 +191,7 @@ const server = Bun.serve({
         }
         try {
           // No `resource` parameter anywhere in this file — the IdP applies
-          // `jwt.audience` as the default (FR-OIDC-6), which is what makes a
+          // `jwt.audience` as the default, which is what makes a
           // naïve client's token valid for Neon without it knowing.
           const tokens = await client.authorizationCodeGrant(config, url, {
             pkceCodeVerifier: session.verifier,
@@ -200,7 +199,7 @@ const server = Bun.serve({
           })
           session.claims = { ...tokens.claims() }
           session.accessToken = tokens.access_token
-          // FR-OIDC-4: the access token is presented to userinfo, and the
+          // the access token is presented to userinfo, and the
           // subject it answers with has to be the one the ID token named —
           // `openid-client` refuses the response otherwise, which is the check
           // a hand-rolled client usually forgets.
@@ -226,7 +225,7 @@ const server = Bun.serve({
       }
 
       case "/logout": {
-        // FR-OIDC-11: the hint is what lets the IdP end the session without
+        // the hint is what lets the IdP end the session without
         // asking, and the post-logout URI has to be one the client registered.
         const endSession = client.buildEndSessionUrl(config, {
           post_logout_redirect_uri: `${SELF}/post-logout`,

@@ -1,5 +1,5 @@
 /**
- * Managing gateways from the admin area (FR-GW-7, FR-ADMIN-6, **D91**).
+ * Managing gateways from the admin area.
  *
  * `client-admin.test.ts`'s shape, because the rules are the same rules: a row
  * the file owns is refused here, a row added here survives every restart, and
@@ -132,7 +132,7 @@ describe("the gateway admin endpoints", () => {
   })
 
   /**
-   * The round trip `/admin/gateways`'s Edit makes, end to end (**D93**).
+   * The round trip `/admin/gateways`'s Edit makes, end to end.
    *
    * A bare origin is the *common* target shape — the path is optional — and
    * the list page used to run every row through `maskConnectionString`, which
@@ -264,7 +264,7 @@ describe("the gateway admin endpoints", () => {
   })
 
   it("refuses every mutation of a config-owned row", async () => {
-    // FR-GW-2: an edit here is a change the next restart silently undoes,
+    // an edit here is a change the next restart silently undoes,
     // which is worse than no control at all.
     const cookie = await adminCookie()
     const attempts = [
@@ -295,7 +295,7 @@ describe("the gateway admin endpoints", () => {
   })
 
   it("refuses a caller who is not an administrator", async () => {
-    // FR-ADMIN-6 makes these a documented API, so the gate has to be on the
+    // the spec makes these a documented API, so the gate has to be on the
     // endpoint rather than on the page in front of it.
     const response = await post("/idp/create-gateway", {
       name: "added",

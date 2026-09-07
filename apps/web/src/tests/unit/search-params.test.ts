@@ -3,7 +3,7 @@
  *
  * Every case here was reachable in the shipped app: the router parses each
  * value with `JSON.parse`, so `?forced=1` arrived as the number `1` and
- * `search.forced === "1"` was false — which is why the FR-AUTH-4 forced page
+ * `search.forced === "1"` was false — which is why the spec forced page
  * rendered the ordinary change-password screen and dropped the `forced` marker
  * from the form it posted.
  */
@@ -65,7 +65,7 @@ describe("searchFlag", () => {
   })
 })
 
-describe("hrefWithoutParam (D71)", () => {
+describe("hrefWithoutParam", () => {
   it("removes the named parameter and leaves the rest of the URL alone", () => {
     expect(
       hrefWithoutParam("http://idp.test/admin/users?notice=created", "notice")

@@ -23,6 +23,10 @@ against, not to re-run by hand:
 
 ### The documentation
 
+- [ ] The security review is closed: every finding in
+      [docs/security-review-2026-09.md](security-review-2026-09.md) is fixed
+      or accepted by name, and `SECURITY.md` "What is not" matches its
+      accepted list.
 - [ ] [CHANGELOG.md](../CHANGELOG.md) has an entry for this version, with the
       `D` numbers of any spec amendments.
 - [ ] [spec-v1.md](../spec-v1.md) is amended through the last decision the code
@@ -107,7 +111,7 @@ The Neon constraints test asserts the shape. This asserts that Neon agrees.
 
 - [ ] On an **empty** database, the root leads to `/setup`, completing it
       creates a working administrator, and `/setup` then redirects to `/login`
-      and stays that way (**D52**).
+      and stays that way.
 - [ ] `/readyz` is 200 and `/healthz` answers without touching the database.
 - [ ] Discovery's `issuer` is byte-for-byte `server.baseUrl`.
 - [ ] Under a sub-path, the origin-root RFC 8414 document answers:
@@ -163,7 +167,7 @@ A pre-release tag (`v1.0.0-rc1`) publishes as `1.0.0-rc1` only — no `1.0`, no
 
 > Until 2026-08-27 this section described behavior that did not exist: the
 > publish steps lived in `ci.yml`, guarded on `refs/tags/v*`, in a workflow
-> that only triggers on branches. Nothing had ever been published. **D73**.
+> that only triggers on branches. Nothing had ever been published.
 
 ## After
 

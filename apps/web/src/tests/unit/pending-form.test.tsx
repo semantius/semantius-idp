@@ -12,7 +12,7 @@ import { TextField } from "@/components/auth/form-parts"
  * is that none of it has leaked into the document the browser gets: a form
  * that arrives already announcing itself as busy, or a submit button that
  * arrives disabled, is a form nobody can use before the JavaScript lands —
- * which is the degraded case this pattern is explicitly allowed to have (D31),
+ * which is the degraded case this pattern is explicitly allowed to have,
  * as long as the degradation is "no spinner" and not "no form".
  *
  * The in-flight behavior itself — the deferred frame, the submitter match,

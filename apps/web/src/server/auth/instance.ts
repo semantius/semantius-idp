@@ -2,7 +2,7 @@
  * The one Better Auth instance (§3, §4).
  *
  * `createAuthOptions()` is deliberately separable from `createAuth()`: schema
- * generation (DM-1) needs the *options* — the plugin list is what decides which
+ * generation needs the *options* — the plugin list is what decides which
  * tables exist — but has no database to connect to. Everything else takes the
  * built instance.
  *
@@ -15,6 +15,7 @@ import { oauthProvider } from "@better-auth/oauth-provider"
 import { betterAuth } from "better-auth"
 import { drizzleAdapter } from "better-auth/adapters/drizzle"
 import { admin } from "better-auth/plugins/admin"
+import { adminAc, userAc } from "better-auth/plugins/admin/access"
 import { jwt } from "better-auth/plugins/jwt"
 import { twoFactor } from "better-auth/plugins/two-factor"
 
@@ -42,6 +43,7 @@ import { requestOrigins } from "../http/request-origin"
 import { currentRequestIssuer, recordAuthApiError } from "../http/request-log"
 import { buildEmailCallbacks } from "./options/email-callbacks"
 import { gateApiKeyPlugin, isApiKeySession } from "./options/api-key-gate"
+import { requestedAudience } from "./requested-audience"
 import { buildAfterHook, buildBeforeHook } from "./options/hooks"
 import { buildSocialProviders } from "./options/social"
 import { buildValidateUserInfo } from "./options/social-sync"
@@ -61,20 +63,20 @@ export interface AuthDeps {
    */
   adminContext?: AdminContext
   /**
-   * Injected by tests so the FR-AUTH-1 breach check never leaves the process.
+   * Injected by tests so the spec breach check never leaves the process.
    * Production leaves it unset and the module uses the global `fetch`.
    */
   breachFetch?: (input: string, init?: RequestInit) => Promise<Response>
   logger?: Logger
   /**
-   * Sends the FR-MAIL-1 templates. Omitted during schema generation, and a
-   * disabled mailer in degraded mode (FR-MAIL-2).
+   * Sends the spec templates. Omitted during schema generation, and a
+   * disabled mailer in degraded mode.
    */
   mailer?: Mailer
-  /** Writes the SEC-6 trail for the approval endpoints. */
+  /** Writes the spec trail for the approval endpoints. */
   audit?: Audit
   /**
-   * `/admin/database`'s own connections (FR-ADMIN-7), built in `runtime.ts`
+   * `/admin/database`'s own connections, built in `runtime.ts`
    * and absent when `admin.database` is `disabled`.
    *
    * Never `database`: a single statement can change session state that a
@@ -86,7 +88,7 @@ export interface AuthDeps {
   consoleDb?: DbHandle
   consoleDirectDb?: DbHandle
   /**
-   * Schema generation (DM-1), which needs every table a deployment could ever
+   * Schema generation, which needs every table a deployment could ever
    * have — so the config-gated plugins stay registered regardless of what the
    * config file says. Never set for a running instance.
    */
@@ -101,7 +103,7 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
   const { config } = deps
   const paths = createBasePaths(config.base)
   const file = config.file
-  // FR-MAIL-2: without a transport there are no callbacks to register, so the
+  // without a transport there are no callbacks to register, so the
   // features that depend on them cannot half-work.
   const email =
     deps.mailer && deps.mailer.enabled
@@ -111,7 +113,7 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
   return {
     appName: file.site.name,
 
-    // SEC-1: every absolute URL derives from `server.baseUrl`, never from a
+    // every absolute URL derives from `server.baseUrl`, never from a
     // request header.
     //
     // The split matters. Better Auth 1.7.1's `withPath` appends `basePath`
@@ -124,9 +126,9 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
     baseURL: paths.origin,
     basePath: paths.authBasePath,
     secret: file.secret,
-    // SEC-3. Two shapes, and which one is in force is a configuration fact:
+    // Two shapes, and which one is in force is a configuration fact:
     // a static list when `server.trustedOrigins` names origins, and otherwise
-    // a per-request one that adds the address the request arrived on (D68 —
+    // a per-request one that adds the address the request arrived on (
     // `http/request-origin.ts` has the reasoning and the limits). Better Auth
     // resolves the function once per request and keeps the issuer origin in
     // front of whatever it returns, so the deployment's own address is trusted
@@ -135,10 +137,10 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
       ? (request) => [...config.trustedOrigins, ...requestOrigins(request)]
       : [...config.trustedOrigins],
 
-    // SEC-8: no third-party origins at runtime.
+    // no third-party origins at runtime.
     telemetry: { enabled: false },
 
-    // FR-OIDC-9: an authorization that cannot be redirected back to the
+    // an authorization that cannot be redirected back to the
     // client — unknown client, unregistered redirect URI — lands on this
     // app's own error page rather than Better Auth's built-in one under
     // `/api/auth/error`, which is unbranded, untranslated and advertises the
@@ -172,7 +174,7 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
     user: {
       additionalFields: userAdditionalFields,
 
-      // FR-SOC-2/3 + D24: what a provider identity is allowed to do to a
+      // what a provider identity is allowed to do to a
       // local account. The only hook that sees the fresh provider profile on
       // every arrival — registration, link and returning sign-in.
       validateUserInfo: buildValidateUserInfo({
@@ -183,7 +185,7 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
       }),
 
       changeEmail: {
-        // FR-ACCT-1: changing an address always verifies the new one. With no
+        // changing an address always verifies the new one. With no
         // transport the whole feature is hidden, so this never runs.
         enabled: config.emailEnabled,
         ...(email
@@ -191,7 +193,7 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
           : {}),
       },
       deleteUser: {
-        // FR-ACCT-1: no self-deletion; admins delete (FR-ADMIN-2).
+        // no self-deletion; admins delete.
         enabled: false,
       },
     },
@@ -199,19 +201,19 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
     // ------------------------------------------------------------- password --
     emailAndPassword: {
       enabled: true,
-      // FR-SIGNUP-1: the global switch governs password registration too.
+      // the global switch governs password registration too.
       disableSignUp: !file.signUp.enabled,
-      // FR-AUTH-2: gates password sign-in only; forced false without e-mail.
+      // gates password sign-in only; forced false without e-mail.
       requireEmailVerification: config.requireEmailVerification,
       minPasswordLength: file.auth.password.minLength,
       maxPasswordLength: file.auth.password.maxLength,
       resetPasswordTokenExpiresIn: minutes(
         file.auth.passwordReset.tokenTtlMinutes
       ),
-      // FR-AUTH-3: a completed reset revokes every other session. The OAuth
+      // a completed reset revokes every other session. The OAuth
       // tokens it also has to revoke are handled by the `account.update.after`
       // database hook, which covers `/change-password` as well and does not
-      // depend on an e-mail transport being configured (FR-OIDC-12).
+      // depend on an e-mail transport being configured.
       revokeSessionsOnPasswordReset: true,
       ...(email
         ? {
@@ -219,16 +221,16 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
             onPasswordReset: email.onPasswordReset,
           }
         : {}),
-      // FR-SIGNUP-2: a fresh sign-up is `pending` and must not be signed in.
+      // a fresh sign-up is `pending` and must not be signed in.
       autoSignIn: false,
-      // SEC-10: Better Auth's default scrypt hashing is kept.
+      // Better Auth's default scrypt hashing is kept.
     },
 
     emailVerification: {
-      // FR-AUTH-2: 24 h, single-use.
+      // 24 h, single-use.
       expiresIn: days(1),
       sendOnSignUp: config.emailEnabled,
-      // FR-SIGNUP-2: verification precedes approval, so verifying must not sign
+      // verification precedes approval, so verifying must not sign
       // the user in.
       autoSignInAfterVerification: false,
       ...(email ? { sendVerificationEmail: email.sendVerificationEmail } : {}),
@@ -236,7 +238,7 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
 
     // ------------------------------------------------------------- accounts --
     account: {
-      // FR-SOC-2 (D8): account linking is off entirely. An identity is
+      // Account linking is off entirely. An identity is
       // (providerId, provider subject) and nothing else, so a social sign-in can
       // never attach itself to an existing password user.
       accountLinking: {
@@ -245,7 +247,7 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
         trustedProviders: [],
         allowDifferentEmails: false,
       },
-      // FR-SOC-4: profile sync on every sign-in of an existing account.
+      // profile sync on every sign-in of an existing account.
       updateAccountOnSignIn: true,
       encryptOAuthTokens: true,
     },
@@ -254,16 +256,16 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
     session: {
       expiresIn: file.session.expiresIn,
       updateAge: file.session.updateAge,
-      // FR-AUTH-5: capped at 5 minutes so a revocation bites quickly.
+      // capped at 5 minutes so a revocation bites quickly.
       cookieCache: {
         enabled: file.session.cookieCacheMinutes > 0,
         maxAge: minutes(file.session.cookieCacheMinutes),
       },
-      // **Zero disables it, and that is deliberate** (**D81**). Better Auth
+      // **Zero disables it, and that is deliberate**. Better Auth
       // runs its own freshness check on `/delete-user` and on `/update-user`'s
       // e-mail change, defaulting to a day; `0` is the documented way off
       // (`api/routes/session.mjs` guards every use with `freshAge !== 0`).
-      // Left at the default it would reintroduce exactly what D81 removed —
+      // Left at the default it would reintroduce exactly what the spec removed —
       // and reintroduce it as a Better Auth error code rather than a bounce,
       // on accounts that authenticate through a provider and have no password
       // to re-present.
@@ -274,7 +276,7 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
 
     // --------------------------------------------------------------- cookies --
     advanced: {
-      // SEC-3, and it has to be said out loud: Better Auth defaults
+      // It has to be said out loud: Better Auth defaults
       // `disableOriginCheck` to **true** under `NODE_ENV=test`
       // (`context/create-context.mjs`), and with it the CSRF origin check and
       // — through its backward-compatibility arm — the Fetch-Metadata one.
@@ -284,16 +286,16 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
       // has. `false` here is what production already does; it is only the test
       // runs that change.
       disableOriginCheck: false,
-      // FR-AUTH-5: `Secure` follows the *issuer's* scheme, not the internal
+      // `Secure` follows the *issuer's* scheme, not the internal
       // one — behind a TLS-terminating proxy the app itself speaks http.
       useSecureCookies: paths.secureCookies,
       cookiePrefix: paths.secureCookies ? "__Secure-idp" : "idp",
       defaultCookieAttributes: {
         httpOnly: true,
         sameSite: "lax",
-        // Both are configuration since **D97**: `Path` defaults to `/` and
+        // Both are configuration : `Path` defaults to `/` and
         // `Domain` is absent, which keeps the cookie host-only — and host-only
-        // is what makes `firstParty` meaningful (FR-OIDC-14), so widening it
+        // is what makes `firstParty` meaningful, so widening it
         // with `server.cookieDomain` widens that rule to every host under the
         // domain. Named explicitly rather than left to Better Auth, whose own
         // defaults these now match, because the value has to agree with
@@ -312,34 +314,34 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
         ? { enabled: true, domain: paths.cookieDomain }
         : { enabled: false },
       ipAddress: {
-        // SEC-2: only honor forwarded headers when a proxy is trusted.
         disableIpTracking: false,
-        ...(file.server.trustProxy === false
-          ? {
-              // Not the empty list. With no header to read, Better Auth cannot
-              // resolve an address at all and every caller shares **one**
-              // rate-limit bucket — which is either so wide it limits nothing
-              // or so narrow it locks the whole deployment out at once. The
-              // edge stamps the real socket address into this private header
-              // and overwrites whatever a client sent, so reading it here is
-              // reading the socket, not the caller.
-              ipAddressHeaders: [SOCKET_ADDRESS_HEADER],
-            }
-          : {
-              ipAddressHeaders: ["x-forwarded-for"],
-              ...(Array.isArray(file.server.trustProxy)
-                ? { trustedProxies: file.server.trustProxy }
-                : {}),
-            }),
+        // ONE header, for every `trustProxy` value, and it
+        // is the private one the edge overwrites on every request with the
+        // address `clientIpFrom` resolved — socket under `false`, leftmost hop
+        // under `true`, rightmost untrusted hop under a CIDR list. Not the
+        // empty list (no header means one shared bucket for the whole
+        // deployment), and not `x-forwarded-for` any more: handed that header
+        // without `trustedProxies`, Better Auth's own resolver trusts a
+        // single-valued chain only and answers `null` for two hops, which is
+        // the sibling deployment's Traefik → Caddy shape — so every user there
+        // shared the `no-trusted-ip` bucket and ten wrong passwords locked
+        // the whole deployment out for a minute. Resolving here a second
+        // time, differently, is the defect; reading the edge's answer is the
+        // fix.
+        ipAddressHeaders: [SOCKET_ADDRESS_HEADER],
+        // Explicit rather than the library default it happens to equal: a
+        // /64 is one subscriber, and 2^64 buckets is no bucket. The IdP's own
+        // keys apply the same mask through `rateLimitKeyAddress`.
+        ipv6Subnet: 64,
       },
     },
 
     // ----------------------------------------------------------- rate limits --
     rateLimit: {
       enabled: file.rateLimit.enabled,
-      // SEC-2: database storage survives restarts and is replica-safe.
+      // database storage survives restarts and is replica-safe.
       storage: file.rateLimit.storage,
-      // SEC-2's named endpoints. Better Auth keys every bucket as `ip:path`
+      // the spec's named endpoints. Better Auth keys every bucket as `ip:path`
       // and `customRules` can only change the window and the maximum, never
       // the key — so the *per-client-id* half of the `/oauth2/token` rule
       // cannot live here. It lives in `routes/oauth2/token.ts` instead, over
@@ -350,19 +352,29 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
     // ------------------------------------------------------------- plugins ---
     plugins: [
       admin({
-        // FR-ROLE-1: the `default: true` entry of the catalog.
+        // the `default: true` entry of the catalog.
         defaultRole: config.defaultRole,
         adminRoles: [...config.adminRoles],
-        // FR-ADMIN-5: at most 1 h, and never against another admin.
+        // The catalog on the WRITE side. Without `roles` the
+        // plugin skips its catalog check entirely, so `/admin/set-role` and
+        // `/admin/update-user` stored any string — and a string with a comma
+        // in it became two roles the moment `splitRoles` read it back. Every
+        // catalog entry is here; the permission each carries is the plugin's
+        // own admin or user statement set, keyed on `admin.adminRoles` —
+        // which is also what its endpoints' `hasPermission` reads, so a
+        // deployment whose admin role is not spelled `admin` now passes that
+        // check rather than tripping over the plugin's built-in pair.
+        roles: buildAdminPluginRoles(config),
+        // at most 1 h, and never against another admin.
         impersonationSessionDuration: 3600,
         allowImpersonatingAdmins: false,
       }),
 
       jwt({
         jwks: {
-          // FR-OIDC-5: ES256 by default; RS256 is the only alternative Neon takes.
+          // ES256 by default; RS256 is the only alternative Neon takes.
           keyPairConfig: { alg: file.jwt.algorithm },
-          // SEC-10 / FR-OIDC-16: private keys are encrypted at rest with `secret`.
+          // private keys are encrypted at rest with `secret`.
           disablePrivateKeyEncryption: false,
           rotationInterval: file.jwt.rotationInterval,
           gracePeriod: config.jwksGracePeriodSeconds,
@@ -393,28 +405,28 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
           // Nothing noticed because nothing verified one until now.
           expirationTime: `${file.jwt.sessionToken.ttl} seconds`,
 
-          // FR-OIDC-7 / FR-KEY-3: the third token shape. `GET {baseUrl}
+          // the third token shape. `GET {baseUrl}
           // /api/auth/token` mints a JWT from a session — or from an API key,
           // since the api-key plugin turns one into a session — and it has to
           // carry the same user claims as an access token, or a resource
           // server would have to special-case where a token came from.
           //
           // The protocol claims differ on purpose, and only in the ways
-          // FR-OIDC-7's acceptance criterion allows: `sub`, `sid`, `azp` and
+          // the spec's acceptance criterion allows: `sub`, `sid`, `azp` and
           // `scope`.
           definePayload: (session) => sessionTokenPayload(session, config),
         },
       }),
 
-      // FR-2FA-1 / FR-KEY-1: a capability that is switched off has no
+      // a capability that is switched off has no
       // endpoints at all, not merely a hidden button. `deps.forSchema` keeps
       // both plugins on for schema generation, because the tables they own
-      // must exist in every deployment or the DM-1 drift gate would flip with
+      // must exist in every deployment or the spec drift gate would flip with
       // an operator's config file.
       ...(file.twoFactor.enabled || deps.forSchema
         ? [
             twoFactor({
-              // FR-2FA-1: the TOTP issuer label shown in the authenticator app.
+              // the TOTP issuer label shown in the authenticator app.
               issuer: config.twoFactorIssuer,
               // Config says days; 1.7.1 wants seconds. 0 disables the
               // trust-this-device option rather than trusting for ever.
@@ -423,13 +435,13 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
           ]
         : []),
 
-      // FR-KEY-2: wrapped so the owner's ban/approval state is re-checked on
+      // wrapped so the owner's ban/approval state is re-checked on
       // every use of a key, which the plugin itself never does.
       ...(file.apiKeys.enabled || deps.forSchema
         ? [
             gateApiKeyPlugin(
               apiKey({
-                // FR-KEY-1: hashed at rest, prefixed for recognizability.
+                // hashed at rest, prefixed for recognizability.
                 defaultPrefix: "idp_",
                 disableKeyHashing: false,
                 requireName: true,
@@ -442,13 +454,13 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
                   maxExpiresIn: Math.ceil(file.apiKeys.maxExpiresIn / 86_400),
                   disableCustomExpiresTime: false,
                 },
-                // FR-KEY-1: per-key rate limiting.
+                // per-key rate limiting.
                 rateLimit: {
                   enabled: true,
                   timeWindow: 60_000,
                   maxRequests: 120,
                 },
-                // FR-KEY-2: a key authenticates *as the owning user*, same roles.
+                // a key authenticates *as the owning user*, same roles.
                 enableSessionForAPIKeys: true,
                 storage: "database",
               }),
@@ -458,28 +470,26 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
         : []),
 
       oauthProvider({
-        // FR-OIDC-9: the gate chain starts at these two pages.
+        // the gate chain starts at these two pages.
         loginPage: paths.path(APP_ROUTES.login),
         consentPage: paths.path(APP_ROUTES.consent),
 
-        // FR-OIDC-1 (D26): these two grants and nothing else. `client_credentials`
+        // these two grants and nothing else. `client_credentials`
         // is absent here, so the token endpoint rejects it and discovery never
         // advertises it.
         grantTypes: ["authorization_code", "refresh_token"],
-
-        // FR-OIDC-13.
         accessTokenExpiresIn: file.oauth.accessTokenTtl,
         idTokenExpiresIn: file.oauth.idTokenTtl,
         codeExpiresIn: file.oauth.codeTtl,
         refreshTokenExpiresIn: file.oauth.refreshTokenTtl,
-        // FR-OIDC-13's reuse detection: zero seconds of tolerance, so any
+        // the spec's reuse detection: zero seconds of tolerance, so any
         // second use of a rotated refresh token is replay and revokes the
         // family. It is 1.7.1's default; stating it makes the requirement
         // visible where the other lifetimes are, rather than depending on a
         // default that could change.
         refreshTokenReuseInterval: 0,
 
-        // FR-OIDC-7: the one claims builder, for the access token and — when
+        // the one claims builder, for the access token and — when
         // the deployment asks for it — the ID token. The provider spreads
         // these *first* and then writes `sub`, `aud`, `client_id`, `azp`,
         // `scope`, `sid`, `iss`, `iat`, `exp` and `jti` over the top, so
@@ -494,7 +504,7 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
             }
           : {}),
 
-        // FR-OIDC-2: no dynamic registration, and client CRUD is denied for
+        // no dynamic registration, and client CRUD is denied for
         // every caller — the file is the source of truth.
         allowDynamicClientRegistration: false,
         allowUnauthenticatedClientRegistration: false,
@@ -504,7 +514,7 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
           config.clients.map((client) => client.clientId)
         ),
 
-        // FR-OIDC-6 / risk R2: resources are seeded from the effective registry
+        // resources are seeded from the effective registry
         // and each client is linked to the ones it may ask for.
         resources: config.resources.map((resource) => ({
           identifier: resource.identifier,
@@ -521,7 +531,7 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
 
         scopes: file.oauth.scopes,
 
-        // FR-OIDC-15: discovery describes *this* deployment. The scope list
+        // discovery describes *this* deployment. The scope list
         // is the configured one, and the claim list is what the builder can
         // actually emit — advertising a claim no token carries sends a
         // resource server looking for something that will never be there.
@@ -540,14 +550,14 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
           ],
         },
 
-        // SEC-10 / risk R4: **the same function object** the reconciler
+        // **the same function object** the reconciler
         // hashes with, so a secret written by `oauth_clients.jsonc` and a
         // secret presented at the token endpoint cannot disagree about how
         // they are compared.
         storeClientSecret: clientSecretStorage,
         storeTokens: "hashed",
 
-        // SEC-2: per-endpoint limits on top of the global ones.
+        // per-endpoint limits on top of the global ones.
         rateLimit: {
           token: { window: 60, max: 30 },
           authorize: { window: 60, max: 30 },
@@ -558,16 +568,16 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
         },
       }),
 
-      // DM-1: contributes `audit_log` and `pending_authorization` to the
+      // contributes `audit_log` and `pending_authorization` to the
       // generated schema, plus the approval endpoints Better Auth has no
-      // equivalent for (FR-SIGNUP-2).
+      // equivalent for.
       idpPlugin({
         config,
         audit: deps.audit,
         mailer: deps.mailer,
-        // FR-ADMIN-3: the last-admin and self-action rules, in front of Better
+        // the last-admin and self-action rules, in front of Better
         // Auth's own admin endpoints — so the admin API and the admin UI are
-        // refused the same things (FR-ADMIN-6).
+        // refused the same things.
         adminGuard: buildAdminGuard({
           config,
           database: deps.database,
@@ -590,7 +600,7 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
           audit: deps.audit,
           logger: deps.logger,
         }),
-        // Registered last on purpose: the SEC-6 trail has to see the response
+        // Registered last on purpose: the spec trail has to see the response
         // the caller gets, after every other plugin has had its say.
         afterHook: buildAfterHook({
           config,
@@ -601,10 +611,10 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
       }),
     ],
 
-    // FR-SIGNUP-2/3, FR-AUTH-1: the approval gate, the domain restriction and
+    // the approval gate, the domain restriction and
     // e-mail normalization, enforced beneath every path that creates a user or
     // a session.
-    // FR-AUTH-1: normalize addresses before Better Auth validates them.
+    // normalize addresses before Better Auth validates them.
     hooks: {
       before: buildBeforeHook({
         config,
@@ -638,7 +648,7 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
 }
 
 /**
- * The payload of a session JWT (FR-OIDC-7, FR-KEY-3).
+ * The payload of a session JWT.
  *
  * `azp` is the honest answer to "who is presenting this": an API-key exchange
  * is not the browser session it borrows, so it says so —
@@ -656,7 +666,7 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
  *
  * A non-active user gets nothing, whatever the session says:
  * `assertUserMaySignIn` runs on every mint, because a session or a key can
- * outlive the ban that should have ended it (FR-SIGNUP-2, FR-KEY-2).
+ * outlive the ban that should have ended it.
  */
 function sessionTokenPayload(
   session: { user: Record<string, unknown>; session: Record<string, unknown> },
@@ -665,8 +675,13 @@ function sessionTokenPayload(
   assertUserMaySignIn(session.user)
 
   const fromApiKey = isApiKeySession(session)
+  // A gateway with a `resource` asks for it as the audience; the
+  // plugin signs `payload.aud` when present and `jwt.audience` otherwise, so
+  // leaving the key out is what keeps every other mint on the spec's default.
+  const aud = requestedAudience()
   return {
     ...buildUserClaims(session.user, config),
+    ...(aud === undefined ? {} : { aud }),
     azp: fromApiKey ? config.file.apiKeys.tokenClientId : IDP_PLUGIN_ID,
     sid: String(session.session.id ?? ""),
     // Fixed rather than negotiated: a session token is not the product of an
@@ -676,7 +691,30 @@ function sessionTokenPayload(
 }
 
 /**
- * The stricter buckets SEC-2 names, in seconds and attempts.
+ * The role catalog in the admin plugin's shape: every `roles.jsonc` entry,
+ * with the plugin's own admin statements for the roles `admin.adminRoles`
+ * names and its (empty) user statements for the rest.
+ *
+ * The statements only decide the plugin's *own* `hasPermission` checks; the
+ * IdP's guard in front of `/admin/*` decides who is an administrator, from
+ * `adminRoles`, exactly as before. What the map is for is its **keys**: with
+ * it set, the plugin refuses a role it does not find, which is the whole
+ * catalog check.
+ */
+function buildAdminPluginRoles(
+  config: IdpConfig
+): NonNullable<NonNullable<Parameters<typeof admin>[0]>["roles"]> {
+  const adminRoles = new Set(config.adminRoles)
+  return Object.fromEntries(
+    config.roles.map((role) => [
+      role.name,
+      adminRoles.has(role.name) ? adminAc : userAc,
+    ])
+  )
+}
+
+/**
+ * The stricter buckets the spec names, in seconds and attempts.
  *
  * The numbers are chosen to be invisible to a person and expensive to a
  * script. Ten sign-in attempts a minute is more than anyone types and far less
@@ -695,7 +733,11 @@ const SEC2_RULES: Record<string, { window: number; max: number }> = {
   "/request-password-reset": { window: 300, max: 3 },
   "/forget-password": { window: 300, max: 3 },
   "/send-verification-email": { window: 300, max: 3 },
-  // FR-2FA-1: the second factor is six digits, so the attempt limit *is* the
+  // The reset token is the credential here, and presenting one is a guess at
+  // it. Ten in five minutes is a person retyping a password the policy
+  // refused, not a script.
+  "/reset-password": { window: 300, max: 10 },
+  // the second factor is six digits, so the attempt limit *is* the
   // security of it.
   "/two-factor/verify-totp": { window: 300, max: 10 },
   "/two-factor/verify-backup-code": { window: 300, max: 10 },

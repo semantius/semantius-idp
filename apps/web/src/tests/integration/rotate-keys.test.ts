@@ -1,5 +1,5 @@
 /**
- * Key rotation without a verification gap (FR-OIDC-16, risk R11).
+ * Key rotation without a verification gap.
  *
  * The property under test is a *timing* one, and it is the reason the module
  * exists: a key must be published before it signs anything. Better Auth on its
@@ -76,7 +76,7 @@ function rotate(ctx: TestContext, propagationSeconds: number) {
 }
 
 describe("rotateKeys", () => {
-  it("publishes the successor before it signs anything (risk R11)", async () => {
+  it("publishes the successor before it signs anything", async () => {
     const ctx = await context("rotate_publish_first")
     try {
       await publishedKeys(ctx)
@@ -120,7 +120,7 @@ describe("rotateKeys", () => {
       const result = await rotate(ctx, -1)
 
       const published = await publishedKeys(ctx)
-      // FR-OIDC-16: a token signed a second before the rotation has to keep
+      // a token signed a second before the rotation has to keep
       // verifying, which means the retired key stays in the set for the
       // grace period.
       expect(published).toContain(before)
@@ -156,7 +156,7 @@ describe("rotateKeys", () => {
     }
   })
 
-  it("records the rotation (SEC-6)", async () => {
+  it("records the rotation", async () => {
     const ctx = await context("rotate_audit")
     try {
       await publishedKeys(ctx)

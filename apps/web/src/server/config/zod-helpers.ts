@@ -1,7 +1,7 @@
 /**
  * Shared zod building blocks for the three config schemas.
  *
- * Placeholder substitution (CFG-2) runs before validation and always produces
+ * Placeholder substitution runs before validation and always produces
  * strings, so every non-string key accepts its string form too and coerces it
  * "to the schema type by strict JSON parsing". The escape hatch is invisible in
  * the exported JSON Schema (`io: "input"` renders the target type only), which
@@ -82,7 +82,7 @@ const DURATION_UNIT_SECONDS: Record<string, number> = {
 
 /**
  * Parses a duration into **seconds**. Accepts a plain number of seconds or a
- * `7d` / `15m` / `90d` style string, which is how the CFG-4 table writes them.
+ * `7d` / `15m` / `90d` style string, which is how the spec table writes them.
  */
 export function parseDurationSeconds(
   value: string | number
@@ -165,7 +165,7 @@ export function absoluteUri() {
 
 /**
  * An absolute http(s) URL with no trailing slash and no query/fragment — the
- * shape every issuer, redirect URI and resource identifier must have (SEC-1).
+ * shape every issuer, redirect URI and resource identifier must have.
  */
 export function absoluteUrl(options: { allowedProtocols?: string[] } = {}) {
   const protocols = options.allowedProtocols ?? ["http:", "https:"]

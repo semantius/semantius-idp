@@ -36,13 +36,13 @@ const LIST = "/admin/gateways"
 const CONSUMED = ["error", "draft"] as const
 
 /**
- * "Add a gateway", as a page (**D93**, FR-GW-7, **D91**).
+ * "Add a gateway", as a page.
  *
  * The client pages carry the argument; this one follows it, because the rule
  * is about addressability rather than size and a four-field form is not an
  * exception to it. What is worth saying here is what did *not* change: the
  * browser still refuses exactly what `config.jsonc` would, from the shared
- * rules in `lib/gateway-rules.ts` that the zod schema also calls (**D62**),
+ * rules in `lib/gateway-rules.ts` that the zod schema also calls,
  * and the server still refuses everything again.
  *
  * Success lands on the list, a refusal comes back here with the draft.
@@ -73,7 +73,7 @@ export const Route = createFileRoute("/admin/gateways/new")({
         const here = `${base}${HERE}`
         const list = `${base}${LIST}`
 
-        // Read before the gate (**D63**, **D81**).
+        // Read before the gate.
         const form = await readForm(request)
 
         const signedIn = await requireSession(runtime, request, HERE)
@@ -86,16 +86,18 @@ export const Route = createFileRoute("/admin/gateways/new")({
             name: form.name ?? "",
             url: form.url ?? "",
             requireAuth: form.requireAuth === "on",
+            audience: form.audience ?? "",
           },
           request
         )
         if (!result.ok) {
           // A duplicate name or a lost race — nothing the form could have
-          // known (**D62**). No `action` discriminator: one page, one draft.
+          // known. No `action` discriminator: one page, one draft.
           const draft = await stashDraft(runtime, {
             name: form.name,
             url: form.url,
             requireAuth: form.requireAuth,
+            audience: form.audience,
           })
           return redirectWithCookies(
             withError(withDraft(here, draft), adminErrorCodeFor(result))
@@ -117,8 +119,11 @@ function NewGatewayPage() {
     url: "",
     // Off by default: PostgREST and the Neon Data API both have an anonymous
     // role, so anonymous reach is the ordinary case and `requireAuth` is the
-    // exception an operator opts into (FR-GW-4).
+    // exception an operator opts into.
     requireAuth: false,
+    // Unset: the JWT carries `jwt.audience` unless the operator names a
+    // audience.
+    audience: "",
   })
 
   return (

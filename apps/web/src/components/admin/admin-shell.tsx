@@ -28,13 +28,13 @@ import type { Catalog } from "@/server/i18n"
 import type { UiContext } from "@/server/ui-context"
 
 /**
- * The page header `/admin/*` shares (FR-ADMIN-2).
+ * The page header `/admin/*` shares.
  *
  * Everything around the page — the navigation, the way back out, the sign-out,
  * the impersonation banner — moved up into `routes/admin.tsx`'s `SidebarLayout`
- * in **D82**. What is left here is the part that is genuinely per page: its
+ * with the sidebar shell. What is left here is the part that is genuinely per page: its
  * own heading, its description, and the buttons that belong beside the heading
- * rather than in the body, all of which are `PageHeader` since **D93**.
+ * rather than in the body, all of which are `PageHeader` .
  *
  * **The heading is an `<h1>` now.** The area's name used to be the chrome's
  * `<h1>` and this the `<h2>` under it; the breadcrumb took that row, and
@@ -45,7 +45,7 @@ import type { UiContext } from "@/server/ui-context"
  * without one would be a blank button.
  *
  * It takes the `UiContext` too, in the shape `accountNavItems` already uses:
- * with `admin.database` at `disabled` the page 404s (FR-ADMIN-7), so a link to
+ * with `admin.database` at `disabled` the page 404s, so a link to
  * it would be a link to a dead end.
  */
 
@@ -88,7 +88,7 @@ export function AdminShell({
   title: string
   description?: ReactNode
   /**
-   * Drop the `max-w-2xl` measure from the description (**D87**, **D95**).
+   * Drop the `max-w-2xl` measure from the description.
    *
    * **The subtitle takes the width of the page's own body.** The cap is right
    * for a paragraph — 65-odd characters is where prose stops being
@@ -98,8 +98,8 @@ export function AdminShell({
    * lines in a narrow column under a panel twice as wide, which reads as a
    * paragraph rather than as the subtitle it is.
    *
-   * D87 found that on `/admin/database` and fixed the one page; the owner
-   * found it again on `/admin/gateways` after **D95** had already shortened
+   * The console fix found that on `/admin/database` and fixed the one page; the owner
+   * found it again on `/admin/gateways` after the earlier fix had already shortened
    * that sentence to the length of its sibling's, which is the answer to
    * "shorten it" — a subtitle that fits on one line is not helped by a
    * measure, and the measure is what was putting it on two. All four list
@@ -110,7 +110,7 @@ export function AdminShell({
   actions?: ReactNode
   /**
    * The page owns the rest of the viewport instead of growing with its
-   * content (**D87**).
+   * content.
    *
    * `SidebarLayout` pins the shell to `h-svh` and hands this section's parent
    * `flex-1`, so a `flex-1 min-h-0` section here is exactly the height left
@@ -147,7 +147,7 @@ export function AdminShell({
  * heading is a real `<h3>`: the axe pass and several e2e selectors go through
  * heading roles, so the element cannot become a styled `<div>`.
  *
- * **The body spaces its own children** (**D95**). The registry's `CardContent`
+ * **The body spaces its own children**. The registry's `CardContent`
  * is `px-(--card-spacing)` and nothing else — a plain block, and preflight
  * zeroes every margin — so two fields in one card sat flush against each
  * other: on `/admin/clients/$id/edit` the "One per line" description under the

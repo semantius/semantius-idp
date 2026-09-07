@@ -5,7 +5,7 @@
  * Three build-time constants decide where a Start app lives: Vite's `base`,
  * the router's `basepath` and the server-function base. `server.baseUrl` is
  * runtime configuration, and one image has to serve at `/` and at `/idp`
- * (OPS-10, G6). Each constant is neutralised here or in the module it belongs
+ * (G6). Each constant is neutralised here or in the module it belongs
  * to:
  *
  *  - **assets** — the build uses `base: "./"`, so chunk-to-chunk imports and
@@ -23,9 +23,9 @@
  * sub-path mount; that layer strips the mount path before looking in
  * `dist/client`.
  *
- * **It is also the edge** (M11). Every request that reaches the application
+ * **It is also the edge**. Every request that reaches the application
  * passes through here exactly once, which makes it the only honest place to
- * mint the request id, resolve the client address and stamp the SEC-4 headers.
+ * mint the request id, resolve the client address and stamp the spec headers.
  * Doing it in `src/serve.ts` instead would leave `vite dev` without any of it,
  * so a developer would be looking at a different application from the one that
  * ships.
@@ -42,7 +42,7 @@ import { setRuntimeBasePath } from "./lib/base-path"
 import type { IdpConfig } from "./server/config/derive"
 import { loadConfig } from "./server/config/loader"
 import { loadDevEnv } from "./server/dev-env"
-import { SOCKET_ADDRESS_HEADER, clientIpFrom } from "./server/http/client-ip"
+import { resolveClientAddress } from "./server/http/client-ip"
 import { clientOrigins } from "./server/http/cors"
 import { resolveRequestIssuer } from "./server/oidc/request-issuer"
 import {
@@ -70,7 +70,7 @@ let edge: { config: IdpConfig; logger: Logger } | undefined
  * The mount path, read straight from the config folder.
  *
  * Deliberately not `getRuntime()`: this runs before the first request is even
- * routed, and building the runtime is the whole OPS-2 startup sequence
+ * routed, and building the runtime is the whole startup sequence
  * (migrations, bootstrap, key seeding). Only `server.baseUrl` is needed, and
  * `loadConfig` is synchronous.
  *
@@ -94,7 +94,7 @@ function resolveMountPath(): string {
  * Configuration and a logger for the edge, resolved once.
  *
  * Same reasoning as `resolveMountPath`: this runs before the first request is
- * routed, and `getRuntime()` is the whole OPS-2 start-up sequence. A broken
+ * routed, and `getRuntime()` is the whole start-up sequence. A broken
  * configuration yields `undefined`, and the edge then does the minimum — an id
  * and the headers — rather than refusing to serve the page that would explain
  * the breakage.
@@ -148,12 +148,12 @@ function unmountServerFnRequest(request: Request): Request {
 export type ServerEntry = {
   fetch: RequestHandler<Register>
   /**
-   * OPS-4, step one: `/readyz` starts answering 503 so the load balancer stops
+   * Shutdown, step one: `/readyz` starts answering 503 so the load balancer stops
    * choosing this instance. In-flight requests are untouched.
    */
   beginDraining: () => void
   /**
-   * OPS-4, step two: closes the database pool. Called by `src/serve.ts` only
+   * Shutdown, step two: closes the database pool. Called by `src/serve.ts` only
    * after the in-flight requests have finished, because closing it under one
    * of them is how an orderly rollout produces 500s.
    */
@@ -167,16 +167,22 @@ const entry: ServerEntry = {
     const trustProxy = context?.config.file.server.trustProxy ?? false
 
     const requestId = requestIdFrom(request, trustProxy)
-    const ipAddress = clientIpFrom(request, trustProxy, {
-      socketAddress: request.headers.get(SOCKET_ADDRESS_HEADER),
-    })
+    // The one place the caller's address is resolved: the answer is
+    // written back into the private header, so Better Auth's limiter and the
+    // gateway proxy read it rather than resolving `X-Forwarded-For` again —
+    // and differently — for themselves. `inbound` is what the handler gets.
+    const { request: inbound, ipAddress } = resolveClientAddress(
+      request,
+      trustProxy
+    )
     const startedAt = Date.now()
 
     // Mutable on purpose: a loader can leave a document status on it, and
-    // this is where that is applied (FR-ROLE-3, see `setDocumentStatus`).
+    // this is where that is applied (see `setDocumentStatus`).
     const requestContext: RequestContext = {
       requestId,
       ipAddress: anonymizeIp(ipAddress),
+      ...(ipAddress ? { clientIp: ipAddress } : {}),
       // Resolved ONCE, here at the edge, so every issuer-derived answer this
       // request produces — the JWT `iss`, discovery, the `{host}` expansions —
       // reads the same value. The boot issuer unless `server.dynamicIssuer`
@@ -185,6 +191,7 @@ const entry: ServerEntry = {
         ? {
             issuer: resolveRequestIssuer(context.config.base, request, {
               trustProxy,
+              allowedHosts: context.config.file.server.allowedHosts,
             }),
           }
         : {}),
@@ -196,7 +203,7 @@ const entry: ServerEntry = {
     let formAction: string[] = []
     const rendered = await withRequestContext(requestContext, () => {
       formAction = context ? [...clientOrigins(context.config)] : []
-      return handler(unmountServerFnRequest(request), ...rest)
+      return handler(unmountServerFnRequest(inbound), ...rest)
     })
 
     // `renderRouterToStream` stamps the document with the *router's* status —
@@ -233,7 +240,7 @@ const entry: ServerEntry = {
         https: context?.config.base.secure ?? false,
         basePath: base,
         // The registered redirect origins, so a completed authorization can
-        // actually reach the client that asked for it (SEC-4, D46). Computed
+        // actually reach the client that asked for it. Computed
         // inside the request scope above, where `{host}` templates expand.
         formAction,
       }

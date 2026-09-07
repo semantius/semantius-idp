@@ -1,10 +1,10 @@
 import { defineConfig, devices } from "@playwright/test"
 
 /**
- * End-to-end tests against the **built image** (TST-6, M13).
+ * End-to-end tests against the **built image**.
  *
  * Two projects, because the sub-path deployment is a different application as
- * far as every URL is concerned (OPS-10, risk R3) and the only honest way to
+ * far as every URL is concerned and the only honest way to
  * know it works is to drive it:
  *
  * - **host-root** — the image on `http://127.0.0.1:3410`, the ordinary case.
@@ -20,7 +20,7 @@ import { defineConfig, devices } from "@playwright/test"
  *
  * The stacks are brought up by `e2e/stack.ts` in `globalSetup`, each with its
  * own compose project name and a **generated** config folder, so a run can
- * never touch the operator's stack or the persistent `idp` schema (P0'.2).
+ * never touch the operator's stack or the persistent `idp` schema.
  */
 
 const HOST_ROOT_PORT = Number(process.env.E2E_PORT ?? 3410)
@@ -52,7 +52,7 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   // `github` is there so a failure is **readable without admin rights**
-  // (**D75**). The HTML report is uploaded as an artifact and downloading one
+  // . The HTML report is uploaded as an artifact and downloading one
   // needs a token; job logs need admin. A Playwright failure otherwise reaches
   // an outside reader as `Process completed with exit code 1` and nothing
   // else, which is exactly the wall the container smoke test hit. The `github`
@@ -89,7 +89,7 @@ export default defineConfig({
       // while the first is still signing people in only makes failures
       // harder to read.
       dependencies: ["host-root"],
-      // **The axe scan runs once, at the host root** (**D98**). It was 131 s
+      // **The axe scan runs once, at the host root**. It was 131 s
       // of a 519 s suite — a quarter of it — for three tests that scan ~25
       // page states each, and the second pass could not disagree with the
       // first: axe reads contrast, labels, roles and accessible names off the

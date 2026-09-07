@@ -9,7 +9,7 @@ import {
   translator,
 } from "@/server/i18n"
 
-describe("FR-I18N-1 locale resolution", () => {
+describe("locale resolution", () => {
   it("prefers ui_locales, then the cookie, then Accept-Language, then the config", () => {
     // With only en-US shipping, the observable behavior is that each source is
     // consulted and an unsupported value never wins.
@@ -76,11 +76,11 @@ describe("catalog", () => {
     expect(t.email.verify.subject("Acme IdP")).toContain("Acme IdP")
   })
 
-  it("gives the same neutral sign-in failure whatever went wrong (SEC-7)", () => {
+  it("gives the same neutral sign-in failure whatever went wrong", () => {
     expect(t.auth.signIn.failed).not.toMatch(/unknown|not found|no account/i)
   })
 
-  it("covers all nine e-mail templates (FR-MAIL-1)", () => {
+  it("covers all nine e-mail templates", () => {
     const templates = [
       "verify",
       "resetPassword",
@@ -97,7 +97,7 @@ describe("catalog", () => {
     }
   })
 
-  it("describes every default scope for the consent page (FR-OIDC-10)", () => {
+  it("describes every default scope for the consent page", () => {
     for (const scope of ["openid", "profile", "email", "offline_access"]) {
       expect(t.consent.scopes[scope]).toBeTruthy()
     }

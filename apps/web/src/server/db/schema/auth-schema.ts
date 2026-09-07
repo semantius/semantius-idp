@@ -2,11 +2,11 @@
  * GENERATED FILE — do not edit.
  *
  * Produced by `bun run scripts/generate-auth-schema.ts` from the installed
- * Better Auth and the plugin list in `src/server/auth/instance.ts` (DM-1).
+ * Better Auth and the plugin list in `src/server/auth/instance.ts`.
  * CI regenerates it and fails on any difference, so the committed migrations
  * can never describe a schema the running code does not expect.
  *
- * Every table is scoped to a Postgres schema (DM-4). The name is a *runtime*
+ * Every table is scoped to a Postgres schema. The name is a *runtime*
  * value — `database.schema`, default `idp` — so the tables come from a
  * factory the database client calls once, and the migrator rewrites the
  * canonical schema identifier in the committed SQL to match.
@@ -32,7 +32,7 @@ import {
 export const CANONICAL_SCHEMA_NAME = "idp"
 
 /**
- * Builds every table inside `schemaName` (CFG-4 `database.schema`, DM-4).
+ * Builds every table inside `schemaName` (`database.schema`).
  *
  * Drizzle needs the schema name when the table is *defined*, so the tables are
  * produced by a factory the database client calls once with the configured
@@ -442,6 +442,7 @@ export function createAuthSchema(schemaName: string) {
       name: text("name").notNull().unique(),
       url: text("url").notNull(),
       requireAuth: boolean("require_auth").default(false),
+      audience: text("audience"),
       source: text("source").notNull(),
       enabled: boolean("enabled").default(true),
       createdAt: timestamp("created_at").defaultNow().notNull(),

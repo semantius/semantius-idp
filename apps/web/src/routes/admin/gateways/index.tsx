@@ -40,8 +40,7 @@ import { getRuntime } from "@/server/runtime"
 const HERE = "/admin/gateways"
 
 /**
- * `/admin/gateways` — the authenticating reverse proxies (FR-GW-7, **D91**,
- * **D92**).
+ * `/admin/gateways` — the authenticating reverse proxies.
  *
  * Two kinds of gateway live in one table, and the difference is visible rather
  * than inferred:
@@ -61,9 +60,9 @@ const HERE = "/admin/gateways"
  * Nothing secret is ever shown here, which is why there is no one-shot stash:
  * a gateway holds a URL and two flags, and the URL is masked password-only on
  * the way out in case a row written by hand carries userinfo — and otherwise
- * returned byte for byte, which it was not until D93's first commit.
+ * returned byte for byte, which it was not until the spec's first commit.
  *
- * **Create and edit are pages** (**D93**): `/admin/gateways/new` and
+ * **Create and edit are pages**: `/admin/gateways/new` and
  * `/admin/gateways/$name/edit`, each owning the POST it used to send here.
  * What is left is enable/disable and remove — confirmations, which stay
  * modals — and the list itself. A manually-added gateway's name links to its
@@ -92,9 +91,9 @@ export const Route = createFileRoute("/admin/gateways/")({
         const base = runtime.config.base.basePath
         const here = `${base}${HERE}`
 
-        // Read before the gate, which D63 established and **D81** kept.
+        // Read before the gate, which the spec established and the spec kept.
         // Nothing left here stashes a draft — create and edit are pages of
-        // their own (**D93**) — but the order is the house one, and a handler
+        // their own — but the order is the house one, and a handler
         // that reads after the gate is the one that has to remember why.
         const form = await readForm(request)
 
@@ -135,7 +134,7 @@ export const Route = createFileRoute("/admin/gateways/")({
 
         // Anything else is a field somebody hand-posted: this route answers
         // for the two confirmations above, and create and update moved to
-        // their own pages (**D93**).
+        // their own pages.
         return redirectWithCookies(withError(here, "invalid_request"))
       },
     },
@@ -152,7 +151,7 @@ function GatewaysPage() {
       description={t.admin.gateways.description}
       wideDescription
       actions={
-        // A link, not a dialog trigger (**D93**). `new` is a static segment
+        // A link, not a dialog trigger. `new` is a static segment
         // and `$name` a dynamic one, and `isValidGatewayName` admits `new` —
         // so the static segment winning is what keeps a gateway called `new`
         // editable rather than shadowed.
@@ -182,8 +181,7 @@ function GatewaysPage() {
               <TableRow>
                 {/* The actions column carries no visible heading — a menu
                     button in every row needs no label above it — but a `<th>`
-                    with nothing in it is a column a screen reader cannot name
-                    (**D80**). First column and pinned, like `/admin/clients`. */}
+                    with nothing in it is a column a screen reader cannot name. First column and pinned, like `/admin/clients`. */}
                 <TableHead className="sticky left-0 w-px bg-card">
                   <span className="sr-only">{t.admin.actions.title}</span>
                 </TableHead>
@@ -203,13 +201,13 @@ function GatewaysPage() {
                   <TableCell className="sticky left-0 bg-card transition-colors [tr:is(:hover,:has([aria-expanded=true]))_&]:bg-[color-mix(in_oklab,var(--muted)_50%,var(--card))]">
                     {/* A file-managed row has no menu at all, rather than a
                         menu of things it may not do: an edit here is one the
-                        next restart would silently undo (FR-GW-2). */}
+                        next restart would silently undo. */}
                     {gateway.source === "manual" ? (
                       <GatewayRowActions t={t} gateway={gateway} />
                     ) : null}
                   </TableCell>
                   <TableCell>
-                    {/* **D93**: the name is the way in, for the reason
+                    {/* the name is the way in, for the reason
                         `/admin/clients` gives — Edit lived only inside the
                         per-row menu, which is the first, pinned column. A
                         config-owned name stays plain text: there is nothing

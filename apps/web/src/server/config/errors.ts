@@ -1,5 +1,5 @@
 /**
- * Configuration error reporting (CFG-5).
+ * Configuration error reporting.
  *
  * Every problem found while loading the config folder is collected as a
  * {@link ConfigIssue} so that **all** errors can be reported in one pass
@@ -10,7 +10,7 @@
 /**
  * The *logical* identity of a config file, not the name on disk.
  *
- * Since **D60** each file may be spelled `.jsonc` (canonical) or `.json`
+ * each file may be spelled `.jsonc` (canonical) or `.json`
  * (still accepted), so the two are no longer the same string. Retyping this
  * union through the five modules that carry it — and the two dozen literals in
  * the cross-checks that name a file — would have bought nothing but a wider
@@ -69,7 +69,7 @@ export function formatIssues(
   if (issues.length === 0) return "Invalid configuration."
   const lines = issues.map((issue) => {
     // The operator has to be able to open what this names, so it is the file
-    // on disk — `config.jsonc` or `config.json`, whichever was read (D60).
+    // on disk — `config.jsonc` or `config.json`, whichever was read.
     const file = names[issue.file] ?? issue.file
     const where = issue.pointer === "" ? file : `${file}${issue.pointer}`
     const hint = issue.hint ? `\n      hint: ${issue.hint}` : ""

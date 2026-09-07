@@ -1,5 +1,5 @@
 /**
- * The branding file server's refusals (CFG-1).
+ * The branding file server's refusals.
  *
  * This is the only place in the deployment where a path from a URL becomes a
  * path on disk, so the tests are written as attacks rather than as usage. The
@@ -8,7 +8,14 @@
 
 import { describe, expect, it } from "vitest"
 
-import { brandingContentType, safeBrandingPath } from "@/server/branding"
+import {
+  BRANDING_CSP,
+  brandingContentType,
+  brandingResponseHeaders,
+  brandingRoot,
+  forgetBrandingRoot,
+  safeBrandingPath,
+} from "@/server/branding"
 
 describe("what it will serve", () => {
   it("accepts a plain file in the branding folder", () => {
@@ -60,5 +67,71 @@ describe("what it refuses", () => {
 
   it("refuses a double extension that ends in something unknown", () => {
     expect(safeBrandingPath("logo.svg.html")).toBeUndefined()
+  })
+})
+
+/**
+ * What every branding response carries.
+ *
+ * `image/svg+xml` is a document: opened top-level, an SVG runs its own
+ * `<script>` on this origin, and the site-wide policy is attached only to
+ * `text/html`. So the file server writes its own, and it is the strictest one
+ * there is — nothing may load and the document is sandboxed — on the served
+ * file and on the refusal alike.
+ */
+describe("what every response carries", () => {
+  it("attaches a no-op CSP and nosniff to a served file", () => {
+    const headers = brandingResponseHeaders("logo.svg")
+    expect(headers["Content-Security-Policy"]).toBe(BRANDING_CSP)
+    expect(BRANDING_CSP).toBe("default-src 'none'; sandbox")
+    expect(headers["X-Content-Type-Options"]).toBe("nosniff")
+    expect(headers["Content-Type"]).toBe("image/svg+xml")
+  })
+
+  it("attaches the same CSP to a refusal", () => {
+    const headers = brandingResponseHeaders(undefined)
+    expect(headers["Content-Security-Policy"]).toBe(BRANDING_CSP)
+    expect(headers["Cache-Control"]).toBe("no-store")
+    expect(headers["Content-Type"]).toBeUndefined()
+  })
+})
+
+/**
+ * The branding folder is resolved once per process: the config is
+ * mounted read-only and re-reading and re-validating three files for every
+ * favicon request bought nothing but latency. A configuration that cannot be
+ * loaded is *not* remembered — the answer is a 404 either way, and the next
+ * request asks again.
+ */
+describe("where it looks", () => {
+  it("consults the configuration once and remembers the answer", () => {
+    forgetBrandingRoot()
+    let loads = 0
+    const load = () => {
+      loads += 1
+      return { dir: "/config" }
+    }
+    const first = brandingRoot(load)
+    const second = brandingRoot(load)
+    expect(first).toBeDefined()
+    expect(second).toBe(first)
+    expect(loads).toBe(1)
+    // Still remembered when nothing is passed: the memo is the module's, not
+    // the loader's.
+    expect(brandingRoot(() => ({ dir: "/somewhere-else" }))).toBe(first)
+    forgetBrandingRoot()
+  })
+
+  it("does not remember a configuration it could not load", () => {
+    forgetBrandingRoot()
+    let loads = 0
+    const broken = () => {
+      loads += 1
+      throw new Error("config.jsonc: unreadable")
+    }
+    expect(brandingRoot(broken)).toBeUndefined()
+    expect(brandingRoot(broken)).toBeUndefined()
+    expect(loads).toBe(2)
+    forgetBrandingRoot()
   })
 })

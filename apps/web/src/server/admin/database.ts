@@ -1,5 +1,5 @@
 /**
- * The engine behind `/admin/database` (FR-ADMIN-7): schema introspection and
+ * The engine behind `/admin/database`: schema introspection and
  * one-statement SQL execution against this deployment's own Postgres.
  *
  * Nothing here is reachable unless `admin.database` is set to something other
@@ -16,7 +16,7 @@
  * next piece of ordinary application traffic that borrows the connection. So
  * the console gets its own dedicated `max: 1` handles, built in `runtime.ts`:
  * one on `database.url` for `read` and one on `database.directUrl` for
- * `read-write` (D74's mutual fallback means a single-endpoint deployment
+ * `read-write` (the spec's mutual fallback means a single-endpoint deployment
  * resolves both names to the same string). Any poisoning a clever statement
  * manages is then contained to the console's own connection. Not the `locking`
  * handle either — its two connections are reserved for advisory locks.
@@ -33,10 +33,25 @@
  * die on `25006`, and the transaction is still the authority the component's
  * own client-side keyword guard explicitly is not.
  *
- * A dedicated read-only Postgres *role* was considered and rejected (D83): the
- * IdP owns one role, creating a second is a deployment-invasive change to
- * every install's provisioning, and the transaction-level guarantee is the
- * same one the role would give.
+ * **What the READ ONLY transaction does and does not constrain**. It refuses writes to tables,
+ * sequences and the catalog — `25006` for an `INSERT`, a writable CTE, a
+ * `DO` block that writes. It constrains nothing about the *role*: every
+ * function the role may call still runs, and a Postgres superuser may call
+ * `pg_read_file('/etc/passwd')`, `pg_ls_dir('/')` and
+ * `COPY (select 1) TO PROGRAM 'id'` inside a READ ONLY transaction, all of
+ * which were confirmed on 2026-09-02 against the reference compose file's
+ * bootstrap user, and the last of which is arbitrary command execution on
+ * the database host. So the transaction is the write barrier and the
+ * **role** is the privilege boundary, and the spec's claim that the first gives
+ * "the same guarantee" a dedicated role would is false for any deployment
+ * whose connection is a superuser or a member of `pg_read_server_files`,
+ * `pg_write_server_files` or `pg_execute_server_program`. Start-up probes
+ * `pg_roles.rolsuper` for the console's connections and warns
+ * (`database.console_as_superuser`); the reference compose file provisions a
+ * NOSUPERUSER application role; and a deployment that cannot do that should
+ * leave `admin.database` at `disabled`. A dedicated *read-only* role is still
+ * not required — the transaction handles writes — which is the half of the earlier decision
+ * that stands.
  */
 
 // The default export, and `postgres.PostgresError` off it rather than a named
@@ -52,6 +67,136 @@ import { quoteIdentifier } from "../db/client"
 
 /** How long any one statement may run. `SET LOCAL`, so it is pooler-safe. */
 const STATEMENT_TIMEOUT_MS = 10_000
+
+/**
+ * A literal longer than this is replaced in the audited statement.
+ *
+ * Eight keeps `'active'`, `'admin'`, `'pending'` and a role name readable in
+ * the trail — the values that say what an administrator was looking for —
+ * and removes anything long enough to be a password, a token or an address.
+ */
+const AUDITED_LITERAL_MAX = 8
+
+/** A word that says the values around it are credentials. Matched inside identifiers too. */
+const SECRET_KEYWORD = /password|secret|token/i
+
+const REDACTED_LITERAL = "'[redacted]'"
+
+/**
+ * The statement as the audit trail may keep it.
+ *
+ * `redactFields` masks by field *name* and the field is `query`, so the
+ * recorded statement went into `audit_log.metadata` and stdout verbatim,
+ * pasted literals included. This is the value-level scrub. What it removes:
+ * string literals longer than {@link AUDITED_LITERAL_MAX} characters; every
+ * string literal after a `password`, `secret` or `token` keyword, whatever
+ * its length, because `set password = 'abc'` is short and is still the
+ * password; dollar-quoted bodies whole, because they are how a function body
+ * or a pasted blob arrives; and comments, because `-- password: hunter2` is a
+ * realistic thing to paste. What it keeps: keywords, identifiers (quoted or
+ * not), numbers, operators and short literals, so the row still reads as
+ * "who ran what". Unterminated quoting runs to the end of the statement and
+ * is redacted the same way, so a cut cannot expose the open half.
+ */
+export function scrubStatementForAudit(statement: string): string {
+  let out = ""
+  let i = 0
+  let afterSecretKeyword = false
+  const n = statement.length
+
+  while (i < n) {
+    const ch = statement[i]!
+
+    if (ch === "-" && statement[i + 1] === "-") {
+      const end = statement.indexOf("\n", i)
+      i = end === -1 ? n : end
+      continue
+    }
+    if (ch === "/" && statement[i + 1] === "*") {
+      const end = statement.indexOf("*/", i + 2)
+      i = end === -1 ? n : end + 2
+      continue
+    }
+
+    if (ch === '"') {
+      const end = pastClosingQuote(statement, i + 1, '"', false)
+      const identifier = statement.slice(i, end)
+      if (SECRET_KEYWORD.test(identifier)) afterSecretKeyword = true
+      out += identifier
+      i = end
+      continue
+    }
+
+    if (ch === "$") {
+      const tag = /^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/.exec(statement.slice(i))
+      if (tag) {
+        const close = statement.indexOf(tag[0], i + tag[0].length)
+        out += `${tag[0]}[redacted]${tag[0]}`
+        i = close === -1 ? n : close + tag[0].length
+        continue
+      }
+    }
+
+    const escapeString = (ch === "E" || ch === "e") && statement[i + 1] === "'"
+    if (ch === "'" || escapeString) {
+      const open = escapeString ? i + 1 : i
+      const end = pastClosingQuote(statement, open + 1, "'", escapeString)
+      const body = statement.slice(open + 1, Math.max(open + 1, end - 1))
+      out +=
+        afterSecretKeyword || body.length > AUDITED_LITERAL_MAX || end > n
+          ? REDACTED_LITERAL
+          : statement.slice(i, end)
+      i = end
+      continue
+    }
+
+    if (/[A-Za-z_]/.test(ch)) {
+      let j = i + 1
+      while (j < n && /[A-Za-z0-9_]/.test(statement[j]!)) j++
+      const word = statement.slice(i, j)
+      if (SECRET_KEYWORD.test(word)) afterSecretKeyword = true
+      out += word
+      i = j
+      continue
+    }
+
+    out += ch
+    i++
+  }
+
+  return out
+}
+
+/**
+ * The index just past the quote that closes the one before `from`, treating a
+ * doubled quote as an escaped one and, for `E'…'`, a backslash as escaping
+ * the next character. Returns `length + 1` when nothing closes it, which the
+ * caller reads as "unterminated" and redacts.
+ */
+function pastClosingQuote(
+  text: string,
+  from: number,
+  quote: string,
+  backslashEscapes: boolean
+): number {
+  let i = from
+  while (i < text.length) {
+    const ch = text[i]!
+    if (backslashEscapes && ch === "\\") {
+      i += 2
+      continue
+    }
+    if (ch === quote) {
+      if (text[i + 1] === quote) {
+        i += 2
+        continue
+      }
+      return i + 1
+    }
+    i++
+  }
+  return text.length + 1
+}
 
 /** Rows past this are dropped and the caller is told (`truncated`). */
 const MAX_ROWS = 500
@@ -174,7 +319,7 @@ export interface RawIntrospection {
 }
 
 /**
- * Every schema on this database the console's role may look into (D84).
+ * Every schema on this database the console's role may look into.
  *
  * `has_schema_privilege` rather than a bare listing: a schema the role cannot
  * read would introspect to an empty tree and look like an empty schema, which
@@ -217,7 +362,7 @@ export async function listSchemas(handle: DbHandle): Promise<string[]> {
  *
  * `schemaName` defaults to the handle's — the deployment's own
  * `database.schema` — and the caller passes another only after checking it
- * against `listSchemas` (D84). The check is not what makes this safe (the
+ * against `listSchemas`. The check is not what makes this safe (the
  * name is a bind parameter either way); it is what keeps a typo from
  * rendering an empty tree that looks like an empty schema.
  *

@@ -1,5 +1,5 @@
 /**
- * Which tokens a sign-out takes with it (FR-AUTH-6, FR-OIDC-12).
+ * Which tokens a sign-out takes with it.
  *
  * `session.revokeOAuthTokensOnLogout` is off by default, and the scope when it
  * is on is the part worth testing: signing out on a laptop must not log the
@@ -135,7 +135,7 @@ async function liveRefreshTokens(context: TestContext): Promise<number> {
   return rows.length
 }
 
-describe("revokeOAuthTokensOnLogout (FR-AUTH-6)", () => {
+describe("revokeOAuthTokensOnLogout", () => {
   it("revokes only the tokens the session obtained", async () => {
     const context = await contextWith("logout_revoke_on", {
       revokeOAuthTokensOnLogout: true,
@@ -177,7 +177,7 @@ describe("revokeOAuthTokensOnLogout (FR-AUTH-6)", () => {
     }
   })
 
-  it("records what it revoked (SEC-6)", async () => {
+  it("records what it revoked", async () => {
     const context = await contextWith("logout_revoke_audit", {
       revokeOAuthTokensOnLogout: true,
     })
@@ -204,10 +204,10 @@ describe("revokeOAuthTokensOnLogout (FR-AUTH-6)", () => {
 })
 
 /**
- * "Sign them out everywhere" means everywhere, whoever asks (**D67**).
+ * "Sign them out everywhere" means everywhere, whoever asks.
  *
  * `docs/admin-api.md` documents `/admin/revoke-user-sessions` as signing a
- * user out everywhere, and FR-ADMIN-6 makes the admin API a supported
+ * user out everywhere, and the spec makes the admin API a supported
  * interface — so the promise has to hold for a `curl` and not only for the
  * button on `/admin/users/:id`.
  *
@@ -218,7 +218,7 @@ describe("revokeOAuthTokensOnLogout (FR-AUTH-6)", () => {
  * minting access tokens. The revocation moved into the guard's `after` hook,
  * which runs for every caller, and this is the test that says so.
  */
-describe("an administrator revoking sessions (FR-OIDC-12, D67)", () => {
+describe("an administrator revoking sessions", () => {
   /** An administrator with a credential, made the way `admin.test.ts` does. */
   async function makeAdmin(context: TestContext): Promise<string> {
     const inner = await context.auth.$context
@@ -283,14 +283,14 @@ describe("an administrator revoking sessions (FR-OIDC-12, D67)", () => {
 })
 
 /**
- * The two properties `revokeForSession` has to hold on its own (**D101**).
+ * The two properties `revokeForSession` has to hold on its own.
  *
  * Both are about the WHERE rather than about a caller: a revocation that a
  * refresh can walk out from under is not a revocation, and a scope enforced
  * only by whoever calls it is one careless caller away from reaching the wrong
  * account.
  */
-describe("revokeForSession's scope (D101)", () => {
+describe("revokeForSession's scope", () => {
   /** The refresh token an authorization-code exchange handed back. */
   async function grantReturning(
     context: TestContext,

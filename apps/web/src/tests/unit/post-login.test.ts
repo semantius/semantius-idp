@@ -7,7 +7,7 @@ import { resolveSignInDestination } from "@/server/http/post-login"
 import { baseConfig } from "@/tests/fixtures/config-files"
 
 /**
- * FR-AUTH-1 / D28 — the post-sign-in precedence, as a matrix.
+ * the post-sign-in precedence, as a matrix.
  *
  * The whole reason this lives in its own module is that three call sites have
  * to agree on it (sign-in, the 2FA challenge, and the far end of a forced
@@ -107,7 +107,7 @@ describe("resolveSignInDestination — the configured default", () => {
   })
 })
 
-describe("resolveSignInDestination — returnTo stays hostile-input (SEC-3)", () => {
+describe("resolveSignInDestination — returnTo stays hostile-input", () => {
   const config = atSubPath()
 
   it.each([

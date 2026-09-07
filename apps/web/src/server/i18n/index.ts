@@ -1,12 +1,12 @@
 /**
- * Locale resolution and the typed message catalog (FR-I18N-1).
+ * Locale resolution and the typed message catalog.
  *
  * Only `en-US` ships in v1. The structure is what has to be ready: adding a
  * locale must not require code changes outside the catalog, so
  * {@link SUPPORTED_LOCALES} and {@link CATALOGS} are the only two places a new
  * language touches, and its object is type-checked against the en-US shape.
  *
- * Resolution order (FR-I18N-1):
+ * Resolution order:
  *   `ui_locales` on the authorize request → locale cookie → `Accept-Language`
  *   → `site.defaultLocale`.
  */
@@ -41,7 +41,7 @@ export interface LocaleSources {
 }
 
 /**
- * Picks the first supported locale from the sources, in FR-I18N-1's order.
+ * Picks the first supported locale from the sources, in the spec's order.
  *
  * Matching is case-insensitive and falls back from a full tag to its language
  * (`de-AT` → `de`), so a browser asking for a regional variant of a language we

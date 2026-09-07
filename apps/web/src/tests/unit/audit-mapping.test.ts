@@ -11,7 +11,7 @@ import {
 } from "@/server/admin/guard"
 
 /**
- * SEC-6 — which endpoint produces which audit event.
+ * which endpoint produces which audit event.
  *
  * Three of the twenty-nine actions were being written before this hook
  * existed: the two the approval endpoints emit, and `signup.created` from the
@@ -51,13 +51,13 @@ describe("auditEventFor", () => {
       action: "signup.created",
       outcome: "success",
     })
-    // No `signup.failed` exists in the SEC-6 action list, and a refused
+    // No `signup.failed` exists in the spec action list, and a refused
     // registration created nothing to point an event at.
     expect(auditEventFor("/sign-up/email", false)).toBeUndefined()
   })
 
   it("records a reset request whether or not the address exists", () => {
-    // SEC-7 makes the *response* uniform. The attempt still belongs on record.
+    // the spec makes the *response* uniform. The attempt still belongs on record.
     for (const path of ["/forget-password", "/request-password-reset"]) {
       expect(auditEventFor(path, true)?.action).toBe("password.reset_requested")
       expect(auditEventFor(path, false)?.action).toBe(
@@ -87,7 +87,7 @@ describe("auditEventFor", () => {
     }
   })
 
-  it("does not call a 2FA challenge a sign-in (FR-2FA-1)", () => {
+  it("does not call a 2FA challenge a sign-in", () => {
     // The password was right, but Better Auth answered with a challenge and
     // no session. Recording success here would put "signed in" in the trail
     // for someone who may still fail the second factor.
@@ -115,7 +115,7 @@ describe("auditEventFor", () => {
     }
   })
 
-  it("records enrollment only when it succeeded (FR-2FA-1)", () => {
+  it("records enrollment only when it succeeded", () => {
     expect(auditEventFor("/two-factor/enable", true)?.action).toBe(
       "twofactor.enabled"
     )
@@ -127,7 +127,7 @@ describe("auditEventFor", () => {
     expect(auditEventFor("/two-factor/disable", false)).toBeUndefined()
   })
 
-  it("records a token that was actually issued (FR-OIDC-5)", () => {
+  it("records a token that was actually issued", () => {
     expect(auditEventFor("/oauth2/token", true)?.action).toBe("token.issued")
     // A refused grant issued nothing, and the client already has the
     // protocol error; a `token.issued` row with outcome "failure" would read
@@ -153,7 +153,7 @@ describe("auditEventFor", () => {
   })
 })
 
-describe("a redirect is a success, not a failure (SEC-6)", () => {
+describe("a redirect is a success, not a failure", () => {
   /** The shape better-calls own `ctx.redirect` throws. */
   function redirect(statusCode: number): Error {
     return Object.assign(new Error("redirect"), { statusCode })
@@ -174,11 +174,11 @@ describe("a redirect is a success, not a failure (SEC-6)", () => {
 })
 
 /**
- * The `/admin/*` half of the trail (**D66**).
+ * The `/admin/*` half of the trail.
  *
  * `guard.ts` owns it. Three endpoints produced no row at all before — so a
  * `curl` to `/admin/create-user` created an account and left no trace, which
- * FR-ADMIN-6 does not allow of a supported interface — and a fourth,
+ * the spec does not allow of a supported interface — and a fourth,
  * `impersonation.stopped`, was declared and never written by anything.
  *
  * The two degradations are asserted rather than only commented: the target of
@@ -217,7 +217,7 @@ describe("plainAuditFor", () => {
   })
 
   it("records a session revocation as covering all of them, and ends access", () => {
-    // `endsAccess` is the half that was missing (**D67**): the admin plugin
+    // `endsAccess` is the half that was missing: the admin plugin
     // deletes `session` rows and knows nothing about OAuth, so without it a
     // direct API call signed the browser out and left the refresh token
     // minting access tokens. It used to be done by the route handler behind

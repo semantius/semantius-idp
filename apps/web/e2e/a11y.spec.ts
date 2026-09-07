@@ -15,7 +15,7 @@ import type { App } from "./fixtures"
 import type { Page } from "@playwright/test"
 
 /**
- * The automated accessibility gate (TST-6, R-1).
+ * The automated accessibility gate.
  *
  * **Serious and critical only, and zero of them.** axe reports four impact
  * levels; the two below these are largely advisory and a gate that failed on
@@ -23,13 +23,13 @@ import type { Page } from "@playwright/test"
  * somebody using the page at all — an unlabeled field, a control with no
  * accessible name, contrast a person cannot read.
  *
- * This is the *automated* half of R-1 and it is not the whole of it: axe
+ * This is the *automated* half and it is not the whole of it: axe
  * cannot tell whether a focus order makes sense or whether an error message
  * says anything useful. The manual half stays in the release checklist. What
  * this catches is the regression nobody would otherwise notice — a field that
  * loses its `<label>` in a refactor.
  *
- * **This file runs in the host-root project only** (**D98**) — see the
+ * **This file runs in the host-root project only** — see the
  * `testIgnore` on the sub-path project in `playwright.config.ts`, which
  * carries the reasoning. In short: what axe measures is read off the DOM, and
  * the mount path changes only the URLs in it, so the second pass cost a
@@ -83,7 +83,7 @@ const ACCOUNT_PAGES = [
 const ADMIN_PAGES = [
   "/admin",
   "/admin/users",
-  // **D93**: the three **static** create routes belong here. The three
+  // the three **static** create routes belong here. The three
   // `$id/edit` routes do not — this array is `app.goto(path)` over fixed
   // paths, scanned deliberately "before any spec creates one", so an edit page
   // has no record to open. Those are scanned in the imperative block below,
@@ -95,7 +95,7 @@ const ADMIN_PAGES = [
   "/admin/gateways/new",
   "/admin/roles",
   "/admin/audit",
-  // FR-ADMIN-7. The base stack runs `read-only` so the page is here to scan;
+  // The base stack runs `read-only` so the page is here to scan;
   // the vendored Neon components are the only third-party markup in the tree,
   // and their low-alpha inks are what this scan is for.
   "/admin/database",
@@ -128,7 +128,7 @@ test.describe("accessibility", () => {
     await signIn(page, app, user.email, user.password)
     await scanAll(page, app, ACCOUNT_PAGES)
 
-    // **D71**: with a toast on screen. It is a live region rendered into a
+    // with a toast on screen. It is a live region rendered into a
     // portal outside the page's landmarks, and its close button's accessible
     // name comes from the registry component rather than from this
     // application's catalog — both of which are exactly the kind of thing axe
@@ -158,11 +158,11 @@ test.describe("accessibility", () => {
     await page.getByRole("link", { name: "e2e-admin@example.com" }).click()
     await scan(page, "/admin/users/:id")
 
-    // **D80**: with a row's actions menu open, and — since **D93** — the two
+    // with a row's actions menu open, and the two
     // edit pages that need a record to exist. Only a database-registered
     // client has a menu, and the static pages above are scanned before any
     // spec creates one, so the row is made here and removed again. Worth the
-    // lines for the same reason D71 scanned the toast: a portalled widget
+    // lines for the same reason the spec scanned the toast: a portalled widget
     // outside the page's landmarks, and a trigger whose accessible name is
     // this application's rather than the registry's.
     await app.goto("/admin/clients/new")
@@ -198,7 +198,7 @@ test.describe("accessibility", () => {
     )
     await submitDialog(page, confirm, "Remove")
 
-    // **D82**: with the sidebar's user menu open, and then with the sidebar
+    // with the sidebar's user menu open, and then with the sidebar
     // collapsed to its icon rail. The menu is here for the same reason as the
     // toast and the row menu above — a portalled popup outside the page's
     // landmarks. The rail is here because collapsing it changes what every

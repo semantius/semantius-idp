@@ -1,19 +1,19 @@
 /**
- * E-mail transport (FR-MAIL-1/2).
+ * E-mail transport.
  *
  * Exactly two implementations in v1, behind one interface:
  *
  * - **`resend`** — the real one.
  * - **`capture`** — keeps messages in memory, and optionally writes each one to
- *   a directory as JSON (**D30**). The in-memory half is what the integration
+ *   a directory as JSON. The in-memory half is what the integration
  *   suite asserts against; the files are how the e2e run reads a verification
  *   or reset link out of the **built image**, where there is no in-process
  *   handle to reach for.
  *
- * D30 chose files over an HTTP endpoint deliberately. An endpoint that returns
+ * The capture transport chose files over an HTTP endpoint deliberately. An endpoint that returns
  * captured mail is an endpoint that returns password-reset links, and it would
  * exist in the shipped image — one misconfiguration away from being the worst
- * possible disclosure (SEC-10). A directory that only exists when
+ * possible disclosure. A directory that only exists when
  * `IDP_EMAIL_TRANSPORT=capture` is set, under the image's only writable path,
  * has no such reachable surface.
  *
@@ -70,7 +70,7 @@ const RESEND_ENDPOINT = "https://api.resend.com/emails"
 
 /**
  * Resend over its REST API rather than the SDK: one `fetch` against a
- * documented endpoint is less surface than a client library, and SEC-8 wants
+ * documented endpoint is less surface than a client library, and the spec wants
  * the runtime's external dependencies countable.
  */
 export function createResendTransport(
@@ -99,7 +99,7 @@ export function createResendTransport(
 
       if (!response.ok) {
         // The body can echo the recipient; keep it out of the thrown message,
-        // which may be logged (SEC-5).
+        // which may be logged.
         const detail = await response.text().catch(() => "")
         options.logger.error("e-mail delivery failed", {
           template: message.template,
@@ -116,7 +116,7 @@ export function createResendTransport(
 
 export interface CaptureTransportOptions {
   /**
-   * Also write each message here as JSON (D30). Absent for the integration
+   * Also write each message here as JSON. Absent for the integration
    * suite, which reads `messages` directly.
    */
   directory?: string
@@ -167,7 +167,7 @@ export function createCaptureTransport(
 }
 
 /**
- * Degraded mode (FR-MAIL-2). Sending is a no-op that logs, because reaching it
+ * Degraded mode. Sending is a no-op that logs, because reaching it
  * means a code path forgot to check `emailEnabled` — worth noticing, not worth
  * failing a request over.
  */

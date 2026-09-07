@@ -10,7 +10,7 @@ import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 /**
  * The confirmation an RP-initiated logout needs when it cannot prove itself
- * (FR-OIDC-11).
+ *.
  *
  * `/oauth2/end-session` sends the browser here whenever the provider decides
  * to ask — no `id_token_hint`, an expired one, or a hint naming a session
@@ -31,10 +31,10 @@ import { PendingForm, SubmitButton } from "@/components/common/pending-form"
  *
  * So what stays here is the *question*, in this deployment's own words and on
  * its own pages, instead of the unbranded HTML the library would otherwise
- * serve (D47). Cancelling is a link, because declining changes nothing.
+ * serve. Cancelling is a link, because declining changes nothing.
  *
  * Distinct from `/logout`, which is the user's own "sign me out" and answers
- * to nobody's redirect (FR-AUTH-6).
+ * to nobody's redirect.
  */
 export const Route = createFileRoute("/sign-out")({
   loader: ({ context, location }) => {

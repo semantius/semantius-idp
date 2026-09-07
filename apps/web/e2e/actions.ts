@@ -8,7 +8,7 @@ import { ADMIN, linkFrom, waitForMail } from "./stack"
 import type { Stack } from "./stack"
 
 /**
- * The things every flow spec has to do before it can test anything (TST-6).
+ * The things every flow spec has to do before it can test anything.
  *
  * Written against the **rendered page** rather than the HTTP endpoints
  * underneath: a helper that signs in with `fetch` would keep working the day
@@ -19,7 +19,7 @@ import type { Stack } from "./stack"
  * Selectors are roles and labels — `getByRole("button", { name: "Sign in" })`
  * — for two reasons. They survive a restyle, and a control that cannot be
  * found by its accessible name is a control a screen reader cannot find
- * either, so the specs fail on the same thing the axe pass would (R-1).
+ * either, so the specs fail on the same thing the axe pass would.
  */
 
 /** A fresh address, so specs sharing one database cannot collide. */
@@ -27,7 +27,7 @@ export function uniqueEmail(prefix: string): string {
   return `${prefix}-${randomUUID().slice(0, 8)}@example.test`
 }
 
-/** Long enough for the default `auth.password.minLength` of 10 (D53). */
+/** Long enough for the default `auth.password.minLength` of 10. */
 export const PASSWORD = "e2e-user-password-01"
 
 /**
@@ -64,7 +64,7 @@ export function onLogin(page: Page, app: App): boolean {
   return new URL(page.url()).pathname === `${app.basePath}/login`
 }
 
-/** Completes the forced change a temporary password lands on (FR-AUTH-4). */
+/** Completes the forced change a temporary password lands on. */
 export async function completeForcedChange(
   page: Page,
   app: App,
@@ -79,7 +79,7 @@ export async function completeForcedChange(
 }
 
 /**
- * Signs in as the administrator this run created (FR-ADMIN-1, D52).
+ * Signs in as the administrator this run created.
  *
  * One password, no fallback. The account is made by the first-run wizard in
  * `globalSetup` before any spec runs, and it carries no forced change — the
@@ -104,7 +104,7 @@ export async function signInAsAdmin(page: Page, app: App): Promise<void> {
  * The modal, and not the toast.
  *
  * Base UI's toast is a `role="dialog"` (`aria-modal="false"`) so a keyboard
- * user can reach its close and action buttons -- which means that from D71,
+ * user can reach its close and action buttons -- which means that
  * when a success confirmation is a toast, a bare `getByRole("dialog")` matches
  * two things and Playwright's strict mode fails the test rather than the app.
  * The registry component is used verbatim (AGENTS.md), so the selector is what
@@ -121,7 +121,7 @@ export function modal(page: Page): Locator {
  * Both are `role="dialog"`, so neither can be selected by its role while the
  * other is on screen. `data-slot="toast"` is what Base UI's toast root stamps
  * and `DialogContent` does not. Scoping to it is what lets a spec assert the
- * *subject* of a confirmation (**D78**) without matching the same address
+ * *subject* of a confirmation without matching the same address
  * where it appears in the table behind the toast.
  */
 export function toast(page: Page): Locator {
@@ -129,7 +129,7 @@ export function toast(page: Page): Locator {
 }
 
 /**
- * Opens a table row's actions menu and returns the popup (**D80**).
+ * Opens a table row's actions menu and returns the popup.
  *
  * `/admin/clients` moved its four per-row controls behind one `⋯` button, so
  * a spec can no longer press "Remove" in a row — it presses the row's menu and
@@ -149,7 +149,7 @@ export async function openRowMenu(
 }
 
 /**
- * Follows a **link** in a row's actions menu (**D93**).
+ * Follows a **link** in a row's actions menu.
  *
  * Edit is a `<Link>` now, not a dialog trigger: the form is a page. The menu
  * item is still a `menuitem` — Base UI renders the anchor *as* one through
@@ -173,7 +173,7 @@ export async function openRowLink(
  * {@link openDialog}, for a dialog a row-menu item opens.
  *
  * The menu closes as the item is activated, which is exactly why those dialogs
- * are controlled rather than trigger-driven (**D80**) — so this waits for the
+ * are controlled rather than trigger-driven — so this waits for the
  * modal rather than assuming it is there.
  */
 export async function openMenuDialog(
@@ -190,7 +190,7 @@ export async function openMenuDialog(
 /**
  * Presses a control that opens a dialog, and returns the dialog.
  *
- * The `within` parameter this used to take is gone with **D93**: it existed
+ * The `within` parameter this used to take is gone: it existed
  * because `/admin/clients` grew a per-row Edit whose trigger could not be
  * found by name alone, and Edit is a page now. Every remaining caller opens a
  * dialog from a control that is unique on its page — a confirmation.
@@ -215,7 +215,7 @@ export async function submitDialog(
   await page.waitForURL((url) => url.href !== before)
 }
 
-/** Fills the registration form and submits it (FR-SIGNUP-1). */
+/** Fills the registration form and submits it. */
 export async function register(
   page: Page,
   app: App,
@@ -237,7 +237,7 @@ export async function register(
 }
 
 /**
- * Opens the link out of a captured message (D30).
+ * Opens the link out of a captured message.
  *
  * The link is read from the **text** part and navigated to as the user's own
  * browser would, so what is asserted afterwards is the page an e-mail client
@@ -255,7 +255,7 @@ export async function openMailLink(
   return url
 }
 
-/** Ends the session through the page a person would use (FR-AUTH-6). */
+/** Ends the session through the page a person would use. */
 export async function signOut(page: Page, app: App): Promise<void> {
   await app.goto("/logout")
   await submit(page, "Sign out")

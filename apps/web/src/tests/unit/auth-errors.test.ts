@@ -11,7 +11,7 @@ import { adminErrorCodeFor, errorCodeFor } from "@/server/http/auth-proxy"
 import { getCatalog } from "@/server/i18n"
 
 /**
- * The codes redirects carry, and the strings they resolve to (FR-I18N-1).
+ * The codes redirects carry, and the strings they resolve to.
  *
  * Wording never travels in a URL — only a code does — so the risk is not a
  * wrong message but *no* message: a page that renders a blank alert because
@@ -71,13 +71,13 @@ describe("notice codes", () => {
 })
 
 describe("error codes", () => {
-  it("collapses a wrong password and an unknown address (SEC-7)", () => {
+  it("collapses a wrong password and an unknown address", () => {
     expect(messageForErrorCode("invalid_credentials", t, 10)).toBe(
       t.auth.signIn.failed
     )
   })
 
-  it("never confirms that an address is already registered (SEC-7)", () => {
+  it("never confirms that an address is already registered", () => {
     // `signup_failed` covers "already exists" too, and resolves to the same
     // neutral confirmation a successful sign-up shows.
     expect(messageForErrorCode("signup_failed", t, 10)).toBe(t.auth.signUp.done)
@@ -107,7 +107,7 @@ describe("error codes", () => {
   })
 })
 
-describe("errorCodeFor (FR-ADMIN-4, SEC-7)", () => {
+describe("errorCodeFor", () => {
   function codeFor(code: string, status = 403): string {
     return errorCodeFor({ ok: false, status, body: { code }, cookies: [] })
   }
@@ -122,7 +122,7 @@ describe("errorCodeFor (FR-ADMIN-4, SEC-7)", () => {
     expect(codeFor("BANNED_USER")).toBe("banned")
   })
 
-  it("separates a rejected origin from a rejected credential (D57)", () => {
+  it("separates a rejected origin from a rejected credential", () => {
     // The refusal that costs the most time of any in this application. Better
     // Auth turns a post from an untrusted `Origin` away before it looks at the
     // password; unmapped, that arrived as `invalid_credentials` and the page
@@ -143,25 +143,25 @@ describe("errorCodeFor (FR-ADMIN-4, SEC-7)", () => {
   })
 
   it("still collapses an unknown refusal into the neutral one", () => {
-    // SEC-7: a wrong password and an address with no account are the same
+    // a wrong password and an address with no account are the same
     // answer, and anything unrecognized joins them rather than leaking.
     expect(codeFor("SOMETHING_NEW")).toBe("invalid_credentials")
     expect(codeFor("ANYTHING", 429)).toBe("rate_limited")
     expect(codeFor("ANYTHING", 500)).toBe("server_error")
   })
 
-  it("hides both spellings of a taken address behind one sign-up answer (D70)", () => {
-    // The public half of D70. `/sign-up/email` and `/admin/create-user` refuse
+  it("hides both spellings of a taken address behind one sign-up answer", () => {
+    // The public half of the error mapping. `/sign-up/email` and `/admin/create-user` refuse
     // a duplicate with different codes; only the first was mapped, so the
     // second fell through the collapse below. On a public page both must land
-    // on the same neutral sentence — SEC-7 is unchanged here.
+    // on the same neutral sentence — the spec is unchanged here.
     expect(codeFor("USER_ALREADY_EXISTS")).toBe("signup_failed")
     expect(codeFor("USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL")).toBe(
       "signup_failed"
     )
   })
 
-  it("names a malformed address rather than calling it a bad credential (D70)", () => {
+  it("names a malformed address rather than calling it a bad credential", () => {
     // `invalid_email` has had a message since the setup wizard and nothing
     // emitted it; Better Auth's own validator is what produces the refusal.
     expect(codeFor("INVALID_EMAIL")).toBe("invalid_email")
@@ -171,7 +171,7 @@ describe("errorCodeFor (FR-ADMIN-4, SEC-7)", () => {
   })
 })
 
-describe("adminErrorCodeFor (D70)", () => {
+describe("adminErrorCodeFor", () => {
   function codeFor(code: string, status = 403): string {
     return adminErrorCodeFor({ ok: false, status, body: { code }, cookies: [] })
   }
@@ -180,7 +180,7 @@ describe("adminErrorCodeFor (D70)", () => {
     // The field report: a valid "Create a user" form answered "that e-mail
     // address and password combination is not correct" — in a dialog with no
     // password field — because the admin endpoint's spelling was unmapped and
-    // the SEC-7 catch-all owned it.
+    // the spec catch-all owned it.
     expect(codeFor("USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL")).toBe(
       "email_exists"
     )
@@ -215,7 +215,7 @@ describe("adminErrorCodeFor (D70)", () => {
   it("passes every mapped refusal through unchanged", () => {
     // The point of delegating rather than re-implementing: the admin
     // invariants and the client refusals each name something the
-    // administrator can do next, and shadowing one would undo D50 and D66.
+    // administrator can do next, and shadowing one would undo the admin mapping.
     expect(codeFor("LAST_ADMIN_PROTECTED")).toBe("last_admin_protected")
     expect(codeFor("CLIENT_MANAGED_BY_FILE")).toBe("client_managed_by_file")
     expect(codeFor("INVALID_EMAIL")).toBe("invalid_email")

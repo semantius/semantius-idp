@@ -1,5 +1,5 @@
 /**
- * The single-use server-side stash (FR-2FA-1).
+ * The single-use server-side stash.
  *
  * It exists so a TOTP secret and its backup codes can travel from a form POST
  * to the page that shows them without going through the URL — where they would

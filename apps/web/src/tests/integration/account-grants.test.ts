@@ -1,13 +1,13 @@
 /**
  * What "connected applications" means, once it is more than a consent table
- * (**D102**).
+ *.
  *
  * `oidc/grants.ts` is where the merge rules live precisely so they can be
  * asserted here without a request: the interesting cases are a client with
  * tokens and no consent (every file client, since they default to
  * `skipConsent`), a client with both, and rows that exist only as evidence —
  * revoked or expired refresh tokens survive `oauth.tokenGraceDays` so reuse
- * detection can tell "revoked" from "never existed" (FR-OIDC-8), and a grants
+ * detection can tell "revoked" from "never existed", and a grants
  * list that showed them would offer to disconnect a month of applications the
  * user had already disconnected.
  */
@@ -172,7 +172,7 @@ async function refresh(
   return (await response.json()) as { refresh_token?: string }
 }
 
-describe("activeGrantsFor (D102)", () => {
+describe("activeGrantsFor", () => {
   it("lists a skipConsent client that holds a live refresh token", async () => {
     const email = "grants-token-only@example.com"
     const cookie = await register(email)
@@ -236,7 +236,7 @@ describe("activeGrantsFor (D102)", () => {
       .set({ expiresAt: new Date(Date.now() - 60_000) })
       .where(eq(oauthRefreshToken.clientId, UNNAMED.clientId))
 
-    // Both rows are still in the table — they are the FR-OIDC-8 evidence that
+    // Both rows are still in the table — they are the spec evidence that
     // tells a revoked token apart from one that never existed, and the sweep
     // keeps them for `oauth.tokenGraceDays`. Neither is a connection.
     expect(await activeGrantsFor(context.database, userId)).toEqual([])
@@ -333,7 +333,7 @@ describe("activeGrantsFor (D102)", () => {
   })
 })
 
-describe("liveTokenClientsBySession (D101)", () => {
+describe("liveTokenClientsBySession", () => {
   it("groups the names under the session that minted them", async () => {
     const email = "grants-by-session@example.com"
     const cookie = await register(email)

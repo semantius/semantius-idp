@@ -5,7 +5,7 @@ import { forwardDiscovery } from "@/server/oidc/protocol-proxy"
 import { getRuntime } from "@/server/runtime"
 
 /**
- * `{issuer}/.well-known/oauth-authorization-server` (RFC 8414, FR-OIDC-15).
+ * `{issuer}/.well-known/oauth-authorization-server` (RFC 8414).
  *
  * The OAuth-flavoured twin of the OIDC document. Some clients look only here.
  *

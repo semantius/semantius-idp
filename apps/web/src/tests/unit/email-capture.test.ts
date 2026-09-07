@@ -1,8 +1,8 @@
 /**
- * The capture transport's file half (D30).
+ * The capture transport's file half.
  *
  * This exists so the e2e run can read a verification or reset link out of the
- * **built image**, where there is no in-process handle to reach for. D30 chose
+ * **built image**, where there is no in-process handle to reach for. The capture transport chose
  * files over an HTTP endpoint because an endpoint that returns captured mail is
  * an endpoint that returns password-reset links, and it would exist in the
  * shipped image.
@@ -124,7 +124,7 @@ describe("the file half of the capture transport", () => {
   })
 })
 
-describe("the D30 environment switch", () => {
+describe("the environment switch", () => {
   it("replaces the real transport when IDP_EMAIL_TRANSPORT=capture", () => {
     const mailer = createMailer({
       config: configWith(WORKING),
@@ -146,7 +146,7 @@ describe("the D30 environment switch", () => {
   })
 
   it("is ignored in degraded mode", () => {
-    // FR-MAIL-2: with no key nothing is sent, and that is the requirement.
+    // with no key nothing is sent, and that is the requirement.
     // Capturing here would make the one behavior where "nothing is sent" is
     // correct indistinguishable from one where it is a bug.
     const mailer = createMailer({

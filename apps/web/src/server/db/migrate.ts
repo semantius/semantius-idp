@@ -1,5 +1,5 @@
 /**
- * Runtime migrations (OPS-5, DM-4, CFG-4 `database.schema`).
+ * Runtime migrations (`database.schema`).
  *
  * Forward-only, applied on boot when `database.migrateOnBoot` is set and
  * otherwise by `idp migrate`. Always under an advisory lock, so two containers
@@ -200,7 +200,7 @@ export async function runMigrations(
 
 /**
  * Whether every committed migration has been applied — the migration half of
- * `GET /readyz` (OPS-3).
+ * `GET /readyz`.
  */
 export async function migrationsAreCurrent(
   handle: DbHandle,

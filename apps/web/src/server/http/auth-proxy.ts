@@ -3,14 +3,14 @@
  *
  * The public pages are plain `<form method="post">`, so a sign-in is a real
  * form submission rather than a scripted fetch. Not because scripting-off has
- * to work — it does not, D31 — but because it keeps the login page correct on
- * the first paint, which is what FR-ACCT-2's "no JS flash" asks for.
+ * to work — it does not — but because it keeps the login page correct on
+ * the first paint, which is what the spec's "no JS flash" asks for.
  *
  * So the flow is: browser posts form-encoded fields → this module turns them
  * into the JSON request Better Auth expects, forwards the original headers so
- * the CSRF origin check still applies (SEC-3), and translates the answer back
+ * the CSRF origin check still applies, and translates the answer back
  * into a redirect. Errors travel as a **code** in the query string, never as a
- * message — the wording comes from the catalog (FR-I18N-1) and user input is
+ * message — the wording comes from the catalog and user input is
  * never echoed into a URL.
  */
 
@@ -82,7 +82,7 @@ export function redirectWithCookies(
  *
  * The mapping is deliberately lossy: several distinct failures collapse into
  * `invalid_credentials` so the page cannot be used to tell a wrong password
- * from an unknown address (SEC-7).
+ * from an unknown address.
  */
 export function errorCodeFor(result: AuthCallResult): string {
   const code =
@@ -103,7 +103,7 @@ export function errorCodeFor(result: AuthCallResult): string {
       return "banned"
     case "EMAIL_DOMAIN_NOT_ALLOWED":
       return "domain_not_allowed"
-    // SEC-3's refusal, not SEC-7's, and the distinction is the whole point.
+    // the spec's refusal, not the spec's, and the distinction is the whole point.
     // Better Auth rejects a post whose `Origin` is not a trusted one before it
     // ever looks at a credential; unmapped, that fell through to
     // `invalid_credentials` and the page told the operator their password was
@@ -111,10 +111,16 @@ export function errorCodeFor(result: AuthCallResult): string {
     // not naming the address the browser is actually on, which is what happens
     // the first time anyone opens a default deployment on `127.0.0.1` instead
     // of `localhost`. Disclosing it leaks nothing: the caller chose the origin,
-    // and the request is refused either way (**D57**).
+    // and the request is refused either way.
     case "INVALID_ORIGIN":
     case "MISSING_OR_NULL_ORIGIN":
       return "untrusted_origin"
+    // The standing gates in `auth/options/session-standing.ts`. Each names what the caller can do next — change the
+    // password, or stop impersonating — so neither collapses.
+    case "PASSWORD_CHANGE_REQUIRED":
+      return "password_change_required"
+    case "IMPERSONATED_SESSION":
+      return "impersonated_session"
     case "EMAIL_NOT_VERIFIED":
       return "email_not_verified"
     case "PASSWORD_TOO_SHORT":
@@ -131,7 +137,7 @@ export function errorCodeFor(result: AuthCallResult): string {
     case "ONLY_ADMINS_GRANT_ADMIN_ROLES":
     case "IMPERSONATION_DISABLED":
       return code.toLowerCase()
-    // D50 (clients) and D91 (gateways): both sets of endpoints answer with
+    // Clients and gateways: both sets of endpoints answer with
     // their own codes, each of which names something the administrator can
     // change, so each is echoed through rather than collapsed.
     case "CLIENT_ALREADY_EXISTS":
@@ -149,10 +155,10 @@ export function errorCodeFor(result: AuthCallResult): string {
     // endpoint refuses: `/sign-up/email` says the first, `/admin/create-user`
     // the second. Only the first was mapped, so an admin create landed in the
     // catch-all below and told an administrator, in a dialog with no password
-    // field, that the e-mail and password combination was wrong (**D70**).
+    // field, that the e-mail and password combination was wrong.
     case "USER_ALREADY_EXISTS":
     case "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL":
-      // SEC-7: sign-up must not confirm that an address is taken.
+      // sign-up must not confirm that an address is taken.
       return "signup_failed"
     // Mapped in `auth-errors.ts` since the setup wizard existed and produced
     // by nothing until now: an address Better Auth's own validator refuses is
@@ -169,16 +175,16 @@ export function errorCodeFor(result: AuthCallResult): string {
 }
 
 /**
- * The same mapping for an **administrator's** form (**D70**).
+ * The same mapping for an **administrator's** form.
  *
  * `errorCodeFor` ends in `invalid_credentials` because the pages it was
- * written for are the public ones, where SEC-7 requires a wrong password and
+ * written for are the public ones, where the spec requires a wrong password and
  * an unknown address to be indistinguishable. Behind `/admin/*` neither half
  * of that sentence is true: the administrator is authenticated, has a list of
  * every account in front of them, and — in a create-user dialog — never typed
  * a password of their own to be wrong about. The collapse there is not a
  * privacy measure, it is a lie about what happened, and it is the same bug
- * class **D57** fixed for the origin check.
+ * class the origin fix closed for the origin check.
  *
  * Two differences, both narrow:
  *
@@ -192,18 +198,28 @@ export function errorCodeFor(result: AuthCallResult): string {
  * refusals, 429 and ≥500 keep the codes and the wording they already have.
  */
 export function adminErrorCodeFor(result: AuthCallResult): string {
-  const code =
-    typeof result.body.code === "string" ? result.body.code : undefined
-
-  if (
-    code === "USER_ALREADY_EXISTS" ||
-    code === "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL"
-  ) {
-    return "email_exists"
-  }
+  if (isExistingAccount(result)) return "email_exists"
 
   const mapped = errorCodeFor(result)
   return mapped === "invalid_credentials" ? "request_failed" : mapped
+}
+
+/**
+ * Whether Better Auth refused because the address already has an account,
+ * in either of its two spellings (see `errorCodeFor`).
+ *
+ * Only the admin mapping asks, and it asks for the fact rather
+ * than the code because the public mapping collapses it into `signup_failed`.
+ * `/signup` does not: with `autoSignIn: false` Better Auth 1.7.1 never
+ * refuses a duplicate at all, and the page tells the two apart afterwards
+ * (`auth/sign-up-outcome.ts`).
+ */
+export function isExistingAccount(result: AuthCallResult): boolean {
+  const code = result.body.code
+  return (
+    code === "USER_ALREADY_EXISTS" ||
+    code === "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL"
+  )
 }
 
 /** Appends `error=<code>` to a path, replacing any existing one. */
@@ -215,7 +231,7 @@ export function withError(path: string, code: string): string {
 }
 
 /**
- * Validates a `returnTo` / `callbackURL` parameter (SEC-3).
+ * Validates a `returnTo` / `callbackURL` parameter.
  *
  * Only a same-origin **relative path** is ever accepted. Anything absolute,
  * protocol-relative or backslash-smuggled is discarded in favour of the

@@ -1,5 +1,5 @@
 /**
- * The second factor (FR-2FA-1, TST-3).
+ * The second factor.
  *
  * Two things are being checked. First that the challenge is real: a correct
  * password with 2FA on yields no session, only a redirect flag, and the
@@ -151,7 +151,7 @@ function challengeCookie(response: Response): string {
 }
 
 describe("two-factor challenge", () => {
-  it("answers a correct password with a challenge, not a session (FR-2FA-1)", async () => {
+  it("answers a correct password with a challenge, not a session", async () => {
     const context = await contextWith("twofactor_challenge")
     try {
       const cookie = await register(context)
@@ -198,7 +198,7 @@ describe("two-factor challenge", () => {
     }
   })
 
-  it("spends a backup code exactly once (TST-3)", async () => {
+  it("spends a backup code exactly once", async () => {
     const context = await contextWith("twofactor_backup_once")
     try {
       const cookie = await register(context)
@@ -242,7 +242,7 @@ describe("two-factor challenge", () => {
     }
   })
 
-  it("records the sign-in when the challenge is answered, not before (SEC-6)", async () => {
+  it("records the sign-in when the challenge is answered, not before", async () => {
     const context = await contextWith("twofactor_audit")
     try {
       const cookie = await register(context)
@@ -270,7 +270,7 @@ describe("two-factor challenge", () => {
 })
 
 describe("two-factor disabled", () => {
-  it("registers no endpoints at all (FR-2FA-1)", async () => {
+  it("registers no endpoints at all", async () => {
     const context = await createTestContext("twofactor_off", {
       config: {
         signUp: { enabled: true, requireApproval: false },
@@ -303,8 +303,7 @@ async function signInAudit(context: TestContext): Promise<number> {
 }
 
 /**
- * A trusted browser dies with the enrollment it belongs to (**D104**,
- * FR-2FA-2).
+ * A trusted browser dies with the enrollment it belongs to.
  *
  * Ticking "trust this device" writes a `verification` row — `identifier` a
  * random `trust-device-…`, `value` the user id — and Better Auth rotates it
@@ -321,7 +320,7 @@ async function signInAudit(context: TestContext): Promise<number> {
  * Auth's crypto, not this. What is under test is the deletion, and the row is
  * the deletion's whole subject.
  */
-describe("trusted devices die with the enrollment (D104)", () => {
+describe("trusted devices die with the enrollment", () => {
   const OTHER = "twofactor-other@example.com"
 
   /** A second browser's trust row, exactly as the plugin writes one. */
@@ -490,14 +489,14 @@ describe("trusted devices die with the enrollment (D104)", () => {
 })
 
 /**
- * Seeing and untrusting one browser (**D104**, FR-2FA-1).
+ * Seeing and untrusting one browser.
  *
  * The teardown above kills trust rows with the enrollment; this is the other
  * half, for the user who ticked the box on a shared machine and wants that one
  * tick back without turning 2FA off. Rotation means such a row never expires
  * on its own, so "wait for it" was not an answer.
  */
-describe("trusted devices listed and individually revocable (D104)", () => {
+describe("trusted devices listed and individually revocable", () => {
   async function trustBrowser(
     context: TestContext,
     userId: string

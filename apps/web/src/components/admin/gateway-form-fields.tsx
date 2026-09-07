@@ -18,7 +18,7 @@ import type { Catalog } from "@/server/i18n"
 
 /**
  * The four fields a gateway is described by, shared by the create and edit
- * **pages** (FR-GW-7, **D91**, **D92**, **D93**).
+ * **pages**.
  *
  * Shared for the reason `client-form-fields.tsx` sets out at length:
  * `/idp/update-gateway` is a **full replace**, so a field the edit form does
@@ -34,6 +34,8 @@ export interface GatewayFormValues {
   name: string
   url: string
   requireAuth: boolean
+  /** Empty means unset — the row stores `null` and the JWT carries `jwt.audience`. */
+  audience: string
 }
 
 /**
@@ -56,6 +58,7 @@ export function resolveGatewayFormValues(
     name: values.name ?? fallback.name,
     url: values.url ?? fallback.url,
     requireAuth: values.requireAuth === "on",
+    audience: values.audience ?? fallback.audience,
   }
 }
 
@@ -74,7 +77,7 @@ export function GatewayFormFields({
    * is shown and not editable — as text plus a **hidden input**.
    *
    * The hidden input is not what tells the handler which gateway to change:
-   * that comes from the path (**D93**), so the two cannot disagree. It is what
+   * that comes from the path, so the two cannot disagree. It is what
    * `useGatewayForm` reads. Removing it was tried, and
    * `validateGatewayForm({ name: "" })` then answered `invalid` and
    * `preventDefault()`d every save on the edit page — a form that silently
@@ -83,7 +86,7 @@ export function GatewayFormFields({
   fixedName?: boolean
   /**
    * The stored target carries a password and is therefore **not** prefilled
-   * (**D93**). Saving is a full replace, so offering the masked projection
+   *. Saving is a full replace, so offering the masked projection
    * back would store `***`; the field is empty and says to retype it. Only
    * reachable for a row written by hand in `psql` — `checkGatewayUrl` refuses
    * userinfo on every write path.
@@ -155,6 +158,29 @@ export function GatewayFormFields({
           {urlMessage(t, errors.url)}
         </FieldError>
       </Field>
+      <Field>
+        <FieldLabel htmlFor={field("audience")}>
+          {t.admin.gateways.audience}
+        </FieldLabel>
+        <Input
+          id={field("audience")}
+          name="audience"
+          autoComplete="off"
+          inputMode="url"
+          className="font-mono text-xs"
+          defaultValue={values.audience}
+          aria-invalid={errors.audience ? true : undefined}
+          aria-describedby={
+            errors.audience ? field("audience-error") : field("audience-help")
+          }
+        />
+        <FieldDescription id={field("audience-help")}>
+          {t.admin.gateways.audienceHelp}
+        </FieldDescription>
+        <FieldError id={field("audience-error")}>
+          {audienceMessage(t, errors.audience)}
+        </FieldError>
+      </Field>
       {/* `aria-describedby`, not just visible text: the control is a
           `role="checkbox"` span, so neither the wrapping label nor the help
           underneath it reaches a screen reader on its own. */}
@@ -207,6 +233,7 @@ export function useGatewayForm(): {
     const found = validateGatewayForm({
       name: read("name"),
       url: read("url"),
+      audience: read("audience"),
     })
 
     setErrors(found)
@@ -215,7 +242,7 @@ export function useGatewayForm(): {
     event.preventDefault()
     // Focus the first field with a problem, or the message is announced with
     // no way to reach what it is about.
-    for (const name of ["name", "url"] as const) {
+    for (const name of ["name", "url", "audience"] as const) {
       if (!found[name]) continue
       const field = form.elements.namedItem(name)
       if (field instanceof HTMLElement) field.focus()
@@ -230,7 +257,7 @@ export function useGatewayForm(): {
  * Turns a `url:<problem>:<value>` code into a catalog sentence.
  *
  * The offending URL is carried in the code rather than in the message, because
- * wording never leaves the catalog (FR-I18N-1).
+ * wording never leaves the catalog.
  */
 function urlMessage(t: Catalog, code: string | undefined): string | undefined {
   if (!code) return undefined
@@ -250,6 +277,26 @@ function urlMessage(t: Catalog, code: string | undefined): string | undefined {
       return t.admin.gateways.urlFragment(url)
     case "credentials":
       return t.admin.gateways.urlCredentials(url)
+    case "link_local":
+      return t.admin.gateways.urlLinkLocal(url)
+    default:
+      return undefined
+  }
+}
+
+/** `audience:<problem>:<value>`, the same shape as {@link urlMessage}. */
+function audienceMessage(
+  t: Catalog,
+  code: string | undefined
+): string | undefined {
+  if (!code) return undefined
+  const [, problem = "", ...rest] = code.split(":")
+  const value = rest.join(":")
+  switch (problem) {
+    case "fragment":
+      return t.admin.gateways.audienceFragment(value)
+    case "not_uri":
+      return t.admin.gateways.audienceNotUri(value)
     default:
       return undefined
   }

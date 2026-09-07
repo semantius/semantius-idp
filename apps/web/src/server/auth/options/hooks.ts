@@ -4,20 +4,20 @@
  * Two things live here, both of which have to happen *before* validation or the
  * endpoint's own logic:
  *
- * - **E-mail normalization (FR-AUTH-1).** "E-mails are trimmed and lower-cased
+ * - **E-mail normalization.** "E-mails are trimmed and lower-cased
  *   everywhere." Doing it in a database hook is too late: the endpoint's schema
  *   rejects `" User@Example.com "` as malformed before any row is written, so a
  *   user who copied their address with a trailing space gets an unhelpful
  *   error instead of being signed in.
  *
- * - **Default audience injection (FR-OIDC-6, risk R1).** The OAuth provider
+ * - **Default audience injection.** The OAuth provider
  *   only issues a JWT access token when a `resource` resolves — no `resource`
  *   means no `aud`, which means an *opaque* token, which is precisely the
- *   failure FR-OIDC-5/6 exists to prevent. So a request that names none has
+ *   failure the audience rules exist to prevent. So a request that names none has
  *   one supplied: the client's own `audience` if it declares one, otherwise
  *   `jwt.audience`.
  *
- * The **after** hook is the SEC-6 trail for everything Better Auth owns. Three
+ * The **after** hook is the spec trail for everything Better Auth owns. Three
  * of the twenty-nine audit actions were being written before this: the two the
  * approval endpoints emit, and `signup.created` from the bootstrap step. A
  * sign-in — success or failure — left no row at all, which makes "who got in"
@@ -38,9 +38,14 @@ import type { DbHandle } from "../../db/client"
 import type { Logger } from "../../logger"
 import { revokeExpiredRefreshFamilies } from "../../oidc/refresh-lifetime"
 import type { AuditAction } from "../plugins/idp-plugin"
+import { signUpCreatedNothing } from "../sign-up-outcome"
 import { checkPasswordBreach } from "../password-breach"
 import { clearTrustedDevices } from "../trusted-devices"
 import type { BreachCheckDeps } from "../password-breach"
+import {
+  assertRefreshOwnerMaySignIn,
+  assertSessionStanding,
+} from "./session-standing"
 import { normalizeEmail } from "./social"
 
 /**
@@ -72,7 +77,7 @@ export interface BeforeHookDeps {
 }
 
 /**
- * Endpoints where the caller is *choosing* a password (FR-AUTH-1).
+ * Endpoints where the caller is *choosing* a password.
  *
  * Sign-in is deliberately absent: refusing an existing password at sign-in
  * would lock a user out of their own account over a corpus they cannot do
@@ -91,13 +96,18 @@ export function buildBeforeHook(
 ): NonNullable<BetterAuthOptions["hooks"]>["before"] {
   const { config } = deps
   return createAuthMiddleware(async (ctx) => {
+    // First, and before any body is read: a session that may not act right
+    // now — a forced password change pending, an impersonating
+    // administrator on a mint — is refused whatever the endpoint is.
+    await assertSessionStanding(ctx)
+
     normalizeEmailFields(
       ctx.path,
       ctx.body as Record<string, unknown> | undefined
     )
     injectDefaultResource(ctx, config)
 
-    // FR-OIDC-13's absolute ceiling, enforced immediately before the grant
+    // the spec's absolute ceiling, enforced immediately before the grant
     // that would otherwise extend it. Revoking first means the presented
     // token is already dead when the provider looks at it, so an over-age
     // family gets the ordinary `invalid_grant` instead of a special case.
@@ -107,6 +117,9 @@ export function buildBeforeHook(
     await rememberRevokedSession(ctx, deps)
 
     if (ctx.path === "/oauth2/token" && body?.grant_type === "refresh_token") {
+      // the owner's standing, then the family's age. The provider
+      // itself only looks the user *up*.
+      await assertRefreshOwnerMaySignIn(body, deps)
       await revokeExpiredRefreshFamilies(deps)
     }
   })
@@ -226,7 +239,7 @@ export function sessionRevocationScope(
 }
 
 /**
- * FR-AUTH-1: refuses a password that is already in a breach corpus.
+ * refuses a password that is already in a breach corpus.
  *
  * Only when `auth.password.breachCheck` is on, and only where a password is
  * being *chosen*. A service failure allows the password — see
@@ -262,7 +275,7 @@ async function assertPasswordNotBreached(
 
 /**
  * The two entry points a `resource` can arrive through, and why both matter
- * (S1):
+ *:
  *
  * - **authorize** — the value is stored in the authorization-code record and
  *   travels to the code grant, and from there into the refresh token's
@@ -292,7 +305,7 @@ export function injectDefaultResource(
       : undefined
   if (!target) return
 
-  // A client that named its own resources is not second-guessed: FR-OIDC-6
+  // A client that named its own resources is not second-guessed: the spec
   // is about supplying a default, not about overriding a choice.
   if (hasResource(target.resource)) return
 
@@ -316,7 +329,7 @@ function hasResource(value: unknown): boolean {
  *
  * A per-client audience is what makes "this app's tokens are for that API"
  * expressible without every client having to send `resource` itself
- * (FR-OIDC-6).
+ *.
  */
 export function defaultResourceFor(
   clientId: string | undefined,
@@ -350,13 +363,13 @@ export function normalizeEmailFields(
 export interface AuditHints {
   /**
    * The endpoint answered with `twoFactorRedirect` — a challenge, not a
-   * session (FR-2FA-1).
+   * session.
    */
   twoFactorPending?: boolean
 }
 
 /**
- * Which SEC-6 event an endpoint produces, if any.
+ * Which audit event an endpoint produces, if any.
  *
  * Pure and exported so the mapping is testable without a database or a
  * request. Returning `undefined` is the common case — this runs on every
@@ -372,7 +385,7 @@ export function auditEventFor(
   // Social sign-in arrives as `/callback/:providerId` on the way back, and as
   // `/sign-in/social` on the way out; only the callback settles anything.
   if (path === "/sign-in/email" || path.startsWith("/callback/")) {
-    // A 2FA challenge is not a sign-in yet (FR-2FA-1). The endpoint answered
+    // A 2FA challenge is not a sign-in yet. The endpoint answered
     // 200 with `twoFactorRedirect`, no session exists, and the user may still
     // fail the second factor — recording success here would put "signed in"
     // in the trail for someone who never was.
@@ -392,7 +405,7 @@ export function auditEventFor(
   switch (path) {
     case "/sign-up/email":
       // Only on success: a rejected registration created nothing, and there
-      // is no `signup.failed` in the SEC-6 action list to describe it
+      // is no `signup.failed` in the spec action list to describe it
       // honestly. The domain and approval refusals are logged by the hook
       // that raises them.
       return ok ? { action: "signup.created", outcome } : undefined
@@ -401,7 +414,7 @@ export function auditEventFor(
     case "/forget-password":
     case "/request-password-reset":
       // Recorded whether or not the address exists — the response is uniform
-      // by SEC-7, and the attempt is the thing worth having on record.
+      // by anti-enumeration, and the attempt is the thing worth having on record.
       return { action: "password.reset_requested", outcome }
     case "/reset-password":
       return { action: "password.reset_completed", outcome }
@@ -412,7 +425,7 @@ export function auditEventFor(
       // already carried by the protocol error the client receives.
       return ok ? { action: "token.issued", outcome } : undefined
     case "/two-factor/enable":
-      // Only on success — a refused enrollment changed nothing (FR-2FA-1).
+      // Only on success — a refused enrollment changed nothing.
       return ok ? { action: "twofactor.enabled", outcome } : undefined
     case "/two-factor/disable":
       return ok ? { action: "twofactor.disabled", outcome } : undefined
@@ -467,7 +480,7 @@ function subjectOf(returned: unknown, session: unknown): string | undefined {
  * failure` because of this — the endpoint answers a redirect to its
  * `callbackURL` on success, and the only path that does not redirect is the
  * one nothing uses. An audit trail that reports every success as a failure is
- * worse than none: SEC-6 exists so somebody can tell the two apart afterwards.
+ * worse than none: the audit trail exists so somebody can tell the two apart afterwards.
  */
 export function isRedirect(value: Error): boolean {
   const status = (value as { statusCode?: unknown }).statusCode
@@ -503,6 +516,29 @@ export function buildAfterHook(
     })
     if (!event) return
 
+    // a `200` from `/sign-up/email` for an address that
+    // already has an account is Better Auth's generic answer — it wrote no
+    // row — and `signup.created` must not say otherwise. The predicate is a
+    // read, so it stays out of the pure mapping above.
+    if (
+      ctx.path === "/sign-up/email" &&
+      ok &&
+      deps.database &&
+      (await signUpCreatedNothing(deps.database, returned))
+    ) {
+      return
+    }
+
+    // a row written under an impersonated session names the
+    // user as actor — that is whose account changed — and the administrator
+    // in the metadata, because "who was really there" is the question an
+    // audit trail exists to answer. Same field the account pages stamp
+    // (`http/session.ts`'s `actorMetadata`).
+    const metadata = {
+      ...revocationMetadata(ctx.path, ctx.context, userId),
+      ...impersonatorMetadata(context.session),
+    }
+
     await audit.record({
       ...event,
       actorType: userId ? "session" : "anonymous",
@@ -510,10 +546,19 @@ export function buildAfterHook(
       ...(userId ? { target: { type: "user", id: userId } } : {}),
       userAgent: ctx.headers?.get("user-agent") ?? null,
       // `ipAddress` waits for M11's `clientIpFrom`, which needs `trustProxy`
-      // to decide which forwarded hop to believe (SEC-2).
-      ...revocationMetadata(ctx.path, ctx.context, userId),
+      // to decide which forwarded hop to believe.
+      ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
     })
   })
+}
+
+/** `{ impersonatedBy }` when the resolved session is an administrator's, else nothing. */
+function impersonatorMetadata(
+  session: unknown
+): { impersonatedBy?: string } {
+  const by = (session as { session?: { impersonatedBy?: unknown } } | undefined)
+    ?.session?.impersonatedBy
+  return typeof by === "string" && by !== "" ? { impersonatedBy: by } : {}
 }
 
 /**
@@ -538,7 +583,7 @@ function revocationMetadata(
   path: string,
   context: object,
   userId: string | undefined
-): { metadata: { scope: string; sessionId?: string } } | Record<string, never> {
+): { scope?: string; sessionId?: string } {
   const scope = sessionRevocationScope(path)
   if (!scope) return {}
 
@@ -547,16 +592,14 @@ function revocationMetadata(
     stashed !== undefined && (path === "/sign-out" || stashed.userId === userId)
 
   return {
-    metadata: {
-      scope,
-      ...(owned ? { sessionId: stashed.sessionId } : {}),
-    },
+    scope,
+    ...(owned ? { sessionId: stashed.sessionId } : {}),
   }
 }
 
 /**
  * Turning your own second factor off forgets every browser you trusted with
- * it (**D104**, FR-2FA-2).
+ * it.
  *
  * Better Auth's `/two-factor/disable` deletes the trust row named by the
  * *presenting* browser's cookie and no other, so a disable followed by a
@@ -565,7 +608,7 @@ function revocationMetadata(
  * fresh expiry on every use, so one in daily use never lapses.
  *
  * There is no plugin seam for this and no `after` hook of the plugin's own to
- * extend, so it hangs off the endpoint path here — the same place the SEC-6
+ * extend, so it hangs off the endpoint path here — the same place the spec
  * mapping already keys on it.
  *
  * **A failure must not fail the disable.** The second factor is off by the
@@ -574,7 +617,7 @@ function revocationMetadata(
  * Same trade as `revokeTokensAfterPasswordWrite`: log it, leave the trust rows
  * for the hourly sweep, and let the user see the change they made.
  *
- * Two flows were considered and deliberately left out, both recorded in D104:
+ * Two flows were considered and deliberately left out, both recorded in the spec:
  * a **password change or reset** (a trust row is not a credential — the
  * sign-in still needs the new password, the enrollment did not change, and
  * clearing would tax routine rotation for nothing) and a **ban or admin

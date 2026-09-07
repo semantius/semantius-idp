@@ -10,7 +10,7 @@ import { APP_ROUTES } from "@/server/oidc/base-path"
 import { fetchAdminGate } from "@/server/functions/admin"
 
 /**
- * `/admin/*` — the administrative area (FR-ADMIN-2, FR-ROLE-3).
+ * `/admin/*` — the administrative area.
  *
  * The gate is here rather than on each page, so a new child route is protected
  * by existing rather than by remembering, and `beforeLoad` runs before any
@@ -25,7 +25,7 @@ import { fetchAdminGate } from "@/server/functions/admin"
  * is a fixed, documented path (docs/admin-api.md), so it buys nothing and
  * costs a signed-in colleague a dead end.
  *
- * That page is served with **403**, which FR-ROLE-3 has always said and
+ * That page is served with **403**, which the spec has always said and
  * nothing in this tree ever set: the refusal rendered with a 200, so every
  * proxy, log and probe recorded a successful page view of the admin area by
  * somebody who cannot see it.
@@ -54,6 +54,15 @@ export const Route = createFileRoute("/admin")({
         search: { notice: "signin_required", returnTo: location.pathname },
       })
     }
+    // The forced password change, before the role: an administrator on a temporary
+    // password is interposed exactly as a user is — see `routes/account.tsx`
+    // for why the layout is where this lives.
+    if (gate.mustChangePassword) {
+      throw redirect({
+        to: APP_ROUTES.changePassword,
+        search: { forced: "1", returnTo: location.pathname },
+      })
+    }
     return { gate }
   },
   loader: async ({ context }) => {
@@ -65,7 +74,7 @@ export const Route = createFileRoute("/admin")({
     }
     return { ui: context.ui, gate: context.gate }
   },
-  // The document title follows `site.adminTitle` too (D61). The deepest
+  // The document title follows `site.adminTitle` too. The deepest
   // matched `head()` wins, and this is the first child of the root, so all
   // eight admin routes inherit it while the account and auth pages keep
   // `site.name` from `__root`.
@@ -103,7 +112,7 @@ function AdminLayout() {
     <SidebarLayout
       ui={ui}
       t={t}
-      // D61's one branded surface: `site.adminTitle`, falling back to
+      // the spec's one branded surface: `site.adminTitle`, falling back to
       // `site.name` in `buildUiContext`, so nothing here tests for it.
       brand={ui.adminTitle}
       heading={t.admin.title}
@@ -112,7 +121,7 @@ function AdminLayout() {
       user={{ name: gate.name, email: gate.email }}
       // The way back out. It was a ghost button in the header; it is a menu
       // entry now, and it is still a plain anchor because `/account` is a
-      // different route subtree (FR-ACCT-1, D82).
+      // different route subtree.
       crossLink={{
         href: `${ui.basePath}${APP_ROUTES.account}`,
         label: t.account.title,

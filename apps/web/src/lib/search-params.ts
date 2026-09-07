@@ -6,7 +6,7 @@
  * else. `?forced=1` arrives as the **number** `1`, and `?forced=true` as the
  * boolean `true` — which is how `/change-password?forced=1` came to render the
  * ordinary "Change your password" page instead of the temporary-password one
- * FR-AUTH-4 asks for, with the `forced` marker missing from the form it
+ * the spec asks for, with the `forced` marker missing from the form it
  * submits. Casting the search object to `Record<string, string>` hid it: the
  * types said string, the values were not.
  *
@@ -39,7 +39,7 @@ export function searchFlag(value: unknown): boolean {
 }
 
 /**
- * The same URL with one query parameter removed (**D71**).
+ * The same URL with one query parameter removed.
  *
  * A success notice arrives as `?notice=…` and is shown once; leaving the
  * parameter behind is what made the old inline banner outlive its truth —

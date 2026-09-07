@@ -1,5 +1,5 @@
 /**
- * The gateway proxy (FR-GW-3..6, **D91**).
+ * The gateway proxy.
  *
  * The bulk of the proxy's coverage lives here rather than in the integration
  * suite, because almost everything it does is a pure decision about headers,
@@ -22,6 +22,12 @@ import { BUILT_IN_ROLES } from "@/server/config/schema/roles-schema"
 import type { DbHandle } from "@/server/db/client"
 import { SOCKET_ADDRESS_HEADER } from "@/server/http/client-ip"
 import {
+  checkGatewayAudience,
+  checkGatewayUrl,
+  validateGatewayForm,
+} from "@/lib/gateway-rules"
+import { requestedAudience } from "@/server/auth/requested-audience"
+import {
   MINT_MISS_MAX,
   NEGATIVE_CACHE_MS,
   UPSTREAM_TTFB_TIMEOUT_MS,
@@ -42,6 +48,8 @@ interface Row {
   requireAuth: boolean | null
   source: string
   enabled: boolean | null
+  /** The audience the minted JWT names when set. */
+  audience?: string | null
 }
 
 function row(overrides: Partial<Row> = {}): Row {
@@ -87,6 +95,7 @@ function config(overrides: Record<string, unknown> = {}): IdpConfig {
 interface Harness {
   fetchImpl: ReturnType<typeof vi.fn>
   handler: ReturnType<typeof vi.fn>
+  resolve: ReturnType<typeof vi.fn>
   call: (
     request: Request,
     options?: { name?: string; subPath?: string }
@@ -103,8 +112,15 @@ function harness(
     rows?: Row[]
     config?: IdpConfig
     now?: () => number
-    upstream?: Response | (() => Promise<Response>)
+    upstream?: Response | ((init: RequestInit) => Promise<Response>)
     token?: Response | (() => Promise<Response>)
+    /**
+     * What the upstream's hostname resolves to. A private
+     * address by default, so no test in this file ever touches real DNS for
+     * `upstream.example` — and so the accepted private-range reach the design
+     * records stays the ordinary case.
+     */
+    resolve?: (hostname: string) => Promise<string[]>
   } = {}
 ): Harness {
   const rows = options.rows ?? [row()]
@@ -113,8 +129,11 @@ function harness(
   // Typed parameters, not `vi.fn(async () => …)`: without them the mock's
   // `calls` is inferred as `[]` and every assertion about what the proxy sent
   // fails to compile rather than failing usefully.
-  const fetchImpl = vi.fn(async (_url: string, _init: RequestInit) =>
-    typeof upstream === "function" ? upstream() : upstream.clone()
+  const fetchImpl = vi.fn(async (_url: string, init: RequestInit) =>
+    typeof upstream === "function" ? upstream(init) : upstream.clone()
+  )
+  const resolve = vi.fn(
+    options.resolve ?? (async (_hostname: string) => ["10.0.0.5"])
   )
   const token = options.token ?? new Response("{}", { status: 401 })
   const handler = vi.fn(async (_request: Request) =>
@@ -126,12 +145,14 @@ function harness(
     auth: { handler } as never,
     database: fakeDb(rows),
     fetchImpl: fetchImpl as never,
+    resolveImpl: resolve as never,
     ...(options.now ? { now: options.now } : {}),
   }
 
   return {
     fetchImpl,
     handler,
+    resolve,
     call: (request, { name = "data", subPath = "" } = {}) =>
       proxyGatewayRequest(deps, request, name, subPath),
     init: () => fetchImpl.mock.calls[0]![1],
@@ -156,7 +177,7 @@ beforeEach(() => {
   resetGatewayTokenCache()
 })
 
-describe("resolving the gateway (FR-GW-6)", () => {
+describe("resolving the gateway", () => {
   it("answers 404 for an unknown name, without calling the upstream", async () => {
     const h = harness()
     const response = await h.call(get(), { name: "nope" })
@@ -198,7 +219,7 @@ describe("resolving the gateway (FR-GW-6)", () => {
   })
 })
 
-describe("auth translation (FR-GW-4)", () => {
+describe("auth translation", () => {
   it("leaves an existing Authorization alone, even beside an API key", async () => {
     const h = harness({ token: tokenResponse() })
     await h.call(
@@ -240,7 +261,7 @@ describe("auth translation (FR-GW-4)", () => {
     expect(h.sent().has("x-api-key"), "never forwarded upstream").toBe(false)
 
     // The exchange goes to Better Auth's own endpoint — the gate, the
-    // last-used accounting and `azp` live only there (FR-KEY-3).
+    // last-used accounting and `azp` live only there.
     const minted = h.handler.mock.calls[0]![0] as Request
     expect(minted.url).toBe(`${ISSUER}/api/auth/token`)
     expect(minted.headers.get("x-api-key")).toBe("idp_key")
@@ -248,7 +269,7 @@ describe("auth translation (FR-GW-4)", () => {
 
   it("puts the caller's address on the mint request", async () => {
     // Without it every mint in the deployment shares Better Auth's single
-    // `no-trusted-ip` bucket, and one caller's spray starves the rest (S3).
+    // `no-trusted-ip` bucket, and one caller's spray starves the rest.
     const h = harness({ token: tokenResponse() })
     await h.call(
       get("/gateway/data", {
@@ -264,7 +285,10 @@ describe("auth translation (FR-GW-4)", () => {
     expect(minted.headers.get(SOCKET_ADDRESS_HEADER)).toBe("203.0.113.7")
   })
 
-  it("uses x-forwarded-for on the mint when a proxy is trusted", async () => {
+  it("stamps the resolved address into the private header when a proxy is trusted", async () => {
+    // Not `x-forwarded-for`: the auth instance reads only the
+    // private header, for every `trustProxy` value, so a mint that wrote the
+    // forwarded header instead would land in the shared bucket again.
     const h = harness({
       config: config({ server: { baseUrl: ISSUER, trustProxy: true } }),
       token: tokenResponse(),
@@ -276,7 +300,7 @@ describe("auth translation (FR-GW-4)", () => {
     )
 
     const minted = h.handler.mock.calls[0]![0] as Request
-    expect(minted.headers.get("x-forwarded-for")).toBe("198.51.100.4")
+    expect(minted.headers.get(SOCKET_ADDRESS_HEADER)).toBe("198.51.100.4")
   })
 
   it("exchanges a session cookie for a bearer token and drops the cookie", async () => {
@@ -293,7 +317,7 @@ describe("auth translation (FR-GW-4)", () => {
     expect(response.status).toBe(200)
     expect(h.sent().get("authorization")).toBe("Bearer jwt-session")
     // Read as a credential, never passed on: the upstream must not receive
-    // this IdP's session cookie (**D92**).
+    // this IdP's session cookie.
     expect(h.sent().has("cookie")).toBe(false)
 
     // The mint carries the cookie so Better Auth validates the session — the
@@ -326,7 +350,7 @@ describe("auth translation (FR-GW-4)", () => {
   })
 
   it("ignores a session cookie on a cross-site request", async () => {
-    // The CSRF guard (**D92**). `SameSite=Lax` still sends the cookie on a
+    // The CSRF guard. `SameSite=Lax` still sends the cookie on a
     // top-level GET navigation, so a link to /gateway/... from anywhere would
     // otherwise have the IdP mint a JWT for whoever clicked it.
     for (const site of ["cross-site", "same-site"]) {
@@ -382,7 +406,7 @@ describe("auth translation (FR-GW-4)", () => {
 
   it("falls through to anonymous when the session is refused", async () => {
     // Unlike a key: the caller did not choose to present this, so a stale
-    // cookie must not turn a working anonymous call into a 401 (**D92**).
+    // cookie must not turn a working anonymous call into a 401.
     const h = harness()
     const response = await h.call(
       get("/gateway/data", { headers: { cookie: "idp.session_token=stale" } })
@@ -474,7 +498,7 @@ describe("auth translation (FR-GW-4)", () => {
   })
 })
 
-describe("the token cache (FR-GW-5)", () => {
+describe("the token cache", () => {
   it("reuses a minted token and stops at the TTL", async () => {
     let clock = 1_000_000
     const h = harness({ token: tokenResponse("jwt-1"), now: () => clock })
@@ -491,7 +515,7 @@ describe("the token cache (FR-GW-5)", () => {
     expect(h.handler).toHaveBeenCalledTimes(2)
   })
 
-  it("is emptied by resetGatewayTokenCache, which is D91's punch-through", async () => {
+  it("is emptied by resetGatewayTokenCache, which is the spec's punch-through", async () => {
     const h = harness({ token: tokenResponse("jwt-1") })
     const request = () =>
       h.call(get("/gateway/data", { headers: { "x-api-key": "idp_key" } }))
@@ -500,7 +524,7 @@ describe("the token cache (FR-GW-5)", () => {
     expect(h.handler).toHaveBeenCalledTimes(1)
 
     // What `admin/guard.ts` calls after a ban or a key revocation: the next
-    // call re-mints, so the FR-KEY-2 gate runs again immediately.
+    // call re-mints, so the spec gate runs again immediately.
     resetGatewayTokenCache()
     await request()
     expect(h.handler).toHaveBeenCalledTimes(2)
@@ -525,7 +549,7 @@ describe("the token cache (FR-GW-5)", () => {
   })
 })
 
-describe("outbound headers (FR-GW-3)", () => {
+describe("outbound headers", () => {
   it("strips hop-by-hop, cookies and every forwarding header the caller sent", async () => {
     const h = harness()
     await h.call(
@@ -690,7 +714,7 @@ describe("the upstream call", () => {
   })
 })
 
-describe("the response (FR-GW-6)", () => {
+describe("the response", () => {
   it("strips Set-Cookie and forces the sandbox CSP", async () => {
     const h = harness({
       upstream: new Response("<b>hi</b>", {
@@ -750,6 +774,61 @@ describe("the response (FR-GW-6)", () => {
     }
   })
 
+  it("strips every header that states a policy for the issuer's origin", async () => {
+    // Each of these is honored by a browser *per origin* — and `/gateway/*`
+    // is the issuer's origin. PostgREST sends none of them.
+    const stripped: Record<string, string> = {
+      "access-control-allow-origin": "*",
+      "access-control-allow-credentials": "true",
+      "access-control-expose-headers": "x-secret",
+      "strict-transport-security": "max-age=0",
+      "x-frame-options": "ALLOWALL",
+      "permissions-policy": "camera=*",
+      "feature-policy": "camera *",
+      "clear-site-data": '"*"',
+      refresh: "0; url=https://evil.example/",
+      "report-to": '{"group":"x","endpoints":[{"url":"https://evil.example/r"}]}',
+      "reporting-endpoints": 'x="https://evil.example/r"',
+      nel: '{"report_to":"x","max_age":86400}',
+      "alt-svc": 'h2="evil.example:443"',
+      "public-key-pins": 'pin-sha256="x"; max-age=1',
+      "set-cookie2": "a=b",
+    }
+    const h = harness({
+      upstream: new Response("{}", { status: 200, headers: stripped }),
+    })
+    const response = await h.call(get())
+    for (const name of Object.keys(stripped)) {
+      expect(response.headers.has(name), `${name} must be stripped`).toBe(false)
+    }
+    // The IdP's own X-Frame-Options and HSTS are added later by
+    // `withSecurityHeaders`, whose `setUnlessPresent` an upstream value would
+    // otherwise have pre-empted.
+  })
+
+  it("keeps the headers a PostgREST client reads", async () => {
+    // the spec is a deny-list, not an allow-list, for exactly these: the
+    // sibling deployment's Scalar page and its key-holding scripts read
+    // every one of them, and `Link` is how a REST upstream paginates.
+    const kept: Record<string, string> = {
+      "content-range": "0-1/2",
+      "content-location": "/items?select=id",
+      "preference-applied": "return=representation",
+      "content-profile": "public",
+      "proxy-status": "postgrest",
+      "www-authenticate": 'Bearer realm="api"',
+      link: '</items?page=2>; rel="next"',
+      "x-content-type-options": "nosniff",
+    }
+    const h = harness({
+      upstream: new Response("[]", { status: 206, headers: kept }),
+    })
+    const response = await h.call(get())
+    for (const [name, value] of Object.entries(kept)) {
+      expect(response.headers.get(name), name).toBe(value)
+    }
+  })
+
   it("answers a HEAD with no body", async () => {
     const h = harness({ upstream: new Response("hello", { status: 200 }) })
     const response = await h.call(
@@ -759,9 +838,378 @@ describe("the response (FR-GW-6)", () => {
   })
 })
 
+describe("the sub-path", () => {
+  /**
+   * What the router hands over. TanStack decodes the splat once
+   * (`decodeURIComponent` in router-core's `new-process-route-tree.ts`), so
+   * `..%2fadmin`, `%2e%2e%2fadmin` and `.%2e%2fadmin` all arrive here as the
+   * plain `../admin`; a literal `../` or `%2e%2e/` never arrives at all,
+   * because the WHATWG URL parser resolves dot segments before the router
+   * sees the path. What the parser leaves alone — an encoded slash — the
+   * router then decodes, which is the vector: `${url}/${subPath}` handed to
+   * `fetch` is normalized *again*, and `https://api.internal/v1/../admin`
+   * reaches `https://api.internal/admin`.
+   */
+  const SCOPED = row({ url: "https://api.internal/v1" })
+
+  it.each([
+    ["../admin", "what the router hands over for ..%2fadmin"],
+    ["..", "a bare parent reference"],
+    ["../", "a bare parent reference with a slash"],
+    ["items/../../admin", "a climb that starts below the prefix"],
+    ["%2e%2e/admin", "an encoded dot segment the parser treats as .."],
+    [".%2e/admin", "the half-encoded spelling"],
+    ["%2e./admin", "the other half-encoded spelling"],
+    ["..\\admin", "a backslash, which is a slash in a special scheme"],
+  ])("refuses %s (%s) with 400 and never calls the upstream", async (subPath) => {
+    const h = harness({ rows: [SCOPED] })
+    const response = await h.call(get("/gateway/data/x"), { subPath })
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({ error: "invalid_path" })
+    expect(h.fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it("refuses a sub-path that would smuggle a query or a fragment", async () => {
+    // `a%3Fb` arrives as `a?b` (the router decoded it), and appended to the
+    // target it would become a query string ahead of the caller's own.
+    for (const subPath of ["a?b", "a#b", "items?select=*"]) {
+      resetGatewayRegistry()
+      const h = harness({ rows: [SCOPED] })
+      const response = await h.call(get("/gateway/data/x"), { subPath })
+      expect(response.status, subPath).toBe(400)
+      expect(h.fetchImpl, subPath).not.toHaveBeenCalled()
+    }
+  })
+
+  it("forwards a plain sub-path under a path-scoped target verbatim", async () => {
+    const h = harness({ rows: [SCOPED] })
+    await h.call(get("/gateway/data/items?select=id"), { subPath: "items" })
+    expect(h.url()).toBe("https://api.internal/v1/items?select=id")
+  })
+
+  it("forwards what is merely odd, byte for byte", async () => {
+    // None of these leave `${url}/`: a double-encoded traversal is one
+    // literal segment after the router's single decode, `./` resolves in
+    // place, and `//` after the origin is a path — the target is built by
+    // concatenation, never by resolving the sub-path as a reference.
+    for (const subPath of [
+      "%2e%2e%2fadmin",
+      "a/./b",
+      "items/",
+      "//odd/path",
+      "a%25b",
+    ]) {
+      resetGatewayRegistry()
+      const h = harness({ rows: [SCOPED] })
+      const response = await h.call(get("/gateway/data/x"), { subPath })
+      expect(response.status, subPath).toBe(200)
+      expect(h.url(), subPath).toBe(`https://api.internal/v1/${subPath}`)
+    }
+  })
+
+  it("lets a climb that cannot leave a bare-origin target through", async () => {
+    // `https://upstream.example/../admin` normalizes to
+    // `https://upstream.example/admin`: a root has nothing above it, so the
+    // result is still under `${url}/` and the rule — refuse what *leaves*
+    // the target, nothing else — has no reason to fire. The upstream never
+    // sees the `..`; `fetch` resolves it before the bytes go out.
+    const h = harness()
+    const response = await h.call(get("/gateway/data/x"), {
+      subPath: "../admin",
+    })
+    expect(response.status).toBe(200)
+    expect(h.url()).toBe("https://upstream.example/../admin")
+  })
+})
+
+describe("the upstream address", () => {
+  it("refuses an upstream that resolves to the IPv4 link-local range with 502", async () => {
+    // The cloud metadata address. The design accepts private-address reach — the
+    // sibling deployment's upstream *is* a compose-network name — and this
+    // is the one range that accepted reach must not extend to.
+    const h = harness({ resolve: async () => ["169.254.169.254"] })
+    const response = await h.call(get())
+
+    expect(response.status).toBe(502)
+    expect(await response.json()).toEqual({ error: "bad_gateway" })
+    expect(h.resolve).toHaveBeenCalledWith("upstream.example")
+    expect(h.fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it("forwards to a private address, which the spec accepts", async () => {
+    const h = harness({ resolve: async () => ["10.0.0.5"] })
+    const response = await h.call(get())
+    expect(response.status).toBe(200)
+    expect(h.fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([
+    ["fe80::1", "IPv6 link-local"],
+    ["FE80::0202:B3FF:FE1E:8329", "IPv6 link-local, upper-case"],
+    ["febf::1", "the top of fe80::/10"],
+    ["::ffff:169.254.169.254", "IPv4-mapped, dotted"],
+    ["::ffff:a9fe:a9fe", "IPv4-mapped, hex"],
+    ["169.254.0.1", "the bottom of 169.254.0.0/16"],
+  ])("refuses %s (%s)", async (address) => {
+    const h = harness({ resolve: async () => [address] })
+    const response = await h.call(get())
+    expect(response.status).toBe(502)
+    expect(h.fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it("refuses when any resolved address is link-local", async () => {
+    // A name that answers with a mix is a name whose next lookup may pick
+    // the other one; the only safe reading of a mixed answer is the worst.
+    const h = harness({ resolve: async () => ["10.0.0.5", "169.254.1.1"] })
+    expect((await h.call(get())).status).toBe(502)
+  })
+
+  it("does not consult the resolver for an address literal, and still refuses a link-local one", async () => {
+    for (const url of [
+      "http://169.254.169.254",
+      "http://169.254.169.254:8080/latest",
+      "http://[fe80::1]:3000",
+      "http://[::ffff:169.254.169.254]",
+    ]) {
+      resetGatewayRegistry()
+      const h = harness({ rows: [row({ url })] })
+      const response = await h.call(get())
+      expect(response.status, url).toBe(502)
+      expect(h.resolve, url).not.toHaveBeenCalled()
+      expect(h.fetchImpl, url).not.toHaveBeenCalled()
+    }
+  })
+
+  it("forwards to a loopback literal without a lookup", async () => {
+    // What the integration suite does: a `node:http` server on 127.0.0.1.
+    const h = harness({ rows: [row({ url: "http://127.0.0.1:9999" })] })
+    expect((await h.call(get())).status).toBe(200)
+    expect(h.resolve).not.toHaveBeenCalled()
+  })
+
+  it("answers 502 when the name does not resolve at all", async () => {
+    const h = harness({
+      resolve: async () => Promise.reject(new Error("ENOTFOUND")),
+    })
+    expect((await h.call(get())).status).toBe(502)
+    expect(h.fetchImpl).not.toHaveBeenCalled()
+  })
+})
+
+describe("the rules the file and the form share", () => {
+  it("refuses a link-local literal at configuration time", () => {
+    for (const url of [
+      "http://169.254.169.254",
+      "http://[fe80::1]",
+      "http://[::ffff:169.254.169.254]:80",
+    ]) {
+      expect(checkGatewayUrl(url), url).toBe("link_local")
+    }
+    for (const url of [
+      "http://10.0.0.5",
+      "http://127.0.0.1:3000",
+      "http://postgrest:3000",
+      "http://[::1]:3000",
+      "http://169.254.example.com",
+    ]) {
+      expect(checkGatewayUrl(url), url).toBeUndefined()
+    }
+  })
+
+  it("is what the configuration file refuses with", () => {
+    const parsed = configFileSchema.safeParse({
+      ...baseConfig(),
+      gateways: { meta: { url: "http://169.254.169.254" } },
+    })
+    expect(parsed.success).toBe(false)
+    expect(
+      parsed.error?.issues.map((issue) => issue.message).join(" ")
+    ).toMatch(/link-local/)
+  })
+
+  it("accepts a audience that is an absolute URI or URN and refuses the rest", () => {
+    for (const value of [
+      "https://api.example/v1",
+      "https://api.example",
+      "urn:example:api",
+      "https://api.example/v1?tenant=a",
+    ]) {
+      expect(checkGatewayAudience(value), value).toBeUndefined()
+    }
+    expect(checkGatewayAudience("not a uri")).toBe("not_uri")
+    expect(checkGatewayAudience("/relative")).toBe("not_uri")
+    expect(checkGatewayAudience("api.example")).toBe("not_uri")
+    // RFC 8707 §2: a audience MUST NOT include a fragment.
+    expect(checkGatewayAudience("https://api.example/#x")).toBe("fragment")
+    expect(checkGatewayAudience("https://api.example/#")).toBe("fragment")
+  })
+
+  it("carries `audience` through the file schema", () => {
+    const ok = configFileSchema.safeParse({
+      ...baseConfig(),
+      gateways: {
+        data: { url: "https://api.example", audience: "https://api.example/v1" },
+      },
+    })
+    expect(ok.success).toBe(true)
+    expect(ok.data?.gateways.data?.audience).toBe("https://api.example/v1")
+
+    const bad = configFileSchema.safeParse({
+      ...baseConfig(),
+      gateways: { data: { url: "https://api.example", audience: "nope" } },
+    })
+    expect(bad.success).toBe(false)
+    expect(
+      bad.error?.issues.map((issue) => issue.message).join(" ")
+    ).toMatch(/absolute URI/)
+  })
+
+  it("names the form field a bad audience belongs to", () => {
+    expect(
+      validateGatewayForm({
+        name: "data",
+        url: "https://api.example",
+        audience: "nope",
+      })
+    ).toEqual({ audience: "audience:not_uri:nope" })
+    expect(
+      validateGatewayForm({ name: "data", url: "https://api.example", audience: "" })
+    ).toEqual({})
+  })
+})
+
+describe("the request body cap", () => {
+  const capped = () =>
+    config({ server: { baseUrl: ISSUER, maxRequestBodyBytes: 1024 } })
+
+  /** An upstream that drains the body, the way a real socket would. */
+  const draining = async (init: RequestInit): Promise<Response> => {
+    const body = init.body as ReadableStream<Uint8Array> | undefined
+    let received = 0
+    if (body) {
+      for await (const chunk of body) received += chunk.byteLength
+    }
+    return new Response(String(received), { status: 200 })
+  }
+
+  function stream(chunks: number, size: number): ReadableStream<Uint8Array> {
+    return new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (let index = 0; index < chunks; index += 1) {
+          controller.enqueue(new Uint8Array(size))
+        }
+        controller.close()
+      },
+    })
+  }
+
+  it("refuses a declared oversize body before the upstream is called", async () => {
+    const h = harness({ config: capped(), upstream: draining })
+    const response = await h.call(
+      new Request(`${ISSUER}/gateway/data`, {
+        method: "POST",
+        headers: { "content-length": "4096" },
+        body: stream(4, 1024),
+        duplex: "half",
+      } as RequestInit)
+    )
+    expect(response.status).toBe(413)
+    expect(await response.json()).toEqual({ error: "payload_too_large" })
+    expect(h.fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it("aborts a streamed body once it passes the cap and answers 413", async () => {
+    // No `content-length` — a chunked upload — so the only place the size
+    // can be known is in the stream, and the only honest answer is to stop
+    // forwarding the moment the cap is passed rather than after buffering.
+    const h = harness({ config: capped(), upstream: draining })
+    const response = await h.call(
+      new Request(`${ISSUER}/gateway/data`, {
+        method: "POST",
+        body: stream(4, 1024),
+        duplex: "half",
+      } as RequestInit)
+    )
+    expect(response.status).toBe(413)
+    expect(await response.json()).toEqual({ error: "payload_too_large" })
+  })
+
+  it("streams a body under the cap through untouched", async () => {
+    const h = harness({ config: capped(), upstream: draining })
+    const response = await h.call(
+      new Request(`${ISSUER}/gateway/data`, {
+        method: "POST",
+        body: stream(2, 512),
+        duplex: "half",
+      } as RequestInit)
+    )
+    expect(response.status).toBe(200)
+    expect(await response.text()).toBe("1024")
+  })
+
+  it("defaults to 64 MiB", () => {
+    expect(config().file.server.maxRequestBodyBytes).toBe(64 * 1024 * 1024)
+  })
+})
+
+describe("the token cache keyed per gateway", () => {
+  const rows = [
+    row({ id: "a", name: "a" }),
+    row({ id: "b", name: "b" }),
+    row({ id: "c", name: "c", audience: "https://c.example" }),
+    row({ id: "d", name: "d", audience: "https://c.example" }),
+  ]
+
+  it("shares one entry across gateways without a audience, and keeps one per gateway with", async () => {
+    const h = harness({ rows, token: tokenResponse("jwt") })
+    const call = (name: string) =>
+      h.call(get(`/gateway/${name}`, { headers: { "x-api-key": "same" } }), {
+        name,
+      })
+
+    await call("a")
+    await call("b")
+    // Byte-for-byte today's behavior: no audience, one entry per credential.
+    expect(h.handler, "a and b share the entry").toHaveBeenCalledTimes(1)
+
+    await call("c")
+    expect(h.handler, "c mints its own").toHaveBeenCalledTimes(2)
+    await call("c")
+    expect(h.handler, "and reuses it").toHaveBeenCalledTimes(2)
+
+    // Same audience, different gateway: still a separate entry, because the
+    // key is the gateway's name — an edit to one gateway's audience must not
+    // hand another gateway a token minted for the old value.
+    await call("d")
+    expect(h.handler).toHaveBeenCalledTimes(3)
+  })
+
+  it("asks the mint for the gateway's audience as the audience, and for nothing otherwise", async () => {
+    const seen: (string | undefined)[] = []
+    const h = harness({
+      rows,
+      token: async () => {
+        seen.push(requestedAudience())
+        return tokenResponse("jwt")
+      },
+    })
+    await h.call(get("/gateway/a", { headers: { "x-api-key": "k" } }), {
+      name: "a",
+    })
+    await h.call(get("/gateway/c", { headers: { "x-api-key": "k" } }), {
+      name: "c",
+    })
+    expect(seen).toEqual([undefined, "https://c.example"])
+    // Outside a mint there is no requested audience — the ordinary `/token`
+    // call must keep minting `jwt.audience`.
+    expect(requestedAudience()).toBeUndefined()
+  })
+})
+
 describe("the route files", () => {
   /**
-   * Both of them, all seven methods (FR-GW-3).
+   * Both of them, all seven methods.
    *
    * An **undeclared** method does not 405 here — it falls through to the page
    * tree and answers 200 with the sign-in document, so a client that sent

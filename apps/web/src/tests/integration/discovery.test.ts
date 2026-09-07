@@ -1,6 +1,6 @@
 /**
  * What a client discovers, and what it is allowed to do with it
- * (FR-OIDC-4/15/16/17).
+ *.
  *
  * Discovery is the one document every client reads before it can do anything,
  * and the URLs in it get cached and hard-coded. So these assertions are about
@@ -70,7 +70,7 @@ async function discoveryFor(
 }
 
 describe("discovery at the host root", () => {
-  it("advertises the issuer byte-equal to server.baseUrl (FR-OIDC-15)", async () => {
+  it("advertises the issuer byte-equal to server.baseUrl", async () => {
     const context = await createTestContext("discovery_root")
     try {
       const document = await discoveryFor(context)
@@ -101,7 +101,7 @@ describe("discovery at the host root", () => {
     }
   })
 
-  it("advertises S256 and only the two v1 grants (D26, SEC-2)", async () => {
+  it("advertises S256 and only the two v1 grants", async () => {
     const context = await createTestContext("discovery_grants")
     try {
       const document = await discoveryFor(context)
@@ -109,7 +109,7 @@ describe("discovery at the host root", () => {
       expect(document.grant_types_supported).toEqual(
         expect.arrayContaining(["authorization_code", "refresh_token"])
       )
-      // D26: no machine-to-machine grant, so it must not be advertised.
+      // no machine-to-machine grant, so it must not be advertised.
       expect(document.grant_types_supported).not.toContain("client_credentials")
       expect(document.response_types_supported).toEqual(["code"])
     } finally {
@@ -175,7 +175,7 @@ describe("discovery at the host root", () => {
   })
 })
 
-describe("discovery under a sub-path (OPS-10)", () => {
+describe("discovery under a sub-path", () => {
   it("keeps the issuer and every endpoint inside the mount", async () => {
     const context = await createTestContext("discovery_subpath", {
       config: {
@@ -198,7 +198,7 @@ describe("discovery under a sub-path (OPS-10)", () => {
   })
 })
 
-describe("the key set (FR-OIDC-16)", () => {
+describe("the key set", () => {
   it("is byte-identical to the canonical endpoint, and cacheable", async () => {
     const context = await createTestContext("discovery_jwks")
     try {
@@ -299,7 +299,7 @@ describe("revocation (RFC 7009 §2.2)", () => {
   })
 })
 
-describe("authorize errors (SEC-3)", () => {
+describe("authorize errors", () => {
   it("never redirects to an unregistered redirect_uri", async () => {
     const context = await contextWithClient("discovery_authorize_error")
     try {

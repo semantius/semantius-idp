@@ -1,5 +1,5 @@
 /**
- * Everything `/account/*` renders from (FR-ACCT-1).
+ * Everything `/account/*` renders from.
  *
  * Route loaders are isomorphic — they run on the server for the first paint
  * and in the browser on every client-side navigation — so anything they import
@@ -39,10 +39,10 @@ export interface ProfileView {
   name: string
   firstName: string
   lastName: string
-  /** Catalog-filtered, in catalog order (FR-ROLE-2). */
+  /** Catalog-filtered, in catalog order. */
   roles: string[]
   /**
-   * Whether any held role opens `/admin` (FR-ROLE-3).
+   * Whether any held role opens `/admin`.
    *
    * Resolved here, on the server, against `admin.adminRoles` — not in the
    * browser from `roles`, and pointedly not in `UiContext`, which is sent to
@@ -53,11 +53,18 @@ export interface ProfileView {
    */
   isAdmin: boolean
   twoFactorEnabled: boolean
-  /** True while an administrator is impersonating (FR-ADMIN-5). */
+  /** True while an administrator is impersonating. */
   impersonated: boolean
   /**
+   * True while a temporary password is still in force.
+   * The layout route turns it into the same redirect `/login` makes, so no
+   * page under `/account/*` renders — read from the row, above, never from
+   * the cookie, because an administrator raises it while the user is in.
+   */
+  mustChangePassword: boolean
+  /**
    * The sidebar's collapse state, read from the browser's cookie so the
-   * server's first paint is already right (**D82**, `http/sidebar-cookie.ts`).
+   * server's first paint is already right (`http/sidebar-cookie.ts`).
    */
   sidebarOpen: boolean
 }
@@ -79,11 +86,11 @@ export interface SessionView {
   userAgent?: string
   /**
    * The applications holding a live refresh token minted through this session
-   * (**D101**). Names only — the page renders them so "sign this one out" can
+   *. Names only — the page renders them so "sign this one out" can
    * say what it disconnects.
    */
   clients: string[]
-  /** True while an administrator is signed in as the user (FR-ADMIN-5). */
+  /** True while an administrator is signed in as the user. */
   impersonated: boolean
 }
 
@@ -99,7 +106,7 @@ export interface ApiKeyView {
 }
 
 /**
- * One browser the user told to skip the second factor (**D104**, FR-2FA-1).
+ * One browser the user told to skip the second factor.
  *
  * The row `id` and two dates, and nothing else, because there is nothing else:
  * a trust row records no user agent and no address. The `identifier` is
@@ -121,7 +128,7 @@ export interface EnrollmentView {
 }
 
 /**
- * One connected application (**D102**).
+ * One connected application.
  *
  * `hasConsent` and `activeTokens` are carried but not rendered: the page says
  * "connected", and whether that rests on a stored consent, on a live refresh
@@ -147,7 +154,7 @@ export interface GrantView {
  * cache carries a *copy* of the user as they were when it was minted. Two
  * things went wrong with the cached copy, and the e2e suite found both. A
  * session signed out from "Sign out everywhere else" kept working in the other
- * browser until the cache expired — which FR-OIDC-12 ("revocation is immediate
+ * browser until the cache expired — which the spec ("revocation is immediate
  * at all IdP endpoints") does not allow, and which the sessions page
  * flatly contradicts in its own description. And saving the profile appeared
  * to do nothing: the redirect re-read the cache, so the form came back with
@@ -171,6 +178,7 @@ export const fetchProfile = createServerFn({ method: "GET" }).handler(
       isAdmin: isAdmin(current.user.roles.join(","), runtime.config.adminRoles),
       twoFactorEnabled: current.user.twoFactorEnabled,
       impersonated: current.session.impersonatedBy !== undefined,
+      mustChangePassword: current.user.mustChangePassword,
       sidebarOpen: readSidebarOpen(getRequest()),
     }
   }
@@ -179,7 +187,7 @@ export const fetchProfile = createServerFn({ method: "GET" }).handler(
 /**
  * The **live** sessions, and what signed in through each of them.
  *
- * Expired rows are filtered out (**D103**). Better Auth deletes one lazily,
+ * Expired rows are filtered out. Better Auth deletes one lazily,
  * when its cookie is next presented, and the retention sweep clears the rest
  * hourly — so between the two an expired row could sit in this list for an
  * hour under a heading that says every session here is live, offering a "Sign
@@ -251,7 +259,7 @@ export const fetchApiKeys = createServerFn({ method: "GET" }).handler(
 )
 
 /**
- * The applications the account is connected to (**D102**).
+ * The applications the account is connected to.
  *
  * The union of stored consents and clients holding a live refresh token, which
  * is what `oidc/grants.ts` exists to compute and why this is four lines: the
@@ -259,7 +267,7 @@ export const fetchApiKeys = createServerFn({ method: "GET" }).handler(
  * integration suite can reach without a request.
  */
 /**
- * The browsers this account has trusted with its second factor (**D104**).
+ * The browsers this account has trusted with its second factor.
  *
  * Empty when 2FA is off for this user, which is not the same as "there are
  * none": a user who turned it off has had every row cleared anyway, and a
@@ -323,7 +331,7 @@ export async function apiKeyBelongsTo(
 
 /**
  * Claims the API key a creation just minted, if the landing URL carries a
- * handle (FR-KEY-1).
+ * handle.
  *
  * The key itself never appears in a URL — the module header of
  * `server/http/one-shot.ts` is the argument, and this is the same shape the

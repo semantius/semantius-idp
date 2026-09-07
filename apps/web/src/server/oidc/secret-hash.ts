@@ -1,6 +1,6 @@
 /**
  * How a client secret is stored, and the only place that decides it
- * (SEC-10, FR-OIDC-2, risk R4).
+ *.
  *
  * Reconciliation writes the hash; the token endpoint verifies against it. Risk
  * R4 was that those two would disagree — that the reconciler would compute one

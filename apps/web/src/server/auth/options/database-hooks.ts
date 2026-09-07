@@ -1,7 +1,7 @@
 /**
  * Database hooks — the single enforcement point for the approval gate
- * (FR-SIGNUP-2), the domain restriction (FR-SIGNUP-3) and e-mail normalization
- * (FR-AUTH-1).
+ *, the domain restriction and e-mail normalization
+ *.
  *
  * These run underneath every path that creates a user or a session: password
  * sign-up, social callback, admin create, and the internal paths the refresh
@@ -10,7 +10,7 @@
  * instead of aspirational — a new sign-in route cannot forget to call it.
  *
  * The refresh-token and API-key paths re-check user state on every use as well
- * (FR-SIGNUP-2, FR-KEY-2); this is the gate that stops the session existing in
+ *; this is the gate that stops the session existing in
  * the first place.
  */
 
@@ -30,13 +30,14 @@ import {
   revokeAllForUser,
   revokeForSession,
 } from "../../oidc/revoke-user-tokens"
+import { trustedDeviceVerificationHooks } from "../trusted-devices"
 import { isEmailDomainAllowed, normalizeEmail } from "./social"
 import type { UserStatus } from "./user-fields"
 
 /**
  * Endpoints where an administrator, the bootstrap step or the CLI creates a
  * user. Accounts made this way are pre-approved and skip the domain
- * restriction (FR-SIGNUP-2, FR-SIGNUP-3, FR-ADMIN-2).
+ * restriction.
  */
 const ADMINISTRATIVE_CREATE_PATHS = new Set([
   "/admin/create-user",
@@ -59,10 +60,10 @@ interface HookContext {
 
 /**
  * Endpoints where the **user themselves** sets their password, which is what
- * ends a forced change (FR-AUTH-4).
+ * ends a forced change.
  *
  * Deliberately a list rather than "any credential password write". An admin
- * assigning a temporary password (FR-ADMIN-2, M10) writes a password *and*
+ * assigning a temporary password writes a password *and*
  * raises this same flag; clearing on every write would race that and undo it.
  */
 const SELF_SERVICE_PASSWORD_PATHS = new Set([
@@ -71,14 +72,14 @@ const SELF_SERVICE_PASSWORD_PATHS = new Set([
 ])
 
 /**
- * Every endpoint that writes a credential password (FR-AUTH-3, FR-OIDC-12).
+ * Every endpoint that writes a credential password.
  *
  * A new password means the old one is no longer sufficient to reach the
  * account — so neither should anything minted with it be. Better Auth revokes
  * *sessions* itself (`revokeSessionsOnPasswordReset`, and
  * `revokeOtherSessions` on change), but OAuth access and refresh tokens
  * survive both, and a refresh token outliving a password reset is the whole
- * reason FR-OIDC-12 exists.
+ * reason immediate revocation exists.
  *
  * This is the seam rather than `emailAndPassword.onPasswordReset` because that
  * callback fires for `/reset-password` only — and, in this codebase, only when
@@ -144,7 +145,7 @@ export function endsForcedPasswordChange(
 }
 
 /**
- * Whether this account write set a password (FR-AUTH-3, FR-OIDC-12).
+ * Whether this account write set a password.
  *
  * Pure and exported for the same reason as {@link endsForcedPasswordChange}:
  * `account.update.after` also fires when Better Auth refreshes a social
@@ -172,15 +173,15 @@ export interface DatabaseHookDeps {
   config: IdpConfig
   /** Absent during schema generation, which needs no connection. */
   database?: DbHandle
-  /** Absent in degraded mode (FR-MAIL-2); a disabled one sends nothing. */
+  /** Absent in degraded mode; a disabled one sends nothing. */
   mailer?: Mailer
   logger?: Logger
-  /** Writes the FR-OIDC-12 `token.revoked` trail. */
+  /** Writes the spec `token.revoked` trail. */
   audit?: Audit
 }
 
 /**
- * Kills the OAuth tokens a password used to back (FR-AUTH-3, FR-OIDC-12).
+ * Kills the OAuth tokens a password used to back.
  *
  * Never allowed to fail the password change: the new password is already
  * written by the time this runs, and refusing the change because a revocation
@@ -213,7 +214,7 @@ async function revokeTokensAfterPasswordWrite(
 }
 
 /**
- * FR-SIGNUP-2: "an administrator is notified" when a self-registration lands
+ * "an administrator is notified" when a self-registration lands
  * as pending.
  *
  * The template has existed since M4 and nothing ever called it, so approval
@@ -242,7 +243,7 @@ async function notifyAdminsOfPendingSignUp(
       .from(database.schema.user)
       // Narrows the scan to users who could possibly be admins; the catalog
       // check itself has to happen in JS, because several roles share one
-      // comma-separated column (FR-ROLE-2).
+      // comma-separated column.
       .where(isNotNull(database.schema.user.role))
 
     const recipients = rows
@@ -271,7 +272,7 @@ export function buildDatabaseHooks(
   return {
     account: {
       update: {
-        // FR-AUTH-4's other half: the flag has to come *off* again.
+        // the spec's other half: the flag has to come *off* again.
         after: async (account, context) => {
           // `context` really is null when there is no request behind the
           // write — the bootstrap step and the CLI both reach this hook that
@@ -290,10 +291,10 @@ export function buildDatabaseHooks(
             context as HookContext | null
           )
 
-          // FR-AUTH-1: addresses are trimmed and lower-cased everywhere.
+          // addresses are trimmed and lower-cased everywhere.
           const email = normalizeEmail(String(user.email))
 
-          // FR-SIGNUP-3: self-registration only, admins bypass it.
+          // self-registration only, admins bypass it.
           if (
             !administrative &&
             !isEmailDomainAllowed(email, config.file.signUp.allowedEmailDomains)
@@ -304,7 +305,7 @@ export function buildDatabaseHooks(
             })
           }
 
-          // FR-SIGNUP-2: admin-created and bootstrap users are active
+          // admin-created and bootstrap users are active
           // immediately; self-registrations wait for approval when it is on.
           const status: UserStatus = administrative
             ? "active"
@@ -312,7 +313,7 @@ export function buildDatabaseHooks(
               ? "pending"
               : "active"
 
-          // FR-SIGNUP-5 / D49: `name` falls back to the two parts, composed
+          // `name` falls back to the two parts, composed
           // in `site.nameFormat` order — the same helper every caller uses,
           // so a fallback and an explicit derivation cannot disagree.
           const first =
@@ -346,10 +347,18 @@ export function buildDatabaseHooks(
       },
     },
 
+    // a trusted browser's row is re-minted to a full
+    // expiry on every use; these two hooks anchor it to the first trust and
+    // cap it at three windows. Built in `auth/trusted-devices.ts`, beside the
+    // rows it governs.
+    verification: trustedDeviceVerificationHooks(
+      config.file.twoFactor.trustDeviceDays
+    ),
+
     session: {
       delete: {
         /**
-         * FR-AUTH-6: `session.revokeOAuthTokensOnLogout`.
+         * `session.revokeOAuthTokensOnLogout`.
          *
          * Scoped to the session, not the user — signing out on a laptop must
          * not log the phone out of every connected application. It has to run
@@ -403,7 +412,7 @@ export interface GateUser {
  * Throws unless the user may hold a session right now.
  *
  * Shared with the refresh-token and API-key paths, which re-check state on
- * every use (FR-SIGNUP-2, FR-KEY-2, FR-OIDC-12) — the same rules have to give
+ * every use — the same rules have to give
  * the same answer wherever they are asked.
  */
 export function assertUserMaySignIn(user: GateUser): void {
@@ -422,7 +431,7 @@ export function assertUserMaySignIn(user: GateUser): void {
     })
   }
   if (status === "rejected") {
-    // SEC-7: the same neutral refusal a banned or unknown account gets.
+    // the same neutral refusal a banned or unknown account gets.
     throw new APIError("FORBIDDEN", {
       code: GATE_ERROR_CODES.rejected,
       message: "This account is not available.",

@@ -1,5 +1,5 @@
 /**
- * The first-run gate, as a server function (**D52**).
+ * The first-run gate, as a server function.
  *
  * `/`, `/login` and `/setup` all have to know whether the deployment still has
  * no users, and a route loader is isomorphic — it runs in the browser on every

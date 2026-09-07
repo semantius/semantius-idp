@@ -1,14 +1,14 @@
 /**
  * Generates `src/server/db/schema/auth-schema.ts` from the *installed* Better
- * Auth (DM-1, DM-4, risk R8).
+ * Auth.
  *
- * DM-1 asks for the schema to be generated from the enabled plugins rather than
+ * the spec asks for the schema to be generated from the enabled plugins rather than
  * hand-written, with CI failing on drift, and names `@better-auth/cli generate`
  * as the tool. **That justification used to be recorded here as "the CLI is
  * version-stranded at 1.4.21". It was wrong** — `@better-auth/cli` is
  * deprecated and the CLI was renamed to `auth`, which publishes 1.7.1 and
  * depends on `better-auth@1.7.1` and `@better-auth/core@1.7.1`: exactly our
- * pins. Recorded as **D29**.
+ * pins. Recorded in the spec.
  *
  * The real reason this file survives is narrower and structural. Run against a
  * shim exporting our own option set, `auth generate` produces the same
@@ -20,8 +20,8 @@ export const ${schemaVarName} = pgSchema(${JSON.stringify(schemaName)});
 
 `
  *
- * — the schema name baked in as a string literal at generate time. D27 and
- * DM-4 make `database.schema` a **runtime** value, so the module has to be a
+ * — the schema name baked in as a string literal at generate time. The schema-name decision and
+ * the spec make `database.schema` a **runtime** value, so the module has to be a
  * `createAuthSchema(schemaName)` factory plus `CANONICAL_SCHEMA_NAME` for the
  * migrator to retarget. The CLI has no code path that emits a function, so it
  * cannot produce the shape the runtime needs. Hence: same source of truth
@@ -67,7 +67,7 @@ const OUT_PATH = join(
 
 /**
  * The schema name the committed file and the committed migrations are written
- * against. `database.schema` retargets both at runtime (D27, DM-4), so this is
+ * against. `database.schema` retargets both at runtime, so this is
  * a canonical value in the artifacts, never a deployment decision.
  */
 const CANONICAL_SCHEMA_NAME = "idp"
@@ -76,11 +76,11 @@ const HEADER = `/**
  * GENERATED FILE — do not edit.
  *
  * Produced by \`bun run scripts/generate-auth-schema.ts\` from the installed
- * Better Auth and the plugin list in \`src/server/auth/instance.ts\` (DM-1).
+ * Better Auth and the plugin list in \`src/server/auth/instance.ts\`.
  * CI regenerates it and fails on any difference, so the committed migrations
  * can never describe a schema the running code does not expect.
  *
- * Every table is scoped to a Postgres schema (DM-4). The name is a *runtime*
+ * Every table is scoped to a Postgres schema. The name is a *runtime*
  * value — \`database.schema\`, default \`idp\` — so the tables come from a
  * factory the database client calls once, and the migrator rewrites the
  * canonical schema identifier in the committed SQL to match.
@@ -308,7 +308,7 @@ function generate(schemaName: string): string {
 export const CANONICAL_SCHEMA_NAME = ${JSON.stringify(schemaName)}
 
 /**
- * Builds every table inside \`schemaName\` (CFG-4 \`database.schema\`, DM-4).
+ * Builds every table inside \`schemaName\` (\`database.schema\`).
  *
  * Drizzle needs the schema name when the table is *defined*, so the tables are
  * produced by a factory the database client calls once with the configured
@@ -380,7 +380,7 @@ async function main(): Promise<void> {
     if (current.replace(/\r\n/g, "\n") !== next) {
       process.stderr.write(
         "The committed Drizzle schema no longer matches the installed Better Auth " +
-          "(DM-1 drift).\nRun `pnpm --filter web run db:generate-schema`, then " +
+          "(drift).\nRun `pnpm --filter web run db:generate-schema`, then " +
           "`pnpm --filter web run db:generate`, and commit both.\n"
       )
       process.exit(1)

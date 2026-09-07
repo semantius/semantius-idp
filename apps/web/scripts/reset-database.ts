@@ -1,7 +1,7 @@
 /**
  * `pnpm drizzle:reset` — drop this deployment's schema and everything in it.
  *
- * Migrations are forward-only (DM-1): there is no `down`, and no seed step to
+ * Migrations are forward-only: there is no `down`, and no seed step to
  * re-run, so the way back to a clean database is to remove the schema and let
  * the next boot re-create it. Every path that already did this — the
  * integration harness and the upgrade-rollback runbook — spells the
@@ -10,13 +10,13 @@
  * *configuration the app itself would load*, so it cannot land in a database
  * the app never uses.
  *
- * Deliberately **not** an `idp` CLI command (OPS-6, **D56**). The CLI ships
+ * Deliberately **not** an `idp` CLI command. The CLI ships
  * inside the container, where a one-word command that destroys the deployment
  * is a hazard with no upside; this lives in the repository, where the developer
  * who wants a clean database is.
  *
  * What it touches: `database.schema`, and nothing else. Not `public`, not
- * another schema in the same database, not roles or extensions — Q16 and DM-4
+ * another schema in the same database, not roles or extensions — the spec
  * exist because the IdP has to be installable into a database that belongs to
  * somebody else, and a reset that forgot that would be the loudest possible
  * violation of it.
@@ -26,14 +26,13 @@
  * Afterwards the schema is gone. `pnpm dev` and the container both migrate on
  * boot (`database.migrateOnBoot`, on in the shipped config), so the next start
  * rebuilds it empty and serves the first-run setup page — there are no users,
- * so whoever completes it is the first administrator (**D52**).
+ * so whoever completes it is the first administrator.
  *
- * **An app that ran through the drop has to be restarted** (**D58**).
+ * **An app that ran through the drop has to be restarted**.
  * `lock_timeout` below was meant to be the guard here and is not: an idle
  * connection holds no table lock, so the drop succeeds against a live dev
  * server and leaves it talking to a schema that no longer exists. Worse, the
- * first-run gate memoizes `false` for the life of the process (D52,
- * `src/server/admin/first-user.ts`), so that server goes on serving the
+ * first-run gate memoizes `false` for the life of the process (* `src/server/admin/first-user.ts`), so that server goes on serving the
  * *sign-in* page — the one page the person who has just reset the database is
  * certain they should not be seeing. The connection count in the target block
  * and the closing instruction both exist because that trap was walked into.
@@ -129,7 +128,7 @@ async function main(): Promise<number> {
   const { config, dir } = loadConfig()
   const schemaName = options.schema ?? config.file.database.schema
 
-  // `public` is never ours (DM-4), and dropping it would take the database's
+  // `public` is never ours, and dropping it would take the database's
   // extensions and everything else living there with it.
   if (schemaName === "public") {
     throw new Error(
@@ -137,14 +136,14 @@ async function main(): Promise<number> {
     )
   }
 
-  // Direct, not pooled, for the same reason every other DDL path is (D27) — a
+  // Direct, not pooled, for the same reason every other DDL path is — a
   // transaction pooler is one more thing between this statement and the locks
   // it needs. `max: 2` because `--migrate` takes an advisory lock and then
   // queries through the same handle, which deadlocks on `max: 1`.
   const database = createDb(config, { direct: true, max: 2, schemaName })
   // The same string `createDb(…, { direct: true })` just connected with —
   // resolved in `derive.ts`, which falls back to `database.url` when a
-  // deployment has one endpoint rather than two (**D74**). Printed so the
+  // deployment has one endpoint rather than two. Printed so the
   // confirmation names the database it is about to drop a schema from.
   const url = config.databaseDirectUrl
 
@@ -157,7 +156,7 @@ async function main(): Promise<number> {
     const tables = existing?.tables ?? 0
 
     // Anything else on this database is, in a developer's shell, almost always
-    // the app (D58). Counted and reported rather than refused on: this script's
+    // the app. Counted and reported rather than refused on: this script's
     // own pool may open a second backend, and a pooler keeps idle ones around
     // after the process behind them has gone, so refusing on a non-zero count
     // would block the reset on a false positive. Saying the number is enough —
@@ -222,8 +221,8 @@ async function main(): Promise<number> {
       options.migrate || config.file.database.migrateOnBoot
         ? "\nStart the app (`pnpm dev`, or `pnpm docker:up`) and it serves the first-run\n" +
             "setup page: there are no users, so whoever completes it becomes the first\n" +
-            "administrator (D52).\n" +
-            "\nIf it was already running, RESTART it (D58). A process that ran through the\n" +
+            "administrator.\n" +
+            "\nIf it was already running, RESTART it. A process that ran through the\n" +
             "drop is talking to a schema that is no longer there, and it still believes\n" +
             "the deployment is set up — so `/` sends you to the sign-in page instead of\n" +
             "back to the wizard.\n"
@@ -231,7 +230,7 @@ async function main(): Promise<number> {
           // and the error it prints names `idp migrate`, not this script.
           "\n`database.migrateOnBoot` is false, so the next start will refuse an unmigrated\n" +
             "database. Run `pnpm --filter web run db:migrate` first, or re-run this with --migrate.\n" +
-            "\nRestart the app either way, if it ran through the drop (D58).\n"
+            "\nRestart the app either way, if it ran through the drop.\n"
     )
 
     return 0

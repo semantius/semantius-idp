@@ -31,6 +31,8 @@ Specifically:
   claim set, revocation, consent, RP-initiated logout;
 - the admin area and the admin API, including the last-administrator and
   self-action invariants;
+- the `/gateway/*` reverse proxy: credential exchange, what is forwarded, what
+  is stripped, and where a request can be made to go;
 - configuration handling: placeholder substitution, secret masking, anything
   that puts a secret in a log or a response;
 - the container: what it runs as, what it can write, what it exposes.
@@ -40,24 +42,44 @@ Specifically:
 These are documented behaviors rather than defects. If you think the reasoning
 is wrong, say so — but they will not be treated as vulnerabilities.
 
-- **An issued access token stays valid until it expires.** Offline validation
-  is the point; the window is `oauth.accessTokenTtl`, 15 minutes by default.
-  Revocation is immediate everywhere the IdP is actually asked.
+- **An issued access token stays valid until it expires**, as any signed JWT
+  does: offline validation is the point, and nothing short of introspection can
+  end a token early. The window is `oauth.accessTokenTtl`, 15 minutes by
+  default. Revocation is immediate everywhere the IdP is actually asked.
 - **`script-src 'unsafe-inline'`.** The framework streams its own scripts with
   no seam for a nonce. The rest of the policy is written so this is the only
   concession — no remote origin anywhere, `connect-src 'self'`, `form-action`
   limited to this origin and the registered redirect origins.
-- **Sign-up enumeration.** Forgot-password, resend-verification and sign-in
-  failures answer uniformly. Sign-up itself cannot: creating an account that
-  already exists has to fail. Rate limits and verification-first are the
-  mitigation, and the residual risk is accepted.
-- **API keys bypass two-factor authentication.** A key is a credential its
-  owner created deliberately; it re-checks their standing on every use, but it
-  does not prompt.
-- **Running with `server.allowInsecureHttp`, or with rate limiting off.** Both
-  are development switches and both say so.
-- **Anything requiring database or configuration-folder access.** Someone who
-  can read `config.jsonc` already has the secret.
+- **API keys bypass two-factor authentication, and an administrator's key is
+  an administrator.** Standard for a bearer credential: a key is not a
+  sign-in, so no second factor applies to it. It re-checks the owner's
+  standing on every use, and it carries every role its owner holds — there is
+  no per-key scope in v1. Keep an administrator's key where you keep the
+  administrator's password.
+- **The SQL console is off by default, and on, it is the database role.**
+  When an operator enables `admin.database`, an administrator's key runs SQL
+  as the role `DATABASE_URL` names: it reads every row, and in `read-write`
+  mode it can delete the audit trail. The reference deployment gives that
+  role no superuser rights; a superuser connection is reported at start-up.
+- **A gateway reaches what its operator points it at.** `/gateway/*` is an
+  authenticating reverse proxy to an operator-named upstream, private
+  addresses included; only link-local addresses are refused. A gateway with
+  `requireAuth: false` forwards anonymous traffic by design.
+- **"Trust this device" is a cookie**, as it is everywhere this feature
+  exists. The checkbox on the two-factor challenge page stores a random
+  token in a cookie; nothing ties it to the browser, so a copy of that cookie
+  skips the second factor on any machine until the device is revoked on
+  `/account/security` or three `twoFactor.trustDeviceDays` windows have
+  passed since it was first trusted.
+- **Second factors are recoverable from the database plus `secret`.** TOTP
+  secrets and backup codes are encrypted with `secret`, not hashed, because the
+  TOTP algorithm needs the secret back. Database read access together with
+  the configuration secret recovers them — the SQL console is such access,
+  and start-up warns when it is on alongside two-factor authentication.
+- **Anything requiring access to the process environment or the database**,
+  which is the trust boundary of any service. The secret lives in `.env` and reaches the IdP through its environment;
+  `config.jsonc` only names it. Whoever can read that environment, or the
+  database, already holds what the IdP protects.
 
 ## Supported versions
 

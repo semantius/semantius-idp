@@ -24,7 +24,7 @@ import { getCatalog } from "@/server/i18n"
 import { fetchRoles, fetchRolesStatus } from "@/server/functions/admin"
 
 /**
- * `/admin/roles` — the catalog, and who holds what (FR-ROLE-2).
+ * `/admin/roles` — the catalog, and who holds what.
  *
  * Read-only for the same reason as the clients page: the catalog is
  * `roles.jsonc`. What is *not* in the file — how many people actually hold each
@@ -38,7 +38,7 @@ export const Route = createFileRoute("/admin/roles")({
       { label: t.admin.nav.roles, to: "/admin/roles" },
     ]),
     roles: (await fetchRoles()) ?? [],
-    // FR-ADMIN-2 asks this page for the last reconcile and the warnings; both
+    // the spec asks this page for the last reconcile and the warnings; both
     // were specified and neither was ever rendered.
     status: await fetchRolesStatus(),
   }),

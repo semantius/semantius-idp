@@ -1,12 +1,12 @@
 /**
  * Turns the validated files into the single effective configuration object that
- * the rest of the process reads (CFG-5: "configuration is read once").
+ * the rest of the process reads ("configuration is read once").
  *
  * Everything that depends on another key is resolved here rather than in the
  * zod schemas: `trustedOrigins` ← `baseUrl`, `twoFactor.issuer` ← `site.name`,
  * `database.ssl` ← host, `jwt.gracePeriod` ← longest token lifetime, the
- * degraded-e-mail overrides of FR-MAIL-2, and the effective resource registry
- * of FR-OIDC-6.
+ * degraded-e-mail overrides, and the effective resource registry
+ *.
  */
 
 import { USER_CLAIM_NAMES } from "./schema/config-schema"
@@ -23,11 +23,11 @@ export interface BasePathInfo {
   origin: string
   /** Mount path with a leading slash and no trailing slash, `""` at the host root. */
   basePath: string
-  /** Cookie `Path` attribute — `server.cookiePath`, `/` unless it is set (**D97**). */
+  /** Cookie `Path` attribute — `server.cookiePath`, `/` unless it is set. */
   cookiePath: string
-  /** Cookie `Domain` attribute — `server.cookieDomain`, absent (host-only) unless it is set (**D97**). */
+  /** Cookie `Domain` attribute — `server.cookieDomain`, absent (host-only) unless it is set. */
   cookieDomain?: string
-  /** True when `server.baseUrl` uses https, which drives `Secure` cookies (FR-AUTH-5). */
+  /** True when `server.baseUrl` uses https, which drives `Secure` cookies. */
   secure: boolean
   /**
    * `server.dynamicIssuer`: derive the issuer per request from the arriving
@@ -55,20 +55,20 @@ export interface IdpConfig {
   /** CSRF origin allow-list, always containing the issuer origin. */
   readonly trustedOrigins: readonly string[]
   /**
-   * True when `server.trustedOrigins` named nothing, which since **D68** means
+   * True when `server.trustedOrigins` named nothing, which means
    * the check follows the request — the `Origin` has to match the host the
    * request arrived on — rather than the issuer alone. Configuring the
    * allow-list turns it off and pins the check to what it lists.
    */
   readonly trustRequestOrigin: boolean
-  /** `true` when a Resend API key is configured; `false` puts the IdP in degraded mode (FR-MAIL-2). */
+  /** `true` when a Resend API key is configured; `false` puts the IdP in degraded mode. */
   readonly emailEnabled: boolean
   /** `auth.requireEmailVerification`, forced to false when e-mail is off. */
   readonly requireEmailVerification: boolean
   /** TOTP issuer label, defaulting to `site.name`. */
   readonly twoFactorIssuer: string
   /**
-   * The connection string for ordinary traffic, resolved (**D74**).
+   * The connection string for ordinary traffic, resolved.
    *
    * `database.url` when it is set, and `database.directUrl` when it is not —
    * a deployment with one endpoint uses that endpoint for everything. Always
@@ -78,7 +78,7 @@ export interface IdpConfig {
   readonly databaseUrl: string
   /**
    * The connection string for anything holding a session advisory lock —
-   * startup, migrations, the CLI, the cleanup job (**D27**, **D74**).
+   * startup, migrations, the CLI, the cleanup job.
    *
    * `database.directUrl` when it is set, and `database.url` when it is not.
    * The pair collapses to the same string on a single-endpoint deployment,
@@ -87,21 +87,21 @@ export interface IdpConfig {
   readonly databaseDirectUrl: string
   /** `disable | require | verify-full`, defaulting to `require` off localhost. */
   readonly databaseSsl: "disable" | "require" | "verify-full"
-  /** Retired keys stay published this long; defaults to the longest token lifetime + 1 h (FR-OIDC-16). */
+  /** Retired keys stay published this long; defaults to the longest token lifetime + 1 h. */
   readonly jwksGracePeriodSeconds: number
   /** Default audience as an array, however it was written. */
   readonly defaultAudience: readonly string[]
-  /** `oauth.resources` ∪ `jwt.audience` ∪ every per-client `audience` (FR-OIDC-6). */
+  /** `oauth.resources` ∪ `jwt.audience` ∪ every per-client `audience`. */
   readonly resources: readonly EffectiveResource[]
-  /** Which optional user claims the claims builder emits (FR-OIDC-7). */
+  /** Which optional user claims the claims builder emits. */
   readonly userClaims: readonly UserClaimName[]
   /** The single `default: true` role, assigned at self-registration. */
   readonly defaultRole: string
   /** Roles that unlock `/admin/*` and the admin API. */
   readonly adminRoles: readonly string[]
-  /** FR-ADMIN-5: impersonation is off unless the operator turns it on. */
+  /** impersonation is off unless the operator turns it on. */
   readonly allowImpersonation: boolean
-  /** True when the deployment is treated as production (https issuer) — drives the CFG-5 literal-secret rule. */
+  /** True when the deployment is treated as production (https issuer) — drives the spec literal-secret rule. */
   readonly isProduction: boolean
 }
 
@@ -110,12 +110,12 @@ export interface IdpConfig {
  * attributes every URL and cookie decision reads.
  *
  * **The cookie scope is configuration, not a consequence of the mount path
- * (D97).** It used to be derived — `Path` was the mount path, so a `/idp`
+ *.** It used to be derived — `Path` was the mount path, so a `/idp`
  * deployment scoped its session to `/idp`. That is a defensible default for
  * isolation and the wrong one here: it silently withholds the session from
- * every route outside the mount, and `/gateway`, which FR-GW-4 reads the
+ * every route outside the mount, and `/gateway`, which the gateway reads the
  * session cookie for, is exactly such a route once it is aliased to the origin
- * root. A withheld cookie there does not fail loudly — D92 makes a missing
+ * root. A withheld cookie there does not fail loudly — the spec makes a missing
  * session fall through to anonymous. `/` is the default now, which is also
  * Better Auth's own; an operator who wants the old isolation sets
  * `server.cookiePath` to the mount path and gets it back.
@@ -221,7 +221,7 @@ export function deriveConfig(
   const emailEnabled = Boolean(file.email.resend.apiKey)
   const defaultAudience = toArray(file.jwt.audience)
 
-  // FR-OIDC-6: the registry is the union of the configured resources, the
+  // the registry is the union of the configured resources, the
   // default audience, and every per-client audience. First declaration wins so
   // an explicit `oauth.resources` entry keeps its TTL and scope policy.
   const resources = new Map<string, EffectiveResource>()
@@ -251,7 +251,7 @@ export function deriveConfig(
     file.apiKeys.tokenTtl
   )
 
-  // D68: an empty list is not "trust only the issuer" — it is "nothing was
+  // an empty list is not "trust only the issuer" — it is "nothing was
   // configured", and a deployment behind a reverse proxy usually cannot
   // configure it. `[]` written out is the same statement as the key being
   // absent, so both land in the same place rather than one of them meaning a
@@ -262,7 +262,7 @@ export function deriveConfig(
   const defaultRole =
     roles.find((role) => role.default)?.name ?? roles[0]?.name ?? "user"
 
-  // D74: two names, one or two endpoints. Each role falls back to the other,
+  // two names, one or two endpoints. Each role falls back to the other,
   // so a deployment that has only a direct endpoint uses it for everything and
   // one that has only a pooled endpoint is warned by `runCrossChecks` rather
   // than silently taking session locks that do not hold.
@@ -288,7 +288,7 @@ export function deriveConfig(
     trustedOrigins: [...trustedOrigins],
     trustRequestOrigin: configuredOrigins.length === 0,
     emailEnabled,
-    // FR-MAIL-2: without a transport there is no way to verify an address.
+    // without a transport there is no way to verify an address.
     requireEmailVerification: emailEnabled
       ? file.auth.requireEmailVerification
       : false,

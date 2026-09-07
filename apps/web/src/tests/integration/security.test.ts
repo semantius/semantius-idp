@@ -1,5 +1,5 @@
 /**
- * The security properties, asserted against a real server (TST-5).
+ * The security properties, asserted against a real server.
  *
  * Everything here is written from the attacker's side. Each case is a thing
  * somebody would actually try — a forged `Host`, an extra field in a sign-up
@@ -21,11 +21,17 @@ import { createLocalAccountIssuer } from "@better-auth/core/db"
 import { createUserWithoutRequest } from "@/server/auth/provisioning"
 import { createLogger } from "@/server/logger"
 import { withStandardRetryAfter } from "@/server/http/security-headers"
+import { readSession } from "@/server/http/session"
 import { forwardDiscovery } from "@/server/oidc/protocol-proxy"
 import { reconcileClients } from "@/server/oidc/reconcile"
 import type { Runtime } from "@/server/runtime"
 import type { TestContext } from "./harness"
-import { authRequest, createTestContext, sessionCookie } from "./harness"
+import {
+  asRuntime,
+  authRequest,
+  createTestContext,
+  sessionCookie,
+} from "./harness"
 
 const ISSUER = "http://localhost:3000"
 const PASSWORD = "correct-horse-battery-staple"
@@ -179,7 +185,7 @@ async function exchange(
   }
 }
 
-describe("host-header injection (SEC-1)", () => {
+describe("host-header injection", () => {
   it("changes no URL in the discovery document", async () => {
     const path = "/.well-known/openid-configuration"
     const forged = await forwardDiscovery(
@@ -221,11 +227,11 @@ describe("host-header injection (SEC-1)", () => {
   })
 })
 
-describe("the CSRF origin check (SEC-3, D68)", () => {
+describe("the CSRF origin check", () => {
   /**
    * A browser two hops away: it is on `https://idp.example.com`, the proxy
    * rewrote `Host` to the upstream it dialled, and `server.baseUrl` names
-   * neither. Before D68 every one of these was refused before the password was
+   * neither. Before the origin fix every one of these was refused before the password was
    * read, which is a deployment that cannot sign anybody in.
    *
    * The `cookie` header is not decoration — Better Auth only checks the origin
@@ -285,7 +291,7 @@ describe("the CSRF origin check (SEC-3, D68)", () => {
   })
 })
 
-describe("mass assignment (FR-AUTH-7)", () => {
+describe("mass assignment", () => {
   it("ignores privileged fields in a sign-up body", async () => {
     const response = await ctx.auth.handler(
       authRequest("/sign-up/email", {
@@ -468,7 +474,7 @@ describe("the token endpoint", () => {
   })
 })
 
-describe("uniform answers (SEC-7)", () => {
+describe("uniform answers", () => {
   it("says the same thing whether or not the address exists", async () => {
     await makeUser("known@example.com")
 
@@ -508,7 +514,7 @@ describe("uniform answers (SEC-7)", () => {
   })
 })
 
-describe("session cookies (FR-AUTH-5)", () => {
+describe("session cookies", () => {
   it("are HttpOnly, SameSite=Lax and scoped to the mount path", async () => {
     await makeUser("cookie@example.com")
     const response = await ctx.auth.handler(
@@ -530,7 +536,7 @@ describe("session cookies (FR-AUTH-5)", () => {
   })
 })
 
-describe("the approval gate, on every path (FR-SIGNUP-2)", () => {
+describe("the approval gate, on every path", () => {
   it("refuses a pending user a session, a token and an API key alike", async () => {
     await ctx.teardown()
     ctx = await createTestContext("security-approval", {
@@ -579,31 +585,28 @@ describe("the approval gate, on every path (FR-SIGNUP-2)", () => {
       ((await before.json()) as { user?: unknown } | null)?.user
     ).toBeTruthy()
 
-    // The administrator suspends them. FR-AUTH-5's cookie cache must not keep
+    // The administrator suspends them. the spec's cookie cache must not keep
     // the session alive past this.
     await ctx.database.db
       .update(ctx.database.schema.user)
       .set({ status: "rejected" })
       .where(eq(ctx.database.schema.user.id, userId))
 
-    const after = await ctx.auth.handler(
-      authRequest("/get-session", {
-        method: "GET",
-        headers: { cookie },
-        // The authoritative read is what the gates use; assert on the same
-        // thing they do rather than on the cached copy.
-        json: undefined,
-      })
+    // The authoritative read is what every gate uses, and it re-runs
+    // the standing gate on the row it read (`http/session.ts`): nobody is
+    // signed in. Pinned to that answer — this used to accept either "no
+    // session" or "a session whose user is visibly not active", which is a
+    // test that passes whether or not the gate exists (security review).
+    const after = await readSession(
+      asRuntime(ctx),
+      new Request(`${ISSUER}/account`, { headers: { cookie } }),
+      { authoritative: true }
     )
-    const body = (await after.json().catch(() => null)) as {
-      user?: { status?: string }
-    } | null
-    // Either no session at all, or a session whose user is visibly not active.
-    if (body?.user) expect(body.user.status).not.toBe("active")
+    expect(after).toBeNull()
   })
 })
 
-describe("rate limiting (SEC-2)", () => {
+describe("rate limiting", () => {
   it("refuses repeated sign-in attempts and says when to come back", async () => {
     await ctx.teardown()
     ctx = await createTestContext("security-ratelimit", {
@@ -674,7 +677,7 @@ describe("rate limiting (SEC-2)", () => {
   })
 })
 
-describe("the breach check (FR-AUTH-1)", () => {
+describe("the breach check", () => {
   const BREACHED = "P@ssw0rd-that-is-in-the-corpus"
 
   /** A stand-in for the range API that only ever knows about one password. */
@@ -823,7 +826,7 @@ describe("the breach check (FR-AUTH-1)", () => {
   })
 })
 
-describe("e-mail links stay canonical under server.dynamicIssuer (SEC-1)", () => {
+describe("e-mail links stay canonical under server.dynamicIssuer", () => {
   /**
    * The one thing the dynamic issuer deliberately does NOT move. Reset and
    * verification links are built from `server.baseUrl` at boot — that is the

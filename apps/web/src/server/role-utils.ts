@@ -1,5 +1,5 @@
 /**
- * Role helpers (FR-ROLE-2).
+ * Role helpers.
  *
  * `user.role` is a Better-Auth-fixed single column, so several roles are stored
  * comma-separated in it. Splitting lives here rather than in `startup.ts`
@@ -26,7 +26,7 @@ export function joinRoles(roles: readonly string[]): string {
 
 /**
  * The roles a user actually has, in catalog order, dropping any that are no
- * longer defined (FR-ROLE-2: "role values no longer in the catalog are dropped
+ * longer defined ("role values no longer in the catalog are dropped
  * from claims"). Catalog order keeps the `roles` claim stable across users.
  */
 export function effectiveRoles(
@@ -37,7 +37,7 @@ export function effectiveRoles(
   return catalog.map((role) => role.name).filter((name) => held.has(name))
 }
 
-/** Whether any held role unlocks the admin area (FR-ROLE-3). */
+/** Whether any held role unlocks the admin area. */
 export function isAdmin(
   stored: string | null | undefined,
   adminRoles: readonly string[]

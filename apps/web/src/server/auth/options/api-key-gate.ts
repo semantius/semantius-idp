@@ -1,5 +1,5 @@
 /**
- * Re-checking the owner on every API-key request (FR-KEY-2, FR-SIGNUP-2).
+ * Re-checking the owner on every API-key request.
  *
  * A key is a long-lived credential handed out once. Everything that can happen
  * to the person holding it — banned, un-approved, rejected — happens *after*
@@ -50,6 +50,26 @@ export function isApiKeySession(session: {
   session?: Record<PropertyKey, unknown> | null
 }): boolean {
   return session.session?.[API_KEY_SESSION] === true
+}
+
+/**
+ * The `actorType` an audit row should carry for this caller.
+ *
+ * One function rather than a literal at each site, because the literal was
+ * `"session"` at every one of them: seventeen admin audit writes said a
+ * browser did it whether or not the caller was a script holding an API key,
+ * while `docs/admin-api.md` promised the column told the two apart. The
+ * marker above is the only thing in the process that knows, so the answer
+ * lives beside it. `null` and `undefined` are a browser session: the gates
+ * have already refused an anonymous caller before any of these sites run.
+ */
+export function actorTypeFor(
+  session:
+    | { session?: Record<PropertyKey, unknown> | null }
+    | null
+    | undefined
+): "session" | "api-key" {
+  return session && isApiKeySession(session) ? "api-key" : "session"
 }
 
 export interface ApiKeyGateDeps {
@@ -105,7 +125,7 @@ function wrap(entry: HookEntry, deps: ApiKeyGateDeps): HookEntry {
     if (!user) return result
 
     // The session in hand was built from a key, and this is the only place
-    // that knows it. `azp` in a session JWT depends on it (FR-KEY-3).
+    // that knows it. `azp` in a session JWT depends on it.
     const built = gate.context.session?.session
     if (built) built[API_KEY_SESSION] = true
 

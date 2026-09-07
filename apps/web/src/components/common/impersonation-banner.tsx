@@ -5,12 +5,12 @@ import type { Catalog } from "@/server/i18n"
 import type { UiContext } from "@/server/ui-context"
 
 /**
- * "You are signed in as somebody else", with a way out (FR-ADMIN-5, **D66**).
+ * "You are signed in as somebody else", with a way out.
  *
  * The banner was on both shells already, in duplicate, and it said what was
  * happening without offering to stop it — so an impersonation ended by
  * expiring after an hour or by signing out, which signs the *administrator*
- * out too. That is also why `impersonation.stopped` was declared in SEC-6 and
+ * out too. That is also why `impersonation.stopped` was declared in the audit spec and
  * never written by anything: nothing ever called the endpoint that produces
  * it.
  *
@@ -28,7 +28,7 @@ export function ImpersonationBanner({
   t: Catalog
   /**
    * The layout pins the banner's height to its own `--banner-h` at `md` and
-   * up, because that is the offset the fixed sidebar is positioned by (D82).
+   * up, because that is the offset the fixed sidebar is positioned by.
    */
   className?: string
 }) {

@@ -1,5 +1,5 @@
 /**
- * What the user typed, kept across a refusal (**D62**).
+ * What the user typed, kept across a refusal.
  *
  * Every mutation here is a form POST answered by a 303 carrying a bare error
  * code (`auth-proxy.ts`), so a rejected form remounts empty: the dialog is
@@ -37,6 +37,37 @@ export type Draft = Record<string, string>
 const NEVER_STASHED = /pass(word)?|secret|token|credential/i
 
 /**
+ * The second list, matched as a whole **name segment** rather than as a
+ * substring (security review 2026-09).
+ *
+ * A one-time code is a credential for the minute it is valid, and a backup
+ * code for as long as it is unused, so a future form that carries one — a 2FA
+ * challenge that keeps its fields across a refusal, say — must not write it
+ * into `verification` in clear. These words are too short to match the way
+ * the list above does: `pin` is in `shipping` and `code` in `postcode`, and
+ * dropping those would be a form that silently forgets ordinary fields. So a
+ * name is split on its camelCase and snake_case seams, and `backupCode`,
+ * `otpCode`, `confirmPin` and `backup_codes` are caught while `pinned` and
+ * `postcode` are not.
+ */
+const NEVER_STASHED_SEGMENTS = new Set([
+  "pin",
+  "otp",
+  "totp",
+  "code",
+  "codes",
+  "backup",
+])
+
+/** Exported for its own test: the rule, without the store. */
+export function isNeverStashed(name: string): boolean {
+  if (NEVER_STASHED.test(name)) return true
+  return name
+    .split(/[^A-Za-z0-9]+|(?=[A-Z])/)
+    .some((segment) => NEVER_STASHED_SEGMENTS.has(segment.toLowerCase()))
+}
+
+/**
  * Ten kilobytes of form. Generous for a dozen inputs and two textareas of
  * URIs, and small enough that this cannot become a way to write arbitrary
  * bulk into `verification` — the routes that POST forms sit in front of no
@@ -49,7 +80,7 @@ export interface StashDraftOptions {
   /**
    * How long the draft stays claimable. The default matches the one-shot
    * store's own; a flow that detours through a full re-authentication asks
-   * for more (see `/admin/clients`, **D63**).
+   * for more (see `/admin/clients`).
    */
   ttlSeconds?: number
 }
@@ -68,7 +99,7 @@ export function draftFields(
   const kept: Draft = {}
   for (const [name, value] of Object.entries(fields)) {
     if (value === undefined) continue
-    if (NEVER_STASHED.test(name)) continue
+    if (isNeverStashed(name)) continue
     const flat = Array.isArray(value) ? value.join("\n") : value
     if (flat === "") continue
     kept[name] = flat

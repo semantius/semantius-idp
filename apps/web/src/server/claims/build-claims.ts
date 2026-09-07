@@ -1,9 +1,9 @@
 /**
- * The one place a token learns anything about a user (FR-OIDC-7).
+ * The one place a token learns anything about a user.
  *
  * Three different tokens carry user claims — the OAuth access token, the ID
  * token, and the session JWT that `GET {baseUrl}/api/auth/token` mints from a
- * session or an API key — and FR-OIDC-7's acceptance criterion is that their
+ * session or an API key — and the spec's acceptance criterion is that their
  * shapes are identical modulo `sub`, `sid`, `azp` and `scope`. One builder is
  * how that is true by construction rather than by three implementations
  * happening to agree this week.
@@ -16,7 +16,7 @@
  * builder that also emitted them would be writing values that are silently
  * discarded, which is worse than not writing them.
  *
- * **Roles are catalog-filtered** (FR-ROLE-2): a role that has been removed from
+ * **Roles are catalog-filtered**: a role that has been removed from
  * `roles.jsonc` stops appearing in tokens, even though the column still holds
  * it. The drop is the point — a resource server authorizing on a role the
  * deployment no longer defines is exactly the situation the catalog exists to
@@ -33,7 +33,7 @@ export interface ClaimsUser {
   name?: unknown
   firstName?: unknown
   lastName?: unknown
-  /** The stored, comma-separated column (FR-ROLE-2). */
+  /** The stored, comma-separated column. */
   role?: unknown
 }
 

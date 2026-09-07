@@ -1,5 +1,5 @@
 /**
- * Refuses to ship the server to the browser (SEC-5, SEC-10).
+ * Refuses to ship the server to the browser.
  *
  * A TanStack Start route `loader` is isomorphic: it runs on the server for the
  * first paint and in the browser on every client-side navigation. So anything
@@ -34,11 +34,11 @@ const SERVER_DIR = "apps/web/dist/server"
  * environment-variable names all survive minification; identifiers do not.
  */
 const SERVER_ONLY_MARKERS = [
-  { marker: "pg_try_advisory_lock", what: "the advisory-lock helper (DM-4)" },
+  { marker: "pg_try_advisory_lock", what: "the advisory-lock helper" },
   { marker: "drizzle", what: "Drizzle ORM" },
   { marker: "better-auth", what: "Better Auth" },
   { marker: "BETTER_AUTH_SECRET", what: "the secret's fallback env var" },
-  { marker: "DATABASE_URL_ADMIN", what: "the direct connection string (D27)" },
+  { marker: "DATABASE_URL_ADMIN", what: "the direct connection string" },
   { marker: "__drizzle_migrations", what: "the migrations table" },
 ]
 
@@ -49,14 +49,14 @@ const SERVER_ONLY_MARKERS = [
  * shape of one — the incident it was written from put the browser bundle over
  * 1 MB. The number was 600 kB against a ~330 kB bundle, and the comment saying
  * so went stale: the client was ~600 kB when this was last raised, so the gate
- * had drifted into a tripwire that ordinary UI work sets off (the **D71**
+ * had drifted into a tripwire that ordinary UI work sets off (the toast
  * toast, 25 kB, brought it to within 1.2 kB) while still passing anything
  * short of the megabyte it was aimed at. Raised to keep the headroom it was
  * written with. Update the measured figure here when it moves, so the next
  * person can see the drift.
  *
- * **1143 kB today**, up from 711 kB. The delta is CodeMirror: **D83** put a
- * SQL console on `/admin/database` (FR-ADMIN-7), and the editor, its SQL
+ * **1143 kB today**, up from 711 kB. The delta is CodeMirror: the SQL console put a
+ * SQL console on `/admin/database`, and the editor, its SQL
  * grammar, its linter and its search are ~410 kB in one chunk
  * (`sql-runner-*.js`), with another ~14 kB for the schema tree. Both panes are
  * `React.lazy`-ed by the route, so nobody who does not open that page
@@ -66,7 +66,7 @@ const SERVER_ONLY_MARKERS = [
  * of headroom the previous figure carried.
  *
  * **1180 kB today**, up from 1143 kB. The delta is `react-resizable-panels`,
- * ~37 kB, which **D87** put on `/admin/database` for the two splitters
+ * ~37 kB, which the spec put on `/admin/database` for the two splitters
  * between the schema tree, the SQL editor and the result grid. Unlike
  * CodeMirror it is *not* behind the route's `React.lazy` — the page module
  * itself renders the group — so it is in that route's chunk rather than in a

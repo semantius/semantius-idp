@@ -4,7 +4,7 @@ import { parseBasePath } from "@/server/config/derive"
 import { resolveRequestIssuer } from "@/server/oidc/request-issuer"
 
 /**
- * `server.dynamicIssuer` — the resolver, as a matrix (SEC-1's one sanctioned
+ * `server.dynamicIssuer` — the resolver, as a matrix (the spec's one sanctioned
  * exception).
  *
  * The fail-safe half is the one that matters: with the flag off, the answer

@@ -10,12 +10,13 @@ import { describe, expect, it } from "vitest"
 
 import { loadConfig } from "@/server/config/loader"
 import { buildUiContext } from "@/server/ui-context"
+import type { UiViewer } from "@/server/ui-context"
 import { baseConfig, makeConfigFolder } from "../fixtures/config-files"
 
-function contextFor(
-  site: Record<string, unknown>,
-  baseUrl?: string,
-  overrides: Record<string, unknown> = {}
+function loadedFor(
+  overrides: Record<string, unknown>,
+  site: Record<string, unknown> = {},
+  baseUrl?: string
 ) {
   const config: Record<string, unknown> = {
     ...baseConfig(),
@@ -24,27 +25,53 @@ function contextFor(
   }
   if (baseUrl) config.server = { baseUrl }
   const folder = makeConfigFolder({ config })
-  const loaded = loadConfig({
+  return loadConfig({
     dir: "/config",
     readFile: folder.readFile,
     env: {},
-  })
-  return buildUiContext(loaded.config, "en-US")
+  }).config
+}
+
+function contextFor(
+  site: Record<string, unknown>,
+  baseUrl?: string,
+  overrides: Record<string, unknown> = {},
+  viewer: UiViewer = { signedIn: true }
+) {
+  return buildUiContext(loadedFor(overrides, site, baseUrl), "en-US", viewer)
 }
 
 describe("buildUiContext capability flags", () => {
   it("says the database console is off unless it is configured", () => {
-    // FR-ADMIN-7. A boolean, not the tri-state: the *mode* is admin-only
+    // A boolean, not the tri-state: the *mode* is admin-only
     // detail and this object reaches every anonymous visitor.
     expect(contextFor({}).adminDatabaseEnabled).toBe(false)
   })
 
-  it("says it is on for either live mode", () => {
+  it("says it is on for either live mode, to a signed-in viewer", () => {
     for (const mode of ["read-only", "read-write"]) {
       expect(
         contextFor({}, undefined, { admin: { database: mode } })
           .adminDatabaseEnabled
       ).toBe(true)
+    }
+  })
+
+  it("keeps the console's existence from an anonymous visitor", () => {
+    // Security review 2026-09: the sign-in page renders this object, and
+    // "there is a SQL console" is attack-surface information nobody without a
+    // session needs. The default viewer is anonymous, so a caller that
+    // forgets to say who is asking gets the safe answer.
+    for (const mode of ["read-only", "read-write"]) {
+      const overrides = { admin: { database: mode } }
+      expect(
+        contextFor({}, undefined, overrides, { signedIn: false })
+          .adminDatabaseEnabled
+      ).toBe(false)
+      // No viewer at all is the anonymous case, not the permissive one.
+      expect(
+        buildUiContext(loadedFor(overrides), "en-US").adminDatabaseEnabled
+      ).toBe(false)
     }
   })
 })

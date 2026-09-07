@@ -14,7 +14,7 @@ import { APP_ROUTES } from "@/server/oidc/base-path"
  *
  * There is a third case, and it is the first one anybody meets: a deployment
  * whose `user` table is still empty has nobody to sign in *as*, so the root
- * sends them to the first-run setup page instead (**D52**). That check comes
+ * sends them to the first-run setup page instead. That check comes
  * first, because `fetchProfile()` on a fresh database can only ever answer
  * "no session".
  *

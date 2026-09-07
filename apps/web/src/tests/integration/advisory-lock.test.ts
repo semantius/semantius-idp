@@ -11,7 +11,7 @@ import {
 import { testDatabaseSsl, testDatabaseUrl } from "./harness"
 
 /**
- * D27 / OPS-2 — the locks every mutating startup step depends on.
+ * the locks every mutating startup step depends on.
  *
  * S4 established that a session advisory lock does not hold through a
  * transaction pooler, which is why `database.directUrl` exists. What it did
@@ -25,7 +25,7 @@ import { testDatabaseSsl, testDatabaseUrl } from "./harness"
  * These run against the direct connection for the same reason the startup
  * steps do.
  */
-describe("advisory locks (D27)", () => {
+describe("advisory locks", () => {
   let holder: postgres.Sql
   let waiter: postgres.Sql
   const NAMESPACE = LOCK_NAMESPACE

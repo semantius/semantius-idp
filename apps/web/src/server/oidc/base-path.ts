@@ -1,5 +1,5 @@
 /**
- * The single source of truth for every path and absolute URL (OPS-10, SEC-1, risk R3).
+ * The single source of truth for every path and absolute URL.
  *
  * `server.baseUrl` may carry a path (`https://apps.example.com/idp`). Six
  * different knobs then have to agree — Vite's `base`, the TanStack router's
@@ -25,7 +25,7 @@
  * has no path of its own, so the issuer must **not** be passed as `baseURL` —
  * see the comment on `createAuthOptions`.
  *
- * Nothing here ever reads `Host` or `X-Forwarded-Host` (SEC-1).
+ * Nothing here ever reads `Host` or `X-Forwarded-Host`.
  */
 
 import type { BasePathInfo } from "../config/derive"
@@ -40,9 +40,9 @@ export interface BasePaths {
   basePath: string
   /** `https://apps.example.com/idp` — the issuer, byte-for-byte. */
   issuer: string
-  /** Cookie `Path`: `server.cookiePath`, `/` by default (**D97**). */
+  /** Cookie `Path`: `server.cookiePath`, `/` by default. */
   cookiePath: string
-  /** Cookie `Domain`: `server.cookieDomain`, absent (host-only) by default (**D97**). */
+  /** Cookie `Domain`: `server.cookieDomain`, absent (host-only) by default. */
   cookieDomain?: string
   /** `Secure` cookies whenever the issuer is https, whatever the internal scheme is. */
   secureCookies: boolean
@@ -89,7 +89,7 @@ export function createBasePaths(base: BasePathInfo): BasePaths {
 export const APP_ROUTES = {
   login: "/login",
   signup: "/signup",
-  /** First-run setup, reachable only while the `user` table is empty (D52). */
+  /** First-run setup, reachable only while the `user` table is empty. */
   setup: "/setup",
   forgotPassword: "/forgot-password",
   resetPassword: "/reset-password",
@@ -101,7 +101,7 @@ export const APP_ROUTES = {
   changePassword: "/change-password",
   logout: "/logout",
   endSession: "/oauth2/end-session",
-  /** The confirmation page for a logout with no `id_token_hint` (FR-OIDC-11). */
+  /** The confirmation page for a logout with no `id_token_hint`. */
   endSessionConfirm: "/sign-out",
   account: "/account",
   admin: "/admin",
@@ -110,7 +110,7 @@ export const APP_ROUTES = {
 
 /**
  * Protocol endpoints that must sit at the issuer root rather than under Better
- * Auth's `basePath` (FR-OIDC-4/15). Thin server routes delegate them to
+ * Auth's `basePath`. Thin server routes delegate them to
  * `auth.handler`.
  */
 export const PROTOCOL_ROUTES = {
@@ -133,7 +133,7 @@ export const PROTOCOL_ROUTES = {
   securityTxt: "/.well-known/security.txt",
 } as const
 
-/** One labeled absolute URL on the admin system page (FR-ADMIN-2, **D55**). */
+/** One labeled absolute URL on the admin system page. */
 export interface DiscoveryUrl {
   /** A stable key the catalog translates; never shown raw. */
   key: string
@@ -141,7 +141,7 @@ export interface DiscoveryUrl {
 }
 
 /**
- * Every well-known URL this deployment answers on, absolute (**D55**).
+ * Every well-known URL this deployment answers on, absolute.
  *
  * The operator's actual question — "what do I paste into the other system?" —
  * had no answer on any page: the issuer was shown, and every discovery URL had

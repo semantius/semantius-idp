@@ -8,21 +8,21 @@ import { authRequest, createTestContext, sessionCookie } from "./harness"
 import type { TestContext } from "./harness"
 
 /**
- * FR-AUTH-4 — both halves of it.
+ * both halves of it.
  *
  * The flag going *on* was covered; the flag coming *off* was not, and it never
  * happened. `mustChangePassword` was set by the bootstrap step and cleared by
  * nothing, so completing the forced change succeeded and the next sign-in
  * interposed the very same page — for ever. The bootstrap admin could not
- * reach any destination at all, which is also why the R-3 `/account` 404 was
+ * reach any destination at all, which is also why the spec `/account` 404 was
  * never seen from that account.
  *
  * The half that must *not* change is equally load-bearing: an administrator
- * assigning a temporary password (FR-ADMIN-2) writes a password and raises
+ * assigning a temporary password writes a password and raises
  * this same flag, so "any credential password write clears it" would quietly
  * undo the feature. Hence the endpoint list, and hence the second test.
  */
-describe("forced password change (FR-AUTH-4)", () => {
+describe("forced password change", () => {
   let ctx: TestContext
   const email = "forced@example.com"
   const temporary = "temporary password from an admin"

@@ -1,5 +1,5 @@
 /**
- * Taking OAuth tokens away (FR-OIDC-12, FR-AUTH-3/6, FR-OIDC-10).
+ * Taking OAuth tokens away.
  *
  * The call sites want *different* scopes, and collapsing them into one
  * "revoke everything" would be wrong in most of them:
@@ -8,13 +8,13 @@
  *   deletion, or an administrator's explicit "sign this person out
  *   everywhere". The user's whole OAuth footprint goes.
  * - **`revokeForSession`** — `session.revokeOAuthTokensOnLogout`, and every
- *   explicit "sign this session out" on `/account/sessions`. FR-AUTH-6 revokes
+ *   explicit "sign this session out" on `/account/sessions`. The spec revokes
  *   the tokens *that session* obtained, not the user's: signing out on a
  *   laptop must not log the phone out of every connected application.
- * - **`revokeForOtherSessions`** — "Sign out everywhere else" (**D101**). The
+ * - **`revokeForOtherSessions`** — "Sign out everywhere else". The
  *   same scope, applied to every session but the caller's, expired ones
  *   included.
- * - **`revokeForClient`** — withdrawing consent. FR-OIDC-10 revokes *that
+ * - **`revokeForClient`** — withdrawing consent. The spec revokes *that
  *   client's* tokens; the other applications the user has connected are not
  *   part of that decision.
  *
@@ -22,7 +22,7 @@
  * asymmetry is deliberate: an access token is short-lived and opaque to us
  * once issued, so the row exists only to answer introspection, while a revoked
  * refresh token's row is the evidence that lets reuse detection tell "revoked"
- * apart from "never existed" (FR-OIDC-8).
+ * apart from "never existed".
  *
  * A JWT access token already issued cannot be recalled — it verifies against
  * the JWKS until it expires. That is inherent to stateless verification and is
@@ -44,7 +44,7 @@ export interface RevokeResult {
   refreshTokens: number
 }
 
-/** Everything the user holds, everywhere (FR-OIDC-12). */
+/** Everything the user holds, everywhere. */
 export async function revokeAllForUser(
   deps: RevokeDeps,
   { userId, reason }: { userId: string; reason: string }
@@ -59,13 +59,13 @@ export async function revokeAllForUser(
 }
 
 /**
- * The tokens one session obtained (FR-AUTH-6).
+ * The tokens one session obtained.
  *
  * Scoped on `session_id`, which both token tables carry — and which is set to
  * `null` rather than cascading when a session row is deleted, so this has to
  * run *before* the session goes.
  *
- * `userId` is **part of the WHERE**, not only audit metadata (**D101**). A
+ * `userId` is **part of the WHERE**, not only audit metadata. A
  * session id is a handle a caller supplies, and every caller here checks
  * ownership before it gets this far — but a scope that is enforced only by its
  * callers is one careless future caller away from a cross-user revocation.
@@ -102,7 +102,7 @@ export async function revokeForSession(
 }
 
 /**
- * Every session the user holds **except** the one asking (**D101**).
+ * Every session the user holds **except** the one asking.
  *
  * This is the token half of "Sign out everywhere else". Better Auth's
  * `/revoke-other-sessions` deletes the session rows and knows nothing about
@@ -156,7 +156,7 @@ export async function revokeForOtherSessions(
   return total
 }
 
-/** One client's tokens for one user (FR-OIDC-10). */
+/** One client's tokens for one user. */
 export async function revokeForClient(
   deps: RevokeDeps,
   {

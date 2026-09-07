@@ -3,11 +3,11 @@ import type { Catalog } from "@/server/i18n"
 import type { UiContext } from "@/server/ui-context"
 
 /**
- * The `<title>` a page carries (**D93**).
+ * The `<title>` a page carries.
  *
  * `routes/admin.tsx`'s `head()` names the whole subtree `site.adminTitle`, so
  * every bookmark of every admin page was called "User Manager" — including,
- * once D93 made an edit addressable, `/admin/clients/foo/edit`.
+ * once the spec made an edit addressable, `/admin/clients/foo/edit`.
  * Bookmarkability is the premise of that change, and a bookmark you cannot
  * tell from seven others is not one.
  *
@@ -24,10 +24,10 @@ export function documentTitle(page: string, site: string): string {
 }
 
 /**
- * `head()` for a page under `/admin/*`, named for `site.adminTitle` (D61).
+ * `head()` for a page under `/admin/*`, named for `site.adminTitle`.
  *
  * Takes the page's name as a function of the catalog rather than as a string,
- * so the wording never leaves it (FR-I18N-1) and the call site reads like every
+ * so the wording never leaves it and the call site reads like every
  * other one: `adminHead(loaderData?.ui, (t) => t.admin.roles.title)`.
  *
  * `loaderData` is `undefined` while a match is still resolving, which is why

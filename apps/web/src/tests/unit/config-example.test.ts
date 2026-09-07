@@ -18,7 +18,7 @@ const EXAMPLE_DIR = join(
 
 /**
  * The shipped `config.example/` folder is documentation that has to keep
- * working: DOC-1's quick start copies it. Loading it here means a renamed or
+ * working: the spec's quick start copies it. Loading it here means a renamed or
  * removed key breaks the build rather than a first-time operator's evening.
  */
 describe("config.example/", () => {
@@ -28,8 +28,10 @@ describe("config.example/", () => {
     IDP_SECRET: "0123456789abcdef0123456789abcdef0123456789",
     DATABASE_URL: "postgres://idp:idp@db:5432/idp",
     RESEND_API_KEY: "re_example",
-    EXAMPLE_WEB_CLIENT_SECRET: "w".repeat(40),
-    EXAMPLE_FIRSTPARTY_CLIENT_SECRET: "f".repeat(40),
+    // What `idp-setup-env` writes: generated values, which the spec requires of
+    // a file secret. `.env.example`'s own placeholders would be refused.
+    EXAMPLE_WEB_CLIENT_SECRET: "0f3e9a7c5b1d2e4f6a8c0b9d7e5f3a1c2b4d6e8f",
+    EXAMPLE_FIRSTPARTY_CLIENT_SECRET: "a1c3e5f7b9d0246813579bdf2468ace13579bdf0",
   }
 
   it("validates as a production deployment", () => {
@@ -40,7 +42,7 @@ describe("config.example/", () => {
     })
 
     expect(config.file.site.name).toBe("Semantius")
-    // D61: the admin area is branded separately in the shipped example, so
+    // the admin area is branded separately in the shipped example, so
     // the key is exercised rather than only documented.
     expect(config.file.site.adminTitle).toBe("User Manager")
     expect(config.isProduction).toBe(true)
@@ -55,11 +57,11 @@ describe("config.example/", () => {
     expect(config.defaultRole).toBe("user")
     // No literal-secret complaints: every secret in the example comes from a
     // placeholder. And no administrator warning either — there is nothing to
-    // configure any more (D52).
+    // configure any more.
     expect(warnings.map((warning) => warning.code)).toEqual([])
   })
 
-  it("exercises the sub-path deployment shape (OPS-10)", () => {
+  it("exercises the sub-path deployment shape", () => {
     const { config } = loadConfig({
       dir: EXAMPLE_DIR,
       env,
@@ -95,7 +97,7 @@ describe("config.example/", () => {
     expect(config.base.origin).toBe("http://localhost:3000")
     expect(config.emailEnabled).toBe(false)
     // Only the degraded-mail one. A deployment with no users is not
-    // misconfigured, so there is no bootstrap warning any more (D52).
+    // misconfigured, so there is no bootstrap warning any more.
     expect(warnings.map((warning) => warning.code).sort()).toEqual([
       "email.degraded",
     ])

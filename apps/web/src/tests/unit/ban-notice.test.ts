@@ -5,7 +5,7 @@ import { createAuthSchema } from "@/server/db/schema/auth-schema"
 import type { Runtime } from "@/server/runtime"
 
 /**
- * What `/banned` is told (FR-ADMIN-4).
+ * What `/banned` is told.
  *
  * The page reads `reason` and `expires` out of its query string, so the
  * contract worth pinning is the shape of that string — including the case

@@ -3,13 +3,13 @@ import { fileURLToPath } from "node:url"
 import { defineConfig } from "vitest/config"
 
 /**
- * Two projects (TST-1):
+ * Two projects:
  *
  * - `unit` — pure modules, no I/O. Coverage gates live here: ≥ 85 % for the
  *   config, claims, reconcile and approval modules, ≥ 70 % overall.
  * - `integration` — runs against a real Postgres. Each file gets its own
  *   uniquely named schema, which is cheap because every table is scoped to one
- *   schema anyway (DM-4), so runs stay isolated even on a shared hosted DB.
+ *   schema anyway, so runs stay isolated even on a shared hosted DB.
  *
  * `test:e2e` is Playwright against the built image and is configured separately.
  *
@@ -61,7 +61,7 @@ export default defineConfig({
         functions: 70,
         branches: 70,
         statements: 70,
-        // TST-1 raises the bar for the modules a mistake would be most
+        // the spec raises the bar for the modules a mistake would be most
         // expensive in.
         "src/server/config/**/*.ts": {
           lines: 85,
@@ -81,7 +81,7 @@ export default defineConfig({
           branches: 85,
           statements: 85,
         },
-        // TST-1 names "approval" explicitly: the status gate and the
+        // the spec names "approval" explicitly: the status gate and the
         // endpoints that move a user through it.
         "src/server/auth/options/database-hooks.ts": {
           lines: 85,

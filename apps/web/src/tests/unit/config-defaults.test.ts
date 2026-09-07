@@ -4,13 +4,13 @@ import { configFileSchema } from "@/server/config/schema/config-schema"
 import { baseConfig } from "@/tests/fixtures/config-files"
 
 /**
- * Locks the whole CFG-4 default table in one snapshot-style assertion.
+ * Locks the whole default table in one snapshot-style assertion.
  *
  * A nested `.default({})` that is not re-parsed, or a duration default left as
  * a string, silently produces the wrong effective value everywhere; this test
  * is the one place that would notice.
  */
-describe("CFG-4 defaults", () => {
+describe("the spec defaults", () => {
   const parsed = configFileSchema.parse(baseConfig())
 
   it("resolves every documented default", () => {
@@ -23,7 +23,8 @@ describe("CFG-4 defaults", () => {
         dynamicIssuer: false,
         allowInsecureHttp: false,
         shutdownTimeoutSeconds: 10,
-        // **D97**: the whole host, and host-only. `cookieDomain` has no default
+        maxRequestBodyBytes: 64 * 1024 * 1024,
+        // the whole host, and host-only. `cookieDomain` has no default
         // — absent is what makes the cookie host-only — so it is not here.
         cookiePath: "/",
       },
@@ -139,7 +140,7 @@ describe("CFG-4 defaults", () => {
   })
 })
 
-describe("auth.defaultRedirect (D28)", () => {
+describe("auth.defaultRedirect", () => {
   const parseRedirect = (defaultRedirect: unknown) =>
     configFileSchema.safeParse({ ...baseConfig(), auth: { defaultRedirect } })
 
@@ -169,7 +170,7 @@ describe("auth.defaultRedirect (D28)", () => {
     expect(parseRedirect(value).success).toBe(false)
   })
 
-  it("leaves SEC-3 alone — this is config, `returnTo` is not", () => {
+  it("leaves the redirect rule alone — this is config, `returnTo` is not", () => {
     // Cross-origin is legitimate *here* because it comes from the operator's
     // file. The runtime parameter is validated by `safeReturnTo` and is
     // covered by its own tests.

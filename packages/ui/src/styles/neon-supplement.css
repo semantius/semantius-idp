@@ -9,7 +9,7 @@
  * redefines the whole shadcn palette in the Neon brand colors — including
  * `--primary`, `--destructive` and every `--sidebar-*`. Two of those are
  * hand-measured divergences from this project's preset that exist because the
- * preset's own values failed R-1's 4.5:1 floor in `e2e/a11y.spec.ts`; letting
+ * preset's own values failed the spec's 4.5:1 floor in `e2e/a11y.spec.ts`; letting
  * Neon's palette land on top of them would silently undo the measurements
  * recorded beside the tokens in `globals.css`.
  *
@@ -29,7 +29,7 @@
      `bg-[var(--status-scaling)]/5` in the blocked-write banner, and over `/15`
      in the mode toggle -- so the ground is nearly white and the ink is the
      same hue. #d97706 measures 3.02:1 at /5 and 2.71:1 at /15, well under
-     R-1's 4.5:1 floor, and the axe scan of /admin/database in
+     the spec's 4.5:1 floor, and the axe scan of /admin/database in
      `e2e/a11y.spec.ts` fails on it. #92400e measures 6.57:1 at /5 and 5.60:1
      at /15 (7.09:1 on plain white). Same kind of deliberate divergence as
      `--destructive` in globals.css: re-vendoring the registry writes its own
@@ -150,7 +150,7 @@
 }
 
 /*
- * R-1 corrections for the two vendored components, scoped to their own roots.
+ * Contrast corrections for the two vendored components, scoped to their own roots.
  *
  * Both draw several strings in `--muted-foreground` at 50-65 % alpha and the
  * error code in `--destructive` at 70 %, and every one of those measures under

@@ -6,10 +6,10 @@ import { RP_PORT } from "./stack"
 import type { Stack } from "./stack"
 
 /**
- * Running `e2e/sample-rp.ts` for the duration of a spec (TST-4, TST-6).
+ * Running `e2e/sample-rp.ts` for the duration of a spec.
  *
  * **A separate process, started with `bun`**, and not an in-test server. The
- * sample RP is a deliverable — DOC-3 points a reader at it — so the thing the
+ * sample RP is a deliverable — the spec points a reader at it — so the thing the
  * suite drives has to be the file the documentation names, run the way the
  * documentation says to run it. An `openid-client` instance constructed inside
  * the test would prove the protocol works and prove nothing about the sample.

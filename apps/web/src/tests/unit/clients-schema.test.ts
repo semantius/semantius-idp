@@ -14,7 +14,7 @@ function errorsFor(client: Record<string, unknown>): string {
     .join("\n")
 }
 
-describe("FR-OIDC-3 client schema", () => {
+describe("client schema", () => {
   it("accepts a confidential web client", () => {
     expect(clientSchema.safeParse(webClient()).success).toBe(true)
   })
@@ -41,7 +41,7 @@ describe("FR-OIDC-3 client schema", () => {
     expect(parsed.resourceServer).toBe(false)
   })
 
-  describe("D26 — no machine-to-machine in v1", () => {
+  describe("no machine-to-machine in v1", () => {
     it('rejects type: "service" and points at per-user API keys', () => {
       const text = errorsFor({ ...webClient(), type: "service" })
       expect(text).toContain("not supported in v1")
@@ -150,5 +150,41 @@ describe("FR-OIDC-3 client schema", () => {
 
   it("defaults an absent clients file to an empty list", () => {
     expect(clientsFileSchema.parse({}).clients).toEqual([])
+  })
+})
+
+describe("a file-declared secret has to look generated", () => {
+  // The stored form is an unsalted SHA-256 (reconciliation and the token
+  // endpoint share one function), so the only thing standing between a
+  // database dump and a working client credential is the secret's entropy.
+  it("accepts what a generator produces", () => {
+    for (const secret of [
+      "3f7a9c1e5b2d8046a1c3e5f7b9d0246813579bdf", // openssl rand -hex 20
+      "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08", // hex 32
+      "QmFzZTY0IHNlY3JldCB0aGF0IGxvb2tzIGdlbmVyYXRlZA+/==", // base64 48 bytes
+      "c2f9e1a7-4b3d-4e8f-9a1b-6d7c8e9f0a1b-2c3d", // uuid-ish, 16 distinct
+    ]) {
+      expect(errorsFor(webClient({ clientSecret: secret })), secret).toBe("")
+    }
+  })
+
+  it("rejects a placeholder built from one repeated character", () => {
+    expect(errorsFor(webClient({ clientSecret: "s".repeat(40) }))).toContain(
+      "distinct characters"
+    )
+  })
+
+  it("accepts a placeholder that clears the floor: the marker is a cross-checks warning, not a refusal", () => {
+    // An old development `.env` carries `example-…` for the two example
+    // clients; refusing it here would stop a working checkout from booting.
+    expect(
+      errorsFor(webClient({ clientSecret: "example-web-client-secret-not-a-real-one" }))
+    ).toBe("")
+  })
+
+  it("still names the length floor first for a short value", () => {
+    expect(errorsFor(webClient({ clientSecret: "short" }))).toContain(
+      "at least 32 characters"
+    )
   })
 })

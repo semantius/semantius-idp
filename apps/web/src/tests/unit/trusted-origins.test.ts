@@ -1,5 +1,5 @@
 /**
- * What `server.trustedOrigins` turns into (SEC-3, **D68**).
+ * What `server.trustedOrigins` turns into.
  *
  * The key has two shapes and the difference is a security posture, so both are
  * asserted here rather than left to the e2e suite: configured means *only*

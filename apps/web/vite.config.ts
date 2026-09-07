@@ -6,7 +6,7 @@ import tailwindcss from "@tailwindcss/vite"
 
 const config = defineConfig(({ command }) => ({
   // Relative **for the build only**, so one build relocates to any mount path
-  // (OPS-10, spike S3): chunk-to-chunk imports resolve from `import.meta.url`
+  // : chunk-to-chunk imports resolve from `import.meta.url`
   // and CSS `url()` references from the stylesheet, instead of from the host
   // root. The two URLs this does *not* fix — the SSR manifest and `?url`
   // imports — are pinned to the runtime mount path in `src/server-entry.ts`

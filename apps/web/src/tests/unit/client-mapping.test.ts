@@ -1,5 +1,5 @@
 /**
- * `oauth_clients.jsonc` → `oauth_client` (FR-OIDC-2/3).
+ * `oauth_clients.jsonc` → `oauth_client`.
  *
  * The mapping is where a configuration file becomes an authorization
  * decision, so each assertion here is a rule with a consequence: a public
@@ -52,7 +52,7 @@ function configWith(overrides: Record<string, unknown> = {}): IdpConfig {
 }
 
 describe("toClientRow", () => {
-  it("never claims a config client belongs to a user (FR-OIDC-2)", () => {
+  it("never claims a config client belongs to a user", () => {
     expect(toClientRow(entry({})).userId).toBeNull()
   })
 
@@ -88,7 +88,7 @@ describe("toClientRow", () => {
     ).toBeNull()
   })
 
-  it("defaults to the two v1 grants and the code response type (D26)", () => {
+  it("defaults to the two v1 grants and the code response type", () => {
     const row = toClientRow(entry({}))
     expect(row.grantTypes).toEqual(["authorization_code", "refresh_token"])
     expect(row.responseTypes).toEqual(["code"])
@@ -103,7 +103,7 @@ describe("toClientRow", () => {
     ])
   })
 
-  it("mirrors the flags that have no column into metadata (S5)", () => {
+  it("mirrors the flags that have no column into metadata", () => {
     const row = toClientRow(
       entry({ resourceServer: true, firstParty: true, metadata: { team: "x" } })
     )
@@ -150,7 +150,7 @@ describe("isPublic", () => {
 })
 
 describe("resourceLinksFor", () => {
-  it("always includes the default audience (FR-OIDC-6)", () => {
+  it("always includes the default audience", () => {
     // Without this link a client could never obtain a JWT access token, since
     // `enforcePerClientResources` refuses a resource the client is not
     // linked to.
@@ -186,7 +186,7 @@ describe("resourceLinksFor", () => {
     ).toEqual(["https://idp.example.com", "https://api.example.com"])
   })
 
-  it("links a resource server to the whole registry (FR-OIDC-4)", () => {
+  it("links a resource server to the whole registry", () => {
     const config = configWith({
       oauth: {
         resources: [
@@ -208,7 +208,7 @@ describe("resourceLinksFor", () => {
   })
 })
 
-describe("client secret hashing (risk R4)", () => {
+describe("client secret hashing", () => {
   it("is deterministic, so an unchanged file writes nothing", () => {
     expect(hashClientSecret(SECRET)).toBe(hashClientSecret(SECRET))
   })

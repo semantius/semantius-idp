@@ -1,6 +1,5 @@
 /**
- * What a social identity is allowed to do to a local account (FR-SOC-2/3/4,
- * D24).
+ * What a social identity is allowed to do to a local account.
  *
  * `social.ts` decides which providers exist and what options they get. This
  * module is the enforcement half, and it hangs off `user.validateUserInfo` —
@@ -12,15 +11,15 @@
  *
  * Two rules:
  *
- * - **FR-SOC-3, per provider.** `social.<p>.allowedEmailDomains` narrows who
+ *, per provider.** `social.<p>.allowedEmailDomains` narrows who
  *   may arrive through that provider, on top of `signUp.allowedEmailDomains`.
  *   Checked on the way back *every* time, not only at registration: an account
  *   whose provider address has moved out of bounds should stop getting in.
  *
- * - **D24, the e-mail collision.** With `syncProfile` on, a provider that
+ *, the e-mail collision.** With `syncProfile` on, a provider that
  *   reports an address already held by a *different* local user would rewrite
  *   that user's identity — or, at best, blow up on the unique index. Instead
- *   the sign-in is refused with a neutral message (FR-SOC-2 wording: nothing
+ *   the sign-in is refused with a neutral message (wording: nothing
  *   about who owns the address), both rows are left untouched, no session is
  *   created, and the attempt is recorded as `social.profile_conflict`.
  */
@@ -141,7 +140,7 @@ export function buildValidateUserInfo(
 
     return {
       error: SOCIAL_ERROR_CODES.emailConflict,
-      // FR-SOC-2: neutral. Never "that address belongs to someone else".
+      // neutral. Never "that address belongs to someone else".
       errorDescription: "This account cannot sign in with that provider.",
     }
   }

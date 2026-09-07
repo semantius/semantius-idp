@@ -34,22 +34,22 @@ import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 /**
  * `/login` — password sign-in plus whichever social providers are configured
- * (FR-AUTH-1, FR-ACCT-2).
+ *.
  *
  * A plain form posting to this same route, so the page is usable on the first
  * paint rather than after a hydration round trip. (Surviving scripting being
- * off is no longer a requirement — D31 — but the shape is worth keeping: it
+ * off is no longer a requirement any more, but the shape is worth keeping: it
  * is what makes the POST a real form submission.) It forwards to Better Auth
  * with the original
- * headers, so the CSRF origin check applies unchanged (SEC-3), and answers with
+ * headers, so the CSRF origin check applies unchanged, and answers with
  * a 303 — a refresh cannot re-post a password.
  *
  * Failures redirect back with a **code**; the wording comes from the catalog.
- * Wrong password and unknown address produce the same code (SEC-7).
+ * Wrong password and unknown address produce the same code.
  */
 export const Route = createFileRoute("/login")({
   loader: async ({ context, location }) => {
-    // D52: on a database with no users there is nobody to sign in as, and the
+    // on a database with no users there is nobody to sign in as, and the
     // form would only ever refuse. The setup page is the whole deployment
     // until somebody finishes it.
     if (await fetchSetupPending()) {
@@ -63,7 +63,7 @@ export const Route = createFileRoute("/login")({
       notice: searchString(search.notice),
       returnTo: safeReturnTo(searchString(search.returnTo), ""),
       // The provider puts the whole signed authorization request in the query
-      // when it sends someone here to sign in (FR-OIDC-9). Carried through
+      // when it sends someone here to sign in. Carried through
       // the form unread: only the provider can verify it.
       oauthQuery: readOauthQuery({ search }),
     }
@@ -75,10 +75,10 @@ export const Route = createFileRoute("/login")({
         const runtime = await getRuntime()
         const form = await readForm(request)
         // Empty rather than `/account`: an absent `returnTo` must fall through
-        // to `auth.defaultRedirect`, not pre-empt it (D28).
+        // to `auth.defaultRedirect`, not pre-empt it.
         const returnTo = safeReturnTo(form.returnTo, "")
         // The signed authorization request, when the provider sent the user
-        // here from `/oauth2/authorize` (FR-OIDC-9). Opaque to this handler:
+        // here from `/oauth2/authorize`. Opaque to this handler:
         // it is verified by the provider, not by us.
         const oauthQuery = form[OAUTH_QUERY_FIELD]
         const here = `${runtime.config.base.basePath}${APP_ROUTES.login}`
@@ -94,14 +94,14 @@ export const Route = createFileRoute("/login")({
           const code = errorCodeFor(result)
           // The status gate has its own pages rather than an inline message,
           // because "wait for approval" and "you are suspended" are states, not
-          // input errors (FR-SIGNUP-2, FR-ADMIN-4).
+          // input errors.
           if (code === "pending_approval") {
             return redirectWithCookies(
               `${runtime.config.base.basePath}${APP_ROUTES.pendingApproval}`
             )
           }
           if (code === "banned") {
-            // FR-ADMIN-4: the page shows the reason and the expiry, and takes
+            // the page shows the reason and the expiry, and takes
             // both from the **ban record** — never from anything the browser
             // sent. Until this looked them up, `/banned` had the wording for
             // both and was never given either, so a suspended user was
@@ -112,7 +112,7 @@ export const Route = createFileRoute("/login")({
             // `BANNED_USER`, which carries neither. Reading it discloses
             // nothing: the ban check runs at session creation, so the password
             // has already been verified and the only person who reaches this
-            // line is the account's owner (SEC-7 intact).
+            // line is the account's owner (intact).
             const banned = await banNoticeFor(runtime, form.email ?? "")
             return redirectWithCookies(
               `${runtime.config.base.basePath}${APP_ROUTES.banned}` +
@@ -129,7 +129,7 @@ export const Route = createFileRoute("/login")({
           )
         }
 
-        // FR-2FA-1: a correct password with 2FA on is not a session yet.
+        // a correct password with 2FA on is not a session yet.
         // Better Auth answers 200 with `twoFactorRedirect` and sets the
         // short-lived challenge cookie, which is the only thing that
         // authorizes `/two-factor` — so the cookies have to be replayed.
@@ -145,21 +145,21 @@ export const Route = createFileRoute("/login")({
           )
         }
 
-        // FR-AUTH-4: a temporary password is changed before anything else
+        // a temporary password is changed before anything else
         // completes, including an OAuth continuation.
         const user = result.body.user as
           | { mustChangePassword?: boolean }
           | undefined
 
         if (user?.mustChangePassword) {
-          // FR-AUTH-4 ahead of FR-OIDC-9: the authorization is carried to the
+          // Forced password change ahead: the authorization is carried to the
           // change-password page rather than resumed here, so a temporary
           // password can never buy an authorization code.
           //
           // Only a *relative* returnTo round-trips through the query — an
           // absolute `auth.defaultRedirect` would not survive `safeReturnTo`
           // at the other end, so the change-password handler re-resolves it
-          // there instead (D28).
+          // there instead.
           const params = new URLSearchParams({ forced: "1" })
           if (returnTo) params.set("returnTo", returnTo)
           if (oauthQuery) params.set(OAUTH_QUERY_FIELD, oauthQuery)
@@ -228,7 +228,7 @@ function LoginPage() {
         <SubmitButton className="w-full">{t.auth.signIn.submit}</SubmitButton>
       </PendingForm>
 
-      {/* FR-MAIL-2: with no transport there is nothing "forgot password" could do. */}
+      {/* with no transport there is nothing "forgot password" could do. */}
       {ui.emailEnabled ? (
         <p className="mt-4 text-sm">
           <Link
@@ -247,7 +247,7 @@ function LoginPage() {
         busy={t.common.loading}
       />
 
-      {/* FR-SIGNUP-1: with sign-up off the link does not exist, and neither does the page. */}
+      {/* with sign-up off the link does not exist, and neither does the page. */}
       {ui.signUpEnabled ? (
         <p className="mt-6 text-sm text-muted-foreground">
           {t.auth.signIn.noAccount}{" "}

@@ -1,5 +1,5 @@
 /**
- * The one-time set-password link an administrator is handed (**D65**).
+ * The one-time set-password link an administrator is handed.
  *
  * It travels through the server-side one-shot stash rather than the URL — a
  * link that grants a password reset does not belong in browser history — and
@@ -19,7 +19,7 @@ export interface InviteLink {
 
 export function parseInviteLink(value: string | null): InviteLink | undefined {
   if (!value) return undefined
-  // A stash written before D65, or by anything else, is a bare URL. Treated as
+  // A stash written before the current format, or by anything else, is a bare URL. Treated as
   // one rather than discarded: the link still works, it is only unlabeled.
   if (!value.startsWith("{")) return { url: value }
   try {

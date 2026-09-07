@@ -1,5 +1,5 @@
 /**
- * The order of a graceful shutdown (OPS-4).
+ * The order of a graceful shutdown.
  *
  * Ordering is the entire content of a drain, and it fails silently: get it
  * wrong and the process still exits 0, still logs "stopped", and the only
@@ -9,7 +9,7 @@
  * There is a second reason to test it here rather than by signalling a
  * process. **Windows cannot deliver SIGTERM to a handler at all**: `uv_kill`
  * maps it to `TerminateProcess`, so on the machine this is developed on the
- * real path can never run. Only TST-8's containerised smoke test will exercise
+ * real path can never run. Only the spec's containerised smoke test will exercise
  * it end to end, and until that exists this is the only thing standing between
  * the sequence and a silent regression.
  */
@@ -177,7 +177,7 @@ describe("releaseResources", () => {
   // The default 5 s made it pass or fail depending on how warm the module cache
   // happened to be — a flake, not a signal.
   it("does not build a runtime in order to close one", { timeout: 30_000 }, async () => {
-    // Closing what was never opened would run the whole OPS-2 sequence —
+    // Closing what was never opened would run the whole startup sequence —
     // migrations, key seeding, client reconciliation — on the way out of a
     // process that never served a request.
     const runtime = await import("@/server/runtime")

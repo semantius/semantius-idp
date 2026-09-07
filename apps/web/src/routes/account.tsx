@@ -8,7 +8,7 @@ import { getCatalog } from "@/server/i18n"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 
 /**
- * `/account/*` — the signed-in area (FR-ACCT-1).
+ * `/account/*` — the signed-in area.
  *
  * The guard lives here rather than on each page, so a new child route is
  * protected by existing, not by remembering. `beforeLoad` runs before any
@@ -18,7 +18,7 @@ import { APP_ROUTES } from "@/server/oidc/base-path"
  * asking again — one RPC per navigation rather than one per matched route,
  * the same arrangement `__root.tsx` uses for the UI context.
  *
- * The chrome is here too, since **D82**: a layout route's component survives
+ * The chrome is here too : a layout route's component survives
  * every navigation inside its subtree, which is what the sidebar's collapse
  * state and its keyboard shortcut need. Mounted per page it would be remounted
  * on each one.
@@ -30,6 +30,19 @@ export const Route = createFileRoute("/account")({
       throw redirect({
         to: APP_ROUTES.login,
         search: { notice: "signin_required", returnTo: location.pathname },
+      })
+    }
+    // the same interposition `/login` makes, for a
+    // session that reached here by typing the address. `/login` sets the
+    // cookie *before* it redirects, so without this every page under here
+    // rendered for a user on a temporary password. The flag is the row's —
+    // `fetchProfile` reads past the cookie cache — and the form handlers
+    // refuse on their own (`http/require-session.ts`), so a POST from a
+    // page rendered a moment before the flag was raised is refused too.
+    if (profile.mustChangePassword) {
+      throw redirect({
+        to: APP_ROUTES.changePassword,
+        search: { forced: "1", returnTo: location.pathname },
       })
     }
     return { profile }
@@ -55,7 +68,7 @@ function AccountLayout() {
       // `admin.adminRoles` — never from `UiContext`, which is sent to
       // anonymous browsers. It decides a menu entry and nothing more: `/admin`
       // is gated by its own route and re-checked by every server function
-      // beneath it (FR-ROLE-3).
+      // beneath it.
       crossLink={
         profile.isAdmin
           ? {

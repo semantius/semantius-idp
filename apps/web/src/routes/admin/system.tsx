@@ -25,7 +25,7 @@ import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 /**
  * `/admin/system` — what this process is running, and the one button that
- * changes it (FR-ADMIN-2, FR-OIDC-16, OPS-3).
+ * changes it.
  *
  * The configuration is printed through the same masking `idp config validate`
  * uses, from the same endpoint an admin API key would call — so what an
@@ -125,7 +125,7 @@ function SystemPage() {
         </dl>
       </AdminCard>
 
-      {/* D55: the question the page could not answer — "what do I paste into
+      {/* the question the page could not answer — "what do I paste into
           the other system?". The issuer alone is not enough, because the
           sub-path forms are not derivable from it by hand. */}
       <AdminCard
@@ -171,7 +171,7 @@ function SystemPage() {
             {info.signingKeys.published}
           </DetailRow>
         </dl>
-        {/* No `mt-` of its own: since **D95** the card's body spaces its own
+        {/* No `mt-` of its own: the card's body spaces its own
             children, and a margin on top of that gap is two spacings. */}
         <PendingForm
           busy={t.common.loading}
@@ -200,7 +200,7 @@ function SystemPage() {
         </ul>
         {/* One grid item, not two: a fragment's children are the card body's
             own children, and the heading belongs against its block rather
-            than a body gap away from it (**D95**). */}
+            than a body gap away from it. */}
         {info.reconcile ? (
           <div className="grid gap-1">
             <h4 className="text-sm font-medium">{t.admin.system.reconcile}</h4>

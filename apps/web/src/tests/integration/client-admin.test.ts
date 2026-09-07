@@ -10,8 +10,7 @@ import type { TestContext } from "./harness"
 import { authRequest, createTestContext, sessionCookie } from "./harness"
 
 /**
- * Registering OAuth clients from the admin area (**D50**, FR-OIDC-2/4/17,
- * SEC-4).
+ * Registering OAuth clients from the admin area.
  *
  * The feature rests on one column — `oauth_client.user_id` — and on the fact
  * that reconciliation's orphan sweep has always been scoped to rows where it is
@@ -118,8 +117,8 @@ async function rotate(cookie: string, clientId = "registered-app") {
  * **`/oauth2/introspect`, not `/oauth2/token`.** The token endpoint validates
  * the authorization code *before* the client credential, so a junk code
  * answers `invalid_grant` whatever secret is presented — including one that
- * was never right. A test built on it asserts nothing, which is what the D50
- * test below did until D72's rotation case exposed it: the old secret "still
+ * was never right. A test built on it asserts nothing, which is what the earlier
+ * test below did until the spec's rotation case exposed it: the old secret "still
  * worked" after a rotation that had in fact replaced it.
  *
  * Introspection authenticates the client and then answers about the token, so
@@ -152,15 +151,15 @@ async function rowFor(clientId: string) {
   return row
 }
 
-describe("registering a client (D50)", () => {
-  it("stores the form's field set as the form now sends it (round 2, finding 10)", async () => {
+describe("registering a client", () => {
+  it("stores the form's field set as the form now sends it (finding 10)", async () => {
     const cookie = await adminCookie()
 
     // Exactly what the create dialog posts once it grew the two checkboxes and
     // the post-logout textarea it had always been read for. Before that the
     // handler sent `skipConsent: false` with no field to send it from — a
     // *defined* false, which overrides the schema's default of true, so every
-    // client registered here wrongly asked for consent (FR-OIDC-3/10).
+    // client registered here wrongly asked for consent.
     const response = await create(cookie, {
       clientId: "form-shaped-app",
       type: "spa",
@@ -211,7 +210,7 @@ describe("registering a client (D50)", () => {
     // The marker the reconcile sweep skips. Everything else follows from it.
     expect(row!.userId).not.toBeNull()
     expect(row!.disabled).toBe(false)
-    // SEC-10: a hash, not the secret.
+    // a hash, not the secret.
     expect(row!.clientSecret).not.toBe(body.clientSecret)
     expect(row!.clientSecret).toMatch(/^[0-9a-f]{64}$/)
   })
@@ -230,7 +229,7 @@ describe("registering a client (D50)", () => {
     // assert the answer was not `invalid_client`. It never could be: the code
     // is validated first, so `invalid_grant` comes back for *any* secret and
     // the test passed for a credential that had never been right. Found while
-    // writing D72's rotation case, which asserted the *old* secret stops
+    // writing the spec's rotation case, which asserted the *old* secret stops
     // working and was told it had not. `authenticates` says how the oracle
     // works; both halves are asserted here so it cannot go quiet again.
     expect(
@@ -375,7 +374,7 @@ describe("registering a client (D50)", () => {
   })
 })
 
-describe("editing a client (D72)", () => {
+describe("editing a client", () => {
   it("replaces the writable fields and leaves the row's identity alone", async () => {
     const cookie = await adminCookie()
     await create(cookie)
@@ -565,7 +564,7 @@ describe("editing a client (D72)", () => {
     })
 
     const cases: [Record<string, unknown>, number, string][] = [
-      // The file's row is not this endpoint's to touch, for D50's reason: the
+      // The file's row is not this endpoint's to touch, for the spec's reason: the
       // next restart would silently undo it.
       [{ clientId: "file-app" }, 400, "CLIENT_MANAGED_BY_FILE"],
       [{ clientId: "never-registered" }, 404, "CLIENT_NOT_FOUND"],
@@ -597,7 +596,7 @@ describe("editing a client (D72)", () => {
   })
 })
 
-describe("rotating a client secret (D72)", () => {
+describe("rotating a client secret", () => {
   it("replaces the secret, once, and leaves the refresh tokens alone", async () => {
     const cookie = await adminCookie()
     const created = (await (await create(cookie)).json()) as {
@@ -678,7 +677,7 @@ describe("rotating a client secret (D72)", () => {
   })
 })
 
-describe("the two kinds of client coexist (D50, FR-OIDC-2)", () => {
+describe("the two kinds of client coexist", () => {
   it("survives a reconcile that disables everything else", async () => {
     const cookie = await adminCookie()
     await create(cookie)
@@ -696,7 +695,7 @@ describe("the two kinds of client coexist (D50, FR-OIDC-2)", () => {
     expect(row!.disabled, "and still enabled").toBe(false)
   })
 
-  it("survives a reconcile after it has been edited (D72)", async () => {
+  it("survives a reconcile after it has been edited", async () => {
     // The regression this exists for: `toClientRow` defaults `userId` to
     // `null`, so an update that did not write the owner back would hand the
     // row to the orphan sweep — and the application would keep working until
@@ -743,7 +742,7 @@ describe("the two kinds of client coexist (D50, FR-OIDC-2)", () => {
   })
 })
 
-describe("removing a client (D50)", () => {
+describe("removing a client", () => {
   it("takes its tokens and consents with it", async () => {
     const cookie = await adminCookie()
     await create(cookie)
@@ -809,10 +808,10 @@ describe("removing a client (D50)", () => {
     ).toHaveLength(0)
   })
 
-  it("records every mutation in the audit trail (SEC-6)", async () => {
+  it("records every mutation in the audit trail", async () => {
     const cookie = await adminCookie()
     await create(cookie)
-    // D72: an edit and a rotation are separate events on purpose — only one
+    // an edit and a rotation are separate events on purpose — only one
     // of them explains a client that stopped authenticating this morning.
     await update(cookie, { name: "Audited" })
     await rotate(cookie)
@@ -832,7 +831,7 @@ describe("removing a client (D50)", () => {
     expect(actions).toContain("client.secret_rotated")
     expect(actions).toContain("client.disabled")
     expect(actions).toContain("client.deleted")
-    // SEC-6, SEC-10: ids and outcomes, never a secret.
+    // ids and outcomes, never a secret.
     expect(JSON.stringify(rows)).not.toMatch(/[A-Za-z0-9_-]{64}/)
   })
 })

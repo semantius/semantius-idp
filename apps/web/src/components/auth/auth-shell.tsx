@@ -12,12 +12,12 @@ import { cn } from "@workspace/ui/lib/utils"
 import type { UiContext } from "@/server/ui-context"
 
 /**
- * The frame every public page shares (FR-ACCT-2).
+ * The frame every public page shares.
  *
  * Mobile-first, one column, and rendered entirely on the server so the login
  * form is present in the first paint rather than after hydration. Branding
  * comes from `site.*`; there are no third-party origins, so the CSP can forbid
- * them outright (SEC-8).
+ * them outright.
  */
 export function AuthShell({
   ui,

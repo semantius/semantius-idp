@@ -19,7 +19,9 @@
  */
 
 import { createServerFn } from "@tanstack/react-start"
+import { getRequest } from "@tanstack/react-start/server"
 
+import { readSession } from "../http/session"
 import { getRuntime } from "../runtime"
 import { buildUiContext } from "../ui-context"
 import type { UiContext } from "../ui-context"
@@ -27,16 +29,22 @@ import type { UiContext } from "../ui-context"
 /**
  * The capability flags and branding the public pages render from.
  *
- * Constant for the life of the process (configuration is read once, CFG-5),
- * which is why the root route fetches it and every child reads it from there
- * rather than asking again.
+ * Constant for the life of the process (configuration is read once)
+ * with one exception: `adminDatabaseEnabled` is `false` until the request
+ * carries a session, so the sign-in page does not tell an anonymous visitor
+ * that a SQL console exists (security review 2026-09). A cached, non
+ * -authoritative read is all that needs — the flag decides whether a nav
+ * entry renders, and the endpoint behind it has its own gate. The root route
+ * fetches this once per navigation and every child reads it from there.
  */
 export const fetchUiContext = createServerFn({ method: "GET" }).handler(
   async (): Promise<UiContext> => {
     const runtime = await getRuntime()
+    const session = await readSession(runtime, getRequest())
     return buildUiContext(
       runtime.config,
-      runtime.config.file.site.defaultLocale
+      runtime.config.file.site.defaultLocale,
+      { signedIn: session !== null }
     )
   }
 )

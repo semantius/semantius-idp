@@ -19,8 +19,7 @@ import { fetchConsentRequest } from "@/server/functions/consent"
 import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 /**
- * `/consent` — what an application is asking for, and the decision (FR-OIDC-9,
- * FR-OIDC-10).
+ * `/consent` — what an application is asking for, and the decision.
  *
  * The provider sends the user here with the whole authorization request signed
  * into the query string; this page reads the client id and scopes out of it to
@@ -31,7 +30,7 @@ import { PendingForm, SubmitButton } from "@/components/common/pending-form"
  *
  * Only reached when the client has `skipConsent: false` or the request carries
  * `prompt=consent`; file-configured clients skip it by default because an
- * administrator already decided (FR-OIDC-3).
+ * administrator already decided.
  *
  * The decision is bound to both the signed request **and** the session: the
  * POST goes through `/oauth2/consent`, which requires a session, so a consent
@@ -98,12 +97,20 @@ export const Route = createFileRoute("/consent")({
           )
         }
 
+        // the client on the trail is the one the provider just
+        // verified the signature over — the `client_id` inside the signed
+        // request, read only after `/oauth2/consent` accepted it. It used to
+        // come from a hidden form field, which is to say from the browser,
+        // and a consent for one client could be recorded as a consent for
+        // any other (security review).
         await runtime.audit.record({
           action: "consent.granted",
           outcome: accept ? "success" : "denied",
           actorType: "session",
           actorUserId: session.user.id,
-          metadata: { clientId: form.clientId ?? null },
+          metadata: {
+            clientId: new URLSearchParams(oauthQuery).get("client_id"),
+          },
         })
 
         return redirectWithCookies(destination)
@@ -209,7 +216,6 @@ function ConsentPage() {
           name={OAUTH_QUERY_FIELD}
           value={request.oauthQuery}
         />
-        <input type="hidden" name="clientId" value={request.clientId} />
         <SubmitButton name="decision" value="deny" variant="outline">
           {t.consent.deny}
         </SubmitButton>

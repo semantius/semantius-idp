@@ -22,18 +22,18 @@ import type { UiContext } from "@/server/ui-context"
 
 /**
  * The twelve fields an OAuth client is described by, shared by the create and
- * edit **pages** (**D50**, **D62**, **D72**, **D93**).
+ * edit **pages**.
  *
  * It was inline in `ClientCreateDialog` until editing arrived. Two forms
  * describing the same row from two field lists is how one of them ends up
  * missing a column, and `/idp/update-client` is a **full replace** — a field
  * the edit form does not render is a field every edit silently resets to its
  * schema default. Sharing the markup is what makes that impossible rather than
- * merely unlikely, and it is why **D93** moved both callers to routes without
+ * merely unlikely, and it is why the full-page forms moved both callers to routes without
  * touching this file's field list.
  *
  * **Three cards, and that — not width — is the fix for "hard to scroll"**
- * (**D93**). One column of twelve controls is one column of twelve controls at
+ *. One column of twelve controls is one column of twelve controls at
  * any measure; `max-w-3xl` is a good line length for the URI textareas and a
  * poor one for stacked single-line inputs, which is what the Identity card's
  * two-column grid is for.
@@ -125,7 +125,7 @@ export function ClientFormFields({
       >
         {/* Two columns from `sm` up: the name and the client id are short
             single-line values, and stacking them is what made twelve controls
-            read as a wall (**D93**). The textareas below stay full width,
+            read as a wall. The textareas below stay full width,
             because a URI is long. */}
         <div className="grid gap-4 sm:grid-cols-2">
           <Field>
@@ -188,7 +188,7 @@ export function ClientFormFields({
           </FieldLabel>
           {/* SPA first and by default: a browser application is what an
             operator adds here, and PKCE is mandatory in this provider
-            either way (FR-OIDC-1), so "web" only buys a secret that a
+            either way, so "web" only buys a secret that a
             single-page app cannot keep. */}
           <NativeSelect
             id={field("type")}
@@ -201,7 +201,7 @@ export function ClientFormFields({
             <option value="web">{t.admin.clients.typeWeb}</option>
             <option value="native">{t.admin.clients.typeNative}</option>
           </NativeSelect>
-          {/* **D78**: this control is the only thing that decides whether the
+          {/* this control is the only thing that decides whether the
             application has a secret, and — on the edit page — the only way
             to give one to an application that has none. Neither was said
             anywhere, so registering the default type produced no secret, no
@@ -249,7 +249,7 @@ export function ClientFormFields({
           <FieldLabel htmlFor={field("postLogoutRedirectUris")}>
             {t.admin.clients.postLogoutRedirectUris}
           </FieldLabel>
-          {/* Read by the handler since D50 and never rendered, so every
+          {/* Read by the handler and never rendered, so every
             client created here got an empty list. */}
           <Textarea
             id={field("postLogoutRedirectUris")}
@@ -303,13 +303,12 @@ export function ClientFormFields({
             </Label>
           ))}
         </fieldset>
-        {/* Asked the way round an administrator thinks about it (round 3,
-          finding 10): *does this application ask the user?* The wire field
+        {/* Asked the way round an administrator thinks about it (finding 10): *does this application ask the user?* The wire field
           is still `skipConsent`, inverted once in `skipConsentFromForm`,
           which has a test on it — this is a real triple negative in the
           making and the one place it is allowed to live.
 
-          Unticked by default, which is `skipConsent: true`: FR-OIDC-3's
+          Unticked by default, which is `skipConsent: true`: the spec's
           documented default and what a file-declared client gets. The
           history is worth keeping, because the shape of the bug is easy to
           recreate: both checkboxes were once sent by the handler with no
@@ -433,7 +432,7 @@ export function useClientForm(): {
 }
 
 /**
- * `invalid` and `reserved` are different refusals (**D93**).
+ * `invalid` and `reserved` are different refusals.
  *
  * "Use letters, digits and `. _ ~ -`" is exactly what `.` and `..` already
  * are, so the generic message would be a refusal describing the value as
@@ -450,7 +449,7 @@ function clientIdMessage(t: Catalog, code: string | undefined) {
  * Turns a `uri:<problem>:<value>` code into a catalog sentence.
  *
  * The offending URI is carried in the code rather than in the message,
- * because wording never leaves the catalog (FR-I18N-1).
+ * because wording never leaves the catalog.
  */
 function uriMessage(t: Catalog, code: string | undefined): string | undefined {
   if (!code) return undefined

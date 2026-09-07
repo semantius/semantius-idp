@@ -1,12 +1,12 @@
 /**
- * Which address the browser thinks it is on (SEC-3, **D68**).
+ * Which address the browser thinks it is on.
  *
  * Better Auth refuses a cookie-bearing post whose `Origin` is not in
  * `trustedOrigins`, and that list defaulted to `[server.baseUrl]` alone. A
  * deployment behind a reverse proxy therefore had to *know its own public URL
  * at configuration time* — and a deployment that is handed one later, or
  * reached through more than one name, could not sign anybody in. It is the
- * same refusal `127.0.0.1` meets against a `baseUrl` of `localhost` (**D57**),
+ * same refusal `127.0.0.1` meets against a `baseUrl` of `localhost`,
  * just permanent.
  *
  * So when no allow-list is configured the check follows the request instead:
@@ -28,7 +28,7 @@
  * forged one there means attributing an action to the wrong person. Here the
  * header only says which name the browser used to reach a server that is
  * answering the request anyway; the value is compared, never stored, never
- * emitted, and never used to build a URL (SEC-1 is untouched — every absolute
+ * emitted, and never used to build a URL (the spec is untouched — every absolute
  * URL the IdP emits still derives from `server.baseUrl`). A caller who forges
  * it only gets to approve their own origin, and a caller who can set arbitrary
  * headers is not the caller CSRF protects against: they have no cookies.
@@ -118,7 +118,7 @@ export function normalizeHost(
 
 /**
  * Whether a state-changing POST arrived from this deployment's own pages
- * (**D101**).
+ *.
  *
  * The account pages write to the database *before* they hand anything to
  * Better Auth — a session revocation has to kill the OAuth tokens while the
@@ -129,7 +129,7 @@ export function normalizeHost(
  *
  * `SameSite=Lax` is not the whole answer here. It stops a *cross-site* form
  * post, but "site" is the registrable domain: a page on a sibling subdomain is
- * same-site, and with `server.cookieDomain` set (**D97**) it carries the
+ * same-site, and with `server.cookieDomain` set it carries the
  * session cookie. A compromised or merely careless app on `apps.example.com`
  * could otherwise disconnect an `idp.example.com` visitor's applications by
  * submitting a form at them.

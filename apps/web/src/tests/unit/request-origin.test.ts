@@ -1,5 +1,5 @@
 /**
- * The address a request arrived on (SEC-3, **D68**).
+ * The address a request arrived on.
  *
  * This is one half of a CSRF check, so the questions are the adversarial ones:
  * *can a value that is not a host get out of here, and can a header choose an
@@ -122,7 +122,7 @@ describe("requestOrigins", () => {
 })
 
 /**
- * The gate in front of the two destructive account posts (**D101**).
+ * The gate in front of the two destructive account posts.
  *
  * Its whole job is to be un-choosable by the page making the request:
  * `Sec-Fetch-Site` is set by the browser, and `Origin` is set by the browser
@@ -165,7 +165,7 @@ describe("assertSameOrigin", () => {
 
   it("refuses a same-site sibling subdomain", () => {
     // The case `SameSite=Lax` does not cover: `apps.example.com` is same-site
-    // with `idp.example.com`, and `server.cookieDomain` (**D97**) is what
+    // with `idp.example.com`, and `server.cookieDomain` is what
     // makes such a page carry the session cookie.
     expect(
       assertSameOrigin(

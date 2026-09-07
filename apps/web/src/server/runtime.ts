@@ -1,6 +1,6 @@
 /**
  * The process-wide runtime: configuration, database and auth instance,
- * constructed once (CFG-5 "configuration is read once", OPS-2).
+ * constructed once (configuration is read once).
  *
  * Server routes and server functions reach the IdP through `await getRuntime()`.
  * There is no hot reload and no per-request construction: a second connection
@@ -10,7 +10,7 @@
  * **Why it is async.** The OAuth provider plugin seeds `oauth_resource` from
  * its own `init()`, which runs the moment the Better Auth instance is built —
  * so on a fresh database the instance cannot be constructed until migrations
- * have run. Building the runtime therefore *is* the OPS-2 sequence, in order,
+ * have run. Building the runtime therefore *is* the spec sequence, in order,
  * and every caller naturally waits for it rather than racing it.
  *
  * The promise is memoized, so concurrent callers share one startup and one
@@ -47,11 +47,11 @@ export interface Runtime {
   audit: Audit
   mailer: Mailer
   logger: Logger
-  /** What the OPS-2 sequence did, for the log and `/admin/system`. */
+  /** What the spec sequence did, for the log and `/admin/system`. */
   startup: StartupResult
   /** Where the configuration was read from, for `/admin/system`. */
   configDir: string
-  /** Non-fatal configuration problems, logged once at startup (CFG-5). */
+  /** Non-fatal configuration problems, logged once at startup. */
   warnings: LoadedConfig["warnings"]
   shutdown: () => Promise<void>
 }
@@ -74,7 +74,7 @@ export function setRuntime(next: Runtime): void {
 }
 
 /**
- * Closes the runtime **if one was ever built** (OPS-4).
+ * Closes the runtime **if one was ever built**.
  *
  * Pointedly not `getRuntime().then(r => r.shutdown())`: that would *build* a
  * runtime in order to close it, so a process signalled before it served its
@@ -107,11 +107,11 @@ export async function buildRuntime(): Promise<Runtime> {
 
   // Request traffic uses the configured (possibly pooled) URL; every
   // advisory-locked step uses the direct one, because a session lock does not
-  // hold through a transaction pooler (S4).
+  // hold through a transaction pooler.
   const database = createDb(config)
   const locking = createDb(config, { direct: true, max: 2 })
 
-  // FR-ADMIN-7. `/admin/database` never touches `database`: one legal
+  // `/admin/database` never touches `database`: one legal
   // statement inside a READ ONLY transaction -- `select set_config('search_path',
   // …, false)` is the easy example -- changes session state that a pooled
   // connection then hands to the next piece of ordinary traffic. Its own
@@ -121,7 +121,7 @@ export async function buildRuntime(): Promise<Runtime> {
   // about `withAdvisoryLock`, which reserves a connection for the whole
   // critical section).
   //
-  // `read` goes over the pooled URL, `read-write` over the direct one. D74's
+  // `read` goes over the pooled URL, `read-write` over the direct one. the spec's
   // mutual fallback means a single-endpoint deployment resolves both names to
   // the same string, so "when configured" needs no extra branch.
   const consoleEnabled = config.file.admin.database !== "disabled"
@@ -156,7 +156,7 @@ export async function buildRuntime(): Promise<Runtime> {
       consoleDirectDb,
     })
     adminContext.auth = auth
-    // D55: the discovery list on the system page names `security.txt` only
+    // the discovery list on the system page names `security.txt` only
     // when there is one, because the route 404s otherwise. Read here, where
     // the config folder is already in hand.
     adminContext.securityTxt = existsSync(join(dir, "security.txt"))
@@ -167,7 +167,7 @@ export async function buildRuntime(): Promise<Runtime> {
     )
     adminContext.startup = startup
 
-    // **After start-up, never as part of it** (OPS-8). A sweep is not a
+    // **After start-up, never as part of it**. A sweep is not a
     // readiness condition: making the first one block `/readyz` would delay
     // every deploy by however long the largest table takes, for work that has
     // no deadline. It gets its own direct handle because the lock is
@@ -190,7 +190,10 @@ export async function buildRuntime(): Promise<Runtime> {
       logger,
       startup,
       configDir: dir,
-      warnings,
+      // The loader's warnings and start-up's own, as one list: the
+      // log has already seen both, and `/admin` and `/admin/system` render
+      // this field and nothing else.
+      warnings: [...warnings, ...startup.warnings],
       shutdown: async () => {
         // Stop scheduling before closing anything a sweep would use.
         cleanup.stop()

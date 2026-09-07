@@ -1,6 +1,6 @@
 /**
  * `config.jsonc`'s `gateways` block is the source of truth; this makes the
- * database agree (FR-GW-2, **D91**).
+ * database agree.
  *
  * A near-copy of `oidc/reconcile.ts`, on purpose and for the same reasons: the
  * file is edited, the container restarts, and the rows follow — which only
@@ -13,7 +13,7 @@
  *
  * **The sweep is scoped to `source = 'config'`.** That column is the one
  * deliberate divergence from the clients, where the marker is `userId === null`
- * (D50): here the row says what it is, and the orphan query is a plain
+ *: here the row says what it is, and the orphan query is a plain
  * `source === "config"` test rather than a null check whose meaning has to be
  * remembered.
  *
@@ -24,7 +24,7 @@
  * by removing it from the file.
  *
  * Everything in one transaction under one advisory lock on the direct
- * connection, for the reasons `oidc/reconcile.ts` sets out at length (D27, S4).
+ * connection, for the reasons `oidc/reconcile.ts` sets out at length.
  */
 
 import { and, eq, inArray, ne } from "drizzle-orm"
@@ -40,7 +40,7 @@ export interface GatewayReconcileDeps {
   config: IdpConfig
   /** Request traffic's handle: the transaction itself. */
   database: DbHandle
-  /** The **direct** connection, for the advisory lock (D27). */
+  /** The **direct** connection, for the advisory lock. */
   locking: DbHandle
   audit?: Audit
   logger?: Logger
@@ -83,6 +83,7 @@ export async function reconcileGateways(
 const OWNED_COLUMNS = [
   "url",
   "requireAuth",
+  "audience",
   "enabled",
 ] as const
 
@@ -111,6 +112,8 @@ async function applyReconciliation(
       const desired = {
         url: target.url,
         requireAuth: target.requireAuth,
+        // Absent in the file is `null` in the row: "mint `jwt.audience`".
+        audience: target.audience ?? null,
         // File-owned: a restart re-enables a config gateway an administrator
         // switched off, which is the point (see the header).
         enabled: true,
@@ -145,7 +148,7 @@ async function applyReconciliation(
       }
     }
 
-    // -- absent from the file (FR-GW-2) -----------------------------------
+    // -- absent from the file -----------------------------------
     const orphans = existing.filter(
       (row) => row.source === "config" && !wantedNames.includes(row.name)
     )
@@ -200,7 +203,7 @@ async function applyReconciliation(
       deleted: diff.deleted.length,
     })
     // Names only. A target URL can carry a host an operator would rather not
-    // publish, and the trail is a page an administrator reads (SEC-6).
+    // publish, and the trail is a page an administrator reads.
     await audit?.record({
       action: "gateway.reconciled",
       outcome: "success",
@@ -221,11 +224,13 @@ function differs(
   current: {
     url: string
     requireAuth: boolean | null
+    audience?: string | null
     enabled: boolean | null
   },
   desired: {
     url: string
     requireAuth: boolean
+    audience: string | null
     enabled: boolean
   }
 ): boolean {
@@ -233,6 +238,8 @@ function differs(
     if (column === "url") return current.url !== desired.url
     if (column === "requireAuth")
       return (current.requireAuth === true) !== desired.requireAuth
+    if (column === "audience")
+      return (current.audience ?? null) !== desired.audience
     return (current.enabled !== false) !== desired.enabled
   })
 }

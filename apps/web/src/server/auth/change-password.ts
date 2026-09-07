@@ -1,7 +1,7 @@
 /**
- * Changing a password, once, for the two places that offer it (FR-AUTH-3/4).
+ * Changing a password, once, for the two places that offer it.
  *
- * `/change-password` is the forced-change page (FR-AUTH-4) and the target of
+ * `/change-password` is the forced-change page and the target of
  * `/.well-known/change-password`, so it stays a page. `/account/security`
  * offers the same change as a dialog, like every other action on that page.
  * Two callers, one set of rules — and the rules are the part that must not
@@ -10,7 +10,7 @@
  *
  * The redirect is *not* here. Where a completed change lands is the difference
  * between the two callers: the forced page resumes a waiting authorization
- * (FR-OIDC-9) and the account page comes back to itself.
+ * and the account page comes back to itself.
  */
 
 import { callAuth, errorCodeFor } from "../http/auth-proxy"
@@ -26,7 +26,7 @@ export async function changePassword(
   request: Request,
   form: Record<string, string | undefined>
 ): Promise<ChangePasswordResult> {
-  // The browser checks this too since D62, and the check stays here because a
+  // The browser checks this too and the check stays here because a
   // form is whatever the caller posts.
   if (form.password !== form.confirmPassword) {
     return { ok: false, code: "password_mismatch" }
@@ -38,7 +38,7 @@ export async function changePassword(
     {
       currentPassword: form.currentPassword ?? "",
       newPassword: form.password ?? "",
-      // FR-AUTH-3: a change revokes the user's other sessions.
+      // a change revokes the user's other sessions.
       revokeOtherSessions: true,
     },
     request
@@ -54,7 +54,7 @@ export async function changePassword(
     }
   }
 
-  // FR-AUTH-3, FR-MAIL-1: "your password was changed" is the message that
+  // "your password was changed" is the message that
   // tells someone their account has been taken, so it cannot be reserved for
   // the reset path. `onPasswordReset` covers that one; this is the other half,
   // and it was missing — changing a password from `/account/security` sent

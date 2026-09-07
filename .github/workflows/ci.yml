@@ -5,12 +5,18 @@ on:
     branches: [main]
   pull_request:
   schedule:
-    # Nightly dependency audit (SEC-9). Runs on the default branch only.
+    # Nightly dependency audit. Runs on the default branch only.
     - cron: "17 3 * * *"
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
+# The token is read-only for every job unless the job widens it.
+# Two do: `docker` below and `image` in release.yml, each to exactly what it
+# uploads or pushes. A job that needs nothing says nothing and gets nothing.
+permissions:
+  contents: read
 
 env:
   # Everything the IdP runs is executed by Bun; Node is only here for CI tooling.
@@ -27,31 +33,33 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install (frozen lockfile)
         run: pnpm install --frozen-lockfile
 
-      - name: Refuse floating dependency ranges (SEC-9)
+      - name: Refuse floating dependency ranges and unpinned actions
         # Every dependency is pinned exactly; `latest` and `^`/`~` ranges are how
-        # a supply-chain change sneaks into a release.
+        # a supply-chain change sneaks into a release. Every `uses:` in these
+        # workflows is pinned to a commit SHA for the same reason: a tag is a
+        # pointer somebody else can move or delete.
         run: bun run scripts/check-pinned-deps.ts
 
-      - name: Bun is pinned to one version everywhere (OPS-1)
+      - name: Bun is pinned to one version everywhere
         # Bun is the *runtime*, not a build tool: the image is
         # `oven/bun:<version>-slim` with Bun as PID 1, and on arm64 that is a
         # different binary from the one this job runs. Five files carry the
         # version and nothing compared them until a release workflow added the
-        # fifth copy by hand (D73).
+        # fifth copy by hand.
         run: bun run scripts/check-bun-version.ts
 
       - name: Lint
@@ -63,10 +71,10 @@ jobs:
       - name: Unit tests
         run: pnpm test
 
-      - name: Config JSON Schemas are up to date (CFG-1)
+      - name: Config JSON Schemas are up to date
         run: pnpm --filter web run config:schemas -- --check
 
-      - name: The shipped example configuration validates (TST-1)
+      - name: The shipped example configuration validates
         # config.example/ is what the quick start tells an operator to copy.
         # It is validated here so it cannot rot into a folder that does not
         # load — the placeholders are given throwaway values because that is
@@ -79,12 +87,12 @@ jobs:
           EXAMPLE_FIRSTPARTY_CLIENT_SECRET: ci-example-client-secret-32-chars-y
         run: bun apps/web/src/cli/index.ts config validate
 
-      - name: The configuration reference is up to date (CFG-4, DOC-1)
+      - name: The configuration reference is up to date
         # Generated from the same zod schemas the loader validates against, so
         # a default can never change without the documentation following it.
         run: pnpm --filter web run docs:config -- --check
 
-      - name: Database schema has not drifted (DM-1)
+      - name: Database schema has not drifted
         # Regenerates from the installed Better Auth and fails on any
         # difference, so the committed migrations can never describe a schema
         # the running code does not expect.
@@ -100,10 +108,10 @@ jobs:
         run: bun run scripts/check-client-bundle.ts
 
   # ---------------------------------------------------------------------------
-  # Integration tests against a real Postgres (TST-1).
+  # Integration tests against a real Postgres.
   #
   # A service container is a *direct* connection, never a transaction pooler,
-  # so the session advisory locks these tests assert actually hold (S4, D27).
+  # so the session advisory locks these tests assert actually hold.
   # `localhost` also means the config's SSL default resolves to `disable`, so
   # no certificate wrangling is needed.
   # ---------------------------------------------------------------------------
@@ -140,21 +148,21 @@ jobs:
       IDP_TEST_DATABASE_URL: postgres://idp:idp@localhost:5432/idp
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install (frozen lockfile)
         run: pnpm install --frozen-lockfile
 
-      - name: Integration tests + coverage thresholds (TST-1)
+      - name: Integration tests + coverage thresholds
         # `test:coverage` runs *both* projects. Measuring `src/server` against
         # the unit project alone was the wrong denominator — the database
         # layer and the auth hooks are exercised by integration tests by
@@ -163,7 +171,7 @@ jobs:
         run: pnpm --filter web run test:coverage
 
   # ---------------------------------------------------------------------------
-  # End-to-end, in a browser, against the built image (TST-6).
+  # End-to-end, in a browser, against the built image.
   #
   # The class of defect this exists for is the one that survives every other
   # gate: markup that is correct and a page that is nevertheless unusable. The
@@ -171,7 +179,7 @@ jobs:
   # gate in this repository read HTML, and the HTML was perfect.
   #
   # Both deployment shapes run, because the sub-path one is a different
-  # application as far as every URL is concerned (OPS-10, risk R3): a wrong
+  # application as far as every URL is concerned: a wrong
   # cookie `Path`, a stripped prefix or a missing origin-root RFC 8414 route
   # only shows up when a browser drives it.
   #
@@ -187,23 +195,23 @@ jobs:
     needs: [check]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       - name: Install (frozen lockfile)
         run: pnpm install --frozen-lockfile
 
-      - name: Build the image the suite drives (OPS-1)
-        uses: docker/build-push-action@v6
+      - name: Build the image the suite drives
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: docker/Dockerfile
@@ -221,7 +229,7 @@ jobs:
         # browser nobody can see.
         run: pnpm --filter web exec playwright install --with-deps chromium
 
-      - name: End-to-end (TST-6)
+      - name: End-to-end
         env:
           IDP_IMAGE: semantius-idp:e2e
         run: pnpm --filter web run test:e2e
@@ -230,7 +238,7 @@ jobs:
         # Traces, screenshots and video for the run that failed — retained only
         # then, because a green run should leave nothing behind.
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: playwright-report
           path: |
@@ -239,7 +247,7 @@ jobs:
           retention-days: 7
 
   # ---------------------------------------------------------------------------
-  # The image, and the only test that exercises it (OPS-1, TST-8, SEC-9).
+  # The image, and the only test that exercises it.
   #
   # Everything above tests the application. This tests the artifact: that what
   # would be published starts, migrates, serves the protocol, signs somebody in
@@ -252,7 +260,7 @@ jobs:
   # roughly triple the build for an artifact nobody merges. Both architectures
   # and the registry belong to `release.yml`, which is the workflow a tag
   # actually triggers — this one never sees a tag, because it filters on
-  # branches (**D73**).
+  # branches.
   # ---------------------------------------------------------------------------
   docker:
     if: github.event_name != 'schedule'
@@ -265,18 +273,18 @@ jobs:
       security-events: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           # The OCI `revision` label wants the real commit, and a shallow
           # checkout of a PR merge commit is not it.
           fetch-depth: 0
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       # This is also the job that writes the layer cache the `e2e` job and
       # `release.yml` read.
       - name: Build (amd64, loaded locally)
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: docker/Dockerfile
@@ -288,17 +296,17 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      - name: Smoke test (TST-8, OPS-13)
+      - name: Smoke test
         env:
           IDP_IMAGE: semantius-idp:ci
         run: bun run scripts/smoke-test.ts
 
-      - name: Vulnerability scan (SEC-9)
-        uses: aquasecurity/trivy-action@v0.36.0
+      - name: Vulnerability scan
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: semantius-idp:ci
           format: sarif
@@ -315,26 +323,26 @@ jobs:
         # runs, and an unguarded upload turns one failure into two and buries
         # the real one.
         if: always() && hashFiles('trivy.sarif') != ''
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@6f5948dfacef28e207b48d0905cf90c03365536d # v3.37.9
         with:
           sarif_file: trivy.sarif
           category: trivy-image
 
-      - name: SBOM (SEC-9)
-        uses: anchore/sbom-action@v0
+      - name: SBOM
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
         with:
           image: semantius-idp:ci
           format: spdx-json
           artifact-name: sbom.spdx.json
 
       # Nothing is pushed from here. A merge to `main` builds and smokes the
-      # image; OPS-1's tag set is a release act, and `release.yml` performs it.
+      # image; the release's tag set is a release act, and `release.yml` performs it.
       # The steps that used to sit at this point were guarded on
       # `refs/tags/v*`, which this workflow's `on:` block cannot produce — a
-      # publish path that had never once executed (**D73**).
+      # publish path that had never once executed.
 
   # ---------------------------------------------------------------------------
-  # Nightly dependency audit (SEC-9).
+  # Nightly dependency audit.
   # ---------------------------------------------------------------------------
   audit:
     if: github.event_name == 'schedule'
@@ -342,9 +350,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm

@@ -15,9 +15,9 @@ import { getRuntime } from "@/server/runtime"
 import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 /**
- * `/forgot-password` (FR-AUTH-3, SEC-7).
+ * `/forgot-password`.
  *
- * Absent entirely in degraded mode (FR-MAIL-2) — with no transport there is
+ * Absent entirely in degraded mode — with no transport there is
  * nothing this page could do, and offering it would be a lie.
  *
  * The answer is the **same whatever happened**: the same redirect, the same
@@ -45,8 +45,8 @@ export const Route = createFileRoute("/forgot-password")({
 
         const form = await readForm(request)
 
-        // SEC-7: the outcome is not inspected, so it cannot leak into the
-        // response. A rate limit still applies underneath (SEC-2).
+        // the outcome is not inspected, so it cannot leak into the
+        // response. A rate limit still applies underneath.
         await callAuth(
           runtime,
           "/request-password-reset",

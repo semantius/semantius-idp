@@ -1,6 +1,5 @@
 /**
- * Name → gateway row, without a database query on the hot path (FR-GW-3,
- * **D91**).
+ * Name → gateway row, without a database query on the hot path.
  *
  * The proxy resolves a name on every request, and against a hosted Postgres
  * that is **~100 ms** before a byte has been forwarded — the same latency
@@ -13,7 +12,7 @@
  *
  * 1. **Write-through invalidation.** Every admin mutation and the boot
  *    reconcile call {@link resetGatewayRegistry}. That is the mechanism, and
- *    it is exact: OPS-11 is a single-instance topology, so the process that
+ *    it is exact: The spec is a single-instance topology, so the process that
  *    wrote the row is the process that serves the next request. The
  *    `first-user.ts` memoization is the precedent.
  * 2. **A 60 s TTL**, as a valve for the replica that is not supposed to exist
@@ -37,6 +36,8 @@ export interface GatewayRow {
   name: string
   url: string
   requireAuth: boolean
+  /** The `aud` to mint for this gateway, or `null` for `jwt.audience`. */
+  audience: string | null
   source: "config" | "manual"
   enabled: boolean
 }
@@ -62,7 +63,7 @@ export interface RegistryDeps {
 /**
  * The gateway named `name`, or `undefined`.
  *
- * Disabled rows are returned rather than hidden: FR-GW-6 answers 404 for both
+ * Disabled rows are returned rather than hidden: the gateway answers 404 for both
  * "no such gateway" and "disabled", and the caller is the one place that
  * decision belongs.
  */
@@ -132,6 +133,7 @@ export function toGatewayRow(row: {
   name: string
   url: string
   requireAuth: boolean | null
+  audience?: string | null
   source: string
   enabled: boolean | null
 }): GatewayRow {
@@ -140,6 +142,7 @@ export function toGatewayRow(row: {
     name: row.name,
     url: row.url,
     requireAuth: row.requireAuth === true,
+    audience: row.audience ?? null,
     source: row.source === "config" ? "config" : "manual",
     enabled: row.enabled !== false,
   }

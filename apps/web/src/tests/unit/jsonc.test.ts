@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { parseJsoncText, stripSchemaKey } from "@/server/config/jsonc"
 
-describe("CFG-1 JSONC parsing", () => {
+describe("JSONC parsing", () => {
   it("accepts comments and trailing commas", () => {
     const text = `{
       // the issuer

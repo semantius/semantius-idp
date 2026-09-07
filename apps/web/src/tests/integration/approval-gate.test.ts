@@ -6,16 +6,16 @@ import { authRequest, createTestContext } from "./harness"
 import type { TestContext } from "./harness"
 
 /**
- * FR-SIGNUP-2: a non-`active` user obtains **no session on any path**, and the
+ * a non-`active` user obtains **no session on any path**, and the
  * rule is enforced in one place (the session-creation hook) rather than per
  * route. This suite covers the password path; the social, refresh-grant and
  * API-key paths get the same treatment in their own milestones and re-check
  * state on every use.
  *
- * FR-SIGNUP-3's domain restriction is here too, because it is the other half of
+ * the spec's domain restriction is here too, because it is the other half of
  * the same hook.
  */
-describe("approval gate (FR-SIGNUP-2/3)", () => {
+describe("approval gate", () => {
   const password = "correct horse battery staple"
 
   describe("with approval required", () => {
@@ -67,7 +67,7 @@ describe("approval gate (FR-SIGNUP-2/3)", () => {
         })
       )
 
-      // Stand in for the admin approval endpoint (M5): the gate reads `status`.
+      // Stand in for the admin approval endpoint: the gate reads `status`.
       await ctx.database.db
         .update(ctx.database.schema.user)
         .set({
@@ -83,7 +83,7 @@ describe("approval gate (FR-SIGNUP-2/3)", () => {
       expect(signIn.status).toBe(200)
     })
 
-    it("refuses a rejected user with a neutral message (FR-SIGNUP-2)", async () => {
+    it("refuses a rejected user with a neutral message", async () => {
       const email = `rejected-${Date.now()}@example.com`
       await ctx.auth.handler(
         authRequest("/sign-up/email", {
@@ -110,7 +110,7 @@ describe("approval gate (FR-SIGNUP-2/3)", () => {
       expect(body.message).toBe("This account is not available.")
     })
 
-    it("refuses a banned user, and says so (FR-ADMIN-4)", async () => {
+    it("refuses a banned user, and says so", async () => {
       const email = `banned-${Date.now()}@example.com`
       await ctx.auth.handler(
         authRequest("/sign-up/email", {
@@ -126,12 +126,12 @@ describe("approval gate (FR-SIGNUP-2/3)", () => {
         authRequest("/sign-in/email", { json: { email, password } })
       )
       expect(banned.status).toBeGreaterThanOrEqual(400)
-      // A ban is deliberately *not* neutral: FR-ADMIN-4 says the user is shown
+      // A ban is deliberately *not* neutral: The spec says the user is shown
       // the reason and expiry, so they know to appeal rather than retry.
       expect((await banned.json()).message).toMatch(/banned/i)
     })
 
-    it("gives the same answer for a wrong password and an unknown address (SEC-7)", async () => {
+    it("gives the same answer for a wrong password and an unknown address", async () => {
       const email = `known-${Date.now()}@example.com`
       await ctx.auth.handler(
         authRequest("/sign-up/email", {
@@ -158,7 +158,7 @@ describe("approval gate (FR-SIGNUP-2/3)", () => {
       expect(await wrongPassword.json()).toEqual(await unknownEmail.json())
     })
 
-    it("lets an expired ban through again (FR-ADMIN-4)", async () => {
+    it("lets an expired ban through again", async () => {
       const email = `unbanned-${Date.now()}@example.com`
       await ctx.auth.handler(
         authRequest("/sign-up/email", {
@@ -214,7 +214,7 @@ describe("approval gate (FR-SIGNUP-2/3)", () => {
     })
   })
 
-  describe("with a domain restriction (FR-SIGNUP-3)", () => {
+  describe("with a domain restriction", () => {
     let ctx: TestContext
 
     beforeAll(async () => {

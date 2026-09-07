@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import { displayName } from "@/server/display-name"
 
 /**
- * The derived display name (FR-SIGNUP-5, **D49**).
+ * The derived display name.
  *
  * A four-line function with six callers — sign-up, first-run setup, admin
  * create, admin edit, the account page and the social profile mapping — which
@@ -12,7 +12,7 @@ import { displayName } from "@/server/display-name"
  * the comma is worse than "Smith", and a blank name renders as an empty cell
  * in every admin table.
  */
-describe("displayName (D49)", () => {
+describe("displayName", () => {
   it("composes both parts in the configured order", () => {
     expect(displayName("Jane", "Smith", "first-last")).toBe("Jane Smith")
     expect(displayName("Jane", "Smith", "last-first")).toBe("Smith, Jane")

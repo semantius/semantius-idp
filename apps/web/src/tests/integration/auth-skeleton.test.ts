@@ -11,7 +11,7 @@ import type { TestContext } from "./harness"
  * against real Postgres.
  *
  * Sign-up is enabled and approval switched off here so this file tests the
- * plumbing only; the approval gate itself is FR-SIGNUP-2's own suite.
+ * plumbing only; the approval gate itself is the spec's own suite.
  */
 describe("Better Auth skeleton against Postgres", () => {
   let ctx: TestContext
@@ -26,7 +26,7 @@ describe("Better Auth skeleton against Postgres", () => {
     await ctx.teardown()
   })
 
-  it("migrates every table into the file's own schema (DM-4)", async () => {
+  it("migrates every table into the file's own schema", async () => {
     const rows = await ctx.database.sql<{ table_name: string }[]>`
       select table_name from information_schema.tables
       where table_schema = ${ctx.schemaName} and table_type = 'BASE TABLE'
@@ -73,7 +73,7 @@ describe("Better Auth skeleton against Postgres", () => {
     expect(wrongPassword.status).toBeGreaterThanOrEqual(400)
   })
 
-  it("persists the DM-3 custom columns with their declared defaults", async () => {
+  it("persists the spec custom columns with their declared defaults", async () => {
     const email = `columns-${Date.now()}@example.com`
     await ctx.auth.handler(
       authRequest("/sign-up/email", {
@@ -94,11 +94,11 @@ describe("Better Auth skeleton against Postgres", () => {
     expect(row!.status).toBe("active") // requireApproval is off in this file
     expect(row!.mustChangePassword).toBe(false)
     expect(row!.approvedAt).toBeNull()
-    // FR-ROLE-1: the catalog's `default: true` role.
+    // the catalog's `default: true` role.
     expect(row!.role).toBe("user")
   })
 
-  describe("FR-AUTH-7 mass assignment", () => {
+  describe("mass assignment", () => {
     // The AC allows the privileged fields to be "ignored or rejected", and
     // Better Auth does both depending on the field — so the assertion is on the
     // *effect*: whatever the response code, no privilege may be granted.
@@ -173,7 +173,7 @@ describe("Better Auth skeleton against Postgres", () => {
     })
   })
 
-  it("normalizes the e-mail address (FR-AUTH-1)", async () => {
+  it("normalizes the e-mail address", async () => {
     const stamp = Date.now()
     const response = await ctx.auth.handler(
       authRequest("/sign-up/email", {

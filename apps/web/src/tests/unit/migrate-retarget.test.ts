@@ -6,7 +6,7 @@ import {
   CANONICAL_SCHEMA_NAME,
 } from "@/server/db/schema/auth-schema"
 
-describe("retargetSchema (DM-4, CFG-4 database.schema)", () => {
+describe("retargetSchema (database.schema)", () => {
   it("makes CREATE SCHEMA idempotent even for the canonical name", () => {
     const { sql, replacements } = retargetSchema(
       `CREATE SCHEMA "idp";`,
@@ -58,7 +58,7 @@ describe("retargetSchema (DM-4, CFG-4 database.schema)", () => {
   })
 })
 
-describe("createAuthSchema (DM-4)", () => {
+describe("createAuthSchema", () => {
   it("binds every table to the schema it is given", () => {
     const schema = createAuthSchema("tenant_a")
     // Drizzle keeps the schema on the table's symbol metadata; the observable
@@ -74,7 +74,7 @@ describe("createAuthSchema (DM-4)", () => {
     expect(a.user).not.toBe(b.user)
   })
 
-  it("covers the DM-2 table inventory", () => {
+  it("covers the spec table inventory", () => {
     const schema = createAuthSchema(CANONICAL_SCHEMA_NAME)
     for (const table of [
       "user",
@@ -97,7 +97,7 @@ describe("createAuthSchema (DM-4)", () => {
     }
   })
 
-  it("does not include the tables DM-2 puts out of scope", () => {
+  it("does not include the tables the spec puts out of scope", () => {
     const keys = Object.keys(createAuthSchema(CANONICAL_SCHEMA_NAME))
     for (const table of [
       "organization",

@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import { readSecurityTxt } from "@/server/functions/security-txt"
 
 /**
- * `/.well-known/security.txt` (RFC 9116, FR-OIDC-15).
+ * `/.well-known/security.txt` (RFC 9116).
  *
  * Served **only** when a `security.txt` file exists in the config folder. The
  * spec says the contents come "from config", and the reading taken here is the

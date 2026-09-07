@@ -1,5 +1,5 @@
 /**
- * Social sign-in against a real provider (FR-SOC-2/3/4, D24, TST-7).
+ * Social sign-in against a real provider.
  *
  * The whole flow runs: `/sign-in/social` produces an authorization URL, the
  * mock provider bounces back with a code, Better Auth exchanges it and the
@@ -152,7 +152,7 @@ async function userByEmail(context: TestContext, email: string) {
 }
 
 describe("social sign-in", () => {
-  it("registers an identity the provider vouches for (FR-SOC-1)", async () => {
+  it("registers an identity the provider vouches for", async () => {
     const context = await socialContext("social_register")
     try {
       const result = await signInWithProvider(context, {
@@ -164,11 +164,11 @@ describe("social sign-in", () => {
 
       expect(hasSessionCookie(result.cookies)).toBe(true)
 
-      // FR-AUTH-1: the address is stored trimmed and lower-cased whatever the
+      // the address is stored trimmed and lower-cased whatever the
       // provider sent.
       const user = await userByEmail(context, "new.user@example.com")
       expect(user).toBeDefined()
-      // FR-SIGNUP-5: `given_name`/`family_name` land in their own columns.
+      // `given_name`/`family_name` land in their own columns.
       expect(user?.firstName).toBe("New")
       expect(user?.lastName).toBe("User")
     } finally {
@@ -176,7 +176,7 @@ describe("social sign-in", () => {
     }
   })
 
-  it("refuses a provider address outside the per-provider domain list (FR-SOC-3)", async () => {
+  it("refuses a provider address outside the per-provider domain list", async () => {
     const context = await socialContext("social_domain", {
       allowedEmailDomains: ["allowed.example"],
     })
@@ -200,7 +200,7 @@ describe("social sign-in", () => {
     }
   })
 
-  it("refreshes the profile on every sign-in when syncProfile is on (FR-SOC-4)", async () => {
+  it("refreshes the profile on every sign-in when syncProfile is on", async () => {
     const context = await socialContext("social_sync_on", { syncProfile: true })
     try {
       await signInWithProvider(context, {
@@ -221,7 +221,7 @@ describe("social sign-in", () => {
     }
   })
 
-  it("leaves the profile alone when syncProfile is off (FR-SOC-4)", async () => {
+  it("leaves the profile alone when syncProfile is off", async () => {
     const context = await socialContext("social_sync_off", {
       syncProfile: false,
     })
@@ -244,7 +244,7 @@ describe("social sign-in", () => {
     }
   })
 
-  it("refuses a sync that would take another user's address, and records it (D24, FR-SOC-2)", async () => {
+  it("refuses a sync that would take another user's address, and records it", async () => {
     const context = await socialContext("social_conflict", {
       syncProfile: true,
     })

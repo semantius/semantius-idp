@@ -22,7 +22,7 @@ function subst(input: unknown, files: Record<string, string> = {}) {
   })
 }
 
-describe("CFG-2 placeholder grammar", () => {
+describe("placeholder grammar", () => {
   it("resolves ${env:NAME}", () => {
     const result = subst({ secret: "${env:IDP_SECRET}" })
     expect(result.issues).toEqual([])
@@ -155,7 +155,7 @@ describe("CFG-2 placeholder grammar", () => {
 
   it("does not treat a value that fell back to an inline default as env-supplied", () => {
     // An inline `:-default` is literal text sitting in the config file, so it
-    // must not satisfy the CFG-5 production-secret rule — otherwise
+    // must not satisfy the spec production-secret rule — otherwise
     // `${env:SECRET:-hunter2}` would smuggle a hard-coded secret past it.
     const result = subst({
       resolved: "${env:IDP_SECRET}",

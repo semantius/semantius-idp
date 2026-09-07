@@ -1,6 +1,5 @@
 /**
- * A password-reset link, minted without sending an e-mail (FR-ADMIN-2,
- * FR-MAIL-2).
+ * A password-reset link, minted without sending an e-mail.
  *
  * `POST /request-password-reset` mints the token *and* hands the URL to
  * `sendResetPassword`, which is the mailer. That is exactly right for the
@@ -44,7 +43,7 @@ export async function createResetLink(
   {
     ttlSeconds = DEFAULT_TTL_SECONDS,
     /**
-     * Mark the link as an invitation (**D65**).
+     * Mark the link as an invitation.
      *
      * The page is the same page either way, and the flag only changes what it
      * says: "an administrator created an account for you" rather than "choose

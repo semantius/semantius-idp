@@ -4,7 +4,7 @@ import { waitForMail } from "./stack"
 import { totpCode } from "../src/tests/fixtures/totp"
 
 /**
- * Enrolling in and answering a second factor (TST-6, FR-2FA-1/2).
+ * Enrolling in and answering a second factor.
  *
  * Codes come from `src/tests/fixtures/totp.ts` — an RFC 6238 implementation
  * written for the integration suite precisely so a test does not generate its
@@ -45,7 +45,7 @@ test.describe("two-factor authentication", () => {
       page.getByText("Two-factor authentication is off.")
     ).toBeVisible()
 
-    // Turning it on asks for the password again (FR-AUTH-5); the enrollment
+    // Turning it on asks for the password again; the enrollment
     // only appears once it is right.
     await page.getByLabel("Password", { exact: true }).fill(user.password)
     await submit(page, "Turn on")
@@ -74,7 +74,7 @@ test.describe("two-factor authentication", () => {
       page.getByText("Two-factor authentication is now on.")
     ).toBeVisible()
 
-    // FR-MAIL-1: the owner is told their sign-in requirements changed.
+    // the owner is told their sign-in requirements changed.
     const notice = await waitForMail(stack, user.email, {
       template: "two-factor-changed",
     })
@@ -82,7 +82,7 @@ test.describe("two-factor authentication", () => {
 
     await signOut(page, app)
 
-    // A correct password is no longer a session (FR-2FA-1).
+    // A correct password is no longer a session.
     await signIn(page, app, user.email, user.password)
     await expect(page).toHaveURL(new RegExp(`${app.basePath}/two-factor`))
     await expect(

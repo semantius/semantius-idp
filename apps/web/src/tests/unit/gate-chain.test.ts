@@ -1,5 +1,5 @@
 /**
- * The order the interstitials happen in (FR-OIDC-9, FR-AUTH-4, FR-SIGNUP-2).
+ * The order the interstitials happen in.
  *
  * Each case is a rule with a consequence, and the ordering is the substance:
  * a suspended user must not reach the consent screen, and a user with a
@@ -22,7 +22,7 @@ describe("nextGate", () => {
     expect(nextGate({ user: ACTIVE })).toBeUndefined()
   })
 
-  it("stops a user who is still waiting for approval (FR-SIGNUP-2)", () => {
+  it("stops a user who is still waiting for approval", () => {
     // The session is valid, which is exactly why this is easy to miss: the
     // gate has to look at the *user*, not at whether there is a session.
     expect(nextGate({ user: { ...ACTIVE, status: "pending" } })).toEqual({
@@ -32,7 +32,7 @@ describe("nextGate", () => {
     expect(nextGate({ user: { banned: false } })).toEqual({ kind: "pending" })
   })
 
-  it("stops a suspended user, and a rejected one the same way (SEC-7)", () => {
+  it("stops a suspended user, and a rejected one the same way", () => {
     expect(nextGate({ user: { ...ACTIVE, banned: true } })).toEqual({
       kind: "banned",
     })
@@ -66,7 +66,7 @@ describe("nextGate", () => {
     ).toEqual({ kind: "banned" })
   })
 
-  it("puts the forced password change before the authorization (FR-AUTH-4)", () => {
+  it("puts the forced password change before the authorization", () => {
     expect(nextGate({ user: { ...ACTIVE, mustChangePassword: true } })).toEqual(
       { kind: "change-password" }
     )

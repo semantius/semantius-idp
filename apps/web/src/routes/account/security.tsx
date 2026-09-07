@@ -25,7 +25,6 @@ import {
   withError,
 } from "@/server/http/auth-proxy"
 import { requireSession } from "@/server/http/require-session"
-import { assertSameOrigin } from "@/server/http/request-origin"
 import { stash } from "@/server/http/one-shot"
 import { changePassword } from "@/server/auth/change-password"
 import { clearTrustedDevice } from "@/server/auth/trusted-devices"
@@ -46,18 +45,18 @@ const HERE = "/account/security"
 
 /**
  * `/account/security` — password, e-mail address and the second factor
- * (FR-ACCT-1, FR-2FA-1).
+ *.
  *
  * Everything on this page changes what it takes to get back into the account,
  * which is exactly what someone who has borrowed an unlocked browser would go
- * for. That is what the freshness gate was for, and **D81** removed it: it
+ * for. That is what the freshness gate was for, and the spec removed it: it
  * could not be satisfied at all by an account that authenticates through a
  * provider, which is most of them. Every POST still requires a session, read
  * authoritatively.
  *
  * The password change is a dialog here, like every other action on the page —
  * it used to be a link away to `/change-password`, which is a page because it
- * is *also* the forced-change page (FR-AUTH-4) and the target
+ * is *also* the forced-change page and the target
  * `/.well-known/change-password` redirects to. Both render the same fields
  * (`components/auth/change-password-fields.tsx`) and both go through the same
  * rules (`server/auth/change-password.ts`); only the destination differs, so
@@ -65,16 +64,16 @@ const HERE = "/account/security"
  *
  * A refused change reopens the dialog with the message inside it. The
  * passwords themselves are **not** restored — `PasswordField` has no
- * `defaultValue` prop, deliberately (**D62**).
+ * `defaultValue` prop, deliberately.
  *
  * Enrollment is two steps because Better Auth stores the secret unverified
  * until a code from it is accepted — which is what stops someone locking
  * themselves out with a mistyped secret. The secret and the backup codes reach
  * the confirmation page through the one-shot stash, never through the URL.
  *
- * **Trusted browsers are listed here and individually revocable** (**D104**).
+ * **Trusted browsers are listed here and individually revocable**.
  * Ticking "trust this device" is the one second-factor decision a user could
- * make and not unmake: **D104** kills those rows with the enrollment, but
+ * make and not unmake: a reset kills those rows with the enrollment, but
  * short of tearing 2FA down there was no way to undo a single tick on a shared
  * machine — and Better Auth rotates a trust row to a fresh expiry on every
  * use, so one in use never lapses on its own. The row `id` is the form handle;
@@ -108,10 +107,8 @@ export const Route = createFileRoute("/account/security")({
         // Everything on this page changes what it takes to get back into
         // the account, and one of the actions below now writes to the
         // database directly — so Better Auth's own origin check, which lives
-        // inside `callAuth`, is no longer in front of all of them (**D101**).
-        if (!assertSameOrigin(request)) {
-          return redirectWithCookies(withError(here, "untrusted_origin"))
-        }
+        // inside `callAuth`, is no longer in front of all of them.
+        // `requireSession` carries the origin check itself .
         const signedIn = await requireSession(runtime, request, HERE)
         if (!signedIn.ok) return signedIn.response
 
@@ -156,7 +153,7 @@ export const Route = createFileRoute("/account/security")({
             )
           case "revoke-trusted-device": {
             // Ownership is in the delete's own `WHERE`; a miss is the same
-            // answer as an unknown id, which is what SEC-7 asks for.
+            // answer as an unknown id, which is what the spec asks for.
             const revoked = await clearTrustedDevice(
               runtime.database,
               signedIn.session.user.id,
@@ -179,7 +176,7 @@ export const Route = createFileRoute("/account/security")({
 // getRuntime`: deriving it kept a live reference to the runtime module in the
 // *client* graph, and the whole server — Drizzle, the schema, the config
 // loader — came with it. 200 KB of database code in the browser bundle, which
-// is the R-4 failure all over again. The client-bundle gate caught it.
+// is the spec failure all over again. The client-bundle gate caught it.
 type Form = Record<string, string | undefined>
 
 async function changeEmail(
@@ -188,7 +185,7 @@ async function changeEmail(
   form: Form,
   here: string
 ): Promise<Response> {
-  // FR-MAIL-2: without a transport there is no confirmation to send, so the
+  // without a transport there is no confirmation to send, so the
   // feature does not exist rather than half-working.
   if (!runtime.config.emailEnabled) {
     return redirectWithCookies(withError(here, "not_found"))
@@ -252,7 +249,7 @@ async function enableTwoFactor(
 }
 
 /**
- * Enrollment finishes here, and so does the notification (FR-MAIL-1, FR-2FA-1).
+ * Enrollment finishes here, and so does the notification.
  *
  * **Sent from the route rather than from a hook**, because "the second factor
  * changed" is a fact about the *enrollment*, and only these two handlers know
@@ -333,7 +330,7 @@ function SecurityPage() {
       {/* Every notice here is about this account — except the one that is
           about a *different* address. "Check the new address for a
           confirmation link", with the old address underneath it, reads as a
-          contradiction, so that one goes without (**D78**). */}
+          contradiction, so that one goes without. */}
       <NoticeToast
         message={messageForNoticeCode(notice, t)}
         subject={notice === "email_change_sent" ? undefined : profile.email}
@@ -381,7 +378,7 @@ function SecurityPage() {
         </ActionDialog>
       </AccountSection>
 
-      {/* FR-MAIL-2: with no transport there is no confirmation to send. */}
+      {/* with no transport there is no confirmation to send. */}
       {ui.emailEnabled ? (
         <AccountSection
           title={t.account.changeEmail.title}
@@ -407,7 +404,7 @@ function SecurityPage() {
         </AccountSection>
       ) : null}
 
-      {/* FR-2FA-1: with 2FA off there is nothing to enroll in. */}
+      {/* with 2FA off there is nothing to enroll in. */}
       {ui.twoFactorEnabled ? (
         <AccountSection
           title={t.account.twoFactor.title}
@@ -460,7 +457,7 @@ function SecurityPage() {
       ) : null}
 
       {/* Only where there is something to manage: with 2FA off for this user
-          every trust row has been cleared anyway (**D104**), and a section
+          every trust row has been cleared anyway, and a section
           that could only ever say "none" is noise on a page about
           credentials. */}
       {ui.twoFactorEnabled && profile.twoFactorEnabled ? (

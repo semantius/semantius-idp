@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The operator CLI (OPS-6), inside the running container:
+# The operator CLI, inside the running container:
 #
 #   ./idp-cli.sh config validate
 #   ./idp-cli.sh migrate

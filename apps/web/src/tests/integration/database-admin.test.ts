@@ -1,5 +1,5 @@
 /**
- * `/admin/database`'s two endpoints, against a real Postgres (FR-ADMIN-7).
+ * `/admin/database`'s two endpoints, against a real Postgres.
  *
  * The interesting half is not "does `select 1` work". It is the boundary: the
  * console's whole safety story is that a `read` statement runs inside a
@@ -174,7 +174,7 @@ describe("the read-only console", () => {
       expect(createdAt?.type).toMatch(/^timestamp/)
     })
 
-    it("lists every schema the connection can look into (D84)", async () => {
+    it("lists every schema the connection can look into", async () => {
       const response = await ctx.auth.handler(
         authRequest("/idp/database/schema", { headers: { cookie } })
       )
@@ -193,11 +193,11 @@ describe("the read-only console", () => {
       // Sorted, because it is drawn as a list a person reads.
       expect(body.schemas).toEqual([...body.schemas].sort())
       // Without `?schema=` the answer is still the deployment's own, which is
-      // what every caller written before D84 gets.
+      // what every caller written before the row action gets.
       expect(body.schemaName).toBe(ctx.schemaName)
     })
 
-    it("introspects the schema `?schema=` names (D84)", async () => {
+    it("introspects the schema `?schema=` names", async () => {
       const other = `${ctx.schemaName}_other`
       const quoted = `"${other}"`
       await ctx.database.sql.unsafe(`create schema ${quoted}`)
@@ -231,7 +231,7 @@ describe("the read-only console", () => {
       }
     })
 
-    it("refuses a schema that is not on this database (D84)", async () => {
+    it("refuses a schema that is not on this database", async () => {
       const response = await ctx.auth.handler(
         authRequest("/idp/database/schema?schema=no_such_schema", {
           headers: { cookie },
@@ -443,8 +443,8 @@ describe("the read-only console", () => {
     })
 
     it("works with an admin API key, so `curl` reaches it too", async () => {
-      // FR-ADMIN-6: the API is the interface and the page is one of its
-      // callers. `requireAdmin`'s D35 fallback is what makes this work.
+      // the API is the interface and the page is one of its
+      // callers. `requireAdmin`'s session fallback is what makes this work.
       const created = await ctx.auth.handler(
         authRequest("/api-key/create", {
           json: { name: "console" },

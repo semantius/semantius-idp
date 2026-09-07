@@ -1,10 +1,10 @@
 /**
- * A fixed-window limiter for the buckets Better Auth cannot key (SEC-2).
+ * A fixed-window limiter for the buckets Better Auth cannot key.
  *
  * **Why this exists at all.** Better Auth's own limiter is good and is used for
  * everything it can express — but it builds its key as `ip:path`, always, and
  * `rateLimit.customRules` can only change the *window and the maximum* for a
- * path, never the key. SEC-2 requires `/oauth2/token` to be limited **per
+ * path, never the key. The spec requires `/oauth2/token` to be limited **per
  * client id as well as per IP**, and a confidential client behind one NAT is a
  * single IP for thousands of users: the per-IP bucket is either so wide it
  * limits nothing or so narrow it breaks the client. So the per-client bucket
@@ -117,6 +117,54 @@ export async function consume(
   }
 }
 
+/**
+ * Whether a bucket is already exhausted, **without counting anything**.
+ *
+ * For the two-phase buckets of `routes/oauth2/token.ts`: a request
+ * is checked here before it is forwarded and counted with {@link consume}
+ * only once the provider has said what the request was — because counting
+ * first is what let anyone who could *name* a client empty that client's
+ * bucket. Checking and counting are two statements, so a burst arriving
+ * inside one window can overshoot the maximum by its own concurrency; Better
+ * Auth's atomic per-IP rule on the same path bounds the burst, and the
+ * overshoot is a few requests where the alternative was an outage.
+ */
+export async function peek(
+  deps: RateLimitDeps,
+  bucket: string,
+  rule: RateLimitRule
+): Promise<RateLimitDecision> {
+  const key = `${KEY_PREFIX}${bucket}`
+  const now = (deps.now ?? Date.now)()
+  const windowMs = rule.window * 1000
+  const { rateLimit } = deps.database.schema
+
+  try {
+    const rows = await deps.database.db
+      .select({ count: rateLimit.count, lastRequest: rateLimit.lastRequest })
+      .from(rateLimit)
+      .where(eq(rateLimit.key, key))
+      .limit(1)
+    const row = rows[0]
+    if (!row) return { allowed: true, retryAfter: 0 }
+    // Past the window the next `consume` starts a new one.
+    const elapsed = now - row.lastRequest
+    if (elapsed >= windowMs) return { allowed: true, retryAfter: 0 }
+    if (row.count < rule.max) return { allowed: true, retryAfter: 0 }
+    return {
+      allowed: false,
+      retryAfter: Math.max(1, Math.ceil((windowMs - elapsed) / 1000)),
+    }
+  } catch (error) {
+    // Same failure policy as `consume`, for the same reason.
+    deps.logger?.error("rate limit check failed; allowing the request", {
+      error: error instanceof Error ? error.message : String(error),
+      bucket,
+    })
+    return { allowed: true, retryAfter: 0 }
+  }
+}
+
 /** Forgets a bucket. Used by tests and by nothing else. */
 export async function reset(
   deps: RateLimitDeps,
@@ -131,7 +179,7 @@ export async function reset(
 /**
  * The 429 a refused caller gets.
  *
- * `Retry-After` and nothing else: SEC-2 says the response must not reveal the
+ * `Retry-After` and nothing else: The spec says the response must not reveal the
  * threshold, so there is no `X-RateLimit-Limit` here and no count in the body.
  * Knowing the limit is knowing exactly how much to do without tripping it.
  */

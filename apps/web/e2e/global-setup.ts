@@ -7,7 +7,7 @@ import { makeStack, startStack } from "./stack"
 import type { Stack } from "./stack"
 
 /**
- * Brings the stacks up before any spec runs (TST-6).
+ * Brings the stacks up before any spec runs.
  *
  * The handles are written to a file rather than kept in memory, because
  * Playwright runs `globalSetup`, the workers and `globalTeardown` in separate

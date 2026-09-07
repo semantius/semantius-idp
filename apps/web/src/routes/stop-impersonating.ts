@@ -9,7 +9,7 @@ import { APP_ROUTES } from "@/server/oidc/base-path"
 import { getRuntime } from "@/server/runtime"
 
 /**
- * Ending an impersonation (FR-ADMIN-5, SEC-6, **D66**).
+ * Ending an impersonation.
  *
  * **POST only**, for the same reason `/logout` is: a GET that changes a
  * session lets any page do it with an `<img>` tag. There is no page here —
@@ -17,7 +17,7 @@ import { getRuntime } from "@/server/runtime"
  * screen an impersonated session can reach.
  *
  * It exists because the endpoint had no caller. `impersonation.stopped` was
- * in SEC-6's list and in the `AuditAction` union and was never written by
+ * in the spec's list and in the `AuditAction` union and was never written by
  * anything: an impersonation ended by expiring after an hour or by signing
  * out, and neither goes through `/admin/stop-impersonating`. Wiring the audit
  * hook alone would have recorded an event that never happens, so the control

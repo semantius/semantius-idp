@@ -5,7 +5,7 @@ import { forwardToAuth } from "@/server/oidc/protocol-proxy"
 import { getRuntime } from "@/server/runtime"
 
 /**
- * `{issuer}/.well-known/jwks.json` (FR-OIDC-16).
+ * `{issuer}/.well-known/jwks.json`.
  *
  * Byte-identical to `/api/auth/jwks`, which keeps answering for anything that
  * already found it. This is the URL discovery advertises, because a verifier

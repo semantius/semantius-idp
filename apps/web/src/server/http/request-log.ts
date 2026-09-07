@@ -1,6 +1,6 @@
 /**
  * One structured line per request, and the id that ties it to the audit trail
- * (SEC-5, SEC-6).
+ *.
  *
  * The `audit_log` table has carried a `request_id` column since M4 and nothing
  * has ever filled it in, because nothing generated one. That is what this
@@ -10,7 +10,7 @@
  * Without it, "the ban at 14:02" and "the 403 at 14:02" are two facts nobody
  * can join.
  *
- * **What is never logged** (SEC-5): passwords, tokens, authorization codes,
+ * **What is never logged**: passwords, tokens, authorization codes,
  * secrets, reset and verification links, `Authorization` and `Cookie` headers,
  * and the *query string* of `/oauth2/*` and `/api/auth/*` — which is where the
  * authorization code, the signed continuation and the reset token all travel.
@@ -32,8 +32,18 @@ const QUIET_PATHS = new Set(["/healthz", "/readyz"])
 
 export interface RequestContext {
   requestId: string
-  /** Already anonymized (SEC-5): the last octet or the low 64 bits are gone. */
+  /** Already anonymized: the last octet or the low 64 bits are gone. */
   ipAddress?: string
+  /**
+   * The resolved address, **not** anonymized — for rate-limit keys only
+   *. `/setup` used to key its bucket on `ipAddress` above, which
+   * is a /24 by the time it is stored there, so a whole subnet shared one
+   * bucket and a runtime that resolved nothing put the entire internet in
+   * `unknown`. Never logged and never written to a row: the audit trail and
+   * the request log read `ipAddress`, and this field exists so that they can
+   * keep doing so. Read it through `rateLimitKeyAddress`, which masks IPv6.
+   */
+  clientIp?: string
   /**
    * The issuer this request is answered with, resolved once at the edge by
    * `oidc/request-issuer.ts`. The boot issuer unless `server.dynamicIssuer`
@@ -54,14 +64,14 @@ export interface RequestContext {
   authApiError?: unknown
   /**
    * The HTTP status the rendered **document** should carry, when it is not
-   * 200 (FR-ROLE-3).
+   * 200.
    *
    * TanStack Start's `setResponseStatus` does not reach an SSR page: the
    * document response is built by `renderRouterToStream` with
    * `status: router.stores.statusCode.get()`, which the router sets to 404 for
    * a `notFound()`, 500 for an errored match, and 200 otherwise. There is no
    * supported way for a loader to ask for a third value, and the admin
-   * refusal needs one — FR-ROLE-3 says 403 and the page rendered with 200, so
+   * refusal needs one — the spec says 403 and the page rendered with 200, so
    * every proxy, log and probe recorded a successful page view of the admin
    * area by somebody who cannot see it.
    *
@@ -111,7 +121,7 @@ export function currentAuthApiError(): unknown {
 }
 
 /**
- * Asks for a non-200 status on the rendered document (**FR-ROLE-3**).
+ * Asks for a non-200 status on the rendered document.
  *
  * A no-op outside a request, like everything else here. Only widening is
  * allowed: the first caller to ask for an error status wins, so a nested

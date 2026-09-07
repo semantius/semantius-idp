@@ -1,6 +1,6 @@
 /**
  * Resuming — and failing to resume — an interrupted authorization
- * (FR-OIDC-9).
+ *.
  *
  * The happy path is covered by `integration/authorize-flow.test.ts` against a
  * real provider. What is worth pinning down here is everything that happens

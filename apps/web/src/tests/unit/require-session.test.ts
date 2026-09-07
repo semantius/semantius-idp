@@ -1,5 +1,5 @@
 /**
- * The session gate (`http/require-session.ts`, **D81**).
+ * The session gate (`http/require-session.ts`).
  *
  * Two properties, and the second is the one worth a test: a caller with no
  * session is bounced to `/login` carrying where they were, and the read is
@@ -8,7 +8,7 @@
  * session up to five minutes old.
  *
  * The predecessor's tests asserted a fifteen-minute window on
- * `session.createdAt`. That window is gone (D81): it could not be satisfied
+ * `session.createdAt`. That window is gone: it could not be satisfied
  * by an account that authenticates through a provider, which is most of them.
  */
 
@@ -37,7 +37,7 @@ describe("signInTarget", () => {
   })
 
   it("keeps a query on the return path across the round trip", () => {
-    // `?draft=…` rides here on the error paths (D62), and `safeReturnTo` at
+    // `?draft=…` rides here on the error paths, and `safeReturnTo` at
     // the other end must see one same-origin relative path.
     expect(signInTarget("/idp", "/admin/clients?draft=abc")).toBe(
       "/idp/login?notice=signin_required&returnTo=%2Fadmin%2Fclients%3Fdraft%3Dabc"
@@ -48,7 +48,9 @@ describe("signInTarget", () => {
 describe("requireSession", () => {
   it("passes a caller who has a session, however old", async () => {
     const { runtime } = runtimeWith({
-      user: { id: "u1", email: "a@example.com", roles: [] },
+      // `status` is what the standing gate reads, and a missing one is
+      // `pending` on purpose (`assertUserMaySignIn`) — a real row always has it.
+      user: { id: "u1", email: "a@example.com", roles: [], status: "active" },
       session: {
         id: "s1",
         token: "t",

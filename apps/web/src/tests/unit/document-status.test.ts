@@ -7,7 +7,7 @@ import {
 } from "@/server/http/request-log"
 
 /**
- * The document status a loader can ask for (FR-ROLE-3).
+ * The document status a loader can ask for.
  *
  * It exists because Start's `setResponseStatus` does not reach an SSR page:
  * `renderRouterToStream` builds that response from the router's own status

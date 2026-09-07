@@ -4,7 +4,7 @@ import { forwardToAuth } from "@/server/oidc/protocol-proxy"
 import { getRuntime } from "@/server/runtime"
 
 /**
- * `{issuer}/oauth2/introspect` (FR-OIDC-4, FR-OIDC-17).
+ * `{issuer}/oauth2/introspect`.
  *
  * **No CORS, deliberately.** Introspection is a resource-server endpoint,
  * called server-to-server with the caller's own client credentials. A browser

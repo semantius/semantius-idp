@@ -22,8 +22,7 @@ import { getRuntime } from "@/server/runtime"
 import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 /**
- * `/reset-password` — and, with `welcome=1`, the invitation (FR-AUTH-3,
- * FR-ADMIN-2, **D65**).
+ * `/reset-password` — and, with `welcome=1`, the invitation.
  *
  * The token is carried through the form as a hidden field and spent at
  * submission. It is now also **read** before the form is rendered, which is
@@ -36,7 +35,7 @@ import { PendingForm, SubmitButton } from "@/components/common/pending-form"
  *
  * One page, two variants, on the `searchFlag` precedent `/change-password`
  * already sets with `forced`. A reset revokes every other session and — from
- * M8 — the user's OAuth tokens too (FR-OIDC-12), so the page says so before
+ * the user's OAuth tokens too, so the page says so before
  * the user commits. An **invitation** says nothing of the sort: that sentence
  * comes from `revokeSessionsOnPasswordReset` and means nothing for an account
  * nobody has ever signed in to. It tells them who made the account instead,
@@ -67,7 +66,7 @@ export const Route = createFileRoute("/reset-password")({
         const form = await readForm(request)
         const token = form.token ?? ""
         // The variant survives a refusal, or a mistyped confirmation would
-        // turn an invitation back into a password reset (D65).
+        // turn an invitation back into a password reset.
         const here =
           `${base}${APP_ROUTES.resetPassword}?token=${encodeURIComponent(token)}` +
           (form.welcome === "1" ? "&welcome=1" : "")
@@ -119,7 +118,7 @@ function ResetPasswordPage() {
     const expired = account.state === "expired"
     // "Request a new one" is self-service, and an invited user may have no
     // self-service to reach: `/forgot-password` is 404 in degraded mode
-    // (FR-MAIL-2), and they were not the one who asked for this link.
+    // , and they were not the one who asked for this link.
     const selfService = !welcome && ui.emailEnabled
     return (
       <AuthShell ui={ui} title={title}>
@@ -154,13 +153,7 @@ function ResetPasswordPage() {
         <>
           {welcome
             ? t.auth.resetPassword.welcomeDescription(ui.siteName)
-            : t.auth.resetPassword.revokedNotice}{" "}
-          {/* Which account, which is the first thing anyone with two
-              addresses wants to know — and the thing that catches a link
-              forwarded to the wrong person before a password is chosen. */}
-          {account.email
-            ? t.auth.resetPassword.forAccount(account.email)
-            : null}
+            : t.auth.resetPassword.revokedNotice}
         </>
       }
     >

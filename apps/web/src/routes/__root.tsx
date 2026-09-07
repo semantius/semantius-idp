@@ -12,9 +12,9 @@ import { getCatalog } from "@/server/i18n"
  *
  * Branding, locale and theme all come from configuration, resolved on the
  * server, so the first paint is already correct — no flash of the wrong theme
- * and no untranslated shell (FR-ACCT-2, FR-I18N-1).
+ * and no untranslated shell.
  *
- * `robots.txt` disallows everything (FR-OIDC-15) and the meta tag repeats it
+ * `robots.txt` disallows everything and the meta tag repeats it
  * for crawlers that arrive at a page directly: an IdP has nothing to index and
  * a sign-in page in search results only helps phishing.
  */
@@ -55,7 +55,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
     <html
       lang={ui.locale}
       className={ui.theme === "dark" ? "dark" : undefined}
-      // How the mount path reaches the browser bundle (OPS-10):
+      // How the mount path reaches the browser bundle:
       // already parsed by the time the client entry builds its router.
       {...{ [BASE_PATH_ATTRIBUTE]: ui.basePath }}
     >
@@ -65,7 +65,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
       <body>
         {children}
         {/*
-          One toast host for the whole application (**D71**). Success notices
+          One toast host for the whole application. Success notices
           arrive as `?notice=<code>` on the page a 303 lands on, so any of them
           could be the one that has something to say — mounting the provider
           per page would mean remembering to, and forgetting on the eight that
@@ -78,7 +78,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
   )
 }
 
-/** 404 (FR-ACCT-2). Says nothing about what does exist. */
+/** 404. Says nothing about what does exist. */
 function NotFound() {
   const t = getCatalog()
   return (
@@ -91,7 +91,7 @@ function NotFound() {
   )
 }
 
-/** 500 (FR-ACCT-2). No stack, no message from the error itself. */
+/** 500. No stack, no message from the error itself. */
 function ErrorPage() {
   const t = getCatalog()
   return (

@@ -4,12 +4,12 @@ import { describe, expect, it } from "vitest"
 import { PasswordField } from "@/components/auth/form-parts"
 
 /**
- * R-1: the reveal control is an icon button inside the field, not a pair of
+ * the reveal control is an icon button inside the field, not a pair of
  * underlined links below it.
  *
  * These assertions are on the **server-rendered** markup on purpose. The whole
  * point of the checkbox mechanism is that the control is already correct on the
- * first paint, before any JavaScript runs (FR-ACCT-2), so that is where it has
+ * first paint, before any JavaScript runs, so that is where it has
  * to be provable. The visual side — that the label really sits inside the
  * field — is Tailwind's job and M13's axe run re-checks the a11y outcome.
  */
@@ -92,7 +92,7 @@ describe("PasswordField reveal control", () => {
     expect(render()).toContain('type="password"')
   })
 
-  it("no longer renders the underlined links that R-1 rejected", () => {
+  it("no longer renders the underlined links that the accessibility review rejected", () => {
     const html = render()
     expect(html).not.toContain("underline")
     // `w-fit` was what made each link a block of its own under the input.
@@ -106,7 +106,7 @@ describe("PasswordField reveal control", () => {
   })
 
   it("withdraws the control when scripting is off, rather than lying", () => {
-    // Scripting-off is not a supported case (D31), but this costs nothing and
+    // Scripting-off is not a supported case, but this costs nothing and
     // Blink and WebKit clamp a password field back to `disc` whatever the
     // style says — so without script the toggle would rename itself "Hide
     // password" over a still-masked field. Both halves carry the hook.

@@ -26,7 +26,7 @@ import type { Catalog } from "@/server/i18n"
  * inline, and a page full of six actions is still six ordinary form posts —
  * which is why none of the server handlers below them changed.
  *
- * Requiring JavaScript for the *chrome* is allowed (D31) and is the whole
+ * Requiring JavaScript for the *chrome* is allowed and is the whole
  * trade: an admin page with a dozen inline forms is unreadable, and the
  * alternative — a page per action — is a navigation for something that is one
  * field and a button.
@@ -59,14 +59,14 @@ export function ActionDialog({
   size?: "default" | "sm" | "lg"
   className?: string
   /**
-   * Open on first paint. What a rejected submission needs (**D62**): the
+   * Open on first paint. What a rejected submission needs: the
    * refusal and the restored fields are both inside the dialog, so a page that
    * came back with an error and a draft has to reopen it or neither is
    * visible. Uncontrolled, so closing it works exactly as it always did.
    */
   defaultOpen?: boolean
   /**
-   * Controlled, and **then there is no trigger** (**D80**).
+   * Controlled, and **then there is no trigger**.
    *
    * What a dialog opened from a menu needs: the control that opens it is a
    * `menuitem` in a popup that closes on activation, so by the time the dialog

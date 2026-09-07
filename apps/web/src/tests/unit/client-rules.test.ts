@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import {
+  NEW_CLIENT_DEFAULTS,
   checkRedirectUri,
   isValidClientId,
   skipConsentFromForm,
@@ -10,7 +11,7 @@ import {
 import type { ClientFormValues } from "@/lib/client-rules"
 
 /**
- * The rules `/admin/clients` and `oauth_clients.jsonc` both apply (**D62**).
+ * The rules `/admin/clients` and `oauth_clients.jsonc` both apply.
  *
  * `config-clients.test.ts` asserts the schema's behavior through zod; this
  * asserts the shared decision underneath both, which is the thing that must
@@ -98,7 +99,7 @@ describe("clientId", () => {
     expect(isValidClientId("")).toBe(false)
     expect(isValidClientId("has space")).toBe(false)
     expect(isValidClientId("a".repeat(129))).toBe(false)
-    // **D93**: legal characters, unusable as a path segment. The id is part
+    // legal characters, unusable as a path segment. The id is part
     // of the row's own address (`/admin/clients/<id>/edit`) and a browser
     // resolves `..` away before the request leaves it.
     expect(isValidClientId(".")).toBe(false)
@@ -173,7 +174,7 @@ describe("validateClientForm", () => {
 })
 
 /**
- * The one inversion in the codebase, pinned (round 3, finding 10).
+ * The one inversion in the codebase, pinned (finding 10).
  *
  * The form asks "Require consent" and the wire field is `skipConsent`, which
  * is a triple negative waiting to happen — so it is one function with a test
@@ -186,10 +187,21 @@ describe("skipConsentFromForm", () => {
     expect(skipConsentFromForm("on")).toBe(false)
   })
 
-  it("absent means the user is not asked, which is FR-OIDC-3's default", () => {
+  it("absent means the user is not asked, which is the spec's default", () => {
     // A checkbox sends nothing at all when it is unticked, so `undefined` is
     // the ordinary case rather than an edge one.
     expect(skipConsentFromForm(undefined)).toBe(true)
     expect(skipConsentFromForm("")).toBe(true)
+  })
+
+  it("but the create form ticks the box to begin with", () => {
+    // The mapping above is unchanged; what changed is where a new
+    // *admin-registered* client starts. A file client stays `skipConsent:
+    // true`, because the operator wrote it down; one added from a form was
+    // reaching the same answer by an unticked default nobody had to read.
+    expect(NEW_CLIENT_DEFAULTS.requireConsent).toBe(true)
+    // End-session stays off: the schema refuses it with no post-logout URI.
+    expect(NEW_CLIENT_DEFAULTS.enableEndSession).toBe(false)
+    expect(NEW_CLIENT_DEFAULTS.type).toBe("spa")
   })
 })

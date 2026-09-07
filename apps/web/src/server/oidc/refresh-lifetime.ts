@@ -1,5 +1,5 @@
 /**
- * The 90-day ceiling on a 30-day sliding refresh token (FR-OIDC-13).
+ * The 90-day ceiling on a 30-day sliding refresh token.
  *
  * "Refresh token 30 d sliding with 90 d absolute maximum." The sliding half is
  * the provider's: every rotation issues a new token expiring
@@ -24,7 +24,7 @@
  * gets the ordinary `invalid_grant` rather than a bespoke error.
  */
 
-import { and, eq, inArray, isNull, sql } from "drizzle-orm"
+import { and, eq, inArray, isNull, lt } from "drizzle-orm"
 
 import type { IdpConfig } from "../config/derive"
 import type { DbHandle } from "../db/client"
@@ -52,26 +52,30 @@ export async function revokeExpiredRefreshFamilies(
   const { oauthRefreshToken } = database.schema
 
   try {
-    // The families whose *first* token predates the cutoff. Grouping is the
-    // whole point: a rotated token created this morning is still part of a
-    // family that began three months ago.
+    // The families whose *first* live token predates the cutoff. A family's
+    // origin is the earliest `createdAt` among its unrevoked rows, and "the
+    // earliest is older than the cutoff" is the same statement as "at least
+    // one is older than the cutoff" — so the bound belongs in the WHERE, and
+    // the query touches only rows old enough to matter. The first
+    // version grouped every unrevoked row in the table on every refresh
+    // grant and compared the aggregate in JavaScript, which was O(table) per
+    // grant for a result that is almost always empty; same semantics, same
+    // rows revoked, one index-range scan.
     //
-    // The comparison is done here rather than in a `having` clause: the
-    // aggregate is over a `timestamp` column and the cutoff is a JS `Date`,
-    // and pushing that binding through Drizzle's `sql` template silently
-    // matched nothing. One row per family is a small enough result to filter
-    // in JavaScript, and it is obviously right.
+    // `lt()` on the column binds the JS `Date` correctly. The reason the
+    // comparison was ever in JavaScript was a `having` over a `min()` through
+    // Drizzle's `sql` template, which silently matched nothing.
     const families = await database.db
-      .select({
-        familyId: oauthRefreshToken.authorizationCodeId,
-        origin: sql<Date>`min(${oauthRefreshToken.createdAt})`,
-      })
+      .selectDistinct({ familyId: oauthRefreshToken.authorizationCodeId })
       .from(oauthRefreshToken)
-      .where(isNull(oauthRefreshToken.revoked))
-      .groupBy(oauthRefreshToken.authorizationCodeId)
+      .where(
+        and(
+          isNull(oauthRefreshToken.revoked),
+          lt(oauthRefreshToken.createdAt, cutoff)
+        )
+      )
 
     const familyIds = families
-      .filter((row) => new Date(row.origin).getTime() < cutoff.getTime())
       .map((row) => row.familyId)
       .filter((id): id is string => typeof id === "string")
     if (familyIds.length === 0) return 0

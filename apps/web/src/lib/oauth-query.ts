@@ -1,6 +1,6 @@
 /**
  * Recognizing an interrupted authorization on an interstitial page
- * (FR-OIDC-9).
+ *.
  *
  * The provider does not hand the request over in a parameter called
  * `oauth_query`: when `/oauth2/authorize` sends someone to the login or

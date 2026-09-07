@@ -7,13 +7,13 @@ import { authRequest, createTestContext, sessionCookie } from "./harness"
 import type {TestContext} from "./harness";
 
 /**
- * FR-SIGNUP-2's approve/reject endpoints and FR-ROLE-3's admin gate.
+ * the spec's approve/reject endpoints and the spec's admin gate.
  *
- * These are endpoints rather than page-only logic because FR-ADMIN-6 makes the
+ * These are endpoints rather than page-only logic because the spec makes the
  * admin API the documented management interface — so the gate has to hold for
  * an API caller, not only for someone who reached a page.
  */
-describe("approval endpoints (FR-SIGNUP-2, FR-ROLE-3)", () => {
+describe("approval endpoints", () => {
   const password = "correct horse battery staple"
   let ctx: TestContext
   let adminCookie: string
@@ -94,7 +94,7 @@ describe("approval endpoints (FR-SIGNUP-2, FR-ROLE-3)", () => {
     )
   }
 
-  describe("the admin gate (FR-ROLE-3)", () => {
+  describe("the admin gate", () => {
     it("refuses an anonymous caller", async () => {
       const applicant = await createApplicant()
       const response = await call("/idp/approve-user", { userId: applicant.id })
@@ -167,23 +167,23 @@ describe("approval endpoints (FR-SIGNUP-2, FR-ROLE-3)", () => {
       expect(after.status).toBe(200)
     })
 
-    it("tells the applicant (FR-MAIL-1)", async () => {
+    it("tells the applicant", async () => {
       const applicant = await createApplicant()
       await call("/idp/approve-user", { userId: applicant.id }, adminCookie)
 
       const message = ctx.mailer.captured.last("account-approved")
       expect(message).toBeDefined()
       expect(message!.to).toBe(applicant.email)
-      // FR-SIGNUP-2: the link goes to /login; approval never resumes a flow.
+      // the link goes to /login; approval never resumes a flow.
       expect(message!.html).toContain("http://localhost:3000/login")
     })
 
-    it("writes an audit row naming the actor and the target (SEC-6)", async () => {
+    it("writes an audit row naming the actor and the target", async () => {
       const applicant = await createApplicant()
       await call("/idp/approve-user", { userId: applicant.id }, adminCookie)
 
       // Filtered by action: the applicant also has a `signup.created` row
-      // from registering, now that the SEC-6 after-hook records one.
+      // from registering, now that the spec after-hook records one.
       const rows = await auditRows(applicant.id, "signup.approved")
       expect(rows).toHaveLength(1)
       expect(rows[0]).toMatchObject({
@@ -248,7 +248,7 @@ describe("approval endpoints (FR-SIGNUP-2, FR-ROLE-3)", () => {
       expect(refused.status).toBeGreaterThanOrEqual(400)
     })
 
-    it("stays silent unless notification is asked for (FR-MAIL-1)", async () => {
+    it("stays silent unless notification is asked for", async () => {
       const quiet = await createApplicant()
       await call("/idp/reject-user", { userId: quiet.id }, adminCookie)
       expect(ctx.mailer.captured.last("account-rejected")).toBeUndefined()
@@ -282,7 +282,7 @@ describe("approval endpoints (FR-SIGNUP-2, FR-ROLE-3)", () => {
       expect(sessions).toHaveLength(0)
     })
 
-    it("audits the rejection (SEC-6)", async () => {
+    it("audits the rejection", async () => {
       const applicant = await createApplicant()
       await call(
         "/idp/reject-user",

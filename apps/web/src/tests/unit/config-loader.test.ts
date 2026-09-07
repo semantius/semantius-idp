@@ -45,7 +45,7 @@ describe("config loader", () => {
     expect(config.defaultRole).toBe("user")
     expect(config.adminRoles).toEqual(["admin"])
     expect(config.trustedOrigins).toEqual(["http://localhost:3000"])
-    // No e-mail transport ⇒ degraded mode (FR-MAIL-2).
+    // No e-mail transport ⇒ degraded mode.
     expect(config.emailEnabled).toBe(false)
     expect(config.requireEmailVerification).toBe(false)
     expect(warnings.map((w) => w.code)).toContain("email.degraded")
@@ -69,13 +69,13 @@ describe("config loader", () => {
   })
 
   /**
-   * D60: `.jsonc` is the canonical spelling and `.json` is still read. Every
+   * `.jsonc` is the canonical spelling and `.json` is still read. Every
    * other test in this file writes `.json`, so the fallback is covered by all
    * of them; what needs its own coverage is the preferred spelling, the
    * refusal when both are there, and the fact that a message names the file
    * the operator can actually open.
    */
-  describe("file resolution (D60)", () => {
+  describe("file resolution", () => {
     it("reads the .jsonc spelling", () => {
       const { config } = load({ extension: "jsonc" })
       expect(config.file.site.name).toBe("Test IdP")
@@ -106,7 +106,7 @@ describe("config loader", () => {
       const message = issues.map((issue) => issue.message).join("\n")
       expect(message).toContain("config.jsonc")
       expect(message).toContain("config.json")
-      // All three files are ambiguous, and CFG-5 reports them together.
+      // All three files are ambiguous, and validation reports them together.
       expect(issues).toHaveLength(3)
     })
 
@@ -141,7 +141,7 @@ describe("config loader", () => {
     })
   })
 
-  it("reports every problem in one pass (CFG-5)", () => {
+  it("reports every problem in one pass", () => {
     const issues = expectIssues({
       config: {
         ...baseConfig(),
@@ -174,7 +174,7 @@ describe("config loader", () => {
     expect(config.file.site.name).toBe("Test IdP")
   })
 
-  describe("CFG-3 precedence", () => {
+  describe("precedence", () => {
     it("uses a fallback env var only when the key is absent from the file", () => {
       const withoutSecret = { ...baseConfig() }
       delete (withoutSecret as Record<string, unknown>).secret
@@ -206,11 +206,11 @@ describe("config loader", () => {
       expect(config.file.server.baseUrl).toBe("http://localhost:3000")
     })
 
-    // D74. Before it, `database.url` was the required key and an operator
+    // Before it, `database.url` was the required key and an operator
     // holding only the direct endpoint — the one that must work, the one every
     // lock-taking step needs — was refused for a configuration that is
     // perfectly serviceable.
-    describe("the two connection strings (D74)", () => {
+    describe("the two connection strings", () => {
       it("accepts directUrl alone and uses it for regular access too", () => {
         const stripped = {
           ...baseConfig(),

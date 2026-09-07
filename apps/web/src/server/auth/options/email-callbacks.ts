@@ -1,11 +1,11 @@
 /**
- * The Better Auth callbacks that actually send mail (FR-MAIL-1, FR-AUTH-2/3).
+ * The Better Auth callbacks that actually send mail.
  *
  * Better Auth generates the tokens and hands us a URL; the IdP decides the
  * template, the wording and — crucially — the link's origin. Better Auth builds
  * its URL from `baseURL`, which we set from `server.baseUrl`, but the callback
  * URL it appends comes from the request, so it is rebuilt here against the
- * issuer to satisfy SEC-1 without exception.
+ * issuer to satisfy the base-URL rule without exception.
  */
 
 import type { IdpConfig } from "../../config/derive"
@@ -22,7 +22,7 @@ export interface EmailCallbackDeps {
  *
  * The token is the only part of the incoming URL that matters; the origin and
  * path are ours to decide, so a poisoned `Host` header cannot turn a
- * verification e-mail into a credential-harvesting link (SEC-1).
+ * verification e-mail into a credential-harvesting link.
  */
 export function issuerLink(
   config: IdpConfig,
@@ -50,7 +50,7 @@ export function issuerLink(
  *
  * So the token goes where it is consumed, and `callbackURL` brings the browser
  * back to the branded page afterwards. That also keeps the mutation inside
- * Better Auth's handler, where the SEC-6 audit hook for `/verify-email`
+ * Better Auth's handler, where the spec audit hook for `/verify-email`
  * already lives, and out of a route loader — loaders are isomorphic and run on
  * client navigations too, which is no place for something that spends a
  * single-use token.
@@ -60,7 +60,7 @@ export function issuerLink(
  * `status` (`routes/verify-email.tsx`).
  *
  * Still built from `server.baseUrl` only, so a poisoned `Host` header cannot
- * redirect the confirmation anywhere (SEC-1).
+ * redirect the confirmation anywhere.
  */
 export function verificationLink(config: IdpConfig, token: string): string {
   const paths = createBasePaths(config.base)
@@ -77,7 +77,7 @@ export function buildEmailCallbacks(deps: EmailCallbackDeps) {
   const { config, mailer } = deps
 
   return {
-    /** FR-AUTH-2: 24 h, single-use. */
+    /** 24 h, single-use. */
     sendVerificationEmail: async (data: {
       user: { email: string }
       token: string
@@ -87,7 +87,7 @@ export function buildEmailCallbacks(deps: EmailCallbackDeps) {
       })
     },
 
-    /** FR-AUTH-3: 1 h by default, single-use, invalidated by any password change. */
+    /** 1 h by default, single-use, invalidated by any password change. */
     sendResetPassword: async (data: {
       user: { email: string }
       token: string
@@ -97,12 +97,12 @@ export function buildEmailCallbacks(deps: EmailCallbackDeps) {
       })
     },
 
-    /** FR-AUTH-3: a password change is always announced to its owner. */
+    /** a password change is always announced to its owner. */
     onPasswordReset: async (data: { user: { email: string } }) => {
       await mailer.send("passwordChanged", data.user.email)
     },
 
-    /** FR-ACCT-1: changing an address confirms the new one first. */
+    /** changing an address confirms the new one first. */
     sendChangeEmailConfirmation: async (data: {
       newEmail: string
       token: string

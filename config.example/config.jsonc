@@ -1,6 +1,6 @@
 {
   // Editor completion and inline validation. `$schema` is exempt from the
-  // unknown-key rule; every other unknown key is a startup error (CFG-1/5).
+  // unknown-key rule; every other unknown key is a startup error.
   //
   // The path is relative to this file, so it resolves both here and in the
   // `config/` a checkout makes by copying this folder beside it. A deployment
@@ -11,7 +11,7 @@
   "$schema": "../config-schema/config.schema.json",
 
   // ---------------------------------------------------------------------
-  // Placeholders (CFG-2). Inside string values only, never in keys:
+  // Placeholders. Inside string values only, never in keys:
   //
   //   ${env:NAME}            required environment variable
   //   ${env:NAME:-default}   with a default, also used when NAME is empty
@@ -26,7 +26,7 @@
     // The issuer. Scheme + host[:port] + optional path, no trailing slash.
     // Everything absolute the IdP emits — discovery, e-mail links, social
     // callbacks, cookie Path — derives from this and never from the Host
-    // header (SEC-1). A path is supported: "https://apps.example.com/idp".
+    // header. A path is supported: "https://apps.example.com/idp".
     "baseUrl": "${env:IDP_BASE_URL:-http://localhost:3000}",
     "host": "0.0.0.0",
     "port": 3000,
@@ -50,6 +50,14 @@
     // canonical domain changes.
     // "dynamicIssuer": true,
 
+    // With dynamicIssuer on, the hosts it may follow: exact hosts and
+    // "*.example.com" suffix patterns (any subdomain, never the bare domain).
+    // Optional — a platform that attaches the domain after deploy does not
+    // know it yet, and start-up warns while this is unset — but set it as
+    // soon as the hosts are known: a request on any other host is then
+    // answered as baseUrl instead of followed.
+    // "allowedHosts": ["idp.example.com", "*.example.net"],
+
     // CSRF origin allow-list. Leave it out and the check follows the request:
     // the browser's Origin has to name the address the request arrived on
     // (X-Forwarded-Host, or Host), which is what a deployment behind a reverse
@@ -58,6 +66,13 @@
     // is for a browser app on a *different* origin that posts to the IdP.
     // "*" turns the origin check off; nothing else does.
     // "trustedOrigins": ["https://apps.example.com"],
+
+    // Largest request body /gateway/* forwards, in bytes (64 MiB by default).
+    // A body that declares more is refused with 413 before the target is
+    // called; one streamed without a length is cut off at the cap. Counted
+    // on the way through, never buffered. The IdP's own endpoints are not
+    // affected.
+    // "maxRequestBodyBytes": 67108864,
 
     // Development only: allow a non-https baseUrl outside localhost.
     "allowInsecureHttp": false,
@@ -78,7 +93,7 @@
     // rely on them — so this is the connection that must always work.
     //
     // `url` and `directUrl` are a pair of which **at least one** must be set
-    // (D74). Both, when your Postgres offers both endpoints; `directUrl`
+    //. Both, when your Postgres offers both endpoints; `directUrl`
     // alone, and it serves ordinary traffic too, which is what a single
     // unpooled endpoint wants. Required whenever `url` is pooled.
     // "directUrl": "${env:DATABASE_URL_ADMIN}",
@@ -97,7 +112,7 @@
   "site": {
     "name": "Semantius",
     // What /admin/* calls itself, when the people who use it think of it as
-    // something other than the identity provider (D61). Branding only: the
+    // something other than the identity provider. Branding only: the
     // TOTP issuer label, the e-mails and every token claim stay on
     // `site.name`. Leave it out and the admin area uses `site.name` too.
     "adminTitle": "User Manager",
@@ -111,13 +126,13 @@
     "defaultLocale": "en-US",
     // How a display name is built from the first and last name captured at
     // sign-up. "first-last" gives "Jane Smith"; "last-first" gives
-    // "Smith, Jane". The name itself is never typed in (D49).
+    // "Smith, Jane". The name itself is never typed in.
     "nameFormat": "first-last"
   },
 
   // Without an API key the IdP runs in degraded mode: password reset, e-mail
   // verification and all notifications are disabled and hidden in the UI, and
-  // `auth.requireEmailVerification` is forced to false (FR-MAIL-2).
+  // `auth.requireEmailVerification` is forced to false.
   "email": {
     "resend": { "apiKey": "${env:RESEND_API_KEY:-}" },
     "from": "Semantius <idp@example.com>"
@@ -125,7 +140,8 @@
   },
 
   "signUp": {
-    // Governs password *and* social registration. Off = invite-only: admins
+    // Governs password *and* social registration. On needs e-mail configured;
+    // an https deployment refuses the combination at start-up. Off = invite-only: admins
     // create accounts, and social sign-in works only for identities that
     // already exist.
     "enabled": false,
@@ -152,7 +168,7 @@
     "cookieCacheMinutes": 5,
     // Governs sign-out, RP-initiated logout and the lazy delete of an expired
     // session. Explicit revocation - the account page, an administrator -
-    // always revokes the session's tokens whatever this says (D101).
+    // always revokes the session's tokens whatever this says.
     "revokeOAuthTokensOnLogout": false
   },
 
@@ -179,6 +195,9 @@
   "twoFactor": {
     "enabled": true,
     // "issuer": "Semantius",     // defaults to site.name, never adminTitle
+    // A trusted browser is renewed for this long on every sign-in, and is
+    // asked again three windows (90 days here) after it was first trusted,
+    // however often it was renewed in between.
     "trustDeviceDays": 30
   },
 
@@ -257,17 +276,24 @@
   // API keys.
   //
   // The exchange is cached in-process for ten minutes, so a key revoked
-  // outside this process keeps working for up to that long (D91).
+  // outside this process keeps working for up to that long.
   //
-  // A signed-in browser's own session cookie is a credential too (D92): it is
+  // A signed-in browser's own session cookie is a credential too: it is
   // exchanged for a JWT the same way, never forwarded, and only honored when
   // the request is not cross-site.
   //
   // The name is a URL path segment: lower-case letters, digits, `_` and `-`.
-  // The target is absolute http(s) with no trailing slash. `requireAuth: true`
+  // The target is absolute http(s) with no trailing slash; a private address
+  // is fine (a compose-network name is the usual shape), a link-local one
+  // (169.254.0.0/16, fe80::/10 — where the cloud metadata service lives) is
+  // refused, at start-up for a literal and per request for a name that
+  // resolves there. `requireAuth: true`
   // refuses an unauthenticated call instead of forwarding it anonymously —
   // leave it off for a target with an anonymous role of its own, like
-  // PostgREST. Every gateway sends the target X-Forwarded-For/-Host/-Proto
+  // PostgREST. `audience` is optional: an absolute URI or URN that the
+  // minted JWT carries as `aud` in place of `jwt.audience`, for a target that
+  // checks `aud` against its own identifier; leave it out to keep the
+  // default. Every gateway sends the target X-Forwarded-For/-Host/-Proto
   // built from this hop's own resolved view of the caller; whether a reverse
   // proxy's inbound headers feed that view is `server.trustProxy`, above.
   //
@@ -284,12 +310,12 @@
 
     // There is no bootstrap account and no password in the environment. While
     // the user table is empty the IdP serves a first-run setup page, and
-    // whoever completes it is the first administrator (D52).
+    // whoever completes it is the first administrator.
 
     "allowImpersonation": false,
 
     // `/admin/database`: a schema explorer and a SQL console over this
-    // deployment's own Postgres (FR-ADMIN-7). "disabled" (the default) removes
+    // deployment's own Postgres. "disabled" (the default) removes
     // the page, the nav entry and both API endpoints; "read-only" runs every
     // statement in a READ ONLY transaction; "read-write" adds a mode toggle
     // and commits when it is set. One statement per run, 10 s timeout,

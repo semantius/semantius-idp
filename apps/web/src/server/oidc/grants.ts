@@ -1,5 +1,5 @@
 /**
- * What an account is actually connected to (FR-OIDC-10, FR-ACCT-1, **D102**).
+ * What an account is actually connected to.
  *
  * `/account/consents` used to list the `oauth_consent` table and nothing else,
  * which in this deployment is a list of nothing: file clients default to
@@ -19,14 +19,14 @@
  *
  * **A client with neither is legitimately absent.** A `skipConsent` client
  * that never asked for `offline_access` leaves no row anywhere: its access
- * token is a stateless JWT (FR-OIDC-5) and its ability to act ends when that
+ * token is a stateless JWT and its ability to act ends when that
  * token expires, fifteen minutes by default. There is nothing to revoke and
  * nothing to list, and the page says so rather than implying the list is
  * complete.
  *
  * **The live filter is not optional.** A revoked refresh token's row survives
  * `oauth.tokenGraceDays` (30) so reuse detection can tell "revoked" from
- * "never existed" (FR-OIDC-8), and an expired one survives the same sweep. A
+ * "never existed", and an expired one survives the same sweep. A
  * grants list that read the table raw would resurrect a month of applications
  * the user had already disconnected — and offer to disconnect them again.
  *

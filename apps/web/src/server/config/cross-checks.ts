@@ -1,17 +1,18 @@
 /**
- * Cross-key and cross-file validation (CFG-5).
+ * Cross-key and cross-file validation.
  *
  * Everything here needs more than one value to decide, so it cannot live in a
  * single zod schema: duplicate ids across a list, a client scope that is not in
  * `oauth.scopes`, an `adminRoles` entry missing from the catalog, a literal
  * secret in a production deployment. All checks run; nothing short-circuits.
  *
- * Warnings (FR-SIGNUP-4, FR-MAIL-1/2, FR-ADMIN-1) are returned alongside the
+ * Warnings are returned alongside the
  * errors — they are logged at startup and never abort it.
  */
 
 import type { ConfigIssue, ConfigWarning } from "./errors"
 import { isLocalhostUrl } from "./derive"
+import { looksLikeShippedSecret } from "./shipped-defaults"
 import { looksPooled } from "../db/client"
 import { hasHostTemplate } from "../../lib/client-rules"
 import {
@@ -71,10 +72,23 @@ export function runCrossChecks(input: CrossCheckInput): CrossCheckResult {
     })
   }
 
-  // --------------------------------------------------- dynamic issuer (D…) --
+  // ------------------------------------------------- dynamic issuer --
   // Contradictions that would make `server.dynamicIssuer` silently unsafe or
   // silently dead, refused at boot rather than discovered in production.
   if (config.server.dynamicIssuer) {
+    // A warning, not a refusal: the sibling's Dokploy variant turns
+    // the flag on before it knows its host at all — the domain is attached
+    // after deploy — so requiring the list would refuse the deployment the
+    // flag exists for. Unset, every host the trusted edge forwards is
+    // followed, which is what the flag always did; this line is how the
+    // operator is reminded to close it once the hosts are known.
+    if (config.server.allowedHosts === undefined) {
+      warnings.push({
+        code: "server.dynamic_issuer_unrestricted",
+        message:
+          '`server.dynamicIssuer` is on and `server.allowedHosts` is not set, so the issuer follows whatever host the trusted edge forwards. Name the hosts this deployment answers for (`["idp.example.com", "*.example.net"]`) as soon as they are known; a request on any other host is then answered as `server.baseUrl` instead of followed.',
+      })
+    }
     if (config.server.trustProxy === false) {
       issues.push({
         file: "config.json",
@@ -93,7 +107,7 @@ export function runCrossChecks(input: CrossCheckInput): CrossCheckResult {
     }
   }
 
-  // D68: `*` is a supported value and the only one that removes the check
+  // `*` is a supported value and the only one that removes the check
   // rather than aiming it, so it says so at start-up. A deployment that meant
   // "I do not know my public URL" wants the default — which still checks —
   // and this line is how somebody who copied `*` from an issue thread finds
@@ -103,6 +117,27 @@ export function runCrossChecks(input: CrossCheckInput): CrossCheckResult {
       code: "server.origin_check_disabled",
       message:
         "`server.trustedOrigins` contains `*`, which switches the CSRF origin check off: any site can post to this IdP with a signed-in visitor's cookies. Leaving the key out is not the same thing — it checks the browser's `Origin` against the address the request arrived on, which needs no configuration and works behind a reverse proxy.",
+    })
+  }
+
+  // the two other switches that turn a protection off entirely. Each is
+  // a legitimate development setting, and each was silent — a deployment
+  // could carry either into production and nothing would ever say so. Same
+  // severity as the `*` above: the flag is doing what it was set to do, so a
+  // refusal would be wrong, and a line at start-up and on the system page is
+  // how somebody who copied a dev config finds out what they turned off.
+  if (config.server.allowInsecureHttp) {
+    warnings.push({
+      code: "server.insecure_http_allowed",
+      message:
+        "`server.allowInsecureHttp` is on: a plain-http `baseUrl` outside localhost is accepted, and with one every session cookie and every credential this IdP handles crosses the wire in clear. Development only — turn it off before anyone but you can reach this deployment.",
+    })
+  }
+  if (!config.rateLimit.enabled) {
+    warnings.push({
+      code: "ratelimit.disabled",
+      message:
+        "`rateLimit.enabled` is false: nothing throttles sign-in, password reset, second-factor or token requests, so a password list runs at whatever speed the network allows. Leave it on unless something in front of this process is doing the same job.",
     })
   }
 
@@ -147,7 +182,7 @@ export function runCrossChecks(input: CrossCheckInput): CrossCheckResult {
   }
 
   // -------------------------------------------------------------- database --
-  // Only when `url` is actually set: since D74 it is optional, and a
+  // Only when `url` is actually set: it is optional, and a
   // deployment configured with `directUrl` alone has nothing pooled in it.
   if (
     config.database.url !== undefined &&
@@ -304,6 +339,18 @@ export function runCrossChecks(input: CrossCheckInput): CrossCheckResult {
     }
     clientIds.add(client.clientId)
 
+    // the stored form is an unsalted digest, so a placeholder secret is
+    // a credential anyone who read the example can present. A warning, like
+    // `secret.shipped_default` above and for the same reason: an old
+    // development `.env` carries `example-…` for the two example clients and
+    // must keep booting. The entropy floor itself is the schema's refusal.
+    if (client.clientSecret !== undefined && looksLikeShippedSecret(client.clientSecret)) {
+      warnings.push({
+        code: "client.shipped_default_secret",
+        message: `Client \`${client.clientId}\`'s secret looks like a shipped default or a placeholder (\`example\`, \`change-me\`, …); anyone who read the example can present it. Generate one (\`openssl rand -base64 48\`) and reconcile.`,
+      })
+    }
+
     for (const scope of client.scopes ?? []) {
       if (!declaredScopes.has(scope)) {
         issues.push({
@@ -337,7 +384,7 @@ export function runCrossChecks(input: CrossCheckInput): CrossCheckResult {
     }
 
     // A first-party app shares the host-only session cookie, so it must sit on
-    // the issuer's own origin (FR-OIDC-14). A `{host}` template satisfies the
+    // the issuer's own origin. A `{host}` template satisfies the
     // rule by construction: it expands to the host of the request being
     // authorized — the same host the host-only session cookie belongs to.
     if (client.firstParty) {
@@ -409,7 +456,7 @@ export function runCrossChecks(input: CrossCheckInput): CrossCheckResult {
   // Every refusal a single entry can produce is in the zod schema, which sees
   // one entry at a time. This is the rule that needs two values: an https
   // issuer minting a bearer token and forwarding it to a plain-http upstream
-  // puts that token on the wire in clear (**D91**). Loopback is exempt because
+  // puts that token on the wire in clear. Loopback is exempt because
   // a sidecar on the same host is the ordinary shape and there is no wire.
   for (const [name, target] of Object.entries(config.gateways)) {
     if (!isProduction) continue
@@ -426,18 +473,42 @@ export function runCrossChecks(input: CrossCheckInput): CrossCheckResult {
     warnings.push({
       code: "email.degraded",
       message:
-        "No Resend API key configured: password reset, e-mail verification and all notification e-mails are disabled, and `auth.requireEmailVerification` is forced to false.", // FR-MAIL-2
+        "No Resend API key configured: password reset, e-mail verification and all notification e-mails are disabled, and `auth.requireEmailVerification` is forced to false.",
     })
   }
-  if (
-    config.signUp.enabled &&
-    !config.signUp.requireApproval &&
-    !emailEnabled
-  ) {
+  // Self-service sign-up needs e-mail to mean anything: without it nobody's
+  // address is verified and nobody can reset a password, so an open sign-up
+  // page is an account factory. In production that combination is refused
+  // outright (the owner's rule: no self-service registration without
+  // e-mail); on a development deployment it stays a warning, because the
+  // test harnesses and a laptop open sign-up to create users without a mail
+  // provider.
+  if (config.signUp.enabled && !emailEnabled) {
+    if (isProduction) {
+      issues.push({
+        file: "config.json",
+        pointer: "/signUp/enabled",
+        message:
+          "Self-service sign-up is on but no e-mail is configured. Without e-mail no address is verified and no password can be reset, so a production deployment does not offer sign-up.",
+        hint: "Configure `email.resend.apiKey`, or set `signUp.enabled: false` and create accounts from the admin area.",
+      })
+    } else if (!config.signUp.requireApproval) {
+      warnings.push({
+        code: "signup.unverified_open_registration",
+        message:
+          "Open registration without approval and without e-mail: anyone can create a usable account with an address nobody verified. A production deployment refuses this combination.",
+      })
+    }
+  }
+  // Second factors are encrypted with `secret`, not hashed — the TOTP
+  // algorithm needs the secret back — so the SQL console, which reads every
+  // row, reads them too; with `secret` in hand that is every enrolled
+  // factor. Said at start-up whenever both are on, at the owner's request.
+  if (config.admin.database !== "disabled" && config.twoFactor.enabled) {
     warnings.push({
-      code: "signup.unverified_open_registration",
+      code: "twofactor.readable_by_console",
       message:
-        "Open registration without approval and without e-mail: anyone can create a usable account with an address nobody verified.",
+        "The SQL console is on and two-factor authentication is enabled: TOTP secrets and backup codes are stored encrypted with `secret`, the console reads every row, and whoever also holds `secret` can decrypt every enrolled second factor.",
     })
   }
   // Social callbacks stay canonical under `dynamicIssuer`: the provider
@@ -455,10 +526,10 @@ export function runCrossChecks(input: CrossCheckInput): CrossCheckResult {
         "A social provider is enabled together with `server.dynamicIssuer`. Social callbacks are built from `server.baseUrl` and registered with the provider once, so social sign-in works on the canonical host only; other hosts still offer password sign-in.",
     })
   }
-  // D25: a social provider enabled while sign-up is off is the normal
+  // a social provider enabled while sign-up is off is the normal
   // invite-only deployment and is deliberately not warned about.
   //
-  // There is no "no bootstrap admin configured" warning any more (D52). A
+  // There is no "no bootstrap admin configured" warning any more. A
   // deployment with no users is not misconfigured — it is new, and it says so
   // itself by serving the first-run setup page.
 
@@ -471,32 +542,6 @@ function safeOrigin(value: string): string | undefined {
   } catch {
     return undefined
   }
-}
-
-/**
- * The known shipped defaults, plus the markers a placeholder secret carries.
- *
- * Values, not shapes: both idp-side checks above verify shape (length, and
- * "came through a placeholder"), which every shipped default passes. The list
- * is short on purpose — it exists to catch the documented dev credentials of
- * the reference stack, not to judge password strength.
- */
-const SHIPPED_DEFAULT_VALUES: ReadonlySet<string> = new Set([
-  "postgres",
-  "devpassword",
-])
-const SHIPPED_DEFAULT_MARKERS = [
-  "change-me",
-  "changeme",
-  "dev-only",
-  "example",
-  "insecure",
-] as const
-
-function looksLikeShippedSecret(value: string): boolean {
-  const lower = value.toLowerCase()
-  if (SHIPPED_DEFAULT_VALUES.has(lower)) return true
-  return SHIPPED_DEFAULT_MARKERS.some((marker) => lower.includes(marker))
 }
 
 /** The password component of a connection string, decoded, if it has one. */

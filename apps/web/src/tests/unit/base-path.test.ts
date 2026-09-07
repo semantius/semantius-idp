@@ -4,7 +4,7 @@ import { parseBasePath } from "@/server/config/derive"
 import { AUTH_BASE_PATH, createBasePaths } from "@/server/oidc/base-path"
 
 /**
- * OPS-10 / SEC-1 — every path and absolute URL comes from `server.baseUrl`.
+ * every path and absolute URL comes from `server.baseUrl`.
  *
  * The sub-path case is the one that breaks quietly: at the host root a missing
  * prefix is invisible, and behind Caddy at `/idp` the same code 404s. So each
@@ -44,7 +44,7 @@ describe("createBasePaths", () => {
   })
 
   it("defaults cookies to the whole host and secures them by the issuer scheme", () => {
-    // **D97**: the mount path no longer narrows the cookie. A sub-path
+    // the mount path no longer narrows the cookie. A sub-path
     // deployment scopes to `/` like a root one, so a route outside the mount —
     // an aliased `/gateway` — still receives the session.
     expect(root.cookiePath).toBe("/")
@@ -55,7 +55,7 @@ describe("createBasePaths", () => {
     expect(subPath.secureCookies).toBe(true)
   })
 
-  it("carries an explicit cookie path and domain through (**D97**)", () => {
+  it("carries an explicit cookie path and domain through", () => {
     const scoped = createBasePaths(
       parseBasePath("https://apps.example.com/idp", {
         path: "/idp",

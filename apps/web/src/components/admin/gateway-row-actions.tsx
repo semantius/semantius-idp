@@ -23,14 +23,13 @@ import type { Catalog } from "@/server/i18n"
 type OpenDialog = "remove" | null
 
 /**
- * Everything that can be done to one gateway, behind one control (FR-GW-7,
- * **D91**).
+ * Everything that can be done to one gateway, behind one control.
  *
  * Built on `ClientRowActions`, and the mechanics that file documents are
  * load-bearing here too: the remaining dialog is controlled because a
  * `menuitem` has ceased to exist by the time its dialog should appear, and
  * Enable/Disable stays a real form post whose `<form>` lives in the row rather
- * than in the portalled popup. **Edit is a `<Link>` since D93**, and so is the
+ * than in the portalled popup. **Edit is a `<Link>` and so is the
  * gateway's name in the row beside it.
  *
  * The trigger's accessible name **names the gateway**, because there is one of

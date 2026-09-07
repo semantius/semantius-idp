@@ -24,7 +24,7 @@ Four files, in this order. Read them before proposing anything.
 | File | What it is |
 | --- | --- |
 | [status.md](status.md) | The handoff. Done, not-done, and why — the ground truth between sessions. |
-| [spec-v1.md](spec-v1.md) | Signed off, amended through **D100**. Numbered requirements, and §12.1's decision log with the reasoning. |
+| [spec-v1.md](spec-v1.md) | Signed off, amended through **D127**. Numbered requirements, and §12.1's decision log with the reasoning. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | The gates, the style, and how to amend the spec. |
 | [docs/release.md](docs/release.md) | What is left before v1.0.0, and it is the owner's, not yours. |
 
@@ -36,22 +36,22 @@ Four files, in this order. Read them before proposing anything.
 
 ## How to work here
 
-### Act on defensible defaults; record them. Do not ask.
+### The owner decides. Ask.
 
-When a question has a defensible answer, take it and write the decision down —
-a `D` number in spec §12.1, an entry in [CHANGELOG.md](CHANGELOG.md), a section
-in status.md. Do not stop and ask.
+A change that alters what a user or administrator sees or can do, the
+deployment shape (compose, Dockerfile, init scripts, env files, roles,
+ports, images), a configuration default, or a numbered requirement is the
+owner's decision. State it as its own question, with its consequence, and
+wait for the answer. Do not classify it as a "defensible default" and
+proceed; that classification is not yours to make, and a decision buried in
+a plan's prose does not count as asked. The rule that stood here until
+2026-09-02 said the opposite, and it produced an unasked change to the
+reference deployment's database roles inside an approved plan.
 
-Classify before asking:
-
-- **destructive, irreversible, or a spec change with no defensible default** →
-  ask;
-- **has a defensible default** → pick it, record it, proceed;
-- **already answered** by the spec, status.md or the decision log → cite it and
-  move on.
-
-Commit `927322a` is literally titled *"record D31, and act on the two questions
-instead of asking them"*. That is the standing preference.
+What you may do without asking: fix a bug within the behavior the spec
+already describes, add a test, correct a comment, and record a decision the
+owner has already made — a `D` number in spec §12.1, a CHANGELOG entry, a
+section in status.md. Everything else waits.
 
 ### A spec amendment rides the commit that makes it true
 
@@ -470,7 +470,9 @@ runs in the browser on every client-side navigation — so one careless import
 puts Better Auth, Drizzle and the `postgres` driver in the client bundle.
 `check-client-bundle.ts` catches it. Reads go through a server function in
 `apps/web/src/server/functions/`; mutations go through a route's own
-`server.handlers`, where the freshness gate and the audit trail live.
+`server.handlers`, where the origin check and the audit trail live (the
+freshness gate was removed in **D81**; `require-session.ts` reads the session
+row authoritatively, it does not demand a recent sign-in).
 
 **An advisory lock needs at least two connections when the locked body queries
 the same handle.** `withAdvisoryLock` reserves one connection for the whole
@@ -611,6 +613,97 @@ dev server, which then talks to a schema that is no longer there *and* keeps
 serving the sign-in page: the first-run gate memoizes "setup is done" for the
 life of the process (`server/admin/first-user.ts`). The script now counts other
 backends on the database and says to restart; believe it.
+
+**A `uses: …@v4` fails the pinning gate now** (**D121**). `check-pinned-deps.ts`
+reads `.github/workflows/*.yml` and accepts only a 40-hex commit SHA on a `uses:`
+line — the tag goes in a trailing comment (`# v4.4.0`), for you, not for the gate.
+Resolve with `gh api repos/{o}/{r}/commits/{tag} --jq .sha` (it peels annotated
+tags; `git/ref/tags/{tag}` hands you the tag *object* for those) and confirm with
+`/commits/{sha}`. The `ls-remote` loop above reports every pinned line as `CHECK`;
+that is the expected shape, not a fault. And read the resolved tag before trusting
+a floating major: `sbom-action@v0` was two releases behind `releases/latest`.
+
+**An old `.env` with an empty `IDP_SECRET` is left exactly as it is** (**D122**).
+`idp-setup-env` only ever *creates* `.env`; it does not repair one. A checkout that
+copied `.env.example` before D122 still fails its first `up --wait` on the empty
+secret and the message still says so — delete the file and run `./idp-create.sh`,
+or fill the value in. The same rule is what keeps the generator from ever touching
+the owner's file, so do not make it cleverer.
+
+**A READ ONLY transaction constrains writes, not the role** (**D109**). A
+superuser inside `BEGIN READ ONLY` still runs `pg_read_file` and
+`COPY … TO PROGRAM`; the compose bootstrap user was one until D109, and so is
+every test harness here. Start-up warns (`database.console_as_superuser`) and
+never refuses. And **`redactFields` masks by field name** — a value under
+`query` goes out verbatim; scrub the value (`scrubStatementForAudit`) before
+it is a field.
+
+**`/sign-up/email` never refuses a duplicate here** (**D116**). Better Auth
+1.7.1 answers a taken address with a generic `200` and a synthetic user
+whenever `autoSignIn` is off — which `instance.ts` sets for every deployment
+— so `errorCodeFor`'s `USER_ALREADY_EXISTS` arm is reachable only from
+`/admin/create-user`, and an after-hook keyed on the status would record
+`signup.created` for an account that was never written. The synthetic user's
+`id` belongs to no row: `signUpCreatedNothing` in `auth/sign-up-outcome.ts`
+is how `/signup` and the audit hook tell the two apart.
+
+**`new URL` against a slash-less base drops the last segment, and the
+router hands `/gateway/*` a *decoded* splat** (**D110**). `new URL("x",
+"https://api/v1")` is `https://api/x`, not `https://api/v1/x` — the base's
+last segment is treated as a file. And TanStack `decodeURIComponent`s the
+splat, so `..%2fadmin` arrives in the handler as `../admin` although the
+URL parser had already resolved every literal `../` before routing. The
+proxy therefore builds `${url}/${subPath}` by concatenation and checks the
+parsed result starts with `${new URL(url).href}/`; do not "simplify" it to
+`new URL(subPath, base)`, which changes what `//host/x` and every accepted
+path mean.
+
+**A gateway response header is stripped when it states a policy for the
+*origin*, and `/gateway/*` is the issuer's origin** (**D118**). `RESPONSE_DENY`
+in `gateways/proxy.ts` lists each with its reason; the test for a new one is
+"does a browser honor this per origin, or does `security-headers.ts` set it
+for ours?" — `withSecurityHeaders` uses `setUnlessPresent`, so an upstream's
+HSTS or `X-Frame-Options` would otherwise win over the IdP's. It is a
+deny-list on purpose: PostgREST's `Content-Range`, `Content-Location`,
+`Preference-Applied`, `Content-Profile`, `Proxy-Status` and a REST
+upstream's `Link` must pass, and an allow-list is the list that forgets the
+next one. `unit/gateway-proxy.test.ts` pins both halves.
+
+**`trustProxy: true` behind two hops means the *leftmost* forwarded address,
+and only one thing may resolve it** (**D115**). Better Auth's own `getIP`,
+handed `x-forwarded-for` with no `trustedProxies`, trusts a single-valued
+header only and answers `null` for `client, proxy` — so the sibling's
+Traefik → Caddy deployment put every user in one `no-trusted-ip` sign-in
+bucket, and ten wrong passwords locked everybody out. The edge resolves the
+address once (`resolveClientAddress`) and overwrites `x-idp-socket-address`
+with the answer; `advanced.ipAddress.ipAddressHeaders` reads that header and
+nothing else, for every `trustProxy` value. Anything that builds a synthetic
+request for `auth.handler` — the gateway mint does — sets that header, never
+`x-forwarded-for`. Rate-limit keys read `currentRequest().clientIp` through
+`rateLimitKeyAddress`, not `ipAddress`, which is already a /24.
+
+**A test that signs in with a temporary password must change it before
+touching `/account/*`, `/admin/*` or any cookie-bearing write** (**D107**).
+`mustChangePassword` is a wall now, not a page: `requireSession` and both
+layouts redirect to `/change-password`, and the before hook in
+`auth/options/session-standing.ts` answers `403 PASSWORD_CHANGE_REQUIRED` to
+everything that is not on its exemption list — `/api-key/create` included, which
+is what the finding was about. `forced-password-change.test.ts` shows the
+order: sign in, `POST /change-password`, then the rest. The flag is read from
+the row, so flipping it by SQL takes effect on the next request, not five
+minutes later.
+
+**A form post with neither `Origin` nor `Sec-Fetch-Site` is allowed, on
+purpose** (**D117**). `requireSession` refuses `cross-site`, `same-site` and a
+foreign `Origin` before it reads anything; a post carrying neither header is
+not a browser, and a script that attached the cookie itself is not a CSRF
+victim. Two things follow. A test that wants the refusal has to *send* the
+header — `sec-fetch-site: same-site` with a matching `Origin` is the case
+Better Auth's allow-list passes and this check catches. And handlers that go
+through `callAuth` still meet Better Auth's own `MISSING_OR_NULL_ORIGIN` for a
+cookie-bearing post with no `Origin` (**D57**), so "neither header still
+works" is only demonstrable on a handler that writes directly, such as
+`/account/consents`.
 
 ---
 

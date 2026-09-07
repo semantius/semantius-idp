@@ -1,12 +1,11 @@
 /**
- * The administrative surface, against a real server (TST-3, FR-ADMIN-2..6,
- * FR-ROLE-3, FR-KEY-2, FR-OIDC-12).
+ * The administrative surface, against a real server.
  *
  * Three things are worth testing here and nothing else is:
  *
  *  1. **The refusals hold against the API**, not only against the UI. Every
  *     invariant is asserted by calling the endpoint the way a script would,
- *     because FR-ADMIN-6 makes the API the interface and the buttons a client
+ *     because the spec makes the API the interface and the buttons a client
  *     of it. A rule enforced only by a disabled button is not enforced.
  *  2. **A ban actually ends access** — sessions, OAuth tokens *and* API keys —
  *     and unbanning restores what it should. This is the requirement most
@@ -170,9 +169,11 @@ describe("the last administrator", () => {
     const cookie = await signIn("solo@example.com")
     const other = await makeUser("other@example.com", { role: "admin" })
 
+    // Both from the catalog: the admin plugin refuses a role it does not
+    // know since it was handed `roles` (security review).
     const response = await post(
       "/admin/set-role",
-      { userId: other, role: ["support", "admin"] },
+      { userId: other, role: ["user", "admin"] },
       cookie
     )
     expect(response.status).toBe(200)
@@ -222,8 +223,8 @@ describe("a ban", () => {
     const victim = await makeUser("victim@example.com")
     const victimCookie = await signIn("victim@example.com")
 
-    // FR-KEY-1: a key of their own, which must survive the ban as a *row* even
-    // though it stops working (FR-KEY-2).
+    // a key of their own, which must survive the ban as a *row* even
+    // though it stops working.
     const created = await post(
       "/api-key/create",
       { name: "victim key" },
@@ -275,14 +276,14 @@ describe("a ban", () => {
     )
     expect((await bodyOf(session)).user).toBeFalsy()
 
-    // The OAuth token is gone (FR-OIDC-12).
+    // The OAuth token is gone.
     const tokens = await ctx.database.db
       .select()
       .from(ctx.database.schema.oauthAccessToken)
       .where(eq(ctx.database.schema.oauthAccessToken.userId, victim))
     expect(tokens).toHaveLength(0)
 
-    // The key still exists but no longer authenticates (FR-KEY-2).
+    // The key still exists but no longer authenticates.
     const keys = await ctx.database.db
       .select()
       .from(ctx.database.schema.apikey)
@@ -336,7 +337,7 @@ describe("who may call what", () => {
     expect([401, 403, 404, 405]).toContain(response.status)
   })
 
-  it("answers an administrator holding an API key (FR-ADMIN-6)", async () => {
+  it("answers an administrator holding an API key", async () => {
     await makeUser("api-admin@example.com", { role: "admin" })
     const cookie = await signIn("api-admin@example.com")
     const created = await post("/api-key/create", { name: "ops" }, cookie)
@@ -354,7 +355,7 @@ describe("who may call what", () => {
   })
 })
 
-describe("what /admin/create-user refuses, and how it says so (D70)", () => {
+describe("what /admin/create-user refuses, and how it says so", () => {
   /**
    * These two assert **Better Auth's own identifiers**, which is unusual here
    * and deliberate. `adminErrorCodeFor` translates a code it does not own, so
@@ -462,7 +463,7 @@ describe("impersonation", () => {
     )
     const body = await bodyOf(session)
     expect((body.user as { email: string }).email).toBe("subject@example.com")
-    // FR-ADMIN-5: the trail — and the banner — depend on this being set.
+    // the trail — and the banner — depend on this being set.
     expect((body.session as { impersonatedBy?: string }).impersonatedBy).toBe(
       self
     )
@@ -482,7 +483,7 @@ describe("the endpoints this app adds", () => {
     await makeUser("gate@example.com", { role: "admin" })
     const cookie = await signIn("gate@example.com")
     // Through the real sign-up, not `makeUser`: an *administrative* create is
-    // active by construction (FR-SIGNUP-2), so a user who is genuinely waiting
+    // active by construction, so a user who is genuinely waiting
     // can only be made by somebody actually registering.
     await ctx.auth.handler(
       authRequest("/sign-up/email", {
@@ -573,12 +574,12 @@ describe("the endpoints this app adds", () => {
     expect(response.status).toBe(200)
     const body = await bodyOf(response)
     const config = body.config as Record<string, unknown>
-    // SEC-5: the one assertion that matters on this endpoint.
+    // the one assertion that matters on this endpoint.
     expect(config.secret).toBe("***")
     expect(JSON.stringify(config)).not.toContain(
       "integration-test-secret-0123456789abcdef"
     )
-    // Round 2, finding 12: `database.directUrl` (D27) reached the browser with
+    // Round 2, finding 12: `database.directUrl` reached the browser with
     // its password intact, because masking is positional and nobody added the
     // pointer. Both connection strings keep their shape and lose the password.
     const database = config.database as Record<string, string>
@@ -590,7 +591,7 @@ describe("the endpoints this app adds", () => {
       (body.signingKeys as { published: number }).published
     ).toBeGreaterThan(0)
 
-    // D55: absolute, and every entry a URL this deployment answers on. At the
+    // absolute, and every entry a URL this deployment answers on. At the
     // host root there is no RFC 8414 origin-root form, because there is no
     // path for the well-known segment to sit in front of.
     const discovery = body.discovery as { key: string; url: string }[]
@@ -632,7 +633,7 @@ describe("the administrator's password-reset link", () => {
       userId
     )
 
-    // D65: the page reads the token before rendering, and the read must not
+    // the page reads the token before rendering, and the read must not
     // spend it. `findVerificationValue` is what Better Auth's own
     // `GET /reset-password/:token` validator uses, and the stored value is the
     // user id — which is what lets the page name the account.
@@ -662,7 +663,7 @@ describe("the administrator's password-reset link", () => {
     ).toBeFalsy()
   })
 
-  it("marks an administrator's link as an invitation (D65)", async () => {
+  it("marks an administrator's link as an invitation", async () => {
     // The flag only changes what the page says; it is not in the token, and
     // forging it changes copy and nothing else.
     const invite = await createResetLink(

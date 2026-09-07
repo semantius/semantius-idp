@@ -38,27 +38,27 @@ const LIST = "/admin/users"
 const CONSUMED = ["error", "draft"] as const
 
 /**
- * "Create a user", as a page again (**D93**, FR-ADMIN-2, FR-SIGNUP-5).
+ * "Create a user", as a page again.
  *
- * This address existed before **D64** moved the form into a dialog on the
- * list, and D64's actual finding is untouched by bringing it back: the defect
+ * This address existed before an earlier round moved the form into a dialog on the
+ * list, and the spec's actual finding is untouched by bringing it back: the defect
  * was that *one action had two outcomes on two surfaces* — a page that could
  * only send you back to the list, while the other outcome of the same action,
  * the one-time set-password link, opened as a dialog there. Both outcomes
- * still land on the list. What D64 over-generalized was the conclusion, "an
+ * still land on the list. What that round over-generalized was the conclusion, "an
  * action is a dialog on the page that lists what it acts on, never a route of
- * its own", and D93 replaces the test: **size is not the test — the test is
- * whether there is one address to look at, link to and bookmark.** D64's other
+ * its own", and the spec replaces the test: **size is not the test — the test is
+ * whether there is one address to look at, link to and bookmark.** the spec's other
  * half, the default role arriving ticked, is not reversed and is below.
  *
- * The POST is D64's, moved and otherwise unchanged. Created **approved and
+ * The POST is the spec's, moved and otherwise unchanged. Created **approved and
  * confirmed**: an administrator typing the address is the vouching the
  * approval queue and the verification e-mail exist to obtain, and making them
  * approve their own creation would be a step that teaches people to click
  * through steps.
  *
  * The password is never chosen here. With e-mail on they get a `setPassword`
- * link; with e-mail off (FR-MAIL-2) the same one-time link is handed over on
+ * link; with e-mail off the same one-time link is handed over on
  * screen *once*, because a server that cannot send mail still has to be able
  * to onboard somebody — and an administrator typing a password into a form is
  * a password that exists in two heads and a browser history. The link is
@@ -93,7 +93,7 @@ export const Route = createFileRoute("/admin/users/new")({
 
         // Roles are checkboxes, so the field repeats; `readForm` keeps only
         // the last value of a repeated key, which would silently drop every
-        // role but one. Read before the gate (D63), so a session that went
+        // role but one. Read before the gate, so a session that went
         // stale while the form was open does not cost it.
         const { fields: form, list: valuesOf } = await readFormMulti(request)
         const email = (form.email ?? "").trim()
@@ -111,13 +111,13 @@ export const Route = createFileRoute("/admin/users/new")({
         if (!signedIn.ok) return signedIn.response
 
         /**
-         * Back to the list, saying which account it is about (**D78**).
+         * Back to the list, saying which account it is about.
          *
          * The address travels as a **one-shot handle**, not as itself:
          * `safeUrlForLog` keeps the query string of every path outside
          * `/oauth2/*` and `/api/auth/*`, so `?subject=jane@example.com` would
          * write the address into the request log of a codebase that
-         * anonymizes IP addresses for exactly that reason (SEC-5). Two
+         * anonymizes IP addresses for exactly that reason. Two
          * minutes is a redirect's worth of life, and the claim consumes it.
          */
         const landOnList = async (notice: string) =>
@@ -134,7 +134,7 @@ export const Route = createFileRoute("/admin/users/new")({
           "/admin/create-user",
           {
             email,
-            // D49: derived from the parts, never typed. FR-SIGNUP-5 asks for
+            // derived from the parts, never typed. The spec asks for
             // first and last name everywhere an account is made, and this was
             // the one place still asking for a single free-text `name`.
             name:
@@ -167,9 +167,9 @@ export const Route = createFileRoute("/admin/users/new")({
         const user = created.body.user as { id?: string } | undefined
         // The `user.created` row is the guard's, written from its hook on
         // `/admin/create-user` so that a direct API call leaves the same trail
-        // (**D66**).
+        // .
 
-        // **D70**: everything from here on runs *after the account exists*, so
+        // everything from here on runs *after the account exists*, so
         // nothing below may throw its way to an error page. It did: an
         // unhandled failure in the link tail produced a 500, the
         // administrator's natural response was to submit the same form again,
@@ -191,7 +191,7 @@ export const Route = createFileRoute("/admin/users/new")({
         try {
           // `welcome=1`: the same page, told to say "an administrator created
           // an account for you" rather than "choose a new password", and to
-          // leave out the promise about other devices (D65).
+          // leave out the promise about other devices.
           const reset = await createResetLink(runtime, user.id, {
             welcome: true,
           })
@@ -201,7 +201,7 @@ export const Route = createFileRoute("/admin/users/new")({
             return landOnList("created")
           }
 
-          // FR-MAIL-2: nothing can be sent, so the link is handed over on
+          // nothing can be sent, so the link is handed over on
           // screen — once, in a dialog on the list, and never in the address
           // bar.
           const handle = await stash(
@@ -231,7 +231,7 @@ function NewUserPage() {
   const t = getCatalog(ui.locale)
   const values = draft ?? {}
   const restored = Object.keys(values).length > 0
-  // **D64**'s second half, and it is not reversed. `roles.jsonc`'s
+  // **the spec's second half, and it is not reversed. `roles.jsonc`'s
   // `default: true` is what a self-registration gets and what the server falls
   // back to when the form sends no role at all — so an unticked box was never
   // "no roles", it was "the default, silently".
@@ -264,7 +264,7 @@ function NewUserPage() {
                 name="firstName"
                 autoComplete="off"
                 defaultValue={values.firstName}
-                // **D93**: the first field of a *create* page only. On an edit
+                // the first field of a *create* page only. On an edit
                 // it would scroll a prefilled form to wherever the first
                 // control happens to be.
                 autoFocus

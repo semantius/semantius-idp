@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import { readOauthQuery, rawSearch } from "@/lib/oauth-query"
 
 /**
- * Carrying a signed authorization request across an interstitial (FR-OIDC-9).
+ * Carrying a signed authorization request across an interstitial.
  *
  * The string the page posts back has to reproduce the **values** the provider
  * signed. It does not have to reproduce the bytes: `verifyOAuthQueryParams`

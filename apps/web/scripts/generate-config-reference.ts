@@ -1,7 +1,7 @@
 /**
- * Generates `docs/configuration.md` from the zod schemas (CFG-4, DOC-1).
+ * Generates `docs/configuration.md` from the zod schemas.
  *
- * DOC-1 asks for a configuration reference **generated from the schemas**,
+ * the spec asks for a configuration reference **generated from the schemas**,
  * because a hand-written one is wrong the first time a default changes and
  * nobody can tell by reading it. The zod schemas are the single source of
  * truth for the loader, the JSON Schemas in `config-schema/` and this table
@@ -11,7 +11,7 @@
  *   bun run scripts/generate-config-reference.ts [--check]
  *
  * Only `config.jsonc` is rendered here. `oauth_clients.jsonc` and `roles.jsonc`
- * are documented where they are *used* — `docs/clients.md` (DOC-3) and the
+ * are documented where they are *used* — `docs/clients.md` and the
  * roles section of the README — because a client entry is read as a whole and
  * a flat table of its twenty fields teaches nobody how to write one.
  */
@@ -111,7 +111,7 @@ const MINIMAL = {
 /**
  * Keys `MINIMAL` supplies that are nevertheless **not** required on their own.
  *
- * `SUPPLIED` is otherwise the required set, and that held until **D74** made
+ * `SUPPLIED` is otherwise the required set, and that held until **the spec made
  * `database.url` and `database.directUrl` a pair of which at least one must be
  * present. A minimal file still has to name a connection string, so `MINIMAL`
  * still carries `database.url` — but the reference must not tell an operator
@@ -182,7 +182,7 @@ function defaultOf(schema: JsonSchema, resolved: unknown): string {
 /**
  * Every leaf, in declaration order, as `section.key`.
  *
- * Nested objects are flattened because that is how CFG-2's placeholders and
+ * Nested objects are flattened because that is how the spec's placeholders and
  * every error message name them (`database.directUrl`, not "directUrl, under
  * database"). A record whose *keys* the operator chooses — `jwt.claims`,
  * `social.<provider>` — is a leaf: its contents are not a fixed inventory.
@@ -273,7 +273,7 @@ function render(rows: Row[]): string {
     "| `HOST` / `PORT` | `0.0.0.0` / `3000` | Where the process listens, when the file leaves `server.host`/`server.port` out. |",
     "| `LOG_LEVEL` / `LOG_FORMAT` | `info` / `json` | As `logging.level` / `logging.format`. |",
     "| `IDP_MIGRATE_ON_BOOT` | `true` | As `database.migrateOnBoot`. |",
-    "| `IDP_EMAIL_TRANSPORT` | — | `capture` writes each message to disk instead of sending it (D30). For tests and development; never set it on a deployment that people rely on for password resets. |",
+    "| `IDP_EMAIL_TRANSPORT` | — | `capture` writes each message to disk instead of sending it. For tests and development; never set it on a deployment that people rely on for password resets. |",
     "| `IDP_EMAIL_CAPTURE_DIR` | `/tmp/idp-mail` | Where that transport writes. |",
     ""
   )

@@ -1,8 +1,8 @@
 /**
  * The administrative endpoints Better Auth has no equivalent for
- * (FR-ADMIN-2/6, FR-2FA-2, FR-OIDC-16).
+ *.
  *
- * They are endpoints rather than server functions on purpose. FR-ADMIN-6 makes
+ * They are endpoints rather than server functions on purpose. The spec makes
  * the admin API the documented management interface and the admin UI one of
  * its callers, so anything the UI can do has to be reachable with an admin API
  * key and a `curl`. The alternative — server functions for the pages plus a
@@ -40,6 +40,7 @@ import { revokeTokensFor, syncResourceLinks } from "../oidc/reconcile"
 import { rotateKeys } from "../oidc/rotate-keys"
 import { revokeAllForUser } from "../oidc/revoke-user-tokens"
 import { clearTrustedDevices } from "../auth/trusted-devices"
+import { actorTypeFor } from "../auth/options/api-key-gate"
 import { hashClientSecret } from "../oidc/secret-hash"
 import { splitRoles } from "../role-utils"
 import { revision, version } from "../version"
@@ -50,7 +51,9 @@ import {
   introspectSchema,
   listSchemas,
   runQuery,
+  scrubStatementForAudit,
 } from "./database"
+import { resetGatewayTokenCache } from "../gateways/proxy"
 import { resetGatewayRegistry } from "../gateways/registry"
 import { isValidGatewayName } from "../../lib/gateway-rules"
 import { requireAdmin } from "./gate"
@@ -65,7 +68,7 @@ export interface AdminEndpointDeps {
   /** Filled in by `runtime.ts` as each piece becomes available. */
   context?: AdminContext
   /**
-   * `/admin/database`'s own connections (FR-ADMIN-7). Absent when
+   * `/admin/database`'s own connections. Absent when
    * `admin.database` is `disabled`, in which case the two endpoints below are
    * not built at all. `consoleDirectDb` exists only in a `read-write`
    * deployment. See `database.ts`'s header for why neither of these is
@@ -88,7 +91,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
   const gate = requireAdmin(deps.config)
 
   /**
-   * The console's own handles (FR-ADMIN-7).
+   * The console's own handles.
    *
    * Both are `SERVICE_UNAVAILABLE` rather than a fall back to `deps.database`:
    * silently borrowing the shared pool is the one thing `database.ts`'s header
@@ -110,14 +113,14 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
   }
 
   /**
-   * FR-2FA-2: an administrator resets a locked-out user's second factor.
+   * an administrator resets a locked-out user's second factor.
    *
    * Four things have to happen together, and skipping any one of them leaves
    * the account in a state nobody can reason about: the enrollment rows go, the
    * flag on the user goes, every live session goes with them — because a
    * session that was minted *behind* a second factor is exactly what an
    * attacker who triggered the reset would be holding — and so does every
-   * browser the user had told to skip the second factor (**D104**). The last
+   * browser the user had told to skip the second factor. The last
    * one was missing, and it is the one that made the other three
    * conditional: a trusted browser walks past a *freshly re-enrolled* factor
    * for up to `twoFactor.trustDeviceDays`, and the trust row is rotated to a
@@ -157,7 +160,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
       await deps.audit?.record({
         action: "twofactor.reset",
         outcome: "success",
-        actorType: "session",
+        actorType: actorTypeFor(ctx.context.session),
         actorUserId: actor.id,
         target: { type: "user", id: user.id },
         // No action of its own: clearing trust is never the event, it is part
@@ -173,7 +176,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
     }
   )
 
-  /** The numbers the dashboard opens with (FR-ADMIN-2). */
+  /** The numbers the dashboard opens with. */
   const adminStats = createAuthEndpoint(
     "/idp/admin-stats",
     { method: "GET", requireHeaders: true, use: [gate] },
@@ -247,7 +250,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
   )
 
   /**
-   * The audit browser's query (SEC-6).
+   * The audit browser's query.
    *
    * Keyset pagination on `(createdAt, id)` rather than `offset`: the table only
    * ever grows at the head, and an offset walk over a busy trail silently
@@ -304,7 +307,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
     }
   )
 
-  /** What this process is actually running (FR-ADMIN-2, OPS-3). */
+  /** What this process is actually running. */
   const systemInfo = createAuthEndpoint(
     "/idp/system",
     { method: "GET", requireHeaders: true, use: [gate] },
@@ -329,13 +332,13 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
         // the admin pages describe the deployment's configuration, not the
         // host this particular request happened to arrive on.
         issuer: deps.config.base.origin + deps.config.base.basePath,
-        // D55: the URLs an operator actually has to paste into the other
+        // the URLs an operator actually has to paste into the other
         // system. Absolute, and built here rather than in the browser, because
         // the sub-path forms are not derivable from the issuer by hand.
         discovery: discoveryUrls(createBasePaths(deps.config.base), {
           securityTxt: deps.context?.securityTxt ?? false,
         }),
-        // SEC-5: masked, positionally, by the same function `idp config
+        // masked, positionally, by the same function `idp config
         // validate` prints through.
         config: maskConfig(deps.config.file),
         email: {
@@ -358,7 +361,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
         startup: {
           steps: deps.context?.startup?.steps ?? [],
           reconcile: deps.context?.startup?.reconcile ?? null,
-          // FR-GW-2's sweep, beside the clients' (**D91**). Absent rather
+          // the spec's sweep, beside the clients'. Absent rather
           // than empty when no gateways are configured, so the page shows
           // nothing instead of an object full of empty arrays.
           gateways: deps.context?.startup?.gateways ?? null,
@@ -368,10 +371,10 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
   )
 
   /**
-   * FR-OIDC-16: rotate the signing key now.
+   * rotate the signing key now.
    *
    * The rotation needs a *direct* connection for its advisory lock — a session
-   * lock does not survive a transaction pooler (S4) — and the one startup used
+   * lock does not survive a transaction pooler — and the one startup used
    * is closed by then. So this opens its own, and closes it whatever happens:
    * a leaked direct connection is one of the few things that can exhaust a
    * small Postgres `max_connections` from a button nobody presses twice.
@@ -409,8 +412,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
   )
 
   /**
-   * Registering an OAuth client from the admin UI (**D50**, FR-OIDC-2/4,
-   * FR-ADMIN-2, SEC-4).
+   * Registering an OAuth client from the admin UI.
    *
    * File clients and database clients coexist, and the thing that keeps them
    * apart is one column: reconciliation's orphan sweep is scoped to
@@ -489,7 +491,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
       const entry = parsed.data
 
       // Scopes a client may ask for are bounded by the deployment's own list
-      // (FR-OIDC-3); the file schema cannot check that because it does not see
+      // ; the file schema cannot check that because it does not see
       // `config.jsonc`, and the cross-checks that do only run at load.
       const allowed = new Set(deps.config.file.oauth.scopes)
       const stray = (entry.scopes ?? []).filter((scope) => !allowed.has(scope))
@@ -502,7 +504,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
 
       // The same lock reconciliation takes, on a direct connection: a client
       // created while a container is booting must not race the sweep that
-      // decides which rows are orphans (D27, S4).
+      // decides which rows are orphans.
       const locking = createDb(deps.config, { direct: true, max: 1 })
       try {
         await withAdvisoryLock(locking.sql, "reconcileClients", async () => {
@@ -524,7 +526,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
               ...toClientRow(entry, {
                 ...(secret ? { hashedSecret: hashClientSecret(secret) } : {}),
                 // The marker. Everything about how this row is treated at the
-                // next restart follows from it (D50).
+                // next restart follows from it.
                 userId: actor.id,
               }),
               createdAt: new Date(),
@@ -547,10 +549,10 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
       await deps.audit?.record({
         action: "client.created",
         outcome: "success",
-        actorType: "session",
+        actorType: actorTypeFor(ctx.context.session),
         actorUserId: actor.id,
         target: { type: "client", id: entry.clientId },
-        // Never the secret (SEC-6, SEC-10).
+        // Never the secret.
         metadata: { type: entry.type, redirectUris: entry.redirectUris.length },
       })
 
@@ -564,7 +566,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
   )
 
   /**
-   * Editing an admin-registered client (**D72**, FR-OIDC-2/4, FR-ADMIN-2).
+   * Editing an admin-registered client.
    *
    * **Full replace, not a patch.** The body carries the same fields the create
    * form does, and that field set *is* the writable surface: a partial update
@@ -573,7 +575,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
    * the whole row in front of it anyway.
    *
    * Better Auth ships `/oauth2/update-client` and it stays unreachable, for
-   * the reasons D50 gave for not using its registration endpoint either: it is
+   * the reasons recorded for not using its registration endpoint either: it is
    * scoped to the client's creator rather than to an administrator, it does
    * not know half these fields, and it validates against nothing this
    * deployment recognizes — no `clientSchema`, no `oauth.scopes` bound, no
@@ -750,15 +752,15 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
 
       // The redirect URIs feed CORS and the `form-action` CSP directive, so an
       // edited URI that is not in the cache is a client that cannot be
-      // redirected to, with nothing in the log naming why (D50).
+      // redirected to, with nothing in the log naming why.
       await refreshDatabaseClientOrigins(handle, deps.logger)
       await deps.audit?.record({
         action: "client.updated",
         outcome: "success",
-        actorType: "session",
+        actorType: actorTypeFor(ctx.context.session),
         actorUserId: actor.id,
         target: { type: "client", id: ctx.body.clientId },
-        // Counts and flags only, never secret material (SEC-6, SEC-10).
+        // Counts and flags only, never secret material.
         metadata: {
           type: ctx.body.type,
           redirectUris: ctx.body.redirectUris.length,
@@ -777,7 +779,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
   )
 
   /**
-   * Replacing an admin-registered client's secret (**D72**).
+   * Replacing an admin-registered client's secret.
    *
    * Deliberately smaller than it looks. Rotation is **hygiene, not incident
    * response**: it writes one column and revokes nothing, because a live
@@ -836,7 +838,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
       await deps.audit?.record({
         action: "client.secret_rotated",
         outcome: "success",
-        actorType: "session",
+        actorType: actorTypeFor(ctx.context.session),
         actorUserId: actor.id,
         target: { type: "client", id: ctx.body.clientId },
       })
@@ -847,7 +849,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
   )
 
   /**
-   * Removing an admin-registered client (**D50**).
+   * Removing an admin-registered client.
    *
    * Tokens and consents go with it, for the same reason reconciliation revokes
    * them when a client leaves the file: a client that is gone must stop
@@ -893,7 +895,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
       await deps.audit?.record({
         action: "client.deleted",
         outcome: "success",
-        actorType: "session",
+        actorType: actorTypeFor(ctx.context.session),
         actorUserId: actor.id,
         target: { type: "client", id: ctx.body.clientId },
       })
@@ -902,7 +904,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
   )
 
   /**
-   * Switching an admin-registered client off, and on again (**D50**).
+   * Switching an admin-registered client off, and on again.
    *
    * Disabling revokes what it was holding — the point is that it stops working
    * now, not when its access tokens expire — and takes its origin out of the
@@ -936,7 +938,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
       await deps.audit?.record({
         action: "client.disabled",
         outcome: "success",
-        actorType: "session",
+        actorType: actorTypeFor(ctx.context.session),
         actorUserId: actor.id,
         target: { type: "client", id: ctx.body.clientId },
         metadata: { disabled: ctx.body.disabled },
@@ -947,7 +949,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
 
   // ---------------------------------------------------------- gateways --
   /**
-   * The four API-gateway mutations (FR-GW-7, FR-ADMIN-6, **D91**).
+   * The four API-gateway mutations.
    *
    * Deliberately the same shape as their client siblings, because they answer
    * the same questions and getting a different answer here would be a bug
@@ -959,7 +961,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
    *    store what the file path would not accept.
    *  - **Under the reconcile lock, on a direct connection.** A gateway created
    *    while a container is booting must not race the sweep that decides which
-   *    rows are orphans (D27, S4).
+   *    rows are orphans.
    *  - **`source: "manual"`.** Everything about how the row survives the next
    *    restart follows from it, and it is the column the boot sweep skips.
    *  - **The registry is invalidated before the response returns**, or the
@@ -974,6 +976,8 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
         name: z.string().min(1),
         url: z.string().min(1),
         requireAuth: z.boolean().optional(),
+        /** Optional; empty or absent means "mint `jwt.audience`". */
+        audience: z.string().optional(),
       }),
       requireHeaders: true,
       use: [gate],
@@ -1003,7 +1007,8 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
               name: entry.name,
               url: entry.url,
               requireAuth: entry.requireAuth,
-              // The marker (**D91**). Explicit, unlike the clients' implied
+              audience: entry.audience,
+              // The marker. Explicit, unlike the clients' implied
               // `userId === null`, so the boot sweep is a plain filter.
               source: "manual",
               enabled: true,
@@ -1020,13 +1025,15 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
       await deps.audit?.record({
         action: "gateway.created",
         outcome: "success",
-        actorType: "session",
+        actorType: actorTypeFor(ctx.context.session),
         actorUserId: actor.id,
         target: { type: "gateway", id: entry.name },
         // The name and the flags, never the URL: a target can carry a host an
-        // operator would rather not publish on the audit page (SEC-6).
+        // operator would rather not publish on the audit page. The
+        // audience is a URI the same rule covers, so only whether one is set.
         metadata: {
           requireAuth: entry.requireAuth,
+          audienceSet: entry.audience !== null,
         },
       })
       return ctx.json({ name: entry.name })
@@ -1050,6 +1057,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
         name: z.string().min(1),
         url: z.string().min(1),
         requireAuth: z.boolean().optional(),
+        audience: z.string().optional(),
       }),
       requireHeaders: true,
       use: [gate],
@@ -1072,6 +1080,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
               .set({
                 url: entry.url,
                 requireAuth: entry.requireAuth,
+                audience: entry.audience,
                 updatedAt: new Date(),
               })
               .where(eq(handle.schema.gateway.name, entry.name))
@@ -1082,14 +1091,19 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
       }
 
       resetGatewayRegistry()
+      // The token cache too: a cached JWT for this gateway names
+      // the `aud` it had *before* this edit, and the key it is filed under
+      // is the gateway's name, which did not change.
+      resetGatewayTokenCache()
       await deps.audit?.record({
         action: "gateway.updated",
         outcome: "success",
-        actorType: "session",
+        actorType: actorTypeFor(ctx.context.session),
         actorUserId: actor.id,
         target: { type: "gateway", id: entry.name },
         metadata: {
           requireAuth: entry.requireAuth,
+          audienceSet: entry.audience !== null,
         },
       })
       return ctx.json({ name: entry.name })
@@ -1126,7 +1140,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
       await deps.audit?.record({
         action: "gateway.deleted",
         outcome: "success",
-        actorType: "session",
+        actorType: actorTypeFor(ctx.context.session),
         actorUserId: actor.id,
         target: { type: "gateway", id: ctx.body.name },
       })
@@ -1165,7 +1179,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
       await deps.audit?.record({
         action: "gateway.disabled",
         outcome: "success",
-        actorType: "session",
+        actorType: actorTypeFor(ctx.context.session),
         actorUserId: actor.id,
         target: { type: "gateway", id: ctx.body.name },
         metadata: { disabled: ctx.body.disabled },
@@ -1186,10 +1200,12 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
     name: string
     url: string
     requireAuth?: boolean
+    audience?: string
   }): {
     name: string
     url: string
     requireAuth: boolean
+    audience: string | null
   } {
     const name = body.name.trim()
     if (!isValidGatewayName(name)) {
@@ -1199,11 +1215,15 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
           "A gateway name must be lower-case letters, digits, `_` or `-`, starting with a letter or digit — it is a URL path segment.",
       })
     }
+    // A blank audience is the form's spelling of "unset"; the file simply
+    // omits the key. Both land as `null` on the row.
+    const audience = body.audience?.trim() ?? ""
     const parsed = gatewayTargetSchema.safeParse({
       url: body.url.trim(),
       ...(body.requireAuth === undefined
         ? {}
         : { requireAuth: body.requireAuth }),
+      ...(audience === "" ? {} : { audience }),
     })
     if (!parsed.success) {
       throw new APIError("BAD_REQUEST", {
@@ -1216,13 +1236,14 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
       name,
       url: parsed.data.url,
       requireAuth: parsed.data.requireAuth,
+      audience: parsed.data.audience ?? null,
     }
   }
 
   /**
-   * Refuses to touch a row the configuration file owns (FR-GW-2).
+   * Refuses to touch a row the configuration file owns.
    *
-   * The same rule D50 wrote for the clients, with the marker made explicit:
+   * The same rule as for the clients, with the marker made explicit:
    * an edit to a `config` row is a change the next restart silently undoes,
    * which is worse than no control at all.
    */
@@ -1254,9 +1275,9 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
   /**
    * Refuses to touch a row the configuration file owns.
    *
-   * `userId === null` is the file marker (FR-OIDC-2). Editing one here would be
+   * `userId === null` is the file marker. Editing one here would be
    * a change the next restart silently undoes, which is worse than no control
-   * at all — it is the exact reason this page was read-only until D50.
+   * at all — it is the exact reason this page was read-only at first.
    */
   async function assertMutableClient(
     handle: DbHandle,
@@ -1283,7 +1304,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
   }
 
   /**
-   * The schema tree `/admin/database`'s left column draws (FR-ADMIN-7).
+   * The schema tree `/admin/database`'s left column draws.
    *
    * Read-only by construction — four catalog queries and `current_database()`
    * — but it goes over the console's own handle rather than the shared one for
@@ -1291,7 +1312,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
    * traffic borrows from, and this feature's whole premise is that an operator
    * is typing statements into it.
    *
-   * **`?schema=` names which one** (D84). Without it the answer is the
+   * **`?schema=` names which one**. Without it the answer is the
    * deployment's own `database.schema`, which is what the page opens on and
    * what an existing caller keeps getting. An unknown name is a 400 rather
    * than a silent fall back to the default: the tree would otherwise describe
@@ -1341,7 +1362,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
   )
 
   /**
-   * Run one statement (FR-ADMIN-7).
+   * Run one statement.
    *
    * POST, and a POST that is sometimes a pure read — which is the right shape
    * anyway: the payload is a SQL string that has no business in a URL, in
@@ -1375,10 +1396,10 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
         await deps.audit?.record({
           action: "database.queried",
           outcome: "denied",
-          actorType: "session",
+          actorType: actorTypeFor(ctx.context.session),
           actorUserId: actor.id,
           // `reason`, not `code`: `redactFields` masks anything called
-          // `code` (SEC-5 -- an OAuth authorization code is one), so the
+          // `code` (an OAuth authorization code is one), so the
           // audit row would have read `[redacted]` and said nothing.
           metadata: { mode: requested, reason: "WRITE_NOT_ALLOWED" },
         })
@@ -1390,24 +1411,33 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
       }
 
       // `read` on the pooled endpoint, `read-write` on the direct one — the
-      // owner's instruction under D74, and the reason `runtime.ts` builds the
+      // owner's instruction, and the reason `runtime.ts` builds the
       // second handle only when the flag calls for it.
       const handle =
         requested === "read-write" ? consoleDirectDb() : consoleDb()
 
       // The statement is recorded whatever happens, capped at 500 characters:
       // the trail's job is "who ran what", and a 100 kB migration script
-      // pasted into the box would otherwise be 100 kB of audit row. `redactFields`
-      // still runs over it (SEC-5), so a literal that looks like a secret is
-      // masked before storage.
-      const recorded = ctx.body.query.slice(0, 500)
+      // pasted into the box would otherwise be 100 kB of audit row.
+      //
+      // **`redactFields` does not protect this value**. It masks
+      // by field *name*, and the field is `query`, so the first 500
+      // characters of every statement — pasted literals included — went to
+      // `audit_log.metadata` and to stdout verbatim, under a comment that said
+      // otherwise. `scrubStatementForAudit` is the value-level scrub: string
+      // literals longer than eight characters, every literal after a
+      // `password`/`secret`/`token` keyword, dollar-quoted bodies and comments
+      // are replaced; identifiers and keywords stay, so the row still says
+      // what was run. Scrubbed *before* the cap, so the cut cannot land inside
+      // a literal and leave its opening half in the trail.
+      const recorded = scrubStatementForAudit(ctx.body.query).slice(0, 500)
 
       try {
         const result = await runQuery(handle, ctx.body.query, requested)
         await deps.audit?.record({
           action: "database.queried",
           outcome: "success",
-          actorType: "session",
+          actorType: actorTypeFor(ctx.context.session),
           actorUserId: actor.id,
           metadata: {
             query: recorded,
@@ -1424,7 +1454,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
         await deps.audit?.record({
           action: "database.queried",
           outcome: "failure",
-          actorType: "session",
+          actorType: actorTypeFor(ctx.context.session),
           actorUserId: actor.id,
           metadata: {
             query: recorded,
@@ -1461,7 +1491,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
     updateGateway,
     deleteGateway,
     setGatewayDisabled,
-    // **Absent, not forbidden** (FR-ADMIN-7, the owner's explicit
+    // **Absent, not forbidden** (the owner's explicit
     // requirement). A `disabled` deployment must not have the API either, and
     // an endpoint Better Auth was never handed answers 404 -- the same way
     // `apiKeys.enabled: false` removes the api-key plugin rather than making

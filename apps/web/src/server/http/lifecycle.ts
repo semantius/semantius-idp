@@ -1,5 +1,5 @@
 /**
- * Graceful shutdown (OPS-4).
+ * Graceful shutdown.
  *
  * A container that is being replaced gets a SIGTERM and then, some seconds
  * later, a SIGKILL. What happens in between is the whole of this module's
@@ -17,7 +17,7 @@
  *
  * `/healthz` deliberately keeps answering 200 throughout. Liveness asks
  * "should this container be killed and restarted", and a container that is
- * draining on purpose should not be — that is what readiness is for (OPS-3).
+ * draining on purpose should not be — that is what readiness is for.
  *
  * **Why the flag lives here and not in `src/serve.ts`.** The Bun wrapper
  * imports the *built* entry by path, so it and the route modules are two
@@ -49,7 +49,7 @@ export function beginDraining(): void {
  *
  * Closes the database pool if a runtime was ever built. It must *not* build
  * one: a process that is shutting down before it ever served a request would
- * otherwise run the entire OPS-2 sequence — migrations included — on its way
+ * otherwise run the entire startup sequence — migrations included — on its way
  * out of the door.
  *
  * **The import is dynamic on purpose.** `server-entry.ts` imports this module
@@ -97,7 +97,7 @@ export interface DrainSteps {
  * called with four fakes and the order observed, which is what
  * `lifecycle.test.ts` does. That matters more than usual here: on Windows a
  * SIGTERM cannot reach a handler at all, so a developer machine can never
- * exercise the real path, and only TST-8's containerised smoke test will.
+ * exercise the real path, and only the spec's containerised smoke test will.
  *
  * Signal handling stays in `serve.ts`: that is the layer that owns the socket,
  * and a handler is not a thing worth abstracting.

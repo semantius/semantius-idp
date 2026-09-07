@@ -1,5 +1,5 @@
 /**
- * The en-US message catalog (FR-I18N-1).
+ * The en-US message catalog.
  *
  * Every user-visible string — UI and e-mail — lives here. The shape *is* the
  * contract: adding a locale means adding one object that satisfies
@@ -11,7 +11,7 @@
  * translator who drops `{name}` gets a compile error instead of a page that
  * says "Hi {name}".
  *
- * Dates are deliberately absent: they render in the browser's locale (FR-I18N-1).
+ * Dates are deliberately absent: they render in the browser's locale.
  */
 
 export const enUS = {
@@ -40,21 +40,21 @@ export const enUS = {
     showPassword: "Show password",
     hidePassword: "Hide password",
     loading: "Working…",
-    // The sidebar trigger's accessible name (FR-I18N-1, **D82**). The registry
+    // The sidebar trigger's accessible name. The registry
     // component ships its own sr-only "Toggle Sidebar"; passing `aria-label`
     // wins over it, which is how the string comes from the catalog without
     // patching a generated file.
     toggleSidebar: "Toggle sidebar",
-    // **D93**: same trick as the line above. The registry's `Breadcrumb`
+    // same trick as the line above. The registry's `Breadcrumb`
     // hard-codes `aria-label="breadcrumb"`; a passed `aria-label` wins over it,
     // so the name of the only other landmark in the chrome comes from the
-    // catalog without patching a generated file (FR-I18N-1).
+    // catalog without patching a generated file.
     breadcrumb: "Breadcrumb",
     required: "Required",
     yes: "Yes",
     no: "No",
-    // **D93**: a create and an edit are pages now, and a page can be left by a
-    // sidebar entry, a breadcrumb, the back button or a reload. D62 built a
+    // a create and an edit are pages now, and a page can be left by a
+    // sidebar entry, a breadcrumb, the back button or a reload. the spec built a
     // whole one-shot draft stash so a *server* refusal would not cost a
     // twelve-field form; losing the same form to a stray click would be
     // incoherent.
@@ -75,9 +75,9 @@ export const enUS = {
       noAccount: "Need an account?",
       socialDivider: "or continue with",
       withProvider: (provider: string) => `Continue with ${provider}`,
-      // SEC-7: one message for wrong password and unknown address alike.
+      // one message for wrong password and unknown address alike.
       failed: "That e-mail address and password combination is not correct.",
-      // D57: *not* a credential failure, and it must not read as one. The
+      // *not* a credential failure, and it must not read as one. The
       // request was refused before the password was looked at, because the
       // browser is on an address the deployment does not know.
       untrustedOrigin:
@@ -113,7 +113,7 @@ export const enUS = {
       description:
         "Enter your e-mail address and we will send you a link to set a new password.",
       submit: "Send reset link",
-      // SEC-7: identical whether or not the account exists.
+      // identical whether or not the account exists.
       done: "If there is an account for that address, a reset link is on its way.",
     },
     resetPassword: {
@@ -122,16 +122,15 @@ export const enUS = {
       success: "Your password has been changed. Sign in with it now.",
       expired: "That reset link has expired. Request a new one.",
       // A spent token's row is deleted, so "already used" and "never existed"
-      // are the same observation (D65). The wording covers both rather than
+      // are the same observation. The wording covers both rather than
       // claiming a distinction the page cannot make.
       invalid:
         "That link is not valid. It may already have been used — if so, your password is set and you can sign in.",
       mismatch: "The two passwords do not match.",
       revokedNotice: "Signing in again will be needed on your other devices.",
-      // D65: the page names the account, and the invitation variant says who
+      // the page names the account, and the invitation variant says who
       // the link is from rather than promising to sign other devices out of
       // an account nobody has ever signed in to.
-      forAccount: (email: string) => `This link is for ${email}.`,
       welcomeTitle: "Set your password",
       welcomeDescription: (siteName: string) =>
         `An administrator created an account for you at ${siteName}. Choose a password to finish.`,
@@ -148,6 +147,7 @@ export const enUS = {
       submit: "Change password",
       success: "Your password has been changed.",
       wrongCurrent: "That is not your current password.",
+      required: "Choose a new password before doing anything else.",
     },
     twoFactor: {
       title: "Two-factor authentication",
@@ -188,7 +188,7 @@ export const enUS = {
   },
 
   /**
-   * First-run setup (**D52**).
+   * First-run setup.
    *
    * Written for the person who has just started a container and has no idea
    * what it wants from them: it says why the page exists, what happens next,
@@ -259,7 +259,7 @@ export const enUS = {
     oauth: {
       title: "This application could not be signed in",
       unknownClient: "This application is not registered with us.",
-      // FR-OIDC-4: never redirect to an unregistered URI; explain instead.
+      // never redirect to an unregistered URI; explain instead.
       invalidRedirect:
         "The address this application asked us to return to is not one of its registered addresses.",
       description:
@@ -271,8 +271,8 @@ export const enUS = {
 
   account: {
     title: "Your account",
-    // FR-ADMIN-5: an impersonated session must be obvious on every page.
-    // D66: the banner said what was happening and offered no way out, so an
+    // an impersonated session must be obvious on every page.
+    // the banner said what was happening and offered no way out, so an
     // impersonation ended by expiring or by signing out — which signs the
     // administrator out too.
     stopImpersonating: "Stop impersonating",
@@ -348,6 +348,9 @@ export const enUS = {
       expiryHint: (days: number) => `Up to ${days} days.`,
       outOfRange: "Choose an expiry within the allowed range.",
       days: "days",
+      // a key outlives the hour an impersonation lasts.
+      impersonated:
+        "An administrator signed in as this user cannot create API keys for them.",
     },
     twoFactor: {
       title: "Two-factor authentication",
@@ -396,7 +399,7 @@ export const enUS = {
   },
 
   /**
-   * The admin area (FR-ADMIN-2..6).
+   * The admin area.
    *
    * Written for someone who has to explain what they did afterwards: every
    * destructive action names its consequence rather than its mechanism, and
@@ -459,7 +462,7 @@ export const enUS = {
       previous: "Previous",
       next: "Next",
       pageSize: "Per page",
-      // **D93**: the `<h1>` of `/admin/users/$id/edit`. The trail already ends
+      // the `<h1>` of `/admin/users/$id/edit`. The trail already ends
       // at the account, so the heading names the *operation* — a bare "Edit"
       // is a verb with no object as a tab title and a focus target.
       editTitle: "Edit the account",
@@ -515,7 +518,7 @@ export const enUS = {
         "They will have to choose a new one the next time they sign in.",
       setRoles: "Roles",
       setRolesHelp: "Tick the roles this account should hold.",
-      // **D93**: on your own account the whole fieldset is disabled, and a
+      // on your own account the whole fieldset is disabled, and a
       // disabled control with no reason beside it reads as a bug. The server
       // refuses it too (`admin_cannot_change_own_roles`); this is the earlier
       // of the two gates, and the only one that explains itself in advance.
@@ -547,7 +550,7 @@ export const enUS = {
       linkTitle: "Give them this link",
       linkHelp:
         "E-mail is turned off, so this is the only copy. It works once and expires.",
-      // D65: which account, because two creations in a row otherwise produce
+      // which account, because two creations in a row otherwise produce
       // two links nobody can tell apart.
       linkFor: (email: string) =>
         `For ${email}. E-mail is turned off, so this is the only copy — it works once and expires.`,
@@ -568,11 +571,11 @@ export const enUS = {
       removeConfirm:
         "Removing the application revokes its tokens and disconnects everyone who allowed it. This cannot be undone.",
       add: "Add an application",
-      // **D78**: "a Web application's", because only that type has one — the
+      // "a Web application's", because only that type has one — the
       // sentence promised a secret the default type never produces.
       addHelp:
         "A Web application's client secret is generated here and shown once. Redirect URIs are matched exactly.",
-      // D72: every field except the id, which is the natural key four other
+      // every field except the id, which is the natural key four other
       // tables reference.
       edit: "Edit",
       editTitle: "Edit the application",
@@ -580,7 +583,7 @@ export const enUS = {
         "Everything except the client ID can be changed. The existing secret is kept unless the type changes.",
       clientIdFixed:
         "The client ID cannot be changed — tokens, consents and audit rows all reference it. Remove the application and add it again to use a different one.",
-      // **D80**: one of these per row, so the name has to say which row —
+      // one of these per row, so the name has to say which row —
       // "Actions" repeated once per application is a list of identical
       // controls to a screen reader and an ambiguous locator to a test.
       actionsFor: (name: string) => `Actions for ${name}`,
@@ -593,19 +596,19 @@ export const enUS = {
       typeWeb: "Web — a server-side app that can keep a secret",
       typeSpa: "Single-page app — no secret, PKCE required",
       typeNative: "Mobile or desktop app",
-      // **D78**: said at the point of choosing, because the type is what
+      // said at the point of choosing, because the type is what
       // decides whether a secret exists at all — and it is also the only way
       // to give an application one afterwards.
       typeHelp:
         "Only a Web application keeps a client secret. Changing an application to Web issues one and shows it once; changing it away from Web destroys it and revokes its tokens.",
       onePerLine: "One per line. Matched exactly, so no wildcards.",
       secretTitle: "The client secret",
-      // **D93**: it names the recovery. The dialog is `defaultOpen` with no
+      // it names the recovery. The dialog is `defaultOpen` with no
       // confirm-before-close, so Escape destroys the only copy — and nothing
       // on it said that rotating from the row menu is how to get another.
       secretHelp:
         "Copy it now — it is stored as a hash and cannot be shown again. If you lose it, rotate the secret from the application's row to issue a new one.",
-      // **D93**: the twelve fields are one page in three cards. One column of
+      // the twelve fields are one page in three cards. One column of
       // twelve controls is one column of twelve controls however wide it is,
       // so grouping — not width — is the fix for "hard to scroll".
       groupIdentity: "Identity",
@@ -617,7 +620,7 @@ export const enUS = {
       groupPermissions: "Permissions",
       groupPermissionsHelp:
         "What the application may ask for, and what the user is asked to agree to.",
-      // **D78**: the consequence, not only the OAuth term. "Public" is what
+      // the consequence, not only the OAuth term. "Public" is what
       // the specification calls it; "no client secret" is the thing an
       // operator was looking for when they registered an application, saw no
       // secret and no way to rotate one, and had nothing on the page to tell
@@ -638,12 +641,12 @@ export const enUS = {
       enableEndSession: "Allow RP-initiated logout",
       enableEndSessionHelp:
         "Lets the application end the session here. Needs at least one post-logout redirect URI.",
-      // What the form can decide for itself, before posting (D62). The same
+      // What the form can decide for itself, before posting. The same
       // rules the file schema applies, worded for the person typing rather
       // than for the operator reading a startup failure.
       invalidClientId:
         "Use letters, digits and `. _ ~ -` only — this is what the application sends at the token endpoint.",
-      // **D93**: `.` and `..` pass the character rule and are not usable as a
+      // `.` and `..` pass the character rule and are not usable as a
       // path segment — a browser resolves `/admin/clients/../edit` to
       // `/admin/edit` before the request leaves it. Dots in general are fine;
       // `com.example.app` is an ordinary client id.
@@ -668,10 +671,9 @@ export const enUS = {
       endSessionNeedsUri:
         "RP-initiated logout needs at least one post-logout redirect URI. Add one, or turn the option off.",
     },
-    // FR-GW-7, **D91**.
     gateways: {
       title: "API gateways",
-      // **D95**: the same two-sentence shape as the applications list, whose
+      // the same two-sentence shape as the applications list, whose
       // second sentence this is word for word. What a gateway *does* moved to
       // `addHelp`, on the page where you decide to make one: three sentences
       // under a heading is a paragraph, and the mechanics were repeating what
@@ -691,7 +693,7 @@ export const enUS = {
         "Removing the gateway stops /gateway/<name> answering. Anything calling it starts getting 404s immediately.",
       enable: "Enable",
       disable: "Disable",
-      // One of these per row, so the name has to say which row (**D80**).
+      // One of these per row, so the name has to say which row.
       actionsFor: (name: string) => `Actions for ${name}`,
       name: "Name",
       nameFixed:
@@ -702,6 +704,15 @@ export const enUS = {
       requireAuth: "Require authentication",
       requireAuthHelp:
         "Refuse a call that carries no Authorization header, no API key and no signed-in session, instead of forwarding it anonymously. Leave it off for a target with an anonymous role of its own, such as PostgREST.",
+      // optional, so the help has to say what leaving it empty means
+      // as plainly as what filling it in does.
+      audience: "Audience",
+      audienceHelp:
+        "Optional. When set, the token minted for a caller's API key or session names this URI as its audience instead of the deployment's default — for a target that checks the audience against its own identifier. Leave it empty to keep the default.",
+      audienceNotUri: (value: string) =>
+        `${value} is not an absolute URI. Include the scheme, as in https://api.internal or urn:example:api.`,
+      audienceFragment: (value: string) =>
+        `${value} must not contain a "#" fragment.`,
       auth: "Authentication",
       authRequired: "Required",
       authAnonymous: "Anonymous allowed",
@@ -711,12 +722,12 @@ export const enUS = {
       status: "Status",
       enabled: "Enabled",
       disabled: "Disabled",
-      // What the form decides before posting (D62's pattern), worded for the
+      // What the form decides before posting (the spec's pattern), worded for the
       // person typing rather than for an operator reading a startup failure.
       invalidName:
         "Use lower-case letters, digits, `_` and `-`, starting with a letter or a digit — the name is a URL path segment.",
       urlRequired: "A target URL is required.",
-      // **D93**: only reachable for a row written by hand in `psql`, because
+      // only reachable for a row written by hand in `psql`, because
       // `checkGatewayUrl` refuses userinfo on every write path. Saving is a
       // full replace, so prefilling the masked value would store `***`.
       urlMasked:
@@ -729,6 +740,10 @@ export const enUS = {
       urlQuery: (url: string) =>
         `${url} must not contain a query string; the caller's own query is forwarded unchanged.`,
       urlFragment: (url: string) => `${url} must not contain a "#" fragment.`,
+      // the one address range an admin-defined target may not
+      // reach, named for what lives there rather than by its CIDR.
+      urlLinkLocal: (url: string) =>
+        `${url} is a link-local address — the range the cloud metadata service answers on — and a gateway cannot point there.`,
       urlCredentials: (url: string) =>
         `${url} must not contain a username or password. Credentials for the target belong in the request, not in its URL.`,
     },
@@ -740,7 +755,7 @@ export const enUS = {
       users: "Users",
       isDefault: "Given at sign-up",
       isAdmin: "Administrator",
-      // FR-ADMIN-2 asks for it on *this* page. It sat under `clients` and
+      // the spec asks for it on *this* page. It sat under `clients` and
       // nothing rendered it.
       lastReconcile: "Last reconciled at start-up",
       warnings: "Roles held by users but missing from the catalog",
@@ -771,7 +786,7 @@ export const enUS = {
       issuer: "Issuer",
       email: "E-mail",
       emailOn: (transport: string) => `On, via ${transport}`,
-      emailOff: "Off — the server runs in degraded mode", // FR-MAIL-2
+      emailOff: "Off — the server runs in degraded mode",
       keys: "Signing keys",
       algorithm: "Algorithm",
       // "Signing key" over a `kid` read as though the key itself were on the
@@ -781,7 +796,7 @@ export const enUS = {
       publishedKeys: "Published",
       rotate: "Rotate the signing key now",
       rotateHelp:
-        "The new key is published first and starts signing an hour later, so tokens already issued keep verifying.", // FR-OIDC-16
+        "The new key is published first and starts signing an hour later, so tokens already issued keep verifying.",
       rotated: (keyId: string) => `A successor key was created: ${keyId}.`,
       startup: "Start-up",
       reconcile: "Client reconciliation",
@@ -810,21 +825,21 @@ export const enUS = {
       },
     },
     /**
-     * `/admin/database` (FR-ADMIN-7).
+     * `/admin/database`.
      *
      * The two forked Neon components carry their own English strings --
      * "Read only", "Run", "Enable writes", the results grid's empty state.
      * They are near-verbatim registry output and their strings are not
-     * cataloged, so that is a bounded FR-I18N-1 exception, recorded in the
-     * spec text beside the requirement and in D83. Everything the page itself
-     * writes is here -- including, since D84, the schema selector's label and
+     * cataloged, so that is a bounded exception, recorded in the
+     * spec text beside the requirement. Everything the page itself
+     * writes is here -- including the schema selector's label and
      * the name of the run button the fork added, both of which are ours.
      */
     database: {
       title: "Database",
       /**
        * Two spellings of one sentence rather than one with the words "read
-       * only" interpolated (D84): the mode is the most important thing on the
+       * only" interpolated: the mode is the most important thing on the
        * page and it belongs in the opening line, and a translator needs the
        * whole sentence to put it where their language wants it. The second
        * paragraph that used to carry it is gone.
@@ -861,8 +876,8 @@ export const enUS = {
         "The application could not be registered. Check the redirect URIs and the scopes.",
       clientNoSecret:
         "That application is a public client and has no secret to rotate. Change its type to a web application first.",
-      // D70: an administrator can list every account, so naming the duplicate
-      // is not the disclosure SEC-7 guards against on `/signup` — and the
+      // an administrator can list every account, so naming the duplicate
+      // is not the disclosure anti-enumeration guards against on `/signup` — and the
       // sentence it replaced was about a password the dialog never asked for.
       emailExists: "An account with that e-mail address already exists.",
       gatewayExists: "A gateway with that name already exists.",
@@ -885,15 +900,15 @@ export const enUS = {
         "A temporary password is set. They must change it at the next sign-in.",
       keyRevoked: "The API key has been revoked.",
       profileSaved: "Profile updated.",
-      // **D93**: one form, one Save, so one confirmation. The page writes the
+      // one form, one Save, so one confirmation. The page writes the
       // profile and the roles in that order.
       accountSaved: "The account has been updated.",
-      // …and the D70 shape when the second half fails after the first has
+      // …and the two-outcome shape when the second half fails after the first has
       // already been written: say which half, and where to finish the job.
       accountSavedRolesFailed:
         "The profile was saved, but the roles were not changed. Open Edit again to set them.",
       clientCreated: "The application has been registered.",
-      // **D78**: the same event, for a client that has no secret to show. It
+      // the same event, for a client that has no secret to show. It
       // used to be reported with the sentence above and nothing else, so an
       // operator who took the default type — a single-page app — saw a
       // registration succeed, no secret dialog, and no rotate control on the
@@ -912,7 +927,7 @@ export const enUS = {
       gatewayDisabled: "The gateway has been disabled.",
       gatewayEnabled: "The gateway has been enabled.",
       created: "The account has been created.",
-      // D70: the account exists and the one-time link does not. Says which
+      // the account exists and the one-time link does not. Says which
       // half succeeded and names both ways back, because the alternative was
       // a 500 page that primed a duplicate refusal on the retry.
       createdLinkFailed:
@@ -921,8 +936,8 @@ export const enUS = {
   },
 
   email: {
-    // Subject + body for each of the nine templates (FR-MAIL-1). Every link is
-    // built from `server.baseUrl` only (SEC-1).
+    // Subject + body for each of the nine templates. Every link is
+    // built from `server.baseUrl` only.
     verify: {
       subject: (siteName: string) =>
         `Confirm your e-mail address for ${siteName}`,
@@ -997,6 +1012,16 @@ export const enUS = {
       warning:
         "If you did not ask for this, contact your administrator immediately.",
       action: "Set up two-factor authentication",
+    },
+    signUpExisting: {
+      subject: (siteName: string) =>
+        `Someone tried to sign up to ${siteName} with your address`,
+      heading: "Someone tried to create an account with your address",
+      body: (siteName: string) =>
+        `Someone — hopefully you — tried to create a new account at ${siteName} with this e-mail address. You already have one, so nothing was created and nothing about your account has changed.`,
+      hint: "If it was you and you have forgotten your password, you can choose a new one below.",
+      action: "Reset your password",
+      ignore: "If this was not you, you can ignore this message.",
     },
     apiKeyCreated: {
       subject: (siteName: string) =>

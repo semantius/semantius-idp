@@ -13,7 +13,7 @@ import { authRequest, createTestContext, sessionCookie } from "./harness"
 import type { TestContext } from "./harness"
 
 /**
- * First-run setup (FR-ADMIN-1, **D52**).
+ * First-run setup.
  *
  * This is the module `routes/setup.tsx` delegates to, and it is where the two
  * things that can go badly wrong live: the gate that decides whether the page
@@ -25,7 +25,7 @@ import type { TestContext } from "./harness"
  * `e2e/auth.spec.ts`, because a redirect nobody follows is not a redirect that
  * has been tested.
  */
-describe("first-run setup (D52)", () => {
+describe("first-run setup", () => {
   const contexts: TestContext[] = []
 
   afterEach(async () => {
@@ -94,7 +94,7 @@ describe("first-run setup (D52)", () => {
 
     const result = await createFirstUser(deps(ctx), input)
     expect(result.created).toBe(true)
-    // **D69**: the admin role *and* the catalog default, so a downstream app
+    // the admin role *and* the catalog default, so a downstream app
     // keying on `user` does not exclude the person who set the IdP up.
     expect(splitRoles(result.role)).toEqual(["admin", "user"])
 
@@ -102,7 +102,7 @@ describe("first-run setup (D52)", () => {
     expect(users).toHaveLength(1)
 
     const admin = users[0]!
-    // FR-AUTH-1: normalized on the way in.
+    // normalized on the way in.
     expect(admin.email).toBe("first.operator@example.com")
     expect(splitRoles(admin.role)).toContain("admin")
     expect(splitRoles(admin.role)).toContain("user")
@@ -112,13 +112,13 @@ describe("first-run setup (D52)", () => {
     // The whole difference from the bootstrap account this replaces: the
     // person who typed the password is the person who will use it.
     expect(admin.mustChangePassword).toBe(false)
-    // D49: derived from the parts, in `site.nameFormat` order.
+    // derived from the parts, in `site.nameFormat` order.
     expect(admin.name).toBe("Frida Operator")
     expect(admin.firstName).toBe("Frida")
     expect(admin.lastName).toBe("Operator")
   })
 
-  it("derives the name the other way round when site.nameFormat says so (D49)", async () => {
+  it("derives the name the other way round when site.nameFormat says so", async () => {
     const ctx = await createTestContext("setup-name-format", {
       config: { site: { name: "Test IdP", nameFormat: "last-first" } },
     })
@@ -131,7 +131,7 @@ describe("first-run setup (D52)", () => {
     expect(admin!.name).toBe("Operator, Frida")
   })
 
-  it("writes a credential the sign-in path verifies (SEC-10)", async () => {
+  it("writes a credential the sign-in path verifies", async () => {
     const ctx = await createTestContext("setup-signs-in")
     contexts.push(ctx)
 
@@ -169,7 +169,7 @@ describe("first-run setup (D52)", () => {
     expect(users).toHaveLength(1)
   })
 
-  it("records the creation in the audit trail (SEC-6)", async () => {
+  it("records the creation in the audit trail", async () => {
     const ctx = await createTestContext("setup-audit")
     contexts.push(ctx)
 
@@ -180,7 +180,7 @@ describe("first-run setup (D52)", () => {
       .from(ctx.database.schema.auditLog)
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({
-      // D66: an account made for somebody, not a self-service registration —
+      // an account made for somebody, not a self-service registration —
       // and `via: "setup"` below says which of the two ways.
       action: "user.created",
       outcome: "success",
@@ -195,7 +195,7 @@ describe("first-run setup (D52)", () => {
     })
   })
 
-  it("does not repeat a role when the catalog default is itself an admin role (D69)", async () => {
+  it("does not repeat a role when the catalog default is itself an admin role", async () => {
     const ctx = await createTestContext("setup-default-is-admin", {
       roles: [
         { name: "admin", description: "Everything.", default: true },

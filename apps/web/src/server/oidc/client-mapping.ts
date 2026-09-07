@@ -1,5 +1,5 @@
 /**
- * `oauth_clients.jsonc` → the `oauth_client` row (FR-OIDC-2/3).
+ * `oauth_clients.jsonc` → the `oauth_client` row.
  *
  * Pure: no database, no clock, no randomness. Reconciliation is the part that
  * is hard to test against a live schema, so everything that can be decided
@@ -11,7 +11,7 @@
  * - **`userId` stays `null` for a file client.** A config-synced client belongs
  *   to the deployment, not to whoever happened to be signed in — and that is
  *   also the marker reconciliation scopes its orphan sweep by, so a row with a
- *   `userId` survives every restart (FR-OIDC-2, **D50**). An administrator
+ *   `userId` survives every restart. An administrator
  *   registering a client through `/admin/clients` is the one caller that passes
  *   one: their own id.
  * - **`resourceServer` is not a column.** 1.7.1 decides introspection
@@ -27,7 +27,7 @@ import type { ClientEntry } from "../config/schema/clients-schema"
 import { PUBLIC_CLIENT_TYPES } from "../config/schema/clients-schema"
 import { HOST_TEMPLATE_DISCOVERY_ID } from "./host-template-clients"
 
-/** The v1 grant set (D26). `client_credentials` is not among them. */
+/** The v1 grant set. `client_credentials` is not among them. */
 export const DEFAULT_GRANT_TYPES = [
   "authorization_code",
   "refresh_token",
@@ -56,8 +56,8 @@ export interface ClientRow {
   policy: string | null
   metadata: Record<string, unknown> | null
   /**
-   * `null` for a config-synced client (FR-OIDC-2), the creating administrator's
-   * id for one registered through `/admin/clients` (**D50**). Reconciliation's
+   * `null` for a config-synced client, the creating administrator's
+   * id for one registered through `/admin/clients`. Reconciliation's
    * orphan sweep is scoped to `userId === null`, so this is what keeps an
    * admin-created client alive across a restart.
    */
@@ -74,7 +74,7 @@ export interface ClientRow {
 }
 
 export interface MappingOptions {
-  /** Already hashed by the caller, which owns the hashing function (R4). */
+  /** Already hashed by the caller, which owns the hashing function. */
   hashedSecret?: string
   /** The owning administrator, for a client registered through the admin UI. */
   userId?: string
@@ -146,7 +146,7 @@ export function toClientRow(
  * column of their own.
  *
  * `resourceServer` is mirrored here for legibility; the link is what actually
- * authorizes introspection. `firstParty` (FR-OIDC-14) has no 1.7.1 equivalent
+ * authorizes introspection. `firstParty` has no 1.7.1 equivalent
  * at all, so this is its only home.
  */
 function metadataFor(entry: ClientEntry): Record<string, unknown> | null {
@@ -160,16 +160,16 @@ function metadataFor(entry: ClientEntry): Record<string, unknown> | null {
 }
 
 /**
- * Which resources a client may ask for (FR-OIDC-6).
+ * Which resources a client may ask for.
  *
  * The deployment's default audience plus anything the client declares. The
  * link is not a convenience: with `enforcePerClientResources` on (the 1.7.1
- * default, S2), a `resource` the client is not linked to is refused, and a
+ * default), a `resource` the client is not linked to is refused, and a
  * client with no links at all could never obtain a JWT access token.
  *
  * A `resourceServer` client is linked to the whole registry instead, which is
  * what lets it introspect tokens it is an audience for rather than only its
- * own (FR-OIDC-4).
+ * own.
  */
 export function resourceLinksFor(
   entry: ClientEntry,

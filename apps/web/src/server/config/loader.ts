@@ -1,12 +1,12 @@
 /**
- * Loads the config folder once, at startup (CFG-1..6).
+ * Loads the config folder once, at startup .
  *
  * Order of operations, and why:
- *  1. read + parse JSONC, strip `$schema`            — CFG-1
- *  2. expand placeholders                            — CFG-2, before validation
- *  3. apply the three fallback environment variables — CFG-3, only for absent keys
- *  4. zod validation of all three files              — CFG-4/5, one pass
- *  5. cross-checks and warnings                      — CFG-5
+ *  1. read + parse JSONC, strip `$schema`
+ *  2. expand placeholders, before validation
+ *  3. apply the three fallback environment variables, only for absent keys
+ *  4. zod validation of all three files              — one pass
+ *  5. cross-checks and warnings
  *  6. derive the effective configuration             — derive.ts
  *
  * Steps 4 and 5 never short-circuit: every problem is collected and thrown
@@ -38,7 +38,7 @@ import { zodPathToPointer } from "./zod-helpers"
 export const DEFAULT_CONFIG_DIR = "/config"
 
 export interface LoadConfigOptions {
-  /** Config folder. Defaults to `IDP_CONFIG_DIR`, then `/config` (CFG-1). */
+  /** Config folder. Defaults to `IDP_CONFIG_DIR`, then `/config`. */
   dir?: string
   /** Environment. Defaults to `process.env`. */
   env?: Record<string, string | undefined>
@@ -62,7 +62,7 @@ export function loadConfig(options: LoadConfigOptions = {}): LoadedConfig {
 
   const issues: ConfigIssue[] = []
   // What each logical file turned out to be called on disk, for the messages
-  // (D60). Filled in by `readAndExpand`, read by `ConfigError`.
+  // . Filled in by `readAndExpand`, read by `ConfigError`.
   const names: ResolvedFileNames = {}
 
   // -- 1/2: read, parse, expand -------------------------------------------
@@ -71,11 +71,11 @@ export function loadConfig(options: LoadConfigOptions = {}): LoadedConfig {
   const rolesRaw = readAndExpand("roles.json", { required: false })
 
   /**
-   * Resolves one logical file to the one on disk (**D60**).
+   * Resolves one logical file to the one on disk.
    *
    * `.jsonc` is the canonical spelling — the files are JSONC and every editor
    * treats the extension as the signal to allow comments — but `.json` is
-   * still read, because a deployment that predates D60 has a config folder
+   * still read, because a deployment that predates the `.jsonc` spelling has a config folder
    * full of them and an extension rename is not something an upgrade may
    * demand. Both present is refused rather than resolved: there is no reading
    * of "which one did they mean" that is not a guess, and a deployment silently
@@ -149,7 +149,7 @@ export function loadConfig(options: LoadConfigOptions = {}): LoadedConfig {
     }
   }
 
-  // -- 3: fallback environment variables (CFG-3) ---------------------------
+  // -- 3: fallback environment variables ---------------------------
   const configInput = applyEnvFallbacks(configRaw?.value, env)
 
   // -- 4: schema validation ------------------------------------------------
@@ -215,7 +215,7 @@ export function loadConfig(options: LoadConfigOptions = {}): LoadedConfig {
 }
 
 /**
- * CFG-3 precedence: a fallback environment variable is consulted **only** when
+ * Precedence: a fallback environment variable is consulted **only** when
  * the key is absent from the file. It never overrides a configured value.
  */
 function applyEnvFallbacks(

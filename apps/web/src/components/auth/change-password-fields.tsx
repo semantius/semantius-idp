@@ -8,7 +8,7 @@ import type { Catalog } from "@/server/i18n"
  * that change a password ask for.
  *
  * `/change-password` is still a page, because it is also the forced-change
- * page (FR-AUTH-4) and the target `/.well-known/change-password` redirects to.
+ * page and the target `/.well-known/change-password` redirects to.
  * `/account/security` asks in a dialog, like every other action on that page.
  * Sharing the fields is what keeps the two from drifting into different
  * `autocomplete` tokens and different hints, which is exactly how a password
@@ -23,7 +23,7 @@ export function ChangePasswordFields({
   t: Catalog
   /** `ui.passwordMinLength`. */
   minLength: number
-  /** The mismatch, from `usePasswordConfirm` (**D62**). */
+  /** The mismatch, from `usePasswordConfirm`. */
   confirmError?: string
   autoFocus?: boolean
 }) {

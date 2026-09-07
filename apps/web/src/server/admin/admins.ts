@@ -1,5 +1,5 @@
 /**
- * Who currently holds an admin role (FR-ADMIN-3, FR-ROLE-3).
+ * Who currently holds an admin role.
  *
  * Separate from `invariants.ts` so the rules stay a pure function: this is the
  * one part that touches the database, and it is deliberately small.

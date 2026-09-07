@@ -42,7 +42,7 @@ import { LocalTime } from "@/components/common/local-time"
 const HERE = "/admin/users"
 
 /**
- * `/admin/users` — the list (FR-ADMIN-2).
+ * `/admin/users` — the list.
  *
  * Every control is a `GET` form, so the state of the screen *is* the URL: a
  * filtered list can be linked to, bookmarked, and reloaded, and the back button
@@ -50,9 +50,9 @@ const HERE = "/admin/users"
  * in the app — "the pending accounts" is a link an administrator sends to a
  * colleague.
  *
- * It is where a creation **lands**, which is D64's actual finding and is not
+ * It is where a creation **lands**, which is the spec's actual finding and is not
  * reversed: one action must not have two outcomes on two surfaces. The form
- * itself is `/admin/users/new` again since **D93**, because the test is
+ * itself is `/admin/users/new` again because the test is
  * addressability rather than size — but both of its outcomes still arrive
  * here. With e-mail on a creation is a notice; with e-mail off the one-time
  * set-password link opens in a dialog, claimed from a server-side stash rather
@@ -95,12 +95,12 @@ export const Route = createFileRoute("/admin/users/")({
       error: searchString(search.error),
       // Claimed, and therefore consumed: this render is the only one that can
       // show it, which is what "it works once" has to mean on this side too.
-      // `{url, email}` since D65 — an administrator who has just created two
+      // `{url, email}` — an administrator who has just created two
       // accounts otherwise has two identical-looking links.
       inviteLink: parseInviteLink(
         await claimAdminSecret({ data: searchString(search.created) ?? "" })
       ),
-      // Who the notice is about (**D78**). The same one-shot store, because
+      // Who the notice is about. The same one-shot store, because
       // the alternative is an e-mail address in the query string and therefore
       // in the request log. Absent for every notice that is not about one
       // account, and for the invite-link path, which carries the address in
@@ -132,7 +132,7 @@ function UsersPage() {
     <AdminShell
       title={t.admin.users.title}
       actions={
-        // A link, not a dialog trigger (**D93**).
+        // A link, not a dialog trigger.
         <Link to="/admin/users/new" className={buttonVariants({ size: "sm" })}>
           {t.admin.users.create}
         </Link>

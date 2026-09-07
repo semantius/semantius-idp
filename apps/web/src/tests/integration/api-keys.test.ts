@@ -1,5 +1,5 @@
 /**
- * API keys (FR-KEY-1/2/3).
+ * API keys.
  *
  * A key authenticates **as its owner**, with the owner's roles, so the
  * interesting assertions are not "can I make one" but the four ways it has to
@@ -77,7 +77,7 @@ async function whoAmI(context: TestContext, key: string): Promise<Response> {
 }
 
 describe("API keys", () => {
-  it("authenticates as the owner, with the owner's roles (FR-KEY-2)", async () => {
+  it("authenticates as the owner, with the owner's roles", async () => {
     const context = await contextWith("apikeys_owner")
     try {
       const cookie = await signedIn(context)
@@ -96,7 +96,7 @@ describe("API keys", () => {
     }
   })
 
-  it("stores only a hash — the secret is never readable again (SEC-10)", async () => {
+  it("stores only a hash — the secret is never readable again", async () => {
     const context = await contextWith("apikeys_hashed")
     try {
       const cookie = await signedIn(context)
@@ -115,7 +115,7 @@ describe("API keys", () => {
     }
   })
 
-  it("stops working once revoked (FR-KEY-1)", async () => {
+  it("stops working once revoked", async () => {
     const context = await contextWith("apikeys_revoke")
     try {
       const cookie = await signedIn(context)
@@ -159,7 +159,7 @@ describe("API keys", () => {
     }
   })
 
-  it("refuses a key whose owner has been banned (FR-KEY-2, FR-ADMIN-4)", async () => {
+  it("refuses a key whose owner has been banned", async () => {
     const context = await contextWith("apikeys_banned")
     try {
       const cookie = await signedIn(context)
@@ -174,7 +174,7 @@ describe("API keys", () => {
       const after = await whoAmI(context, key)
       expect(after.status).toBeGreaterThanOrEqual(400)
 
-      // SEC-6: a refused key is an event worth having on record.
+      // a refused key is an event worth having on record.
       const audit = await context.database.db
         .select()
         .from(context.database.schema.auditLog)
@@ -182,7 +182,7 @@ describe("API keys", () => {
       expect(audit).toHaveLength(1)
       expect(audit[0]?.outcome).toBe("failure")
 
-      // FR-ADMIN-4: the key was not deleted, so lifting the ban restores it.
+      // the key was not deleted, so lifting the ban restores it.
       await context.database.db
         .update(context.database.schema.user)
         .set({ banned: false })
@@ -193,7 +193,7 @@ describe("API keys", () => {
     }
   })
 
-  it("refuses a key whose owner is no longer approved (FR-SIGNUP-2)", async () => {
+  it("refuses a key whose owner is no longer approved", async () => {
     const context = await contextWith("apikeys_pending")
     try {
       const cookie = await signedIn(context)
@@ -213,7 +213,7 @@ describe("API keys", () => {
 })
 
 describe("API keys disabled", () => {
-  it("registers no endpoints at all (FR-KEY-1)", async () => {
+  it("registers no endpoints at all", async () => {
     const context = await createTestContext("apikeys_off", {
       config: {
         signUp: { enabled: true, requireApproval: false },
@@ -237,7 +237,7 @@ describe("API keys disabled", () => {
 })
 
 describe("reading the session", () => {
-  it("reads the session the same way everywhere (FR-ROLE-2)", async () => {
+  it("reads the session the same way everywhere", async () => {
     const context = await createTestContext("apikeys_readsession", {
       config: {
         signUp: { enabled: true, requireApproval: false },

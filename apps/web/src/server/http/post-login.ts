@@ -1,19 +1,19 @@
 /**
- * Where a completed sign-in goes (FR-AUTH-1, D28).
+ * Where a completed sign-in goes.
  *
  * Four sources, in the order the spec fixes:
  *
- * 1. a pending OAuth authorization continuation (FR-OIDC-9) — always wins,
+ * 1. a pending OAuth authorization continuation — always wins,
  *    because the user did not come here to look at their profile;
  * 2. a `returnTo` that survives `safeReturnTo`, i.e. a same-origin relative
- *    path (SEC-3 — this is the only one of the four that is user input, and it
+ *    path (this is the only one of the four that is user input, and it
  *    is validated exactly as before);
  * 3. `auth.defaultRedirect`, which the operator may point anywhere;
  * 4. `/account`.
  *
  * Keeping this in one function is the point. The destination is decided at
- * three different moments — plain sign-in, the 2FA challenge (M6) and the end
- * of a forced password change (FR-AUTH-4) — and an absolute
+ * three different moments — plain sign-in, the 2FA challenge and the end
+ * of a forced password change — and an absolute
  * `auth.defaultRedirect` cannot be carried between them through a `returnTo`
  * query parameter, since `safeReturnTo` would rightly throw it away. So each
  * of those moments re-resolves here instead of passing a value along.
@@ -31,7 +31,7 @@ export interface SignInDestinationInput {
   /** The raw `returnTo` from the form or query. Validated here, not by the caller. */
   returnTo?: string | null
   /**
-   * Where to resume a pending `/oauth2/authorize` (FR-OIDC-9).
+   * Where to resume a pending `/oauth2/authorize`.
    *
    * Either the client's own redirect URI carrying an authorization code, or
    * the consent page — both decided by the provider, never by the browser, so

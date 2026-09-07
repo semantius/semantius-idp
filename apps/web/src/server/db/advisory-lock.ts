@@ -1,10 +1,10 @@
 /**
- * Postgres advisory locks (OPS-2, OPS-5, OPS-8, FR-ADMIN-1, FR-OIDC-2/16).
+ * Postgres advisory locks.
  *
  * Every startup step that mutates shared state — migrating, generating the
  * first signing key, reconciling clients, creating the bootstrap admin, the
  * cleanup job — runs inside one of these. Single-instance is the supported
- * topology (OPS-11), but an accidental second replica must not corrupt
+ * topology, but an accidental second replica must not corrupt
  * anything, and two containers restarting together is the ordinary case.
  *
  * **Session-scoped, not transaction-scoped, and deliberately so:** the locked
@@ -19,7 +19,7 @@
  * lock held on one reserved connection, `pg_try_advisory_lock` on a second
  * connection through Neon's pooled endpoint **succeeds**, and through the
  * direct endpoint is refused. Startup, migrations and the CLI therefore
- * connect through the *direct* endpoint (`database.directUrl`, **D27**).
+ * connect through the *direct* endpoint (`database.directUrl`).
  */
 
 import type postgres from "postgres"
@@ -37,7 +37,7 @@ export const LOCK_KEYS = {
   bootstrapAdmin: 4,
   cleanup: 5,
   rotateKeys: 6,
-  /** FR-GW-2: the same discipline `reconcileClients` has, for the gateways. */
+  /** the same discipline `reconcileClients` has, for the gateways. */
   reconcileGateways: 7,
 } as const
 

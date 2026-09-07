@@ -1,5 +1,5 @@
 /**
- * Client reconciliation against a real database (FR-OIDC-2/3/6, risk R4).
+ * Client reconciliation against a real database.
  *
  * The invariant that matters most is the last one in this file: a secret
  * written by the reconciler authenticates at the **live token endpoint**. That
@@ -86,7 +86,7 @@ async function linksFor(
 }
 
 describe("client reconciliation", () => {
-  it("creates the rows the file describes (FR-OIDC-2/3)", async () => {
+  it("creates the rows the file describes", async () => {
     const context = await contextWithClients("reconcile_create", [
       WEB_CLIENT,
       SPA_CLIENT,
@@ -262,7 +262,7 @@ describe("client reconciliation", () => {
     }
   })
 
-  it("links every client to the default audience (FR-OIDC-6)", async () => {
+  it("links every client to the default audience", async () => {
     const context = await contextWithClients("reconcile_links", [WEB_CLIENT])
     try {
       await reconcile(context)
@@ -312,7 +312,7 @@ describe("client reconciliation", () => {
   })
 })
 
-describe("the FR-OIDC-2 secret invariant (risk R4)", () => {
+describe("the spec secret invariant", () => {
   it("authenticates at the live token endpoint with the file's secret", async () => {
     const context = await contextWithClients("reconcile_parity", [WEB_CLIENT])
     try {
@@ -320,7 +320,7 @@ describe("the FR-OIDC-2 secret invariant (risk R4)", () => {
       const cookie = await signIn(context)
       const { code, verifier } = await authorizationCode(context, cookie)
 
-      // The whole point of R4: the reconciler hashed this secret, and the
+      // The whole point: the reconciler hashed this secret, and the
       // token endpoint verifies it. A real code is required because client
       // authentication is only reached once the grant itself is plausible —
       // with a bogus code both the right and the wrong secret produce

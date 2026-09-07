@@ -1,9 +1,9 @@
 /**
- * zod schema for `oauth_clients.jsonc` (FR-OIDC-3).
+ * zod schema for `oauth_clients.jsonc`.
  *
  * The file is the source of truth; startup reconciles it into `oauth_client`
- * (FR-OIDC-2). Unknown fields are rejected. Machine-to-machine clients are not
- * part of v1 (D26): `type: "service"` and a `client_credentials` grant are
+ *. Unknown fields are rejected. Machine-to-machine clients are not
+ * part of v1: `type: "service"` and a `client_credentials` grant are
  * refused with a message that points at per-user API keys instead.
  */
 
@@ -18,9 +18,16 @@ import {
 } from "@/lib/client-rules"
 import type { ClientType } from "@/lib/client-rules"
 
+/**
+ * The entropy floor for a file-declared secret: a 32-character hex
+ * secret — the shortest a generator writes — falls under it once in thirty
+ * million draws, and a placeholder never reaches it.
+ */
+const MIN_DISTINCT_SECRET_CHARACTERS = 8
+
 // The rules themselves live in `lib/client-rules.ts`, because `/admin/clients`
 // applies the same ones in the browser and importing this module there would
-// put zod in the client bundle (**D62**). Re-exported so every existing caller
+// put zod in the client bundle. Re-exported so every existing caller
 // of `server/config` is unchanged.
 export { CLIENT_TYPES, PUBLIC_CLIENT_TYPES }
 export type { ClientType }
@@ -43,7 +50,7 @@ const clientIdSchema = z
     /^[A-Za-z0-9._~-]+$/,
     "clientId may only contain letters, digits and `. _ ~ -`."
   )
-  // **D93**: `.` and `..` pass the character rule and are not usable as a
+  // `.` and `..` pass the character rule and are not usable as a
   // path segment — `/admin/clients/<id>/edit` is the row's own address, and a
   // browser resolves `/admin/clients/../edit` before the request leaves it.
   // Two exact values, not a rule about dots: `com.example.app` is ordinary.
@@ -88,7 +95,7 @@ const grantTypeSchema = z.string().superRefine((value, ctx) => {
  *
  * The decision is shared with the browser; only the sentence is here, because
  * this one goes into a startup failure an operator reads in a log and the
- * other goes through the message catalog (FR-I18N-1).
+ * other goes through the message catalog.
  */
 function validateRedirectUri(
   value: string,
@@ -141,7 +148,7 @@ const baseClientSchema = z.strictObject({
   firstParty: flexBoolean()
     .default(false)
     .describe(
-      "Same-host app that may use the session-JWT endpoint." // FR-OIDC-14
+      "Same-host app that may use the session-JWT endpoint."
     ),
   redirectUris: flexArray(z.string().min(1)).default([]),
   postLogoutRedirectUris: flexArray(z.string().min(1)).default([]),
@@ -152,7 +159,7 @@ const baseClientSchema = z.strictObject({
     .union([absoluteUri(), flexArray(absoluteUri(), { min: 1 })])
     .optional()
     .describe(
-      "Per-client default audience; overrides `jwt.audience` for this client." // FR-OIDC-6
+      "Per-client default audience; overrides `jwt.audience` for this client."
     ),
   grantTypes: flexArray(grantTypeSchema).optional(),
   responseTypes: flexArray(z.literal("code")).optional(),
@@ -168,7 +175,7 @@ const baseClientSchema = z.strictObject({
   resourceServer: flexBoolean()
     .default(false)
     .describe(
-      "May introspect tokens it is an audience for, not only its own." // FR-OIDC-4
+      "May introspect tokens it is an audience for, not only its own."
     ),
   disabled: flexBoolean().default(false),
   uri: absoluteUrl().optional(),
@@ -207,6 +214,27 @@ export const clientSchema = baseClientSchema.superRefine((client, ctx) => {
       path: ["clientSecret"],
       message: "Client secrets must be at least 32 characters.",
     })
+  } else if (client.clientSecret !== undefined) {
+    // the stored form is an unsalted SHA-256 (reconciliation and
+    // the token endpoint share one function, and that equality is what makes
+    // a file-declared secret work at all), so a secret's entropy is the only
+    // thing between a database dump and a working credential. Length alone
+    // let `ssss…` and a copied example through. Two shape checks that a
+    // generator always passes: a 32-character hex secret — the shortest
+    // `openssl rand -hex 16` — has fewer than eight distinct characters once
+    // in thirty million draws. The marker words a placeholder is written
+    // with (`example`, `change-me`, …) are a start-up WARNING in
+    // `cross-checks.ts`, not a refusal here: a development `.env` copied from
+    // `.env.example` before the generator carries them for the two example clients,
+    // and a boot refusal would turn a working checkout into one that does not
+    // start, over a placeholder that redirects to nobody's deployment.
+    if (new Set(client.clientSecret).size < MIN_DISTINCT_SECRET_CHARACTERS) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["clientSecret"],
+        message: `Client secrets must look generated: at least ${MIN_DISTINCT_SECRET_CHARACTERS} distinct characters (\`openssl rand -base64 48\`).`,
+      })
+    }
   }
   if (
     isPublic &&

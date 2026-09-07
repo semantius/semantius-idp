@@ -14,7 +14,11 @@ import { ClaimedParams } from "@/components/common/claimed-params"
 import { GuardedForm } from "@/components/common/guarded-form"
 import { SubmitButton } from "@/components/common/pending-form"
 import { messageForErrorCode } from "@/lib/auth-errors"
-import { skipConsentFromForm, uriLines } from "@/lib/client-rules"
+import {
+  NEW_CLIENT_DEFAULTS,
+  skipConsentFromForm,
+  uriLines,
+} from "@/lib/client-rules"
 import { adminHead } from "@/lib/page-title"
 import { searchString } from "@/lib/search-params"
 import { claimAdminDraft } from "@/server/functions/admin"
@@ -38,12 +42,12 @@ const LIST = "/admin/clients"
 const CONSUMED = ["error", "draft"] as const
 
 /**
- * "Add an application", as a page (**D93**, FR-OIDC-2, **D50**, **D62**).
+ * "Add an application", as a page.
  *
  * It was a `DialogContent` capped at `sm:max-w-md` with an inner scroller,
- * holding twelve fields including two textareas and a scope fieldset — D64's
+ * holding twelve fields including two textareas and a scope fieldset — the spec's
  * "an action is a dialog on the page that lists what it acts on",
- * over-generalized. The rule D93 replaces it with is about addressability
+ * over-generalized. The rule that replaces it is about addressability
  * rather than size: *every create and every edit is a page, because there has
  * to be one address to look at, link to and bookmark; every confirmation stays
  * a modal.*
@@ -51,9 +55,9 @@ const CONSUMED = ["error", "draft"] as const
  * `new` is a static segment and `$clientId` a dynamic one, so this route can
  * never be shadowed by an application whose id is literally `new`.
  *
- * Everything the POST does is D50's and D62's, unchanged: the same
- * read-before-`requireSession` order (**D63**, **D81**), the same `callAuth`,
- * the same `adminErrorCodeFor` (**D70**), the same 303. Two destinations
+ * Everything the POST does is the spec's and the spec's, unchanged: the same
+ * read-before-`requireSession` order, the same `callAuth`,
+ * the same `adminErrorCodeFor`, the same 303. Two destinations
  * differ — success lands on the **list**, because that is where the new row
  * is and where the secret dialog claims its handle; a refusal comes back
  * **here**, with the draft, because this is the form the values belong to.
@@ -69,7 +73,7 @@ export const Route = createFileRoute("/admin/clients/new")({
       ]),
       error: searchString(search.error),
       // The refused registration, so the fields come back with what was typed
-      // rather than empty (**D62**). Claimed, and therefore consumed — which
+      // rather than empty. Claimed, and therefore consumed — which
       // is why `ClaimedParams` strips the handle below.
       draft:
         (await claimAdminDraft({ data: searchString(search.draft) ?? "" })) ??
@@ -87,7 +91,7 @@ export const Route = createFileRoute("/admin/clients/new")({
         const here = `${base}${HERE}`
         const list = `${base}${LIST}`
 
-        // Read before the gate (**D63**, **D81**): a refusal that arrives with
+        // Read before the gate: a refusal that arrives with
         // the body already in hand can stash the draft, and the error path
         // below does.
         const { fields: form, list: valuesOf } = await readFormMulti(request)
@@ -106,7 +110,7 @@ export const Route = createFileRoute("/admin/clients/new")({
             postLogoutRedirectUris: uriLines(form.postLogoutRedirectUris ?? ""),
             scopes: valuesOf("scopes"),
             // The form asks the question the other way round; the wire field
-            // is unchanged (round 3, finding 10).
+            // is unchanged (finding 10).
             skipConsent: skipConsentFromForm(form.requireConsent),
             enableEndSession: form.enableEndSession === "on",
           },
@@ -115,7 +119,7 @@ export const Route = createFileRoute("/admin/clients/new")({
         if (!result.ok) {
           // What is left for the server to refuse is a duplicate id, a
           // file-managed collision or a lost race — none of which the form
-          // could have known (**D62**). The twelve fields come back rather
+          // could have known. The twelve fields come back rather
           // than being retyped; nothing password-shaped is in there. No
           // `action` discriminator any more: one page, one form, one draft.
           const draft = await stashDraft(runtime, {
@@ -139,7 +143,7 @@ export const Route = createFileRoute("/admin/clients/new")({
             : ""
         if (secret === "") {
           // Nothing to hand over, for one of two reasons, and **which one
-          // matters** (**D78**). A public client has no secret at all, and the
+          // matters**. A public client has no secret at all, and the
           // form's default type is `spa` — so the commonest registration made
           // here produces no secret dialog, and the operator has to be told
           // that is the answer rather than a failure to show one.
@@ -165,15 +169,15 @@ function NewClientPage() {
   const values = resolveClientFormValues(draft, {
     name: "",
     clientId: "",
-    type: "spa",
     redirectUris: "",
     postLogoutRedirectUris: "",
     // Every scope this deployment allows, ticked: an operator adding an
     // application is describing what it may ask for, and starting from none
     // means a client that can request nothing.
     scopes: [...ui.oauthScopes],
-    requireConsent: false,
-    enableEndSession: false,
+    // Type and the two checkboxes come from `client-rules.ts`, where "Require
+    // consent" is ticked to begin with and says why.
+    ...NEW_CLIENT_DEFAULTS,
   })
 
   return (
@@ -183,7 +187,7 @@ function NewClientPage() {
     >
       {/* The draft is single-use, so leaving its handle and the error in the
           address bar would make a reload render twelve empty fields under a
-          live message about values that are gone (**D93**). */}
+          live message about values that are gone. */}
       <ClaimedParams names={CONSUMED} />
       <FormRefusal>
         {messageForErrorCode(error, t, ui.passwordMinLength)}

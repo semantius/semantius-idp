@@ -1,5 +1,5 @@
 /**
- * Masking of the effective configuration (CFG-5, SEC-5).
+ * Masking of the effective configuration.
  *
  * `/admin/system` prints the configuration the process actually runs with, in
  * full, to a browser. Anything secret is replaced before it gets there.
@@ -24,7 +24,7 @@ const SECRET_POINTERS: readonly RegExp[] = [
   /^\/email\/resend\/apiKey$/,
   /^\/social\/[^/]+\/clientSecret$/,
   /^\/clients\/\d+\/clientSecret$/,
-  // FR-GW-1: a gateway target is not a secret — the host is what an operator
+  // a gateway target is not a secret — the host is what an operator
   // came to this page to read — but userinfo in it would be, so it is masked
   // password-only, the way a connection string is.
   /^\/gateways\/[^/]+\/url$/,
@@ -32,7 +32,7 @@ const SECRET_POINTERS: readonly RegExp[] = [
 
 /**
  * Secrets that are connection strings, masked password-only. Kept as a set
- * rather than a literal comparison because `directUrl` (D27) was added to the
+ * rather than a literal comparison because `directUrl` was added to the
  * config without being added here, and the single-pointer `===` check made that
  * omission invisible — the value fell through unmasked.
  */

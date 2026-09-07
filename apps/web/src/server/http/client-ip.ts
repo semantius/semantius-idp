@@ -1,5 +1,5 @@
 /**
- * Which address the request actually came from (SEC-2, SEC-5, SEC-1).
+ * Which address the request actually came from.
  *
  * `X-Forwarded-For` is a list that anyone can prepend to. A client that sends
  * `X-Forwarded-For: 1.2.3.4` and then goes through one proxy arrives as
@@ -29,12 +29,20 @@
  */
 
 /**
- * The header the edge stamps the socket address into.
+ * The private header that carries the caller's address between the layers.
  *
- * It lives here rather than in `src/server-entry.ts` because two very
- * different modules need the name — the edge that writes it and the Better
- * Auth options that read it — and importing the Start entry into the auth
- * instance would drag the whole framework handler along with it.
+ * Two writers, in order: `src/serve.ts` stamps the **socket** address into it,
+ * and `src/server-entry.ts` then overwrites it with the address
+ * {@link resolveClientAddress} resolved from that socket and the forwarded
+ * chain under `server.trustProxy`. Everything downstream — Better Auth's rate
+ * limiter through `advanced.ipAddress.ipAddressHeaders`, the gateway proxy,
+ * the audit trail — reads the resolved value and nothing re-resolves it
+ *.
+ *
+ * It lives here rather than in `src/server-entry.ts` because very different
+ * modules need the name — the edge that writes it and the Better Auth options
+ * that read it — and importing the Start entry into the auth instance would
+ * drag the whole framework handler along with it.
  *
  * **Always overwritten by the layer that sets it**, never merged, so a client
  * sending one of its own has it erased before anything reads it.
@@ -93,6 +101,67 @@ export function clientIpFrom(
   // client — a misconfiguration rather than a request. The leftmost is the
   // closest thing to an answer, and it is at least one of ours.
   return chain[0]
+}
+
+/**
+ * Resolves the caller's address **once**, at the edge, and writes the answer
+ * back into {@link SOCKET_ADDRESS_HEADER} so every later reader sees the same
+ * address whatever `server.trustProxy` is.
+ *
+ * Before this, two resolvers disagreed. `clientIpFrom` read the leftmost hop
+ * under `trustProxy: true`; Better Auth's own `getIP`, handed
+ * `x-forwarded-for` with no `trustedProxies`, trusts a *single-valued* header
+ * only and answers `null` for a chain — so behind two hops (Traefik → Caddy,
+ * the sibling deployment's shape) every user of the deployment shared one
+ * `no-trusted-ip` bucket, and the spec's ten sign-in attempts a minute became a
+ * ten-a-minute lockout of everybody. One resolution, written to one header
+ * the edge always overwrites, is what makes the two agree — and it keeps
+ * `true` meaning "leftmost", which the sibling depends on.
+ *
+ * The returned request is a copy with the header rewritten; the forwarded
+ * chain itself is left in place for anything that still wants to read it.
+ * When nothing resolves the header is *removed*, so no reader can mistake a
+ * stale or client-supplied value for an answer.
+ */
+export function resolveClientAddress(
+  request: Request,
+  trustProxy: TrustProxy
+): { request: Request; ipAddress: string | undefined } {
+  const ipAddress = clientIpFrom(request, trustProxy, {
+    socketAddress: request.headers.get(SOCKET_ADDRESS_HEADER),
+  })
+  const next = new Request(request)
+  if (ipAddress) next.headers.set(SOCKET_ADDRESS_HEADER, ipAddress)
+  else next.headers.delete(SOCKET_ADDRESS_HEADER)
+  return { request: next, ipAddress }
+}
+
+/**
+ * The address as a rate-limit key: IPv4 verbatim, IPv6 masked to its /64
+ *.
+ *
+ * A residential or cloud IPv6 allocation is a /64 at the smallest, so the low
+ * 64 bits are the caller's to rotate through — 2^64 addresses that never
+ * share a bucket is no bucket at all (the GHSA-p6v2 class). Better Auth masks
+ * its own keys the same way (`advanced.ipAddress.ipv6Subnet`); this is the
+ * same rule for the buckets the IdP keys itself, `/setup` and the token
+ * endpoint's per-address one. **Rate-limit keys only**: the audit trail and
+ * the request log anonymize separately (`logger.ts`) and never read this.
+ */
+export function rateLimitKeyAddress(
+  value: string | null | undefined
+): string | undefined {
+  const ip = normalizeIp(value)
+  if (!ip) return undefined
+  const bytes = toBytes(ip)
+  if (!bytes || bytes.length === 4) return ip
+  const groups: string[] = []
+  for (let index = 0; index < 4; index += 1) {
+    groups.push(
+      ((bytes[index * 2]! << 8) | bytes[index * 2 + 1]!).toString(16)
+    )
+  }
+  return `${groups.join(":")}::/64`
 }
 
 /** Whether an address falls inside any of the trusted ranges. */

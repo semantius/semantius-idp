@@ -4,19 +4,19 @@
  * The build emits a `{ fetch }` object, not a listener, and nothing in it
  * serves `dist/client`. This wrapper supplies both, and it is the layer that
  * knows about the mount path: a request for `/idp/assets/x.js` is a request
- * for `dist/client/assets/x.js` (OPS-10). Page requests keep their
+ * for `dist/client/assets/x.js`. Page requests keep their
  * prefix — the router matches them with it.
  *
  * The entry is imported by path rather than by specifier so that `tsc` does
  * not need `dist/` to exist, and so the container can point at its own layout.
  *
- * The request id, the SEC-5 log line and the SEC-4 headers all live in
+ * The request id, the spec log line and the spec headers all live in
  * `src/server-entry.ts` instead, so `vite dev` gets them too. The one thing
  * only this layer knows is the **socket address** — `Bun.serve` reports it and
  * a `Request` does not carry it — so it is stamped into a private header for
  * the entry to resolve `server.trustProxy` against.
  *
- * **Draining (M12, OPS-4).** SIGTERM and SIGINT are handled here because this
+ * **Draining.** SIGTERM and SIGINT are handled here because this
  * is the layer that owns the socket. The sequence is deliberately two-phase —
  * say not-ready, *then* let go — and the reasoning for that split is in
  * `server/http/lifecycle.ts`.
@@ -66,11 +66,27 @@ async function staticResponse(pathname: string): Promise<Response | undefined> {
   }
   if (relative === "/" || relative === "") return undefined
 
+  // An asset path never carries a percent-encoded slash, backslash or dot.
+  // The containment check below would pass one — `..%2f` is not a dot
+  // segment to the URL parser — and `Bun.file` then throws
+  // `ERR_INVALID_FILE_URL_PATH` on the `%2F` inside a `file:` URL, which
+  // surfaced as a bare 500 for every request whose path contained `%2f`,
+  // before the request log or any route saw it (found by the 2026-09
+  // security review's traversal probe, which expected the gateway's own 400
+  // and got the crash instead). Not an asset: hand it to the app.
+  if (/%(2f|5c|2e)/i.test(relative)) return undefined
+
   const resolved = new URL(`.${relative}`, clientDir)
   if (!resolved.href.startsWith(clientDir.href)) return undefined
 
-  const file = Bun.file(resolved)
-  if (!(await file.exists())) return undefined
+  let file: ReturnType<typeof Bun.file>
+  try {
+    file = Bun.file(resolved)
+    if (!(await file.exists())) return undefined
+  } catch {
+    // Anything the runtime refuses to open as a file is not a static asset.
+    return undefined
+  }
 
   // Hashed asset names are immutable; everything else in `public/` is not.
   const immutable = relative.startsWith("/assets/")
@@ -121,7 +137,7 @@ const server = Bun.serve({
 })
 
 /**
- * SIGTERM/SIGINT → drain → exit 0 (OPS-4).
+ * SIGTERM/SIGINT → drain → exit 0.
  *
  * Three things happen, in this order and for three different reasons:
  *

@@ -1,5 +1,5 @@
 /**
- * The container smoke test (TST-8, OPS-13).
+ * The container smoke test.
  *
  * Everything else in this repository tests the application. This tests the
  * *image*: that the thing CI publishes starts, migrates, serves the protocol,
@@ -13,18 +13,18 @@
  *
  *   1. compose up, against a **generated** config folder, a generated `.env`
  *      and its own project name, so it can never touch the operator's stack or
- *      the persistent `idp` schema (P0'.2);
- *   2. `/readyz` — and the time it took, which is OPS-13's start-up budget;
+ *      the persistent `idp` schema;
+ *   2. `/readyz` — and the time it took, which is the spec's start-up budget;
  *   3. discovery and the JWKS, fetched as a client would;
  *   4. **the first-run setup wizard, scripted.** A fresh stack has no accounts
- *      at all (D52): `/` leads to `/setup`, and the form there is what creates
+ *      at all: `/` leads to `/setup`, and the form there is what creates
  *      the first administrator. A smoke test that skipped it would be asserting
  *      that a deployment *starts*, not that anyone can use it;
  *   5. a session JWT, verified against the JWKS published in step 3 — which is
  *      what proves the signing key survived the image build;
- *   6. RSS, from `docker stats`, against OPS-13's ceiling;
+ *   6. RSS, from `docker stats`, against the spec's ceiling;
  *   7. SIGTERM, and the exit code. `docker compose stop` sends exactly that,
- *      and OPS-4 says the answer is 0.
+ *      and the spec says the answer is 0.
  *
  * Run it locally with `pnpm docker:smoke` (`--build`); CI runs it against an
  * image it has already built.
@@ -40,7 +40,7 @@ import { createLocalJWKSet, jwtVerify } from "jose"
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..")
 
-/** D51: the deployment artifacts live in `docker/`, and the build context is `..`. */
+/** the deployment artifacts live in `docker/`, and the build context is `..`. */
 const COMPOSE_FILE = "docker/docker-compose.yml"
 const DOCKERFILE = "docker/Dockerfile"
 
@@ -50,14 +50,14 @@ const ORIGIN = `http://127.0.0.1:${PORT}`
 const IMAGE = process.env.IDP_IMAGE ?? "semantius-idp:local"
 
 /**
- * OPS-13, all three.
+ * The footprint targets, all three.
  *
- * **`imageBytes` is only meaningful in CI** (**D76**). It is compared against
+ * **`imageBytes` is only meaningful in CI**. It is compared against
  * `docker image inspect --format {{.Size}}`, and Docker Desktop's containerd
  * image store answers that with the *compressed* size: the same image this
  * repository builds reports 117.9 MiB there and 385.8 MiB on a GitHub runner's
  * classic store, which is the real one. So a local run of this test cannot
- * fail the size check and never could — OPS-13 says "measured in the CI smoke
+ * fail the size check and never could — the spec says "measured in the CI smoke
  * test" for that reason, and the first CI run this repository ever had is what
  * found the image 28 % over its ceiling.
  */
@@ -70,7 +70,7 @@ const BUDGET = {
 const PG_PASSWORD = "smoke-pg-password"
 const SECRET = "smoke-test-secret-of-at-least-thirty-two-chars"
 
-/** Chosen by this run, at the wizard, and known nowhere else (D52). */
+/** Chosen by this run, at the wizard, and known nowhere else. */
 const ADMIN = {
   email: "smoke-admin@example.com",
   firstName: "Smoke",
@@ -81,7 +81,7 @@ const ADMIN = {
 let failures = 0
 
 /**
- * A failed check is also a **GitHub Actions annotation** (**D75**).
+ * A failed check is also a **GitHub Actions annotation**.
  *
  * A `run:` step that exits non-zero produces no annotation of its own, and
  * `actions/jobs/{id}/logs` is 403 without admin rights on the repository - so
@@ -140,7 +140,7 @@ function run(
 /**
  * Polls until `check` succeeds or the deadline passes.
  *
- * Returns the elapsed seconds, which is the OPS-13 measurement — so the wait
+ * Returns the elapsed seconds, which is the spec measurement — so the wait
  * and the assertion are the same operation and cannot drift apart.
  */
 async function waitFor(
@@ -164,7 +164,7 @@ async function waitFor(
  * A throwaway config folder and environment file, so no operator file is read
  * or written.
  *
- * The `.env` is the same file in both of the roles a real one has (D48): it is
+ * The `.env` is the same file in both of the roles a real one has: it is
  * compose's interpolation source *and* the `env_file` the IdP container reads
  * its connection string out of.
  */
@@ -323,7 +323,7 @@ async function main(): Promise<void> {
     // `docker-compose.yml`'s `idp` service carries both `image:` and
     // `build:`, so `compose up` **silently builds from source** when the tag
     // is not present locally. That is right for `idp-create.sh`, where an
-    // operator has no image yet, and wrong here: TST-8 exists to test the
+    // operator has no image yet, and wrong here: the smoke test exists to test the
     // artifact CI is about to publish, and a mistyped `IDP_IMAGE` would have
     // it quietly test a fresh build of the working tree instead — passing,
     // while proving nothing about the thing being released. Verified by
@@ -360,11 +360,11 @@ async function main(): Promise<void> {
     }, 60)
     check("/readyz answers 200", readyIn !== undefined)
 
-    // Measured from the first probe, not from `compose up`: OPS-13's budget
+    // Measured from the first probe, not from `compose up`: the spec's budget
     // is "ready < 5 s excluding migrations", and `--wait` has already waited
     // for the container's own health check, which covers the migration.
     check(
-      `ready within ${BUDGET.readySeconds}s (OPS-13)`,
+      `ready within ${BUDGET.readySeconds}s`,
       (readyIn ?? Infinity) < BUDGET.readySeconds,
       `${(readyIn ?? -1).toFixed(2)}s`
     )
@@ -388,7 +388,7 @@ async function main(): Promise<void> {
       `${keyCount} key(s)`
     )
 
-    // ---- 4. the first-run wizard (D52) ----------------------------------
+    // ---- 4. the first-run wizard ----------------------------------
     //
     // A fresh stack has no accounts, so the root leads to `/setup` and the
     // form there is the only way in. Until this succeeds the deployment has no
@@ -481,7 +481,7 @@ async function main(): Promise<void> {
     ])
     const rss = parseBytes(stats.stdout.split("/")[0] ?? "")
     check(
-      `idle RSS under ${mib(BUDGET.rssBytes)} (OPS-13)`,
+      `idle RSS under ${mib(BUDGET.rssBytes)}`,
       rss !== undefined && rss < BUDGET.rssBytes,
       rss === undefined ? stats.stdout.trim() : mib(rss)
     )
@@ -495,7 +495,7 @@ async function main(): Promise<void> {
     ])
     const imageBytes = Number(size.stdout.trim())
     check(
-      `image under ${mib(BUDGET.imageBytes)} (OPS-13)`,
+      `image under ${mib(BUDGET.imageBytes)}`,
       Number.isFinite(imageBytes) && imageBytes < BUDGET.imageBytes,
       mib(imageBytes)
     )
@@ -516,7 +516,7 @@ async function main(): Promise<void> {
     ])
     const exitCode = Number(exit.stdout.trim())
     check(
-      "exits 0 on SIGTERM (OPS-4)",
+      "exits 0 on SIGTERM",
       exitCode === 0,
       exitCode === 137
         ? "137 — SIGKILL: the signal never reached it"
@@ -596,7 +596,7 @@ await main()
 // `return` early, so every one of them skipped it and the process exited
 // **0 while printing FAIL**. A missing image or a stack that never came up
 // was reported to CI as a pass, which is a gate that does not gate. Found
-// by running the script against a tag that does not exist (**D75**).
+// by running the script against a tag that does not exist.
 process.stdout.write(
   failures === 0 ? "\nsmoke test passed\n" : `\n${failures} check(s) failed\n`
 )

@@ -2,7 +2,7 @@ import { signInAsAdmin } from "./actions"
 import { expect, test } from "./fixtures"
 
 /**
- * The sidebar shell `/admin/*` and `/account/*` wear (TST-6, **D82**).
+ * The sidebar shell `/admin/*` and `/account/*` wear.
  *
  * Two properties that only a real browser can answer, and that nothing else
  * in this suite would notice if they broke:
@@ -12,7 +12,7 @@ import { expect, test } from "./fixtures"
  *    which is the whole reason it is not `localStorage`: read after hydration,
  *    the sidebar would render open and then snap shut on every navigation.
  *    Running under the sub-path project as well is what proves the cookie's
- *    `Path` is scoped to the mount (OPS-10) rather than to `/`.
+ *    `Path` is scoped to the mount rather than to `/`.
  * 2. **The mobile sheet.** Below `md` the sidebar is not merely narrow, it is
  *    a different element — the registry swaps the fixed rail for a `Sheet` —
  *    and the navigation is unreachable until the trigger opens it.
@@ -30,7 +30,7 @@ const TRIGGER = '[data-sidebar="trigger"]'
 const SIDEBAR = '[data-slot="sidebar"]'
 
 test.describe("the sidebar shell", () => {
-  test("collapses, and is still collapsed after a reload (D82)", async ({
+  test("collapses, and is still collapsed after a reload", async ({
     page,
     app,
   }) => {
@@ -78,8 +78,7 @@ test.describe("the sidebar shell", () => {
     await signInAsAdmin(page, app)
     await app.goto("/admin")
 
-    // The heading is the page; the navigation is not on it yet. Since **D93**
-    // that heading is the page's own name — the chrome row is the
+    // The heading is the page; the navigation is not on it yet. // that heading is the page's own name — the chrome row is the
     // breadcrumb's, and nothing renders "Administration" any more.
     await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible()
     await expect(page.getByRole("link", { name: "Users" })).toBeHidden()

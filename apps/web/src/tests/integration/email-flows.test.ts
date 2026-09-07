@@ -7,8 +7,8 @@ import { authRequest, createTestContext } from "./harness"
 import type { TestContext } from "./harness"
 
 /**
- * FR-MAIL-1/2 and the verification and reset flows that depend on them
- * (FR-AUTH-2, FR-AUTH-3).
+ * The e-mail requirements and the verification and reset flows that depend on them
+ *.
  *
  * The capture transport is what makes these assertable without a mailbox: the
  * test reads the link straight out of the message, exactly as the Playwright
@@ -35,12 +35,12 @@ describe("e-mail flows", () => {
     afterAll(async () => await ctx.teardown())
     beforeEach(() => ctx.mailer.captured.clear())
 
-    it("keeps e-mail verification on (FR-MAIL-2 does not apply)", () => {
+    it("keeps e-mail verification on (the spec does not apply)", () => {
       expect(ctx.config.emailEnabled).toBe(true)
       expect(ctx.config.requireEmailVerification).toBe(true)
     })
 
-    it("sends a verification link on sign-up and honors it (FR-AUTH-2)", async () => {
+    it("sends a verification link on sign-up and honors it", async () => {
       const email = `verify-${Date.now()}@example.com`
 
       const signUp = await ctx.auth.handler(
@@ -53,7 +53,7 @@ describe("e-mail flows", () => {
       const message = ctx.mailer.captured.last("verify-email")
       expect(message).toBeDefined()
       expect(message!.to).toBe(email)
-      // SEC-1: the link is built from server.baseUrl, never from a header —
+      // the link is built from server.baseUrl, never from a header —
       // and it points at the endpoint that *consumes* the token, not at the
       // page that reports the outcome, which is where it used to point and
       // why confirming an address never worked in a browser.
@@ -62,7 +62,7 @@ describe("e-mail flows", () => {
       )
       expect(message!.text).toContain("callbackURL=%2Fverify-email%3Fstatus")
 
-      // Unverified: password sign-in is refused (FR-AUTH-2).
+      // Unverified: password sign-in is refused.
       const beforeVerify = await ctx.auth.handler(
         authRequest("/sign-in/email", { json: { email, password } })
       )
@@ -88,7 +88,7 @@ describe("e-mail flows", () => {
       expect(afterVerify.status).toBe(200)
     })
 
-    it("sends a reset link and answers identically for an unknown address (FR-AUTH-3, SEC-7)", async () => {
+    it("sends a reset link and answers identically for an unknown address", async () => {
       const email = `reset-${Date.now()}@example.com`
       await signUpAndVerify(ctx, email)
       ctx.mailer.captured.clear()
@@ -107,7 +107,7 @@ describe("e-mail flows", () => {
         })
       )
 
-      // SEC-7: the response must not distinguish the two.
+      // the response must not distinguish the two.
       expect(known.status).toBe(unknown.status)
       expect(await known.json()).toEqual(await unknown.json())
 
@@ -145,7 +145,7 @@ describe("e-mail flows", () => {
       ).toBe(200)
     })
 
-    it("refuses a reset token the second time (FR-AUTH-3)", async () => {
+    it("refuses a reset token the second time", async () => {
       const email = `reuse-${Date.now()}@example.com`
       await signUpAndVerify(ctx, email)
       ctx.mailer.captured.clear()
@@ -173,7 +173,7 @@ describe("e-mail flows", () => {
       expect(second.status).toBeGreaterThanOrEqual(400)
     })
 
-    it("tells the owner when their password changed (FR-AUTH-3)", async () => {
+    it("tells the owner when their password changed", async () => {
       const email = `notify-${Date.now()}@example.com`
       await signUpAndVerify(ctx, email)
       ctx.mailer.captured.clear()
@@ -197,7 +197,7 @@ describe("e-mail flows", () => {
     })
   })
 
-  describe("the pending-sign-up notification (FR-SIGNUP-2)", () => {
+  describe("the pending-sign-up notification", () => {
     let ctx: TestContext
     const admin = "queue-watcher@example.com"
     const otherAdmin = "second-watcher@example.com"
@@ -283,7 +283,7 @@ describe("e-mail flows", () => {
     })
   })
 
-  describe("in degraded mode (FR-MAIL-2)", () => {
+  describe("in degraded mode", () => {
     let ctx: TestContext
 
     beforeAll(async () => {
@@ -342,7 +342,7 @@ describe("e-mail flows", () => {
 
 /**
  * Signs a user up and clicks the verification link, so a later assertion is
- * about the thing it names rather than about FR-AUTH-2 still gating sign-in.
+ * about the thing it names rather than about verification still gating sign-in.
  */
 async function signUpAndVerify(ctx: TestContext, email: string): Promise<void> {
   const password = "correct horse battery staple"

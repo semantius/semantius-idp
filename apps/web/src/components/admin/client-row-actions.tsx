@@ -24,15 +24,15 @@ type OpenDialog = "rotate" | "remove" | null
 
 /**
  * Everything that can be done to one registered application, behind one
- * control (**D80**, FR-OIDC-2, FR-ADMIN-2).
+ * control.
  *
- * The four actions **D50** and **D72** added were rendered inline, wrapped
+ * The four actions the spec added were rendered inline, wrapped
  * under the Enabled/Disabled badge in the Status column — so a table whose
  * other six columns are one line each had a row four buttons tall, and a
  * column headed "Status" whose contents were mostly not status. Reported by
  * the owner as "showing actions below Status is ugly".
  *
- * **Edit is a `<Link>` now** (**D93**): the form is a page, so the menu entry
+ * **Edit is a `<Link>` now**: the form is a page, so the menu entry
  * navigates to it rather than opening a twelve-field dialog rendered once per
  * row. The row's *name* links to the same address, which is the affordance
  * that matters — this menu keeps the entry because the redundancy is correct,
@@ -58,7 +58,7 @@ type OpenDialog = "rotate" | "remove" | null
  *
  * The third mechanic this file used to document — a refused edit seeding the
  * menu's state so its dialog reopened — went with the dialog. A refused edit
- * comes back to its own address now, which is the whole point of D93 and is
+ * comes back to its own address now, which is the whole point of full-page forms and is
  * also why `stashDraft` no longer needs an `action`/`clientId` discriminator
  * to work out which of several dialogs the draft belonged to.
  *
@@ -129,9 +129,8 @@ export function ClientRowActions({
             </DropdownMenuItem>
             {/* Only where there is a secret to replace. A public client
                 authenticates with PKCE, and the endpoint refuses it rather
-                than quietly minting one (**D72**); the type field and the
-                table say so, so the absence is explained rather than bare
-                (**D78**). */}
+                than quietly minting one; the type field and the
+                table say so, so the absence is explained rather than bare. */}
             {client.isPublic ? null : (
               <DropdownMenuItem
                 onClick={() => {

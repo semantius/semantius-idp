@@ -37,9 +37,9 @@ const LIST = "/admin/clients"
 const CONSUMED = ["error", "draft"] as const
 
 /**
- * "Edit the application", as a page (**D93**, **D72**, FR-OIDC-2, FR-ADMIN-2).
+ * "Edit the application", as a page.
  *
- * Three symptoms of D64's over-generalization went away with the dialog this
+ * Three symptoms of the spec's over-generalization went away with the dialog this
  * replaces, and each had been patched rather than diagnosed: the `max-h`
  * override in `dialogs.tsx` — added because the client form's submit button
  * became unclickable the moment it grew two checkboxes and a second textarea —
@@ -52,7 +52,7 @@ const CONSUMED = ["error", "draft"] as const
  * without moving this one.
  *
  * **A file-managed row is refused with a redirect, not `notFound()`.** The
- * write would be undone by the next restart (FR-OIDC-2, **D50**), so it must
+ * write would be undone by the next restart, so it must
  * not happen — but `notFound()` is a `min-h-svh` centered page with no sidebar
  * and no link out (`__root.tsx`), replying "this does not exist" about a row
  * that was visible on the previous screen. The list with a reason is the shape
@@ -74,7 +74,7 @@ export const Route = createFileRoute("/admin/clients/$clientId/edit")({
       crumbs: crumbTrail(context.ui, (t) => [
         { label: t.admin.nav.clients, to: LIST },
         // The trail ends at the record; the `<h1>` names the operation, so
-        // nothing is said twice and the verb has an object (**D93**).
+        // nothing is said twice and the verb has an object.
         { label: client.name },
       ]),
       client,
@@ -95,14 +95,14 @@ export const Route = createFileRoute("/admin/clients/$clientId/edit")({
         // `encodeURIComponent`, because the id is an operator's string in a
         // path segment. `validateClientForm` refuses `.` and `..` — the two
         // values a browser would resolve away before the request left it
-        // (**D93**) — and this covers everything else the character rule
+        // — and this covers everything else the character rule
         // allows through.
         const here = `${base}/admin/clients/${encodeURIComponent(
           params.clientId
         )}/edit`
         const list = `${base}${LIST}`
 
-        // Read before the gate (**D63**, **D81**).
+        // Read before the gate.
         const { fields: form, list: valuesOf } = await readFormMulti(request)
 
         const signedIn = await requireSession(runtime, request, here)
@@ -110,7 +110,7 @@ export const Route = createFileRoute("/admin/clients/$clientId/edit")({
 
         // Create and update marshal identically — `/idp/update-client` takes
         // create's body, because a full replace *is* a create against a row
-        // that already exists (**D72**). The `clientId` comes from the path,
+        // that already exists. The `clientId` comes from the path,
         // not the form: the field is display-only here.
         const result = await callAuth(
           runtime,
@@ -144,7 +144,7 @@ export const Route = createFileRoute("/admin/clients/$clientId/edit")({
 
         // A type change from public to Web mints a secret, and it is shown
         // once on the list, through the same one-shot stash a creation uses
-        // (**D78**). An update that kept the existing secret shows nothing:
+        // . An update that kept the existing secret shows nothing:
         // the row holds a hash.
         const secret =
           typeof result.body.clientSecret === "string"
@@ -171,7 +171,7 @@ function EditClientPage() {
   const t = getCatalog(ui.locale)
   const { onSubmit, errors } = useClientForm()
   // Draft first, then the row: a refused edit comes back with what was typed
-  // (**D62**), and an untouched form shows what is stored. Both matter,
+  // , and an untouched form shows what is stored. Both matter,
   // because `/idp/update-client` is a full replace — an unprefilled field is a
   // field that saving clears.
   const values = resolveClientFormValues(draft, {

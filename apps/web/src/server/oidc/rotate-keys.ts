@@ -1,6 +1,5 @@
 /**
- * Rotating the signing key without breaking every verifier (FR-OIDC-16,
- * risk R11).
+ * Rotating the signing key without breaking every verifier.
  *
  * **The hazard.** Better Auth picks the signing key as "the newest live key of
  * the configured algorithm" and mints a replacement the moment the current one
@@ -27,7 +26,7 @@
  * token signed just before a rotation still verifies after it.
  *
  * Under `LOCK_KEYS.rotateKeys` on the **direct** connection: a session-level
- * advisory lock does not hold through a transaction pooler (D27, S4), and two
+ * advisory lock does not hold through a transaction pooler, and two
  * containers rotating at once would each publish a successor.
  */
 
@@ -54,7 +53,7 @@ export const DEFAULT_PROPAGATION_SECONDS = 3600
 export interface RotateKeysDeps {
   config: IdpConfig
   database: DbHandle
-  /** The direct connection, for the advisory lock (D27). */
+  /** The direct connection, for the advisory lock. */
   locking: DbHandle
   auth: Auth
   audit?: Audit

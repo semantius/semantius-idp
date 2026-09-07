@@ -12,6 +12,9 @@ import {
 
 type Folder = Parameters<typeof makeConfigFolder>[0]
 
+/** Generated-looking, because a file secret has to be. */
+const GENERATED_CLIENT_SECRET = "7b3e9f1a5c2d8e4f6a0b9c1d3e5f7a2b4c6d8e0f"
+
 function load(
   options: Folder = {},
   env: Record<string, string | undefined> = {}
@@ -50,7 +53,7 @@ const prodConfig = (extra: Record<string, unknown> = {}) => ({
   ...extra,
 })
 
-describe("CFG-5 cross-checks", () => {
+describe("cross-checks", () => {
   it("rejects a secret shorter than 32 characters", () => {
     expect(
       messages({ config: { ...baseConfig(), secret: "too-short" } })
@@ -163,7 +166,7 @@ describe("CFG-5 cross-checks", () => {
     expect(issuesOf({ clients })).toEqual([])
   })
 
-  describe("FR-ROLE-1 catalog", () => {
+  describe("role catalog", () => {
     it("rejects duplicate role names", () => {
       const roles = {
         roles: [{ name: "user", default: true }, { name: "user" }],
@@ -201,7 +204,7 @@ describe("CFG-5 cross-checks", () => {
     })
   })
 
-  describe("FR-SOC-5 Entra tenant lock", () => {
+  describe("Entra tenant lock", () => {
     const withMicrosoft = (microsoft: Record<string, unknown>) => ({
       ...baseConfig(),
       social: {
@@ -239,10 +242,60 @@ describe("CFG-5 cross-checks", () => {
     })
   })
 
+  describe("self-service sign-up needs e-mail", () => {
+    it("refuses open sign-up without e-mail on an https deployment", () => {
+      const config = prodConfig({ signUp: { enabled: true, requireApproval: true } })
+      expect(messages({ config }, { IDP_SECRET: VALID_SECRET })).toContain(
+        "Self-service sign-up is on but no e-mail is configured"
+      )
+    })
+
+    it("accepts it once e-mail is configured", () => {
+      const config = prodConfig({
+        signUp: { enabled: true, requireApproval: true },
+        email: { resend: { apiKey: "${env:IDP_RESEND}" }, from: "idp@example.com" },
+      })
+      expect(
+        messages({ config }, { IDP_SECRET: VALID_SECRET, IDP_RESEND: "re_live_x" })
+      ).not.toContain("Self-service sign-up")
+    })
+
+    it("only warns on a development deployment, which the test harnesses rely on", () => {
+      const config = { ...baseConfig(), signUp: { enabled: true, requireApproval: false } }
+      expect(messages({ config })).not.toContain("Self-service sign-up")
+      const { warnings } = load({ config })
+      expect(warnings.map((warning) => warning.code)).toContain(
+        "signup.unverified_open_registration"
+      )
+    })
+  })
+
+  describe("the SQL console beside two-factor authentication", () => {
+    it("warns when both are on: the console reads the encrypted second factors", () => {
+      const config = {
+        ...baseConfig(),
+        admin: { database: "read-only" },
+        twoFactor: { enabled: true },
+      }
+      const { warnings } = load({ config })
+      expect(warnings.map((warning) => warning.code)).toContain(
+        "twofactor.readable_by_console"
+      )
+    })
+
+    it("says nothing while the console is disabled", () => {
+      const config = { ...baseConfig(), twoFactor: { enabled: true } }
+      const { warnings } = load({ config })
+      expect(warnings.map((warning) => warning.code)).not.toContain(
+        "twofactor.readable_by_console"
+      )
+    })
+  })
+
   describe("production literal secrets", () => {
     const env = {
       IDP_SECRET: VALID_SECRET,
-      IDP_CLIENT_SECRET: "c".repeat(40),
+      IDP_CLIENT_SECRET: GENERATED_CLIENT_SECRET,
       IDP_RESEND: "re_live_x",
     }
 
@@ -266,7 +319,7 @@ describe("CFG-5 cross-checks", () => {
     })
 
     it("rejects a literal client secret", () => {
-      const clients = { clients: [webClient({ clientSecret: "c".repeat(40) })] }
+      const clients = { clients: [webClient({ clientSecret: GENERATED_CLIENT_SECRET })] }
       expect(messages({ config: prodConfig(), clients }, env)).toContain(
         "client secret of `web-app` is a literal value"
       )
@@ -286,7 +339,7 @@ describe("CFG-5 cross-checks", () => {
     })
 
     it("allows literal secrets in a non-production (http localhost) deployment", () => {
-      const clients = { clients: [webClient({ clientSecret: "c".repeat(40) })] }
+      const clients = { clients: [webClient({ clientSecret: GENERATED_CLIENT_SECRET })] }
       expect(issuesOf({ clients })).toEqual([])
     })
 
@@ -301,7 +354,7 @@ describe("CFG-5 cross-checks", () => {
   })
 
   describe("warnings", () => {
-    it("warns when `*` switches the origin check off (D68)", () => {
+    it("warns when `*` switches the origin check off", () => {
       const config = {
         ...baseConfig(),
         server: { baseUrl: "http://localhost:3000", trustedOrigins: ["*"] },
@@ -312,7 +365,7 @@ describe("CFG-5 cross-checks", () => {
       )
     })
 
-    it("does not warn for the default, which still checks (D68)", () => {
+    it("does not warn for the default, which still checks", () => {
       const { warnings } = load({})
       expect(warnings.map((warning) => warning.code)).not.toContain(
         "server.origin_check_disabled"
@@ -330,7 +383,7 @@ describe("CFG-5 cross-checks", () => {
       )
     })
 
-    it("does not warn when a social provider is enabled while sign-up is off (D25)", () => {
+    it("does not warn when a social provider is enabled while sign-up is off", () => {
       const config = {
         ...baseConfig(),
         signUp: { enabled: false },
@@ -345,7 +398,7 @@ describe("CFG-5 cross-checks", () => {
       ).not.toContain("pre-existing social")
     })
 
-    it("says nothing about administrators on a fresh deployment (D52)", () => {
+    it("says nothing about administrators on a fresh deployment", () => {
       // The bootstrap warning is gone with the bootstrap. A database with no
       // users is the ordinary state of a new deployment, and the IdP announces
       // it by serving `/setup` rather than by warning about configuration.
@@ -354,7 +407,7 @@ describe("CFG-5 cross-checks", () => {
       )
     })
 
-    it("rejects `admin.bootstrap`, which no longer exists (D52)", () => {
+    it("rejects `admin.bootstrap`, which no longer exists", () => {
       const config = {
         ...baseConfig(),
         admin: {
@@ -503,11 +556,102 @@ describe("CFG-5 cross-checks", () => {
       )
     })
 
+    it("warns about a client secret carrying a placeholder marker, naming the client", () => {
+      const placeholder = load({
+        config: baseConfig(),
+        clients: {
+          clients: [webClient({ clientSecret: "example-web-client-secret-not-a-real-one" })],
+        },
+      })
+      expect(placeholder.warnings.map((warning) => warning.code)).toContain(
+        "client.shipped_default_secret"
+      )
+      const generated = load({
+        config: baseConfig(),
+        clients: { clients: [webClient({ clientSecret: GENERATED_CLIENT_SECRET })] },
+      })
+      expect(generated.warnings.map((warning) => warning.code)).not.toContain(
+        "client.shipped_default_secret"
+      )
+    })
+
     it("does not warn about a real secret and real credentials", () => {
       const { warnings } = load({})
       const codes = warnings.map((warning) => warning.code)
       expect(codes).not.toContain("secret.shipped_default")
       expect(codes).not.toContain("database.shipped_default_password")
+    })
+  })
+
+  describe("switched-off protections say so at start-up", () => {
+    const codesOf = (config: Record<string, unknown>) =>
+      load({ config }).warnings.map((warning) => warning.code)
+
+    it("warns when rate limiting is disabled", () => {
+      expect(
+        codesOf({ ...baseConfig(), rateLimit: { enabled: false } })
+      ).toContain("ratelimit.disabled")
+    })
+
+    it("warns when allowInsecureHttp is on", () => {
+      expect(
+        codesOf({
+          ...baseConfig(),
+          server: { baseUrl: "http://idp.example.com", allowInsecureHttp: true },
+          jwt: { audience: "http://idp.example.com" },
+        })
+      ).toContain("server.insecure_http_allowed")
+    })
+
+    it("says nothing when both are at their defaults", () => {
+      const codes = codesOf(baseConfig())
+      expect(codes).not.toContain("ratelimit.disabled")
+      expect(codes).not.toContain("server.insecure_http_allowed")
+    })
+  })
+
+  describe("dynamicIssuer and server.allowedHosts", () => {
+    const dynamic = (server: Record<string, unknown> = {}) => ({
+      ...baseConfig(),
+      server: {
+        baseUrl: "https://idp.example.com",
+        trustProxy: true,
+        dynamicIssuer: true,
+        ...server,
+      },
+      jwt: { audience: "https://idp.example.com" },
+      secret: "${env:IDP_SECRET}",
+    })
+    const env = { IDP_SECRET: VALID_SECRET }
+
+    it("warns when the flag is on and no hosts are named", () => {
+      const { warnings } = load({ config: dynamic() }, env)
+      expect(warnings.map((warning) => warning.code)).toContain(
+        "server.dynamic_issuer_unrestricted"
+      )
+    })
+
+    it("is quiet once allowedHosts names the hosts", () => {
+      const { config, warnings } = load(
+        { config: dynamic({ allowedHosts: ["idp.example.com", "*.example.net"] }) },
+        env
+      )
+      expect(warnings.map((warning) => warning.code)).not.toContain(
+        "server.dynamic_issuer_unrestricted"
+      )
+      expect(config.file.server.allowedHosts).toEqual([
+        "idp.example.com",
+        "*.example.net",
+      ])
+    })
+
+    it("refuses an entry that is not a host or a *.suffix pattern", () => {
+      for (const entry of ["https://idp.example.com", "*", "a.*.example.com", "*.com/x"]) {
+        expect(
+          messages({ config: dynamic({ allowedHosts: [entry] }) }, env),
+          entry
+        ).toContain("/server/allowedHosts")
+      }
     })
   })
 })

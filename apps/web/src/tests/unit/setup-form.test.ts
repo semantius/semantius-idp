@@ -1,5 +1,5 @@
 /**
- * What `/setup` refuses (FR-ADMIN-1, **D54**).
+ * What `/setup` refuses.
  *
  * The wizard runs exactly once per deployment and closes behind itself, so
  * every one of these refusals is the difference between a working deployment
@@ -84,7 +84,7 @@ describe("validateSetupForm", () => {
       "password_mismatch"
     )
     // Missing entirely is the same answer: a form posted by a script that
-    // predates D54 must not create an account whose password nobody confirmed.
+    // predates the confirmation field must not create an account whose password nobody confirmed.
     expect(code({ ...GOOD, confirmPassword: undefined })).toBe(
       "password_mismatch"
     )

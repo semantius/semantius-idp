@@ -1,5 +1,5 @@
 /**
- * The headers every response carries (SEC-4).
+ * The headers every response carries.
  *
  * **CSP without a nonce, and why.** A nonce is the better mechanism and it is
  * not available here: TanStack Start streams the HTML shell, and the inline
@@ -28,7 +28,7 @@
  * localhost poisons the browser for every other project on that host.
  */
 
-/** The endpoints that must never be stored, whatever else is true (SEC-4). */
+/** The endpoints that must never be stored, whatever else is true. */
 const NO_STORE_PATHS = [
   "/oauth2/token",
   "/oauth2/userinfo",
@@ -49,7 +49,7 @@ export interface SecurityHeaderOptions {
   connectSrc?: readonly string[]
   /**
    * Origins a form on these pages may end up submitting to: every registered
-   * client's redirect and post-logout origin (FR-OIDC-17's list, reused).
+   * client's redirect and post-logout origin (the spec's list, reused).
    *
    * **Without this, no OAuth login can complete in Chrome.** The sign-in form
    * posts to this origin and the response is a 303 to the client's redirect
@@ -81,7 +81,7 @@ export function contentSecurityPolicy({
     // Tailwind emits a stylesheet, but the framework also injects inline style
     // for streamed content; the same reasoning applies and the risk is lower.
     "style-src 'self' 'unsafe-inline'",
-    // `data:` for the QR code, which is rendered inline as an SVG (FR-2FA-1).
+    // `data:` for the QR code, which is rendered inline as an SVG.
     "img-src 'self' data:",
     "font-src 'self'",
     `connect-src ${connect}`,
@@ -142,7 +142,7 @@ export function withSecurityHeaders(
   }
 
   if (isNoStorePath(new URL(request.url).pathname, options.basePath ?? "")) {
-    // SEC-4 names these explicitly, and here the header is *overwritten*: a
+    // the spec names these explicitly, and here the header is *overwritten*: a
     // cached token response is a token handed to whoever asks next.
     headers.set("Cache-Control", "no-store")
     headers.set("Pragma", "no-cache")
@@ -155,7 +155,7 @@ export function withSecurityHeaders(
   })
 }
 
-/** Whether SEC-4's no-store rule covers this path, under any mount point. */
+/** Whether the spec's no-store rule covers this path, under any mount point. */
 export function isNoStorePath(pathname: string, basePath = ""): boolean {
   const relative =
     basePath !== "" && pathname.startsWith(basePath)
@@ -176,11 +176,11 @@ function setUnlessPresent(headers: Headers, name: string, value: string): void {
 }
 
 /**
- * Gives a 429 the header clients actually honor (SEC-2).
+ * Gives a 429 the header clients actually honor.
  *
  * Better Auth's rate limiter answers with `X-Retry-After`, which is not a
  * header — no browser, no `fetch` wrapper and no HTTP client library does
- * anything with it. SEC-2 says a refused caller is told when to come back, and
+ * anything with it. The spec says a refused caller is told when to come back, and
  * a nonstandard header tells them nothing, so the value is copied onto
  * `Retry-After` as it leaves.
  *

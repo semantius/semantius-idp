@@ -48,7 +48,7 @@ import { cn } from "@workspace/ui/lib/utils"
  *    not submitting anything.
  *
  * Before hydration the form still posts natively; it just does so without the
- * spinner. That is the documented degraded case (D31), not a bug.
+ * spinner. That is the documented degraded case, not a bug.
  */
 
 /** Whatever React's own `<form onSubmit>` is typed as, in this React. */

@@ -1,5 +1,5 @@
 /**
- * Postgres connection and Drizzle instance (DM-4, CFG-4 `database.*`).
+ * Postgres connection and Drizzle instance (`database.*`).
  *
  * Everything the IdP owns lives in one schema — `database.schema`, default
  * `idp` — and nothing is created in `public`. The schema name is a runtime
@@ -93,7 +93,7 @@ function sslOption(config: IdpConfig): postgres.Options<{}>["ssl"] {
 
 /**
  * Opens a connection pool. The caller owns it and must `close()` it — the
- * server does so on SIGTERM (OPS-4), the CLI when its command finishes.
+ * server does so on SIGTERM, the CLI when its command finishes.
  */
 export function createDb(
   config: IdpConfig,
@@ -101,7 +101,7 @@ export function createDb(
 ): DbHandle {
   const schemaName = options.schemaName ?? config.file.database.schema
   // Both are resolved in `derive.ts` and each already falls back to the other
-  // (**D74**), so a single-endpoint deployment gets the same string either
+  // , so a single-endpoint deployment gets the same string either
   // way and this does not need to know which shape it is looking at.
   const url =
     options.url ??

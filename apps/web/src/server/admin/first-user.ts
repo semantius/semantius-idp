@@ -1,5 +1,5 @@
 /**
- * The first-run setup: who creates the very first account, and when (**D52**).
+ * The first-run setup: who creates the very first account, and when.
  *
  * Until this existed the first administrator came out of `IDP_ADMIN_EMAIL` and
  * `IDP_ADMIN_PASSWORD` — a password in an environment file, a forced change at
@@ -26,7 +26,7 @@
  *
  * Lockout recovery is no longer a command. It is: another administrator, the
  * password-reset e-mail, or — last resort, in `docs/runbooks.md` — one SQL
- * statement promoting an existing user. That trade is recorded in D52.
+ * statement promoting an existing user. That trade is recorded in the spec.
  */
 
 import { createLocalAccountIssuer } from "@better-auth/core/db"
@@ -48,7 +48,7 @@ export interface FirstUserDeps {
   config: IdpConfig
   /** Request-serving handle; the audit row and the read both use it. */
   database: DbHandle
-  /** Direct, non-pooled handle — the advisory lock lives on this one (D27). */
+  /** Direct, non-pooled handle — the advisory lock lives on this one. */
   locking: DbHandle
   auth: Auth
   audit: Audit
@@ -66,7 +66,7 @@ export interface FirstUserResult {
   /** False when another submission won the race; the caller says "already set up". */
   created: boolean
   userId?: string
-  /** The stored role column: the first admin role plus the catalog default (**D69**). */
+  /** The stored role column: the first admin role plus the catalog default. */
   role?: string
 }
 
@@ -79,7 +79,7 @@ export interface FirstUserResult {
  * somebody who should see the login form. `false` is never re-queried: a
  * deployment cannot go back to having no users while it is running (deleting
  * the last user is refused by the last-admin invariant), and this is read on
- * `/` and `/login`, which are the two busiest pages there are. OPS-11's
+ * `/` and `/login`, which are the two busiest pages there are. the spec's
  * single-instance topology is what makes the cached answer correct.
  */
 let pending: boolean | undefined
@@ -125,7 +125,7 @@ export async function createFirstUser(
   input: FirstUserInput
 ): Promise<FirstUserResult> {
   const email = input.email.trim().toLowerCase()
-  // **D69**: the admin role *and* the catalog's default. FR-ROLE-1 makes roles
+  // the admin role *and* the catalog's default. The spec makes roles
   // downstream labels, and every other creation path — self-registration, the
   // admin create form, the admin API's fallback — assigns the default one; the
   // wizard account was the only one in the deployment without it, so an app
@@ -154,7 +154,7 @@ export async function createFirstUser(
         context,
         {
           email,
-          // D49: derived, never typed. The database hook composes the same
+          // derived, never typed. The database hook composes the same
           // fallback, but it does not know `site.nameFormat`.
           name:
             displayName(
@@ -170,7 +170,7 @@ export async function createFirstUser(
           approvedAt: new Date(),
           approvedBy: "system",
           // Not the bootstrap account: nobody handed this password over, so
-          // there is nothing to change at the first sign-in (D52).
+          // there is nothing to change at the first sign-in.
           mustChangePassword: false,
         },
         // Drives `user.validateUserInfo`; the social rules are scoped to
@@ -185,7 +185,7 @@ export async function createFirstUser(
         // collide with an OAuth identity.
         issuer: createLocalAccountIssuer(CREDENTIAL_PROVIDER_ID),
         accountId: created.id,
-        // SEC-10: the same hashing the sign-in path verifies with.
+        // the same hashing the sign-in path verifies with.
         password: await context.password.hash(input.password),
       })
 
@@ -200,11 +200,15 @@ export async function createFirstUser(
 
   if (result.created) {
     markSetupComplete()
+    // The id, not the address. The audit row two lines down carries the same
+    // id, and an e-mail address is a personal datum that nothing else in the
+    // process writes to the log — this line was the one exception,
+    // found by the 2026-09 security review.
     deps.logger.info("first user created through the setup page", {
-      email,
+      userId: result.userId,
       role,
     })
-    // `user.created`, not `signup.created` (**D66**): this is not a
+    // `user.created`, not `signup.created`: this is not a
     // self-service registration, it is the act of configuring the deployment,
     // and `via: "setup"` says which of the two ways an account can be made
     // for somebody. Written here because nothing else can see it — the

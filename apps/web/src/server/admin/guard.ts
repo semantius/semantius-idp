@@ -1,11 +1,10 @@
 /**
- * The invariants, enforced where the writes actually happen (FR-ADMIN-3/5,
- * FR-ROLE-3, FR-ADMIN-6).
+ * The invariants, enforced where the writes actually happen.
  *
  * Better Auth's admin plugin does the bans, the role changes and the deletes,
  * and it does them well — but it has no idea that this deployment must always
  * keep one administrator, and no opinion about an admin banning themselves.
- * Those rules cannot live in the UI: FR-ADMIN-6 says the admin API is a
+ * Those rules cannot live in the UI: The spec says the admin API is a
  * documented interface, so anything the buttons refuse must also be refused to
  * a `curl` holding an admin API key. Hence a `before` hook on the mutating
  * endpoints, with the UI simply never offering what the hook would refuse.
@@ -13,7 +12,7 @@
  * **Impersonation** is gated here rather than by leaving the endpoint out:
  * `admin.allowImpersonation` defaults to false and the plugin has no switch
  * for it, so with the endpoint registered unconditionally this hook is the
- * thing that answers 403 (FR-ADMIN-5).
+ * thing that answers 403.
  *
  * What this hook deliberately does *not* do is authorize. The admin plugin's
  * own middleware already refuses non-admins on every one of these paths; a
@@ -30,6 +29,7 @@ import {
 import type { AuthMiddleware } from "better-auth/api"
 
 import type { Audit } from "../audit"
+import { actorTypeFor } from "../auth/options/api-key-gate"
 import type { AuditAction } from "../auth/plugins/idp-plugin"
 import type { IdpConfig } from "../config/derive"
 import type { DbHandle } from "../db/client"
@@ -46,7 +46,7 @@ import {
 import type {AdminAction, AdminInvariantUser} from "./invariants";
 
 /**
- * Who was being impersonated, remembered across the two hooks (**D66**).
+ * Who was being impersonated, remembered across the two hooks.
  *
  * `/admin/stop-impersonating` is the one endpoint whose audit row cannot be
  * assembled after the fact. It declares no session middleware, so
@@ -89,18 +89,18 @@ export interface AdminGuardDeps {
 /**
  * The paths this guard has an opinion about.
  *
- * Two kinds, and the second is newer (**D66**). The first five carry an
+ * Two kinds, and the second is newer. The first five carry an
  * *invariant* — the last administrator, self-bans, impersonation being off —
  * and the guard refuses them. The rest carry no invariant at all and are here
- * for the audit row: FR-ADMIN-6 says the admin API is a supported interface,
- * and until D66 a `curl` to `/admin/create-user`, `/admin/set-user-password`
+ * for the audit row: The spec says the admin API is a supported interface,
+ * and once a `curl` to `/admin/create-user`, `/admin/set-user-password`
  * or `/admin/revoke-user-sessions` left no trace, because the only writes were
  * in the route handlers behind the buttons.
  *
  * **`guard.ts` owns `/admin/*` auditing** from here on. `hooks.ts`'s
  * `auditEventFor` stays the choke point for Better Auth's own surface, and a
  * manual write in a route survives only where no hook can see the event. That
- * split is the thing D66 records, because the alternative had already
+ * split is the thing recorded, because the alternative had already
  * happened: `impersonation.started` was written twice on the UI path, once
  * here and once in `http/admin-actions.ts`.
  */
@@ -122,7 +122,7 @@ export function isGuardedAdminPath(path: string): boolean {
 
 /**
  * Endpoints that end a credential's usefulness without being admin endpoints
- * (**D91**, extended by **D92**).
+ * (extended to sessions).
  *
  * The gateway caches a credential → JWT exchange, and a cache hit skips the
  * re-check — so anything that revokes a credential has to empty that cache in
@@ -130,7 +130,7 @@ export function isGuardedAdminPath(path: string): boolean {
  *
  * `/api-key/delete` is the api-key plugin's own, reachable from `/account` and
  * from `/admin/users/:id` alike; `/api-key/update` is how a key is disabled or
- * re-dated. The four session paths arrived with **D92**, which made a session
+ * re-dated. The four session paths arrived , which made a session
  * cookie a gateway credential in its own right: without them, signing out
  * would leave the JWT that cookie was exchanged for working until the TTL.
  * `/admin/revoke-user-sessions` needs no entry — it is already `GUARDED`.
@@ -151,12 +151,68 @@ interface AdminBody {
 }
 
 /**
+ * The columns `/admin/update-user` may write.
+ *
+ * Better Auth types the endpoint's `data` as `z.record(z.any())` and hands it
+ * to `updateUser` whole, so a body could once name *any* column of the
+ * `user` table — `twoFactorEnabled`, `approvedAt`, `approvedBy`, `createdAt`,
+ * the id — and the spec's `input: false` did not apply, because that flag is
+ * about the *public* paths. The list is the two in-repo callers' fields
+ * (`http/admin-actions.ts`: the profile edit and the temporary-password flag)
+ * plus the standing columns `actionForPath` already maps to an invariant, so
+ * that every writable column is either harmless or guarded. Anything else is
+ * `400 UPDATE_USER_FIELD_NOT_ALLOWED`, which names the field, because the
+ * alternative — silently dropping it — is how a script goes on believing it
+ * turned somebody's second factor off.
+ *
+ * `twoFactorEnabled` is refused on purpose: `/idp/reset-two-factor` is the
+ * endpoint that does that, and it deletes the enrollment, the sessions and
+ * the trusted browsers with it. Flipping the flag alone leaves a
+ * TOTP secret behind that no longer gates anything.
+ */
+export const UPDATE_USER_ALLOWED_FIELDS: ReadonlySet<string> = new Set([
+  // Profile — `admin-actions.ts`'s `edit-profile`.
+  "name",
+  "firstName",
+  "lastName",
+  "email",
+  "emailVerified",
+  "image",
+  // Standing — each mapped to an `AdminAction` below, so the invariants see it.
+  "role",
+  "banned",
+  "banReason",
+  "banExpires",
+  "status",
+  // `admin-actions.ts`'s `temporary-password` tail.
+  "mustChangePassword",
+])
+
+/** The fields of an `update-user` body the allow-list refuses, in body order. */
+export function refusedUpdateUserFields(data: unknown): string[] {
+  if (data === null || typeof data !== "object" || Array.isArray(data)) return []
+  return Object.keys(data as Record<string, unknown>).filter(
+    (field) => !UPDATE_USER_ALLOWED_FIELDS.has(field)
+  )
+}
+
+/**
  * Turns a request into the action the rules are written in terms of.
  *
  * `update-user` is the awkward one: it is a generic patch, so it counts as a
  * ban or a rejection only when the patch actually contains one. A patch that
  * changes a display name is not an administrative action in this sense and
  * must not be refused for being the last admin's.
+ *
+ * **Any `status` other than `active` is a rejection here**. The
+ * first version matched `"rejected"` alone, and `isUsableAdmin` counts every
+ * non-`active` status as unusable — so `{ status: "pending" }` locked the
+ * last administrator out through a call the last-admin rule never saw, and
+ * did the same to the caller's own account past `ADMIN_CANNOT_BAN_SELF`. The
+ * rules are about what the change *does* to the account, and `pending`,
+ * `rejected` and a typo all do the same thing: nobody can sign in as it.
+ * `active` is the reverse — it removes no administrator — and carries no
+ * invariant, which is why it maps to nothing.
  */
 export function actionForPath(
   path: string,
@@ -174,7 +230,9 @@ export function actionForPath(
     case "/admin/update-user": {
       const data = (body.data ?? {}) as Record<string, unknown>
       if (data.banned === true) return { kind: "ban" }
-      if (data.status === "rejected") return { kind: "reject" }
+      if ("status" in data && data.status !== "active") {
+        return { kind: "reject" }
+      }
       if (typeof data.role === "string" || Array.isArray(data.role)) {
         return { kind: "set-role", roles: rolesFrom(data.role) }
       }
@@ -200,7 +258,7 @@ export function buildAdminGuard(deps: AdminGuardDeps): AuthMiddleware {
     if (!isGuardedAdminPath(path)) return
 
     if (path === "/admin/impersonate-user" && !deps.config.allowImpersonation) {
-      // FR-ADMIN-5: off by default, and off means the endpoint does not work —
+      // off by default, and off means the endpoint does not work —
       // not that it works and the UI hides the button.
       throw new APIError("FORBIDDEN", {
         message: "Impersonation is disabled on this server.",
@@ -223,6 +281,22 @@ export function buildAdminGuard(deps: AdminGuardDeps): AuthMiddleware {
     }
 
     const body = (ctx.body ?? {}) as AdminBody
+
+    if (path === "/admin/update-user") {
+      // Before the invariants and before the endpoint's own validation: a
+      // body that names a column this API does not write is refused whole,
+      // whoever the target is.
+      const refused = refusedUpdateUserFields(body.data)
+      if (refused.length > 0) {
+        throw new APIError("BAD_REQUEST", {
+          code: "UPDATE_USER_FIELD_NOT_ALLOWED",
+          message:
+            `\`${refused.join("`, `")}\` cannot be set through /admin/update-user. ` +
+            `Writable: ${[...UPDATE_USER_ALLOWED_FIELDS].join(", ")}.`,
+        })
+      }
+    }
+
     const action = actionForPath(path, body)
     if (!action) return
 
@@ -256,7 +330,7 @@ export function buildAdminGuard(deps: AdminGuardDeps): AuthMiddleware {
       await deps.audit?.record({
         action: auditActionFor(action),
         outcome: "denied",
-        actorType: "session",
+        actorType: actorTypeFor(session),
         actorUserId: session.user.id,
         target: { type: "user", id: targetId },
         metadata: { reason: error.code },
@@ -271,7 +345,7 @@ export function buildAdminGuard(deps: AdminGuardDeps): AuthMiddleware {
 
 /**
  * What a completed admin mutation has to do beyond the row it wrote
- * (FR-ADMIN-4, FR-OIDC-12, SEC-6).
+ *.
  *
  * The admin plugin deletes the user's sessions when it bans or removes them,
  * but it knows nothing about OAuth: without this, a banned user's refresh
@@ -287,9 +361,9 @@ export function buildAdminAfterHook(deps: AdminGuardDeps): AuthMiddleware {
     const path = ctx.path
     const isUnban = path === "/admin/unban-user"
 
-    // **D91's punch-through**, widened to sessions by **D92**. The gateway
+    // **the spec's punch-through**, widened to sessions. The gateway
     // caches a credential → JWT exchange for up to ten minutes, and a cache
-    // hit skips the FR-KEY-2 owner re-check — so without this a suspended
+    // hit skips the spec owner re-check — so without this a suspended
     // user's key, or a signed-out browser's session, would keep opening every
     // gateway until the entry expired. Cheap (three `Map.clear()`s) and rare,
     // so it is unconditional rather than scoped to the affected credential:
@@ -297,7 +371,7 @@ export function buildAdminAfterHook(deps: AdminGuardDeps): AuthMiddleware {
     // targeted invalidation would be a second place that has to agree.
     //
     // Here, in the hook, rather than in the route handlers behind the buttons,
-    // for **D67**'s reason: the admin API is a supported interface, so a
+    // for **the spec's reason: the admin API is a supported interface, so a
     // `curl` to `/admin/ban-user` has to leave the process in the same state
     // the UI does.
     if (
@@ -317,15 +391,16 @@ export function buildAdminAfterHook(deps: AdminGuardDeps): AuthMiddleware {
 
     const body = (ctx.body ?? {}) as AdminBody
     const actorId = ctx.context.session?.user.id
+    const actorType = actorTypeFor(ctx.context.session)
 
     // The endpoints that carry no invariant and are guarded purely so that a
-    // direct API call leaves the same trail the UI does (**D66**).
+    // direct API call leaves the same trail the UI does.
     const plain = plainAuditFor(path, ctx, body)
     if (plain) {
       await deps.audit?.record({
         action: plain.action,
         outcome: "success",
-        actorType: "session",
+        actorType,
         actorUserId: plain.actorId ?? actorId,
         target: { type: "user", id: plain.targetId },
         metadata: plain.metadata,
@@ -338,12 +413,12 @@ export function buildAdminAfterHook(deps: AdminGuardDeps): AuthMiddleware {
     if (!targetId) return
 
     if (isUnban) {
-      // FR-KEY-2: nothing to restore explicitly — the API keys were never
+      // nothing to restore explicitly — the API keys were never
       // deleted, and the per-use check starts passing again by itself.
       await deps.audit?.record({
         action: "user.unbanned",
         outcome: "success",
-        actorType: "session",
+        actorType,
         actorUserId: actorId,
         target: { type: "user", id: targetId },
       })
@@ -356,11 +431,10 @@ export function buildAdminAfterHook(deps: AdminGuardDeps): AuthMiddleware {
     await deps.audit?.record({
       action: auditActionFor(action),
       outcome: "success",
-      actorType: "session",
+      actorType,
       actorUserId: actorId,
       target: { type: "user", id: targetId },
-      metadata:
-        action.kind === "set-role" ? { roles: action.roles } : undefined,
+      metadata: auditMetadataFor(path, action, body),
     })
 
     if (!endsAccess(action)) return
@@ -369,15 +443,15 @@ export function buildAdminAfterHook(deps: AdminGuardDeps): AuthMiddleware {
 }
 
 /**
- * The OAuth half of an administrative action (FR-OIDC-12).
+ * The OAuth half of an administrative action.
  *
  * Better Auth's admin plugin deletes `session` rows and has no idea this
  * deployment issues tokens, so every action that ends someone's access has a
  * second half, and it is this one. It lives here — in the `after` hook — and
  * **not** in the route handler behind the button, because a hook runs for
- * every caller: FR-ADMIN-6 makes the admin API a supported interface, and
+ * every caller: The spec makes the admin API a supported interface, and
  * `docs/admin-api.md` promises `/admin/revoke-user-sessions` "signs them out
- * everywhere" whoever asks (**D67**).
+ * everywhere" whoever asks.
  *
  * Runs after the write, and a failure is logged rather than thrown — the ban
  * is already real, and turning a partial success into a 500 would invite the
@@ -410,7 +484,7 @@ export interface PlainAudit {
   actorId?: string
   metadata?: Record<string, unknown>
   /**
-   * The user should hold no live OAuth tokens afterwards (**D67**).
+   * The user should hold no live OAuth tokens afterwards.
    *
    * Same rule as {@link endsAccess} for the invariant-carrying paths; it is a
    * field here because these endpoints have no `AdminAction` to ask about.
@@ -419,7 +493,7 @@ export interface PlainAudit {
 }
 
 /**
- * The audit row for an endpoint with no invariant behind it (**D66**).
+ * The audit row for an endpoint with no invariant behind it.
  *
  * Two things degrade here on purpose, and saying so is the point of the
  * comment. `/admin/create-user` has no `body.userId` — the account did not
@@ -459,7 +533,7 @@ export function plainAuditFor(
         action: "session.revoked",
         targetId,
         metadata: { scope: "all" },
-        // FR-OIDC-12, and **D67**: the admin plugin deletes `session` rows and
+        // The admin plugin deletes `session` rows and
         // knows nothing about OAuth, so without this the user is signed out of
         // the browser and their refresh token goes on minting access tokens.
         endsAccess: true,
@@ -468,7 +542,7 @@ export function plainAuditFor(
       // Read by the *before* hook and left in `IMPERSONATION_ENDING`, for the
       // three reasons set out there. The target is the person who was being
       // impersonated; the actor is the administrator who started it
-      // (FR-ADMIN-5).
+      // .
       const ending = IMPERSONATION_ENDING.get(ctx.context)
       if (!ending) return undefined
       return {
@@ -489,6 +563,25 @@ function endsAccess(action: AdminAction): boolean {
     action.kind === "delete" ||
     action.kind === "reject"
   )
+}
+
+/**
+ * What the row says beyond the action. Roles for a role change; for a status
+ * written through `update-user` the status itself, because `signup.rejected`
+ * is the action every non-`active` status maps to and the row
+ * should still say whether the account was parked or refused.
+ */
+function auditMetadataFor(
+  path: string,
+  action: AdminAction,
+  body: AdminBody
+): Record<string, unknown> | undefined {
+  if (action.kind === "set-role") return { roles: action.roles }
+  if (action.kind === "reject" && path === "/admin/update-user") {
+    const status = (body.data as Record<string, unknown> | undefined)?.status
+    return typeof status === "string" ? { status } : undefined
+  }
+  return undefined
 }
 
 function auditActionFor(action: AdminAction): AuditAction {

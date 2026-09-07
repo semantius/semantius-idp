@@ -5,14 +5,14 @@ import { getCatalog } from "@/server/i18n"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 
 /**
- * `/pending-approval` (FR-SIGNUP-2).
+ * `/pending-approval`.
  *
  * A state, not an error: the account exists and nothing the visitor can do
  * here changes anything, so the page offers no retry. Whether it promises an
- * e-mail depends on whether one can actually be sent (FR-MAIL-2).
+ * e-mail depends on whether one can actually be sent.
  *
  * Asynchronous approval deliberately does **not** resume an OAuth flow
- * (FR-OIDC-9): the approval e-mail links to `/login` and the user starts again
+ *: the approval e-mail links to `/login` and the user starts again
  * from the application.
  */
 export const Route = createFileRoute("/pending-approval")({

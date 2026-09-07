@@ -2,7 +2,7 @@
  * Development-only `.env` loading.
  *
  * In a container every variable arrives from the environment — that is the
- * whole point of CFG-2/CFG-3, and nothing here runs. On a developer machine the
+ * whole point of the placeholder and fallback rules, and nothing here runs. On a developer machine the
  * dev server is started by Vite, which does not put a repo-root `.env` into
  * `process.env`, so the config folder's `${env:…}` placeholders would fail to
  * resolve for no good reason.

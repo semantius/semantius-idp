@@ -1,10 +1,10 @@
 /**
  * Creating a user when there is no request behind it.
  *
- * The first-run setup page (FR-ADMIN-1, D52) and the test fixtures both
+ * The first-run setup page and the test fixtures both
  * provision accounts outside any HTTP endpoint, and Better Auth
  * 1.7.1 refuses that as soon as `user.validateUserInfo` is configured — which
- * it is, because FR-SOC-3 and D24 have nowhere else to run. `createUser` looks
+ * it is, because the social-provisioning rules have nowhere else to run. `createUser` looks
  * for an async-local *endpoint* context to hand the gate and throws
  * `validation_context_missing` when it cannot find one.
  *

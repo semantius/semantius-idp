@@ -1,0 +1,1 @@
+ALTER TABLE "idp"."gateway" ADD COLUMN "audience" text;

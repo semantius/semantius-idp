@@ -11,7 +11,7 @@ import {
 import { expect, test } from "./fixtures"
 
 /**
- * Password sign-in, end to end (TST-6, FR-AUTH-1/4/6).
+ * Password sign-in, end to end.
  *
  * These drive the **rendered pages** against the built image, which is what
  * separates them from `integration/auth-lifecycle.test.ts`: that suite calls
@@ -21,7 +21,7 @@ import { expect, test } from "./fixtures"
  */
 
 test.describe("signing in", () => {
-  test("a wrong password says so and changes nothing (SEC-7)", async ({
+  test("a wrong password says so and changes nothing", async ({
     page,
     app,
   }) => {
@@ -41,7 +41,7 @@ test.describe("signing in", () => {
     await expect(page).toHaveURL(new RegExp(`${app.basePath}/login`))
   })
 
-  test("the administrator the first-run wizard created can sign in (D52)", async ({
+  test("the administrator the first-run wizard created can sign in", async ({
     page,
     app,
   }) => {
@@ -50,7 +50,7 @@ test.describe("signing in", () => {
     // using it — so this is an ordinary sign-in and nothing interposes.
     await signInAsAdmin(page, app)
     await expect(
-      // **D93**: the page's own name, not the area's. "Your account" was the
+      // the page's own name, not the area's. "Your account" was the
       // chrome's `<h1>`; the breadcrumb has that row now, and it is the trail's
       // root crumb rather than a heading. `level: 1` because the page's own
       // Profile card is an `<h3>` with the same text.
@@ -58,7 +58,7 @@ test.describe("signing in", () => {
     ).toBeVisible()
   })
 
-  test("the first-run wizard is gone once the deployment has a user (D52)", async ({
+  test("the first-run wizard is gone once the deployment has a user", async ({
     page,
     app,
   }) => {
@@ -75,7 +75,7 @@ test.describe("signing in", () => {
     await expect(page).toHaveURL(app.url("/login"))
   })
 
-  test("a verified user signs in, and signing out ends it (FR-AUTH-6)", async ({
+  test("a verified user signs in, and signing out ends it", async ({
     page,
     app,
     stack,
@@ -84,7 +84,7 @@ test.describe("signing in", () => {
 
     await signIn(page, app, user.email, user.password)
     await expect(page).toHaveURL(app.url("/account"))
-    // `main`, not the page: the sidebar footer carries the address too (D82).
+    // `main`, not the page: the sidebar footer carries the address too.
     await expect(page.locator("main").getByText(user.email)).toBeVisible()
 
     await signOut(page, app)
@@ -96,7 +96,7 @@ test.describe("signing in", () => {
     await expect(page).toHaveURL(new RegExp(`${app.basePath}/login`))
   })
 
-  test("an unverified account cannot sign in (FR-AUTH-2)", async ({
+  test("an unverified account cannot sign in", async ({
     page,
     app,
   }) => {
@@ -127,7 +127,7 @@ test.describe("signing in", () => {
     await page.getByLabel("Password", { exact: true }).fill(user.password)
     await submit(page, "Sign in")
 
-    // SEC-3: `returnTo` is a same-origin relative path, and it is honored.
+    // `returnTo` is a same-origin relative path, and it is honored.
     await expect(page).toHaveURL(app.url("/account/sessions"))
   })
 })

@@ -1,5 +1,5 @@
 /**
- * What `/setup` accepts, as a pure function (FR-ADMIN-1, **D54**).
+ * What `/setup` accepts, as a pure function.
  *
  * The route handler owns the rate limiter, the advisory lock and the redirects;
  * this owns the rules, so they can be asserted without a runtime, a database or
@@ -29,7 +29,7 @@ export function validateSetupForm(
   form: Record<string, string | undefined>,
   policy: { minLength: number; maxLength: number }
 ): SetupFormResult {
-  // Trimmed as well as lower-cased, per FR-AUTH-1's "trimmed and lower-cased
+  // Trimmed as well as lower-cased, per the spec's "trimmed and lower-cased
   // everywhere": `EMAIL_SHAPE` rejects any whitespace, so without this a
   // pasted address with a trailing space is refused as malformed — on the one
   // form in the application that cannot be reached a second time.
@@ -40,8 +40,8 @@ export function validateSetupForm(
 
   if (!EMAIL_SHAPE.test(email)) return { ok: false, code: "invalid_email" }
 
-  // Both names are required (D54). The display name is derived from them
-  // (D49), so a blank one leaves the first administrator with a name that
+  // Both names are required. The display name is derived from them
+  // , so a blank one leaves the first administrator with a name that
   // renders as a stray space in the admin list and the audit trail — and
   // `/setup` is not reachable a second time to correct it.
   if (firstName === "" || lastName === "")

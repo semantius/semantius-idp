@@ -1,5 +1,5 @@
 /**
- * Audit trail (SEC-6).
+ * Audit trail.
  *
  * Every recorded event goes to two places: an append-only row in `audit_log`,
  * browsable at `/admin/audit` and retained for `audit.retentionDays`, and a
@@ -11,12 +11,12 @@
  * best-effort and a failure is itself logged loudly.
  *
  * No secrets are ever stored: `metadata` carries identifiers and outcomes. The
- * same redaction that protects the logs is applied to it (SEC-5).
+ * same redaction that protects the logs is applied to it.
  */
 
 import type { DbHandle } from "./db/client"
 import type { AuditAction } from "./auth/plugins/idp-plugin"
-import { anonymizeIp, redactFields } from "./logger"
+import { redactFields } from "./logger"
 import { currentRequest, currentRequestId } from "./http/request-log"
 import type { LogFields, Logger } from "./logger"
 
@@ -31,8 +31,15 @@ export interface AuditEvent {
   actorType?: "session" | "api-key" | "system" | "cli" | "anonymous"
   /** What it happened to. */
   target?: { type: string; id: string }
-  /** Anonymized before storage (SEC-5). */
-  ipAddress?: string | null
+  /**
+   * There is deliberately no `ipAddress` here. The address on the row is the
+   * one the edge resolved for this request under `server.trustProxy`, read
+   * from the request context below; a caller-supplied value used to take
+   * precedence over it, which meant any future call site reading a raw
+   * `X-Forwarded-For` — attacker-controlled at the left — could write a
+   * spoofed address into the trail simply by passing one (security review
+   * 2026-09). Nothing in the tree ever passed a real value.
+   */
   userAgent?: string | null
   requestId?: string
   metadata?: LogFields
@@ -57,7 +64,7 @@ export function createAudit(database: DbHandle, logger: Logger): Audit {
       actorType: event.actorType,
       targetType: event.target?.type,
       targetId: event.target?.id,
-      // SEC-6: falls back to the id the edge minted for this request, so the
+      // falls back to the id the edge minted for this request, so the
       // trail and the request log can be read side by side. `undefined`
       // outside a request — start-up, the CLI, a background job — and that is
       // an ordinary answer rather than a missing one.
@@ -75,11 +82,8 @@ export function createAudit(database: DbHandle, logger: Logger): Audit {
         targetType: event.target?.type ?? null,
         targetId: event.target?.id ?? null,
         // The edge already resolved and anonymized the caller's address using
-        // `server.trustProxy`. Falling back to it means a call site that reads
-        // a raw `X-Forwarded-For` — which anyone can prepend to — cannot write
-        // a spoofed address into the trail just by passing one.
-        ipAddress:
-          anonymizeIp(event.ipAddress) ?? currentRequest()?.ipAddress ?? null,
+        // `server.trustProxy`, and it is the only source: see `AuditEvent`.
+        ipAddress: currentRequest()?.ipAddress ?? null,
         userAgent: event.userAgent ?? null,
         requestId: event.requestId ?? currentRequestId() ?? null,
         metadata: metadata ?? null,

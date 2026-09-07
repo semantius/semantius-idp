@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router"
 
 /**
- * `/robots.txt` — disallow everything (FR-OIDC-15).
+ * `/robots.txt` — disallow everything.
  *
  * An identity provider has nothing to index, and a sign-in page in search
  * results only helps phishing. `__root.tsx` repeats it as a meta tag for

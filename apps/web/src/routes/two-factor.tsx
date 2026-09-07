@@ -26,7 +26,7 @@ import { getRuntime } from "@/server/runtime"
 import { PendingForm, SubmitButton } from "@/components/common/pending-form"
 
 /**
- * `/two-factor` — the second-factor challenge (FR-2FA-1, TST-3).
+ * `/two-factor` — the second-factor challenge.
  *
  * `/login` sends the browser here when Better Auth answers a correct password
  * with `twoFactorRedirect` instead of a session. At that moment there is *no*
@@ -45,7 +45,7 @@ import { PendingForm, SubmitButton } from "@/components/common/pending-form"
  */
 export const Route = createFileRoute("/two-factor")({
   loader: ({ context, location }) => {
-    // FR-2FA-1: with 2FA off the plugin is not registered, there is no
+    // with 2FA off the plugin is not registered, there is no
     // challenge to answer, and the page does not exist.
     if (!context.ui.twoFactorEnabled) throw notFound()
 

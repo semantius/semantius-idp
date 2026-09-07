@@ -4,7 +4,7 @@ import { proxyGatewayRequest } from "@/server/gateways/proxy"
 import { getRuntime } from "@/server/runtime"
 
 /**
- * `/gateway/<name>` — the upstream's own root (FR-GW-3, **D91**).
+ * `/gateway/<name>` — the upstream's own root.
  *
  * The sibling `$name.$.ts` handles everything below it. Two files rather than
  * one because TanStack's splat only matches when there *is* a rest, and a

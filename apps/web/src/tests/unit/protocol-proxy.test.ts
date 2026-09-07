@@ -1,5 +1,5 @@
 /**
- * The discovery rewrite and the CORS matrix (FR-OIDC-15/17).
+ * The discovery rewrite and the CORS matrix.
  *
  * Both are pure decisions with expensive consequences: a discovery URL that
  * still points at `/api/auth` locks every client that reads it to an internal
@@ -63,7 +63,7 @@ describe("rewriteDiscovery", () => {
     expect(document.end_session_endpoint).toBe(`${ISSUER}/oauth2/end-session`)
   })
 
-  it("corrects what the provider says it supports (FR-OIDC-15)", () => {
+  it("corrects what the provider says it supports", () => {
     const document = rewriteDiscovery(
       {
         token_endpoint_auth_methods_supported: [
@@ -113,7 +113,7 @@ describe("rewriteDiscovery", () => {
     expect(document.response_modes_supported).toEqual([`${ISSUER}/x`, "query"])
   })
 
-  it("works for a sub-path issuer (OPS-10)", () => {
+  it("works for a sub-path issuer", () => {
     const subIssuer = "https://apps.example.com/idp"
     const subAuth = `${subIssuer}/api/auth`
     const document = rewriteDiscovery(
@@ -323,5 +323,105 @@ describe("mapCrossHostTokenError", () => {
     expect(
       (await forwardWith(bare500(), claimError("iss"), "/oauth2/token")).status
     ).toBe(500)
+  })
+})
+
+/**
+ * RFC 7009 §2.2: an invalid token is a *success*, so the endpoint is not an
+ * oracle for which tokens exist. The provider says `400 invalid_request` for
+ * one, and the only stable thing about that answer is the `error` code — the
+ * `error_description` is prose the library has already spelled three ways
+ * ("token not found", "opaque access token not found", "Invalid access
+ * token"). What makes a 400 `invalid_request` mean "invalid token" rather than
+ * "malformed request" is a fact the proxy can see for itself: the request
+ * carried a token, and its client authentication was a shape the provider
+ * could have accepted.
+ */
+describe("normalizeRevocation (RFC 7009 §2.2)", () => {
+  const basic = `Basic ${Buffer.from("app:secret").toString("base64")}`
+
+  async function revoke(
+    providerAnswer: Response,
+    body: string,
+    authorization: string | undefined = basic
+  ): Promise<Response> {
+    return withRequestContext({ requestId: "test" }, () =>
+      forwardToAuth(
+        runtimeAnswering(providerAnswer),
+        new Request(`${ISSUER}/oauth2/revoke`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/x-www-form-urlencoded",
+            ...(authorization ? { authorization } : {}),
+          },
+          body,
+        }),
+        { providerPath: "/oauth2/revoke" }
+      )
+    )
+  }
+
+  const invalidRequest = (description: string) =>
+    Response.json(
+      { error: "invalid_request", error_description: description },
+      { status: 400 }
+    )
+
+  it("keys on the error code, not on the description's wording", async () => {
+    // A description the current library never emits: if the match were on
+    // wording this would stay a 400 and the oracle would be back.
+    const response = await revoke(invalidRequest("no such thing"), "token=abc")
+    expect(response.status).toBe(200)
+    expect(response.headers.get("cache-control")).toBe("no-store")
+  })
+
+  it("keeps a 400 for a request that carried no token", async () => {
+    // "missing a required token" is the client's mistake, and the proxy can
+    // tell without reading a word of the description.
+    const missing = await revoke(invalidRequest("token not found"), "")
+    expect(missing.status).toBe(400)
+    const blank = await revoke(invalidRequest("token not found"), "token=")
+    expect(blank.status).toBe(400)
+  })
+
+  it("keeps a 400 when the Authorization header is not one the provider accepts", async () => {
+    const response = await revoke(
+      invalidRequest("Invalid authorization header format"),
+      "token=abc",
+      "Digest nope"
+    )
+    expect(response.status).toBe(400)
+  })
+
+  it("passes every other error through untouched", async () => {
+    const unsupported = await revoke(
+      Response.json(
+        { error: "unsupported_token_type", error_description: "JWT" },
+        { status: 400 }
+      ),
+      "token=abc"
+    )
+    expect(unsupported.status).toBe(400)
+    expect(await unsupported.json()).toMatchObject({
+      error: "unsupported_token_type",
+    })
+
+    const unauthenticated = await revoke(
+      Response.json({ error: "invalid_client" }, { status: 401 }),
+      "token=abc"
+    )
+    expect(unauthenticated.status).toBe(401)
+
+    const unparseable = await revoke(
+      new Response("not json", { status: 400 }),
+      "token=abc"
+    )
+    expect(unparseable.status).toBe(400)
+    expect(await unparseable.text()).toBe("not json")
+  })
+
+  it("leaves a success alone", async () => {
+    const ok = await revoke(new Response(null, { status: 200 }), "token=abc")
+    expect(ok.status).toBe(200)
   })
 })

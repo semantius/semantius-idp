@@ -1,5 +1,5 @@
 /**
- * The headers, and the request log (SEC-4, SEC-5).
+ * The headers, and the request log.
  *
  * The CSP assertions are written as *prohibitions* rather than as a string
  * comparison. A policy that gains a directive should not fail this file; a
@@ -74,7 +74,7 @@ describe("the Content-Security-Policy", () => {
     )
     // And no wider than that: named origins, never a wildcard or a bare
     // scheme. These are the origins already trusted with authorization codes
-    // (FR-OIDC-17's list), and nothing else.
+    // (the spec's list), and nothing else.
     const directive = withClients
       .split("; ")
       .find((part) => part.startsWith("form-action "))
@@ -184,7 +184,7 @@ describe("withSecurityHeaders", () => {
 })
 
 describe("isNoStorePath", () => {
-  it("covers the four SEC-4 endpoints, at the root and under a mount path", () => {
+  it("covers the four no-store endpoints, at the root and under a mount path", () => {
     for (const path of [
       "/oauth2/token",
       "/oauth2/userinfo",
@@ -204,7 +204,7 @@ describe("isNoStorePath", () => {
   })
 })
 
-describe("the request log (SEC-5)", () => {
+describe("the request log", () => {
   it("drops the query string of anything that carries a credential", () => {
     const entry = buildLogEntry({
       request: new Request(

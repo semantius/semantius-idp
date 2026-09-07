@@ -1,5 +1,5 @@
 /**
- * Telling a key-borne session from a browser one (FR-KEY-3).
+ * Telling a key-borne session from a browser one.
  *
  * The integration suite proves the *outcome* — a JWT minted from an API key
  * carries `apiKeys.tokenClientId` and one minted from a session carries the

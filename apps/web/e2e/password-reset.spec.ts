@@ -12,7 +12,7 @@ import { expect, test } from "./fixtures"
 import { readMail, waitForMail } from "./stack"
 
 /**
- * Forgotten passwords, through the captured mail (TST-6, FR-AUTH-3, SEC-7).
+ * Forgotten passwords, through the captured mail.
  *
  * The reset link is opened the way a person opens it — out of the message, in
  * the browser — rather than by posting a token to an endpoint. That is what
@@ -22,7 +22,7 @@ import { readMail, waitForMail } from "./stack"
 const NEW_PASSWORD = "e2e-reset-password-02"
 
 test.describe("resetting a password", () => {
-  test("an unknown address gets the same answer as a known one (SEC-7)", async ({
+  test("an unknown address gets the same answer as a known one", async ({
     page,
     app,
     stack,
@@ -45,7 +45,7 @@ test.describe("resetting a password", () => {
     expect(sent, "mail sent to an address with no account").toEqual([])
   })
 
-  test("the link sets a new password and retires the old one (FR-AUTH-3)", async ({
+  test("the link sets a new password and retires the old one", async ({
     page,
     app,
     stack,
@@ -79,7 +79,7 @@ test.describe("resetting a password", () => {
       page.getByText("Your password has been changed.")
     ).toBeVisible()
 
-    // FR-AUTH-3: the owner is told, whatever they think they did.
+    // the owner is told, whatever they think they did.
     const notice = await waitForMail(stack, user.email, {
       template: "password-changed",
     })
@@ -94,7 +94,7 @@ test.describe("resetting a password", () => {
     await signOut(page, app)
   })
 
-  test("a reset link works once (FR-AUTH-3)", async ({ page, app, stack }) => {
+  test("a reset link works once", async ({ page, app, stack }) => {
     const user = await createVerifiedUser(page, app, stack, "reused")
 
     await app.goto("/forgot-password")
@@ -107,7 +107,7 @@ test.describe("resetting a password", () => {
     await submit(page, "Set new password")
     await expect(page).toHaveURL(/notice=password_changed/)
 
-    // The same URL a second time: the token is spent, and since D65 the page
+    // The same URL a second time: the token is spent, and the page
     // says so **up front** rather than presenting a form that cannot work and
     // refusing it after a password has been typed twice.
     await page.goto(link)

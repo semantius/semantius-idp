@@ -1,5 +1,5 @@
 /**
- * zod schema for `roles.jsonc` (FR-ROLE-1).
+ * zod schema for `roles.jsonc`.
  *
  * Roles are labels for downstream applications — the IdP evaluates no
  * permissions from them. Exactly one entry carries `default: true`; it feeds
@@ -12,7 +12,7 @@ import { z } from "zod"
 
 import { flexBoolean } from "../zod-helpers"
 
-/** No commas: `user.role` stores several roles comma-separated (FR-ROLE-2). */
+/** No commas: `user.role` stores several roles comma-separated. */
 const ROLE_NAME_RE = /^[a-z0-9_-]{1,64}$/
 
 export const roleSchema = z.strictObject({
@@ -35,7 +35,7 @@ export const rolesFileSchema = z.strictObject({
 export type RoleEntry = z.infer<typeof roleSchema>
 export type RolesFile = z.infer<typeof rolesFileSchema>
 
-/** Catalog used when `roles.jsonc` is absent (FR-ROLE-1). */
+/** Catalog used when `roles.jsonc` is absent. */
 export const BUILT_IN_ROLES: RoleEntry[] = [
   {
     name: "admin",

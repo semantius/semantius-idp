@@ -13,7 +13,7 @@ pnpm --filter web exec bun src/cli/index.ts <command>   # from a checkout
 `docker/idp-cli.sh` (and `idp-cli.cmd`) is a two-line wrapper around `docker compose exec idp idp`,
 and every other `docker compose` line below is run from `docker/` with
 `--env-file ../.env`, which is where the compose file and the environment file
-each live (**D51**). The `idp-*` scripts do that for you.
+each live. The `idp-*` scripts do that for you.
 
 `idp config validate` prints the effective configuration with secrets masked
 and exits non-zero if anything is wrong. Run it first whenever a change did not
@@ -34,6 +34,14 @@ docker compose --env-file ../.env pull
 docker compose --env-file ../.env up -d --wait
 curl -fsS localhost:3000/readyz
 ```
+
+**Upgrading onto the two-role database layout** (the compose Postgres gained a
+non-superuser `idp` role): a kept `pgdata` volume is untouched — its `idp` stays the superuser it
+was initialized as, the healthcheck still passes, and the IdP logs a warning at
+every start. To move onto the two-role layout take the dump above, run
+`./idp-destroy.sh` (removes the volume), `./idp-create.sh`, then `pg_restore`
+the schema; the role that restores must be `idp` or the restored objects belong
+to `postgres` and the IdP cannot alter them.
 
 Migrations run on boot under an advisory lock, so a container that starts
 while another is still migrating waits rather than racing. `/readyz` reports
@@ -56,10 +64,31 @@ is an upgrade nobody scheduled.
 
 ---
 
+## The database roles
+
+The bundled Postgres has two. `postgres` is the bootstrap superuser,
+password `POSTGRES_PASSWORD`; the IdP never connects as it. `idp` is the
+application role — `LOGIN NOSUPERUSER NOCREATEROLE NOCREATEDB`, `CONNECT` and
+`CREATE` on the `idp` database — created by `docker/initdb/10-idp-role.sh` the
+first time a data directory is initialized, with `IDP_DB_PASSWORD`, which is
+also the password inside `DATABASE_URL`. `CREATE` on the database is what the
+IdP needs and all it needs: boot creates `database.schema` if it is missing,
+an `IDP_SCHEMA_NAME` throwaway creates another, `pnpm drizzle:reset` drops one,
+and each is owned by the role that created it.
+
+Both passwords are read once. Changing one afterwards is `ALTER ROLE … PASSWORD`
+by hand (and the matching edit in `.env`), or `./idp-destroy.sh` and a fresh
+`./idp-create.sh`. On a database you bring yourself, give the IdP the same
+shape — a role with `CREATE` on the database and nothing more — and the
+start-up warning about a superuser connection will not fire.
+
 ## Starting over on a clean database
 
 For a development deployment, and for a staging one nobody minds losing. It
-destroys every account, session, token, key and audit row.
+destroys every account, session, token, key and audit row — and it reopens the
+first-run setup page, where **the next person to reach the address becomes the
+administrator**. Do it with the port closed to anyone but you, and
+complete the wizard before opening it again.
 
 ```bash
 pnpm docker:down                 # or stop the dev server; see below
@@ -67,11 +96,10 @@ pnpm drizzle:reset
 ```
 
 It drops `database.schema` — the one the configuration names, on
-`database.directUrl` — and nothing else in the database (**D56**). Migrations
+`database.directUrl` — and nothing else in the database. Migrations
 are forward-only and there is no seed step, so the schema going away *is* the
 reset. The next start migrates it back empty and serves the first-run setup
-page, because a database with no users is exactly what that page is for
-(**D52**): whoever completes it is the first administrator.
+page, because a database with no users is exactly what that page is for: whoever completes it is the first administrator.
 
 It prints the target first — configuration folder, masked connection string,
 schema, and how many tables are in it — and then asks `[y/N]` about that schema
@@ -92,9 +120,22 @@ psql "$DATABASE_URL_ADMIN" -c 'drop schema idp cascade'
 
 ---
 
+## The console runs as a superuser
+
+If the log or `/admin/system` shows `database.console_as_superuser`, the IdP
+connects as a Postgres superuser and `admin.database` is on. A READ ONLY
+transaction stops writes; it does not stop `pg_read_file('/etc/passwd')` or
+`COPY (select 1) TO PROGRAM 'id'`. On a database you brought yourself, create
+an application role — `create role idp_app login password '…' nosuperuser
+nocreaterole noinherit; grant connect, create on database idp to idp_app;` —
+point `DATABASE_URL` (and `DATABASE_URL_ADMIN`) at it, and restart; on an
+existing schema also `reassign owned by <old role> to idp_app` so migrations
+keep applying. On the reference compose file, see "The database roles" above.
+Or set `admin.database` to `disabled`. The warning never stops a boot.
+
 ## Promoting a user when nobody can sign in
 
-The last resort, and the price of removing the environment bootstrap (**D52**).
+The last resort, and the price of removing the environment bootstrap.
 Try the other two first: give a second account an admin role *before* you need
 it, or use the password-reset e-mail. Neither needs database access; this does.
 
@@ -221,7 +262,7 @@ What it does, transactionally and under an advisory lock:
 - deletes them instead when `oauth.reconcile.prune` is true;
 - seeds resources and links each client to the default audience and its own.
 
-**Clients registered at `/admin/clients` are not touched** (**D50**). The sweep
+**Clients registered at `/admin/clients` are not touched**. The sweep
 that disables absent clients is scoped to rows the file owns — the ones with no
 `userId` — so an admin-registered client is not an orphan and survives every
 reconcile and every restart. If a client id appears in *both* places, the file
@@ -280,7 +321,7 @@ Every row carries the actor, the target, the outcome, the client IP, the user
 agent and a **request id** that also appears on the matching log line, so a row
 and a log entry can be tied together.
 
-What is recorded (SEC-6): sign-in success and failure, sign-up, verification,
+What is recorded: sign-in success and failure, sign-up, verification,
 approval and rejection, suspension and its lifting, role changes, password
 changes and resets, session revocation, two-factor enrollment and reset, API-key
 creation and revocation and failures, impersonation, consent granted and

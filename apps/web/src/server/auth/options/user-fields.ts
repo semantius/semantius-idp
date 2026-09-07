@@ -1,6 +1,6 @@
 /**
- * Custom `user` columns (DM-3) and the mass-assignment rules that protect them
- * (FR-AUTH-7).
+ * Custom `user` columns and the mass-assignment rules that protect them
+ *.
  *
  * Better Auth's own columns (`role`, `banned`, `banReason`, `banExpires`,
  * `emailVerified`) are already `input: false` in the core and admin plugin
@@ -10,19 +10,19 @@
  *
  * `input: false` is Better Auth's own mechanism — the field is stripped from
  * request bodies and can only be written through internal/admin paths — which
- * is exactly the guarantee FR-AUTH-7 asks for.
+ * is exactly the guarantee the spec asks for.
  */
 
 import type { DBFieldAttribute } from "@better-auth/core/db"
 
-/** Approval state of a user (FR-SIGNUP-2). */
+/** Approval state of a user. */
 export const USER_STATUSES = ["pending", "active", "rejected"] as const
 export type UserStatus = (typeof USER_STATUSES)[number]
 
 export const userAdditionalFields = {
   /**
    * Optional given name. Collected at sign-up and mapped from a provider's
-   * `given_name` (FR-SIGNUP-5); emitted as the `given_name` claim.
+   * `given_name`; emitted as the `given_name` claim.
    */
   firstName: {
     type: "string",
@@ -36,7 +36,7 @@ export const userAdditionalFields = {
   },
   /**
    * Approval state. A non-`active` user gets no session, no authorization code,
-   * no token and no API-key authentication on any path (FR-SIGNUP-2).
+   * no token and no API-key authentication on any path.
    */
   status: {
     type: USER_STATUSES as unknown as string[],
@@ -59,7 +59,7 @@ export const userAdditionalFields = {
   /**
    * Set for the bootstrap admin and for any admin-assigned temporary password.
    * Interposes a change-password step before anything else completes, including
-   * an OAuth continuation (FR-AUTH-4).
+   * an OAuth continuation.
    */
   mustChangePassword: {
     type: "boolean",
@@ -70,7 +70,7 @@ export const userAdditionalFields = {
 } satisfies Record<string, DBFieldAttribute>
 
 /**
- * Fields that must never be settable from a request body (FR-AUTH-7). The ones
+ * Fields that must never be settable from a request body. The ones
  * Better Auth owns are listed for the test that asserts the whole set, not
  * because we declare them.
  */

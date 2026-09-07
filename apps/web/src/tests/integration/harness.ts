@@ -1,14 +1,14 @@
 /**
- * Integration-test harness (TST-1).
+ * Integration-test harness.
  *
  * Each test file gets its **own uniquely named Postgres schema**, migrated from
  * the committed SQL. That is only cheap because the schema name is a runtime
- * value (DM-4): creating and dropping one schema is fast even on a shared
+ * value: creating and dropping one schema is fast even on a shared
  * hosted database, so runs stay isolated without a per-file database.
  *
  * Connection: `IDP_TEST_DATABASE_URL`, else `DATABASE_URL_ADMIN`, else
  * `DATABASE_URL`. The direct endpoint is preferred because advisory locks do
- * not hold through a transaction pooler (S4) and several tests exercise them.
+ * not hold through a transaction pooler and several tests exercise them.
  */
 
 import { readFileSync } from "node:fs"
@@ -67,7 +67,7 @@ export function testDatabaseUrl(): string {
       "No test database. Set IDP_TEST_DATABASE_URL, or DATABASE_URL in the repo-root .env. " +
         "Any Postgres will do; prefer a direct (non-pooled) endpoint, because several " +
         "tests assert session advisory locks and those do not hold through a transaction " +
-        "pooler (S4, D27)."
+        "pooler."
     )
   }
   return url
@@ -79,7 +79,7 @@ export interface TestContextOptions {
   clients?: Record<string, unknown>[]
   roles?: RoleEntry[]
   /**
-   * Stands in for the Have I Been Pwned range API (FR-AUTH-1).
+   * Stands in for the Have I Been Pwned range API.
    *
    * Supplied so the suite never reaches the internet: a test that depends on a
    * third party is a test that fails on a train. Without it the check fails
@@ -94,9 +94,9 @@ export interface TestContext {
   auth: ReturnType<typeof createAuth>
   /** Filled in as the runtime would; `startup` stays unset unless a test sets it. */
   adminContext: AdminContext
-  /** Capture transport: every e-mail the run would have sent (FR-MAIL-1). */
+  /** Capture transport: every e-mail the run would have sent. */
   mailer: ReturnType<typeof createCaptureMailer>
-  /** The SEC-6 trail this context writes to, for {@link asRuntime}. */
+  /** The audit trail this context writes to, for {@link asRuntime}. */
   audit: Audit
   logger: Logger
   schemaName: string
@@ -129,6 +129,7 @@ export function asRuntime(context: TestContext): Runtime {
     startup: {
       steps: [],
       roleWarnings: [],
+      warnings: [],
       completedAt: new Date().toISOString(),
     },
     configDir: "",
@@ -141,7 +142,7 @@ export function asRuntime(context: TestContext): Runtime {
  * How to connect, TLS-wise, for a test that builds its own `postgres()` handle.
  *
  * The rule used to be `url.includes("localhost")`, which is the
- * `127.0.0.1`-versus-`localhost` trap that **D57** and **D68** each cost a day
+ * `127.0.0.1`-versus-`localhost` trap that the spec and the spec each cost a day
  * to: a local Postgres reached on its IP address was given `ssl: "require"`,
  * answered by dropping the socket, and reported it as "Client network socket
  * disconnected before secure TLS connection was established" — which looks
@@ -196,7 +197,7 @@ export async function createTestContext(
     secret: "integration-test-secret-0123456789abcdef",
     site: { name: "Test IdP" },
     jwt: { audience: "http://localhost:3000" },
-    // A test file makes many attempts from one "IP"; the SEC-2 limits are real
+    // A test file makes many attempts from one "IP"; the spec limits are real
     // and would throttle it. The rate limiter has its own suite, which turns
     // this back on and asserts the 429s.
     rateLimit: { enabled: false },
@@ -213,17 +214,17 @@ export async function createTestContext(
   )
   const config = deriveConfig(file, clients, options.roles ?? BUILT_IN_ROLES)
 
-  // D52's first-run gate memoizes "a user exists" for the life of the process,
+  // the spec's first-run gate memoizes "a user exists" for the life of the process,
   // and one process runs every file in this suite against a different schema.
   // Forgetting it here is what keeps the second file from inheriting the first
   // file's answer.
   resetSetupGate()
 
   const database = createDb(config, { max: 4 })
-  // FR-ADMIN-7's own handles, built the way `runtime.ts` builds them and only
+  // the spec's own handles, built the way `runtime.ts` builds them and only
   // when the flag calls for them -- a suite that shared `database` here would
   // pass while production's separation was broken. Against a test database
-  // both URLs resolve to the same string (D74's mutual fallback), so the two
+  // both URLs resolve to the same string (the spec's mutual fallback), so the two
   // handles differ in nothing but which name they were asked for; what they
   // prove is the wiring.
   const consoleEnabled = config.file.admin.database !== "disabled"

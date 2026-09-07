@@ -1,6 +1,6 @@
 /**
  * The things an administrator must not be able to do, however they ask
- * (FR-ADMIN-3, FR-ROLE-3, SEC-7).
+ *.
  *
  * Two classes of rule, and they exist for different reasons.
  *
@@ -25,7 +25,7 @@
  * taken inside the same request as the change, which leaves a narrow race
  * between two concurrent demotions; the loser of that race gets a deployment
  * with no admin, and the only way back is the SQL promotion in the runbooks
- * (D33, D52).
+ *.
  *
  * Nothing here reads the database. The caller supplies the candidate set,
  * because the two callers — this app's own endpoints and the wrapper around
@@ -177,7 +177,7 @@ export function assertAdminInvariants(input: AdminInvariantInput): void {
     }
   }
 
-  // FR-ROLE-3: granting admin is not something a non-admin can do. The endpoint
+  // granting admin is not something a non-admin can do. The endpoint
   // gate already refuses non-admins, so this catches the subtler case — an
   // actor whose admin role was taken away between the gate and the write.
   if (

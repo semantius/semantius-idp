@@ -1,5 +1,5 @@
 /**
- * The breach check (FR-AUTH-1, SEC-8).
+ * The breach check.
  *
  * Two things are being pinned down. First, that **the password does not leave
  * the process** — the request must carry five hex characters and nothing else,

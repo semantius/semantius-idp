@@ -11,11 +11,13 @@
  * fields, so a session that Better Auth considers dead is not resurrected here.
  *
  * **"No session" and "the database is unreachable" are not the same answer**
- * (**D59**). See {@link readSession}.
+ *. See {@link readSession}.
  */
 
 import { APIError } from "better-auth/api"
 
+import { assertUserMaySignIn } from "../auth/options/database-hooks"
+import type { GateUser } from "../auth/options/database-hooks"
 import type { Runtime } from "../runtime"
 import { splitRoles } from "../role-utils"
 
@@ -27,7 +29,7 @@ export interface SessionUser {
   lastName?: string
   emailVerified: boolean
   image?: string
-  /** Catalog-filtered role names (FR-ROLE-2). */
+  /** Catalog-filtered role names. */
   roles: string[]
   twoFactorEnabled: boolean
   mustChangePassword: boolean
@@ -40,7 +42,7 @@ export interface SessionInfo {
   expiresAt: Date
   ipAddress?: string
   userAgent?: string
-  /** Set while an administrator is impersonating (FR-ADMIN-5). */
+  /** Set while an administrator is impersonating. */
   impersonatedBy?: string
 }
 
@@ -58,7 +60,7 @@ export interface ReadSessionOptions {
    * *current* state: the cached copy carries the ban flag and the approval
    * state as they were when it was minted, so a write authorized from it is a
    * write authorized by a copy of the world up to five minutes old. Every form
-   * POST handler asks for the row (`http/require-session.ts`, **D81**).
+   * POST handler asks for the row (`http/require-session.ts`).
    */
   authoritative?: boolean
 }
@@ -66,7 +68,7 @@ export interface ReadSessionOptions {
 /**
  * The caller's session, or `null` when there is none.
  *
- * **A failure to read is not an absence** (**D59**). Better Auth answers `null`
+ * **A failure to read is not an absence**. Better Auth answers `null`
  * for an anonymous caller and *throws* for a refusal — a dead or banned
  * session, which is still "no session" and still belongs on the login page.
  * A query that could not run throws too, and it is a different thing entirely.
@@ -102,6 +104,16 @@ export async function readSession(
   const user = result.user as Record<string, unknown>
   const session = result.session as Record<string, unknown>
 
+  // the standing gate, on the user this read produced.
+  // A session outlives the approval or the ban that should have ended it
+  // when the change was made by SQL, or by anything that skips the admin
+  // endpoints' revocation — and "banned" or "pending" is still nobody signed
+  // in. Until this line the only thing refusing such a read was the JWT
+  // plugin's after hook on `/get-session`, which mints a `set-auth-jwt`
+  // header through `sessionTokenPayload` and trips its gate by accident;
+  // `disableSettingJwtHeader` would have taken the whole check with it.
+  if (!maySignIn(user)) return null
+
   return {
     user: {
       id: String(user.id),
@@ -124,6 +136,40 @@ export async function readSession(
       userAgent: optionalString(session.userAgent),
       impersonatedBy: optionalString(session.impersonatedBy),
     },
+  }
+}
+
+/**
+ * `{ impersonatedBy }` while an administrator is signed in as the user, else
+ * `undefined` — so it spreads into a metadata object or stands as one.
+ *
+ * Every `/account/*` audit write carries it. The row's actor is
+ * the user, because it is their account that changed; the administrator is
+ * the answer to "who was really there", and a trail that could not give it
+ * named the victim as the author of a revocation they never made.
+ */
+export function actorMetadata(
+  session: RouteSession
+): { impersonatedBy: string } | undefined {
+  const by = session.session.impersonatedBy
+  return by ? { impersonatedBy: by } : undefined
+}
+
+function maySignIn(user: Record<string, unknown>): boolean {
+  const standing: GateUser = {
+    status: optionalString(user.status),
+    banned: user.banned === true,
+    banExpires:
+      user.banExpires instanceof Date || typeof user.banExpires === "string"
+        ? user.banExpires
+        : null,
+  }
+  try {
+    assertUserMaySignIn(standing)
+    return true
+  } catch (error) {
+    if (error instanceof APIError) return false
+    throw error
   }
 }
 

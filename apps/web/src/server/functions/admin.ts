@@ -1,12 +1,12 @@
 /**
- * Everything `/admin/*` renders from (FR-ADMIN-2).
+ * Everything `/admin/*` renders from.
  *
  * The same rule as `functions/account.ts`: loaders are isomorphic, so anything
  * they import reaches the client bundle, and `createServerFn` is the seam that
  * keeps Drizzle, Better Auth and the configuration out of it. **Reads only** —
  * every mutation is a form POST to a route's own `server.handlers`, where the
  * invariants (`admin/guard.ts`), the session requirement (`http/require-session.ts`,
- * which replaced the freshness gate in **D81**) and the audit trail live.
+ * which replaced the freshness gate ) and the audit trail live.
  *
  * Each function checks the admin role itself rather than trusting the layout
  * route to have done it. A server function is an HTTP endpoint whatever the
@@ -19,7 +19,7 @@
  *
  * **One exception to "reads only", and it is deliberate.** `executeDatabaseQuery`
  * is a POST, because the payload is a SQL string that must not travel in a URL
- * (FR-ADMIN-7). It is still a read as this file means it: the endpoint behind
+ *. It is still a read as this file means it: the endpoint behind
  * it runs a `read` statement inside a READ ONLY transaction, and the audit row,
  * the mode check and the timeout all live there rather than here -- so a `curl`
  * holding an admin API key is subject to every rule the page is.
@@ -63,7 +63,7 @@ import type { Runtime } from "../runtime"
 export interface AdminUserRow {
   id: string
   email: string
-  /** Derived from the two parts below, in `site.nameFormat` order (D49). */
+  /** Derived from the two parts below, in `site.nameFormat` order. */
   name: string
   firstName: string
   lastName: string
@@ -110,9 +110,9 @@ export interface AdminUserDetail extends AdminUserRow {
     lastRequest?: string
   }[]
   events: AdminAuditRow[]
-  /** True when this account has ever hit the D24 address collision. */
+  /** True when this account has ever hit the address collision between two identities. */
   profileConflict: boolean
-  /** Roles held that are no longer in `roles.jsonc` (FR-ROLE-2). */
+  /** Roles held that are no longer in `roles.jsonc`. */
   unknownRoles: string[]
 }
 
@@ -175,20 +175,20 @@ export interface AdminClientRow {
   audience: string[]
   skipConsent: boolean
   /**
-   * Carried for the edit dialog (**D72**). `/idp/update-client` is a full
+   * Carried for the edit dialog. `/idp/update-client` is a full
    * replace, so a field the form cannot prefill is a field every edit silently
    * resets — and this one has no column on the table, which is why it was not
    * here before.
    */
   enableEndSession: boolean
   /**
-   * File-managed clients cannot be edited here (FR-OIDC-2, D50): the next
+   * File-managed clients cannot be edited here: the next
    * restart would undo it. Database ones can.
    */
   managedBy: "file" | "database"
 }
 
-/** A row of `/admin/gateways` (FR-GW-7, **D91**). */
+/** A row of `/admin/gateways`. */
 export interface AdminGatewayRow {
   name: string
   /**
@@ -204,16 +204,18 @@ export interface AdminGatewayRow {
   url: string
   /**
    * The target above is a lossy projection and must not be prefilled into a
-   * form (**D93**). Only reachable for a row written by hand in `psql`:
+   * form. Only reachable for a row written by hand in `psql`:
    * `lib/gateway-rules.ts` refuses userinfo on every write path.
    */
   urlMasked: boolean
   requireAuth: boolean
+  /** The `aud` minted for this gateway, or `null` for `jwt.audience`. */
+  audience: string | null
   enabled: boolean
   /**
-   * Config-owned rows cannot be edited here (FR-GW-2): the next restart would
+   * Config-owned rows cannot be edited here: the next restart would
    * undo it. Manual ones can. The column says so directly, unlike the clients'
-   * `userId === null` marker (**D91**).
+   * `userId === null` marker.
    */
   source: "config" | "manual"
 }
@@ -231,7 +233,7 @@ export interface AdminSystemInfo {
   version: string
   revision: string | null
   issuer: string
-  /** The well-known URLs this deployment answers on (**D55**). */
+  /** The well-known URLs this deployment answers on. */
   discovery: DiscoveryUrl[]
   email: { enabled: boolean; transport: string }
   signingKeys: {
@@ -244,12 +246,12 @@ export interface AdminSystemInfo {
   /**
    * Pretty-printed JSON; the page shows it in a `<pre>`.
    *
-   * Both sweeps when both ran — the clients' (FR-OIDC-2) and the gateways'
-   * (FR-GW-2) — under one key each, because the page has one "last reconcile"
+   * Both sweeps when both ran — the clients' and the gateways'
+   * — under one key each, because the page has one "last reconcile"
    * block and two of them would be two blocks saying the same kind of thing.
    */
   reconcile: string | null
-  /** Pretty-printed **masked** JSON (SEC-5). */
+  /** Pretty-printed **masked** JSON. */
   config: string
   warnings: string[]
 }
@@ -260,7 +262,7 @@ async function admin(): Promise<
 > {
   const runtime = await getRuntime()
   // Authoritative: a role taken away has to bite on the next page load, not
-  // whenever the ≤ 5 min cookie cache happens to expire (FR-AUTH-5).
+  // whenever the ≤ 5 min cookie cache happens to expire.
   const session = await readSession(runtime, getRequest(), {
     authoritative: true,
   })
@@ -282,14 +284,20 @@ async function admin(): Promise<
  */
 export type AdminGate =
   | { signedIn: false }
-  | { signedIn: true; admin: false }
+  | { signedIn: true; admin: false; mustChangePassword: boolean }
   | {
       signedIn: true
       admin: true
-      /** Shown in the sidebar's user menu beside the address (**D82**). */
+      /** Shown in the sidebar's user menu beside the address. */
       name: string
       email: string
       impersonated: boolean
+      /**
+       * A temporary password still in force: the
+       * layout redirects to `/change-password` before any admin page renders.
+       * On both signed-in shapes, because the wall comes before the role.
+       */
+      mustChangePassword: boolean
       /** The sidebar's collapse state, so the first paint is already right. */
       sidebarOpen: boolean
     }
@@ -301,8 +309,9 @@ export const fetchAdminGate = createServerFn({ method: "GET" }).handler(
       authoritative: true,
     })
     if (!session) return { signedIn: false }
+    const mustChangePassword = session.user.mustChangePassword
     if (!isAdmin(session.user.roles.join(","), runtime.config.adminRoles)) {
-      return { signedIn: true, admin: false }
+      return { signedIn: true, admin: false, mustChangePassword }
     }
     return {
       signedIn: true,
@@ -310,6 +319,7 @@ export const fetchAdminGate = createServerFn({ method: "GET" }).handler(
       name: session.user.name,
       email: session.user.email,
       impersonated: session.session.impersonatedBy !== undefined,
+      mustChangePassword,
       sidebarOpen: readSidebarOpen(getRequest()),
     }
   }
@@ -527,7 +537,7 @@ export const fetchUserDetail = createServerFn({ method: "GET" })
         lastRequest: row.lastRequest ? iso(row.lastRequest) : undefined,
       })),
       events: events.map(toAuditRow),
-      // D24: the sign-in that was refused because the address already belonged
+      // the sign-in that was refused because the address already belonged
       // to someone else. Worth surfacing on the person's own page — it is the
       // single most confusing failure a user reports.
       profileConflict: events.some(
@@ -646,7 +656,7 @@ export const fetchClients = createServerFn({ method: "GET" }).handler(
         .map((link) => link.resourceId),
       skipConsent: row.skipConsent === true,
       enableEndSession: row.enableEndSession === true,
-      // D50: the file marker is `userId === null`, and it is what decides
+      // the file marker is `userId === null`, and it is what decides
       // whether this row may be edited here at all — not merely how it is
       // labeled. A row whose id also appears in the file is shown as
       // file-managed either way, because the next restart will make it so.
@@ -659,7 +669,7 @@ export const fetchClients = createServerFn({ method: "GET" }).handler(
 )
 
 /**
- * The API gateways, config-owned and admin-added alike (FR-GW-7, **D91**).
+ * The API gateways, config-owned and admin-added alike.
  *
  * One query: the table is a list an operator typed, so there is no paging and
  * no filter. The proxy's own registry cache is deliberately **not** read here
@@ -668,7 +678,7 @@ export const fetchClients = createServerFn({ method: "GET" }).handler(
  * to replace would make the page disagree with the database it is describing.
  *
  * The target is returned **byte for byte** unless it carries a password
- * (**D93**). It used to go through `maskConnectionString`, which normalizes as
+ *. It used to go through `maskConnectionString`, which normalizes as
  * well as masks — and the normalization is what the edit form then refused, for
  * a trailing slash the operator never typed. See `maskGatewayTarget`.
  */
@@ -694,6 +704,7 @@ export const fetchGateways = createServerFn({ method: "GET" }).handler(
         url: target.url,
         urlMasked: target.masked,
         requireAuth: row.requireAuth === true,
+        audience: row.audience ?? null,
         enabled: row.enabled !== false,
         source: row.source === "config" ? "config" : ("manual" as const),
       }
@@ -766,7 +777,7 @@ export const claimAdminSecret = createServerFn({ method: "GET" })
   })
 
 /**
- * Claims the form a refused admin POST stashed (**D62**).
+ * Claims the form a refused admin POST stashed.
  *
  * Same store and the same single-use claim as {@link claimAdminSecret}; the
  * difference is only what is in it — the fields the administrator filled in,
@@ -811,7 +822,7 @@ export const fetchSystemInfo = createServerFn({ method: "GET" }).handler(
 
     // Through the endpoint rather than around it, so the page and a `curl`
     // holding an admin API key see byte-for-byte the same document — including
-    // the same masking (FR-ADMIN-6, SEC-5).
+    // the same masking.
     const response = await runtime.auth.handler(
       new Request(
         `${runtime.config.base.origin}${runtime.config.base.basePath}/api/auth/idp/system`,
@@ -859,7 +870,7 @@ function reconcileSummary(startup: {
 
 export interface AdminDatabaseSchema {
   schemaName: string
-  /** Every schema the console's connection may look into (D84). Sorted. */
+  /** Every schema the console's connection may look into. Sorted. */
   schemas: string[]
   /** `current_database()`, which is the label on the runner's header. */
   database: string
@@ -869,18 +880,18 @@ export interface AdminDatabaseSchema {
 }
 
 /**
- * The schema tree for `/admin/database` (FR-ADMIN-7).
+ * The schema tree for `/admin/database`.
  *
  * Through the endpoint rather than around it, the same round trip
  * `fetchSystemInfo` makes and for the same reason: what the page draws and
  * what `curl -H x-api-key` returns are then the same document, from the same
- * gate (FR-ADMIN-6). `callAuth` cannot be used -- it is POST-only, and this
+ * gate. `callAuth` cannot be used -- it is POST-only, and this
  * one is a GET.
  */
 export const fetchDatabaseSchema = createServerFn({ method: "GET" })
   // Optional, and normalized to `{}` rather than left undefined: the loader
   // calls this with no argument at all, and the page calls it again with a
-  // schema name every time the selector changes (D84).
+  // schema name every time the selector changes.
   .validator((input: { schema?: string } | undefined) => input ?? {})
   .handler(async ({ data }): Promise<AdminDatabaseSchema | null> => {
     const context = await admin()
@@ -912,7 +923,7 @@ export type DatabaseQueryOutcome =
   | { ok: false; error: QueryFailure & { code: string } }
 
 /**
- * Run one statement (FR-ADMIN-7). **The one POST server function in the tree.**
+ * Run one statement. **The one POST server function in the tree.**
  *
  * A GET would put the SQL in a URL, and a URL is the one place a statement
  * must not be: browser history, `Referer` on the next outbound request, and
@@ -996,7 +1007,7 @@ export interface AdminRolesStatus {
    */
   reconciledAt: string
   /**
-   * Roles held by users that `roles.jsonc` does not define (FR-ROLE-2).
+   * Roles held by users that `roles.jsonc` does not define.
    *
    * Not `runtime.warnings`: those are configuration-load problems, they are
    * already on `/admin` and `/admin/system`, and a third copy in red on a
@@ -1007,7 +1018,7 @@ export interface AdminRolesStatus {
 }
 
 /**
- * The two things FR-ADMIN-2 wants beside the roles table.
+ * The two things the spec wants beside the roles table.
  *
  * A separate, tiny function rather than `fetchSystemInfo`: that one round-trips
  * through `/idp/system` and carries the whole masked configuration with it,

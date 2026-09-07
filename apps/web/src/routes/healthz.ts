@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import { version } from "@/server/version"
 
 /**
- * Liveness (OPS-3): the process is up and answering.
+ * Liveness: the process is up and answering.
  *
  * Unauthenticated, non-revealing, and excluded from rate limiting and request
  * logging — a probe that gets throttled or floods the log is worse than no

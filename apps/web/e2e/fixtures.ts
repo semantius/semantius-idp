@@ -29,7 +29,7 @@ function stacks(): Record<string, Stack> {
  * resolves the way `new URL` does — an absolute path replaces the *whole* path
  * of the base — so against `http://127.0.0.1:3411/idp` it requests
  * `http://127.0.0.1:3411/login`. That is the origin root, which under a
- * sub-path deployment belongs to somebody else's application (OPS-10). The
+ * sub-path deployment belongs to somebody else's application. The
  * sub-path project did exactly that on its first run: it drove the wrong URL
  * and failed with "no Password field", which is a confusing way to learn that
  * the *test* was wrong rather than the deployment.

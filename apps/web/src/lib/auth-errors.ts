@@ -4,7 +4,7 @@ import type { Catalog } from "@/server/i18n"
  * Turns the error code a redirect carries into a catalog string.
  *
  * Codes travel in the query string; wording never does. That keeps user input
- * out of URLs, keeps every message translatable (FR-I18N-1), and means a
+ * out of URLs, keeps every message translatable, and means a
  * message cannot be forged by editing the address bar into something that
  * looks like it came from us.
  */
@@ -23,10 +23,10 @@ export function messageForErrorCode(
 
   switch (code) {
     case "invalid_credentials":
-      // SEC-7: identical for a wrong password and an unknown address.
+      // identical for a wrong password and an unknown address.
       return t.auth.signIn.failed
     case "untrusted_origin":
-      // D57: the one refusal on this page that is *not* about the credential.
+      // the one refusal on this page that is *not* about the credential.
       // It used to arrive here as `invalid_credentials`, which sent whoever
       // hit it looking for a password problem that did not exist.
       return t.auth.signIn.untrustedOrigin
@@ -46,6 +46,15 @@ export function messageForErrorCode(
       return t.auth.resetPassword.mismatch
     case "wrong_current_password":
       return t.auth.changePassword.wrongCurrent
+    case "password_change_required":
+      // a form post refused because the temporary password is still in
+      // force. The page handlers redirect to the change itself; this is the
+      // wording for the rare path that lands back on a page with the code.
+      return t.auth.changePassword.required
+    case "impersonated_session":
+      // an administrator signed in as the user asked for a
+      // credential that would outlive the impersonation.
+      return t.account.apiKeys.impersonated
     case "two_factor_invalid":
       return t.auth.twoFactor.invalid
     case "two_factor_locked":
@@ -53,7 +62,7 @@ export function messageForErrorCode(
     case "two_factor_expired":
       return t.auth.twoFactor.expired
     case "not_found":
-      // The thing being acted on is not there, or is not yours. SEC-7: the
+      // The thing being acted on is not there, or is not yours. Anti-enumeration: the
       // two cases must not be distinguishable.
       return t.errors.notFound.description
     case "expiry_out_of_range":
@@ -62,21 +71,21 @@ export function messageForErrorCode(
       return t.auth.resetPassword.expired
     // No `token_used`: it was mapped and never emitted. Better Auth deletes a
     // spent token's row, so a used link and a made-up one are the same
-    // refusal — `INVALID_TOKEN` — and `token_invalid` is what arrives (D65).
+    // refusal — `INVALID_TOKEN` — and `token_invalid` is what arrives.
     case "token_invalid":
       return t.auth.resetPassword.invalid
     case "signup_failed":
-      // SEC-7: never confirms whether the address was already taken.
+      // never confirms whether the address was already taken.
       return t.auth.signUp.done
     case "email_exists":
       // The opposite trade, and only behind `/admin/*`: `adminErrorCodeFor`
       // is the only thing that emits this, and an administrator is already
-      // looking at the list that would answer the question (**D70**).
+      // looking at the list that would answer the question.
       return t.admin.refusals.emailExists
     case "request_failed":
       // `invalid_credentials` for a form with no credential in it. Same
       // wording as `server_error`, without the sentence about a password
-      // nobody typed (**D70**).
+      // nobody typed.
       return t.errors.serverError.description
     case "admin_cannot_change_own_roles":
       return t.admin.refusals.ownRoles
@@ -105,7 +114,7 @@ export function messageForErrorCode(
     case "invalid_client_definition":
     case "scope_not_allowed":
       return t.admin.refusals.clientInvalid
-    // FR-GW-7, **D91**: the same three shapes the client endpoints answer
+    // the same three shapes the client endpoints answer
     // with, for the same three reasons.
     case "gateway_already_exists":
       return t.admin.refusals.gatewayExists
@@ -187,7 +196,7 @@ export function messageForNoticeCode(
     case "twofactor_off":
       return t.account.twoFactor.turnedOff
     case "already_setup":
-      // D52: the loser of a concurrent first-run POST, and anyone who kept the
+      // the loser of a concurrent first-run POST, and anyone who kept the
       // `/setup` bookmark. Neutral either way.
       return t.setup.alreadyDone
     default:

@@ -1,5 +1,5 @@
 /**
- * The retention job, against a real database (OPS-8, DM-5).
+ * The retention job, against a real database.
  *
  * Written as two questions, asked of every table: **is the dead row gone, and
  * is the live one still there?** The second matters more. A purge that deletes
@@ -115,7 +115,7 @@ describe("what the sweep removes, and what it must not", () => {
 
     // An authorization code is a `verification` row: 1.7.1's oauth-provider
     // stores them through `createVerificationValue`, so this case covers
-    // DM-5's "codes" as well as reset links.
+    // the spec's "codes" as well as reset links.
     await db.insert(schema.verification).values([
       {
         id: "ver-dead",

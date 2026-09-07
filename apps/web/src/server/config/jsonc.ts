@@ -1,5 +1,5 @@
 /**
- * JSONC parsing for the config folder (CFG-1).
+ * JSONC parsing for the config folder.
  *
  * Config files are parsed as JSONC — comments and trailing commas are allowed —
  * so operators can annotate the shipped `config.example/` files in place.
@@ -25,7 +25,7 @@ export interface JsoncParseResult {
 
 /**
  * Parses JSONC text. Returns every syntax error found rather than throwing on
- * the first, matching the "all errors in one pass" rule of CFG-5.
+ * the first, matching the "all errors in one pass" rule.
  */
 export function parseJsoncText(
   file: ConfigFileName,
@@ -81,7 +81,7 @@ export function parseJsoncText(
 
 /**
  * `$schema` is honored for editor IntelliSense and is exempt from the
- * unknown-key rule (CFG-1). It is stripped before validation so that every
+ * unknown-key rule. It is stripped before validation so that every
  * schema can keep `additionalProperties: false`.
  */
 export function stripSchemaKey(value: unknown): unknown {

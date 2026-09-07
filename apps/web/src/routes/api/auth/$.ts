@@ -7,7 +7,7 @@ import { getRuntime } from "@/server/runtime"
  *
  * The protocol endpoints OIDC clients discover — `/oauth2/*` and
  * `/.well-known/*` — live at the issuer root instead and are separate thin
- * routes that delegate to the same handler (FR-OIDC-4/15).
+ * routes that delegate to the same handler.
  */
 const handle = async ({ request }: { request: Request }) =>
   (await getRuntime()).auth.handler(request)

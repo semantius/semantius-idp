@@ -8,11 +8,11 @@ import { getCatalog } from "@/server/i18n"
 import { fetchAdminStats } from "@/server/functions/admin"
 
 /**
- * `/admin` — the numbers, and the one thing that needs doing (FR-ADMIN-2).
+ * `/admin` — the numbers, and the one thing that needs doing.
  *
  * The pending-approval count is a link rather than a statistic, because it is
  * the only figure on this page that represents *people waiting*: everything
- * else describes the deployment, and this describes a queue (FR-SIGNUP-2).
+ * else describes the deployment, and this describes a queue.
  *
  * Configuration warnings are shown here as well as logged. An operator who
  * mis-typed a social provider's domain finds out at start-up only if they were
@@ -22,7 +22,7 @@ export const Route = createFileRoute("/admin/")({
   loader: async ({ context }) => ({
     ui: context.ui,
     // The area index: the brand crumb the layout prepends already names it,
-    // so this page adds nothing to the trail (**D93**).
+    // so this page adds nothing to the trail.
     crumbs: [],
     stats: await fetchAdminStats(),
   }),

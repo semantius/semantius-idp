@@ -1,6 +1,6 @@
 /**
  * `/account/sessions` and `/account/consents`, driven as form posts
- * (**D101**, **D102**, **D103**).
+ *.
  *
  * The handlers are the requirement here, not the helpers underneath them.
  * Whether "Sign out" revokes the session's OAuth tokens depends on the *order*
@@ -218,7 +218,7 @@ function outcome(response: Response): string {
   )
 }
 
-describe("signing one session out (D101)", () => {
+describe("signing one session out", () => {
   it("revokes the tokens that session obtained, with the flag off", async () => {
     const email = "one-scope@example.com"
     const laptop = await register(email)
@@ -255,7 +255,7 @@ describe("signing one session out (D101)", () => {
       sessionId: await sessionIdFor(theirs),
     })
 
-    // SEC-7: "not yours" and "does not exist" are the same answer.
+    // "not yours" and "does not exist" are the same answer.
     expect(outcome(response)).toBe("not_found")
     expect(await liveTokens(strangerId)).toBe(1)
     // And the session it named is still signed in.
@@ -266,7 +266,7 @@ describe("signing one session out (D101)", () => {
   })
 })
 
-describe("signing every other session out (D101)", () => {
+describe("signing every other session out", () => {
   it("cuts off every other device, expired sessions included", async () => {
     const email = "others-scope@example.com"
     const keep = await register(email)
@@ -360,7 +360,7 @@ describe("the gates in front of both destructive posts", () => {
     await grant(other)
 
     // The cookies are `SameSite=Lax`, which does not stop a post from a page
-    // on a sibling subdomain — and `server.cookieDomain` (**D97**) is what
+    // on a sibling subdomain — and `server.cookieDomain` is what
     // makes such a page carry the cookie.
     const response = await post(
       SessionsRoute,
@@ -398,7 +398,7 @@ describe("the gates in front of both destructive posts", () => {
   })
 })
 
-describe("disconnecting an application (D102)", () => {
+describe("disconnecting an application", () => {
   it("revokes a skipConsent client's tokens with no consent row to delete", async () => {
     const email = "disconnect@example.com"
     const cookie = await register(email)

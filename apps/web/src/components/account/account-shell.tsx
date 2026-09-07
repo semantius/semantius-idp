@@ -23,17 +23,17 @@ import type { Catalog } from "@/server/i18n"
 import type { UiContext } from "@/server/ui-context"
 
 /**
- * The page header `/account/*` shares (FR-ACCT-1, FR-ACCT-2).
+ * The page header `/account/*` shares.
  *
  * The navigation, the sign-out and the administrator's way into `/admin` moved
- * up into `routes/account.tsx`'s `SidebarLayout` in **D82**; so did the
+ * up into `routes/account.tsx`'s `SidebarLayout` with the sidebar shell; so did the
  * `<main>` landmark, which `SidebarInset` now renders once for the whole
  * subtree. What is left is the page's own heading and description — an `<h1>`
- * since **D93**, because the chrome's row is the breadcrumb's now.
+ * because the chrome's row is the breadcrumb's now.
  *
  * Which nav entries exist still follows the capability flags — with e-mail off
  * there is nothing to change an address to, and with API keys off the page
- * 404s, so a link to it would be a link to a dead end (FR-MAIL-2, FR-KEY-1).
+ * 404s, so a link to it would be a link to a dead end.
  */
 
 export function accountNavItems(ui: UiContext, t: Catalog): ShellNavItem[] {
@@ -74,7 +74,7 @@ export function AccountShell({
 }) {
   return (
     <section>
-      {/* `PageHeader`, the same one `/admin/*` uses (**D93**): the `<h1>` is
+      {/* `PageHeader`, the same one `/admin/*` uses: the `<h1>` is
           the page's since the breadcrumb took the chrome's header row, and the
           route-change focus target has to be the same element in both areas. */}
       <PageHeader title={title} description={description} />

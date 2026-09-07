@@ -5,14 +5,14 @@ import { fileURLToPath } from "node:url"
 import { defineConfig } from "drizzle-kit"
 
 /**
- * drizzle-kit configuration (DM-1, DM-4, risk R8).
+ * drizzle-kit configuration.
  *
  * It sits next to the schema it describes rather than at the repo root, because
  * both the generated schema and the migrations the runtime reads live in
  * `apps/web` and drizzle-kit resolves every path relative to this file.
  *
  * `migrations.schema` is the important line: without it drizzle's own
- * bookkeeping table lands in `public`, which Q16/DM-4 forbid — the IdP must be
+ * bookkeeping table lands in `public`, which Q16/the spec forbid — the IdP must be
  * installable into a database whose `public` schema belongs to someone else.
  *
  * Only `pnpm --filter web run db:generate` uses this. The runtime migrator

@@ -1,5 +1,5 @@
 /**
- * Who may call an administrative endpoint (FR-ROLE-3, FR-ADMIN-6).
+ * Who may call an administrative endpoint.
  *
  * One middleware, used by every endpoint this app adds, so a new endpoint
  * cannot forget the check — and enforced against `admin.adminRoles` from the
@@ -40,24 +40,24 @@ export function requireAdmin(config: IdpConfig) {
 }
 
 /**
- * The caller, whether they arrived with a cookie or an API key (FR-ADMIN-6).
+ * The caller, whether they arrived with a cookie or an API key.
  *
  * `getAuthoritativeSessionFromCtx` re-reads the session *row* past the cookie
  * cache, which is what an admin endpoint needs: a role change or a revocation
- * has to bite now, not whenever the ≤ 5 min cache of FR-AUTH-5 expires.
+ * has to bite now, not whenever the ≤ 5 min cache expires.
  *
  * But it does that by setting `ctx.context.session = null` and reading the
  * cookie again — and an API-key caller has no cookie. The api-key plugin built
  * their session in a `before` hook, so the authoritative read discards it and
  * answers 401, which made the whole admin API unreachable to exactly the
- * callers FR-ADMIN-6 exists for. Found by `integration/admin.test.ts`.
+ * callers the admin API exists for. Found by `integration/admin.test.ts`.
  *
  * So: try authoritative first, and fall back to whatever the hooks already
  * resolved — putting it back where the authoritative read nulled it, or every
  * later hook in the chain sees an anonymous request.
  *
  * The key-built session is not the stale one of the two. `gateApiKeyPlugin`
- * re-reads the owner's standing on *every* use (FR-KEY-2), so a banned owner's
+ * re-reads the owner's standing on *every* use, so a banned owner's
  * key stops working immediately — sooner than a cookie session would.
  */
 async function resolveSession(

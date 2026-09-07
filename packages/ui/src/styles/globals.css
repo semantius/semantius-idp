@@ -68,7 +68,7 @@
        see `--input` below, on whose new fill this ink is what a placeholder is
        drawn in. 6.56:1 on white, 6.02:1 on `--muted` and 4.66:1 on a field,
        against 4.81:1, 4.41:1 and 4.30:1 before -- the last two of which were
-       already under R-1's 4.5:1 floor and are not caught by any gate, because
+       already under the spec's 4.5:1 floor and are not caught by any gate, because
        axe measures neither placeholder text nor a pairing no page happens to
        render. */
     --muted-foreground: oklch(0.48 0.013 58.071);
@@ -76,7 +76,7 @@
     --accent-foreground: oklch(0.216 0.006 56.043);
     /* Darkened from the preset's own 0.577. `variant="destructive"` is
        `bg-destructive/10 text-destructive`, which put #e7000b on #fde5e7 --
-       3.98:1, under the 4.5:1 WCAG AA floor R-1 requires, and every page with
+       3.98:1, under the 4.5:1 WCAG AA floor the spec requires, and every page with
        a destructive dialog trigger failed the axe gate in `e2e/a11y.spec.ts`.
        0.525 measures 4.62:1 for that pairing and 5.53:1 for white on the solid
        color. A deliberate divergence from the preset: re-applying one resets
@@ -138,7 +138,7 @@
        `--card`, and the checkbox 1.50:1. 26 % measures 1.48:1 and 2.14:1.
        It stops there rather than matching light mode's step: at 30 % the
        schema explorer's search placeholder -- `--muted-foreground`, which this
-       theme keeps -- falls to 4.27:1, under R-1's floor. */
+       theme keeps -- falls to 4.27:1, under the spec's floor. */
     --input: oklch(1 0 0 / 26%);
     --ring: oklch(0.553 0.013 58.071);
     --chart-1: oklch(0.845 0.143 164.978);

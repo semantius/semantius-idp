@@ -7,7 +7,7 @@ import { getCatalog } from "@/server/i18n"
 
 /**
  * `/error` — where an authorization request goes when it cannot go back
- * (FR-OIDC-9, SEC-3).
+ *.
  *
  * OAuth errors are normally *redirected* to the client, with `error` and
  * `state` in the query. That is only safe once the `redirect_uri` has been
@@ -41,7 +41,7 @@ function ErrorPage() {
   const t = getCatalog(ui.locale)
 
   // 429 gets its own wording because "try again" is actionable and the others
-  // are not. The threshold itself is never shown (SEC-2).
+  // are not. The threshold itself is never shown.
   const rateLimited = error === "rate_limited"
 
   return (

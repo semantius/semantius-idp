@@ -1,6 +1,6 @@
 /**
  * `oauth_clients.jsonc` is the source of truth; this makes the database agree
- * (FR-OIDC-2, OPS-2).
+ *.
  *
  * The file is edited, the container restarts, and the rows follow. That only
  * works if the sync is total — a client removed from the file has to *stop
@@ -9,15 +9,15 @@
  * when `oauth.reconcile.prune` says so.
  *
  * **The sweep is scoped to file-managed rows** (`userId === null`), which is
- * what lets D50's admin-registered clients coexist with these: a row with an
+ * what lets the spec's admin-registered clients coexist with these: a row with an
  * owner is not an orphan, and no restart touches it. That scoping predates
- * D50 — it is what made D50 cheap.
+ * it is what made admin registration cheap.
  *
  * **Everything in one transaction, under one advisory lock, on the direct
  * connection.** Two containers starting together would otherwise both compute
  * a diff from the same before-state and apply it twice; a session-level lock
  * does not hold through a transaction pooler, which is why this takes the
- * direct handle (D27, S4). The transaction is what stops a crash halfway
+ * direct handle. The transaction is what stops a crash halfway
  * through leaving a client with new redirect URIs and a stale secret.
  *
  * The secret is re-hashed **only when it changed**, so an unchanged file makes
@@ -42,7 +42,7 @@ export interface ReconcileDeps {
   config: IdpConfig
   /** Request traffic's handle: reads and the transaction itself. */
   database: DbHandle
-  /** The **direct** connection, for the advisory lock (D27). */
+  /** The **direct** connection, for the advisory lock. */
   locking: DbHandle
   audit?: Audit
   logger?: Logger
@@ -140,7 +140,7 @@ async function applyReconciliation(
       }
     }
 
-    // -- absent from the file (FR-OIDC-2) ---------------------------------
+    // -- absent from the file ---------------------------------
     const orphans = existing.filter(
       (row) => !wantedIds.includes(row.clientId) && row.userId === null
     )
@@ -164,7 +164,7 @@ async function applyReconciliation(
       }
     }
 
-    // -- resource links (FR-OIDC-6) ---------------------------------------
+    // -- resource links ---------------------------------------
     for (const entry of entries) {
       const wanted = resourceLinksFor(entry, config)
       const changed = await syncResourceLinks(
@@ -192,7 +192,7 @@ async function applyReconciliation(
       deleted: diff.deleted.length,
       relinked: diff.relinked.length,
     })
-    // Ids only: a client secret must never reach the trail (SEC-6, SEC-10).
+    // Ids only: a client secret must never reach the trail.
     await audit?.record({
       action: "client.reconciled",
       outcome: "success",
@@ -258,7 +258,7 @@ function equal(a: unknown, b: unknown): boolean {
 }
 
 /**
- * A transaction handle. Exported because the admin client endpoints (D50) run
+ * A transaction handle. Exported because the admin client endpoints run
  * {@link syncResourceLinks} and {@link revokeTokensFor} in transactions of
  * their own, and a second implementation of either would be a second chance to
  * leave a deleted client's refresh tokens alive.
@@ -323,7 +323,7 @@ export async function syncResourceLinks(
 }
 
 /**
- * Kills everything a removed client could still be holding (FR-OIDC-2).
+ * Kills everything a removed client could still be holding.
  *
  * Consents go too: a client that comes back later is a *new* grant decision,
  * and silently resuming the old one would let a removed-and-restored client

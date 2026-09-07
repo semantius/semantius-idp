@@ -6,7 +6,7 @@ import { getCatalog } from "@/server/i18n"
 import { APP_ROUTES } from "@/server/oidc/base-path"
 
 /**
- * `/banned` (FR-ADMIN-4).
+ * `/banned`.
  *
  * Deliberately *not* the neutral refusal the other blocked states get: a
  * suspended user is told so, with the reason and expiry when they are set, so

@@ -93,6 +93,15 @@ Decisions that changed a numbered requirement carry their `D` number from
 - **Start-up warns when the SQL console and two-factor authentication are
   both on** (**D127**): the console reads the rows that hold the encrypted
   TOTP secrets and backup codes.
+- **The nightly SEC-9 audit went red on five `moderate` advisories** in two
+  packages, both reached only through the shadcn CLI's MCP server —
+  `@workspace/ui → shadcn → @modelcontextprotocol/sdk → express → qs@6.15.3`
+  (GHSA-x5fp-wj9c-mxmx, GHSA-4mjr-xmp4-gh2g) and `… → hono@4.13.3`
+  (GHSA-gqvv-2mrq-wpjv, GHSA-g6gw-c38x-mqfc, GHSA-crvj-82cr-hjcx). One
+  version of each in the tree, dev-only, nothing in the image. Closed per
+  **D85** with exact global overrides, `qs: 6.16.0` and `hono: 4.13.7`, both
+  inside their parents' declared ranges. The `low` on
+  `drizzle-kit>tsx>esbuild` remains the one advisory D85 leaves by name.
 
 ### Added
 

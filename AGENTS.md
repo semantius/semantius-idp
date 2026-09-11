@@ -83,6 +83,21 @@ rg -oi -g '!node_modules' -g '!dist' -g '!*.lock' -g '!packages/ui/src/component
   '\b(materialis|anonymis|serialis|normalis|initialis|organis|recognis|authoris|memois|catalogue|behaviour|colour|honour|artefact|judgement|whilst|amongst|centred|licence|labelled|cancelled|enrolment|enrol\b|optimisation)\w*'
 ```
 
+### Line endings are LF, and `.gitattributes` enforces it
+
+`* text=auto eol=lf`, with `*.cmd`/`*.bat` as the CRLF exception cmd.exe
+needs. This machine has `core.autocrlf=true` in both the system and the user
+gitconfig, and until 2026-09-11 there was no `.gitattributes` to overrule it:
+the working tree was a mix of CRLF (whatever git checked out) and LF (whatever
+a tool rewrote), git warned `LF will be replaced by CRLF` on every file a tool
+touched, and four `docker/idp-*.sh` scripts were CRLF on disk and would not
+run under bash. **If that warning ever comes back, an attribute is missing —
+do not "fix" it by converting files or flipping `autocrlf`.** A new file type
+that must be CRLF gets its own `eol=crlf` line; a new binary type gets
+`binary`. After changing the attributes, `git add --renormalize .` and
+re-check the tree out, then `git ls-files --eol` should show `w/crlf` on
+`.cmd` files and nothing else.
+
 ### Comments explain why, not what
 
 The code says what it does. The comment says why it is that way, what was tried

@@ -39,8 +39,9 @@ function New-ClientSecret    { (New-Secret).Replace('+', '-').Replace('/', '_') 
 
 # `[^\r\n]*` rather than `.*`: in .NET `.` matches a lone \r, so `.*$` under
 # (?m) would eat the CR of a CRLF file and leave that one line LF-terminated in
-# an otherwise CRLF .env. .env.example has no eol attribute, so it is checked
-# out CRLF on Windows -- the substitution has to preserve whatever it finds.
+# an otherwise CRLF .env. .gitattributes checks .env.example out LF, but a
+# copy an editor has saved as CRLF is still a CRLF file -- the substitution
+# has to preserve whatever it finds.
 function Set-EnvValue([string]$text, [string]$key, [string]$value) {
   $re = [regex]::new('(?m)^' + [regex]::Escape($key) + '=[^\r\n]*')
   if (-not $re.IsMatch($text)) {

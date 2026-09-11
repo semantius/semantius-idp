@@ -1,0 +1,16 @@
+# Every text file is LF in the index *and* in the working tree, whatever the
+# machine's core.autocrlf says. Without this, a Windows checkout under
+# autocrlf=true wrote CRLF for whatever git checked out and LF for whatever a
+# tool rewrote, so the tree was a mix, git warned on every LF file, and the
+# shell scripts broke: bash stops at `$'\r': command not found`, and
+# docker/initdb/*.sh runs inside a Linux container that has no autocrlf to
+# undo it. .prettierrc's `endOfLine: "lf"` is the same rule for the formatter.
+* text=auto eol=lf
+
+# cmd.exe is the one consumer that needs CRLF: with LF-only lines its label
+# and `goto`/`call :label` handling misparses near 512-byte boundaries.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+*.png binary
+*.ico binary

@@ -158,6 +158,13 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ### Fixed
 
+- **A Windows checkout no longer breaks the shell scripts.** The repository
+  had no `.gitattributes`, so under `core.autocrlf=true` git checked text out
+  CRLF — `docker/idp-*.sh` then stopped at `$'\r': command not found`, and a
+  fresh clone would have handed Postgres a CRLF `docker/initdb/10-idp-role.sh`.
+  Every text file is now LF in the working tree as well as in the index
+  (`* text=auto eol=lf`), except `*.cmd`/`*.bat`, which are CRLF for
+  cmd.exe. The index was already all LF; no content changed.
 - The draft stash never keeps a field named like a one-time code, PIN or
   backup code (`otpCode`, `confirmPin`, `backup_codes`), alongside the
   password and secret names it already dropped.

@@ -271,4 +271,50 @@ describe("resolveClientAddress — the edge's one resolution", () => {
     expect(ipAddress).toBeUndefined()
     expect(stamped.headers.has(SOCKET_ADDRESS_HEADER)).toBe(false)
   })
+
+  /**
+   * What `vite dev` hands the entry: srvx's `NodeRequest`, which is not a
+   * Request but has the native prototype under its own, so `instanceof`
+   * passes. Node's `new Request(it)` then reads undici state it does not
+   * have and throws "reading 'window'" — which is what every page under the
+   * dev server did until the edge copied the request from its parts.
+   */
+  function foreign(method: string, body?: string): Request {
+    const real = new Request("https://idp.example.com/login", {
+      method,
+      headers: { "x-forwarded-for": "203.0.113.5" },
+      ...(body === undefined ? {} : { body }),
+    })
+    class NodeRequestLike {
+      url = real.url
+      method = real.method
+      headers = real.headers
+      body = real.body
+      signal = real.signal
+    }
+    Object.setPrototypeOf(NodeRequestLike.prototype, Request.prototype)
+    return new NodeRequestLike() as unknown as Request
+  }
+
+  it("copies a request that only looks like one, as the dev server sends", () => {
+    expect(() => new Request(foreign("GET"))).toThrow(/window/)
+
+    const { request: stamped, ipAddress } = resolveClientAddress(
+      foreign("GET"),
+      true
+    )
+    expect(ipAddress).toBe("203.0.113.5")
+    expect(stamped.headers.get(SOCKET_ADDRESS_HEADER)).toBe("203.0.113.5")
+    expect(stamped.method).toBe("GET")
+    expect(stamped.url).toBe("https://idp.example.com/login")
+  })
+
+  it("carries a posted body across the copy", async () => {
+    const { request: stamped } = resolveClientAddress(
+      foreign("POST", "email=jane%40example.com"),
+      true
+    )
+    expect(stamped.method).toBe("POST")
+    await expect(stamped.text()).resolves.toBe("email=jane%40example.com")
+  })
 })

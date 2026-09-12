@@ -81,6 +81,7 @@ describe("the spec defaults", () => {
       oauth: {
         accessTokenTtl: 15 * 60,
         idTokenTtl: 3600,
+        protectedResources: [],
         codeTtl: 60,
         refreshTokenTtl: 30 * 86_400,
         refreshTokenMaxLifetime: 90 * 86_400,

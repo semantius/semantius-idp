@@ -700,6 +700,31 @@
             ]
           }
         },
+        "protectedResources": {
+          "description": "Publish RFC 9728 protected-resource metadata for each resource server that shares this origin, e.g. `[{ \"path\": \"/rest\" }]`. The first entry is also served at `/.well-known/oauth-protected-resource`, which is the document an MCP or CLI client reads first. Empty — the default — 404s that path, which is what a deployment that fronts no resource server wants.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Path of the resource server on this deployment's own origin, e.g. `/rest`. Leading slash, no trailing slash, no query or fragment; the published `resource` is the issuer's origin plus this path, so it follows `server.dynamicIssuer`."
+              },
+              "scopes": {
+                "description": "Published as `scopes_supported`. A client appends these to the scopes it already asks for and sends the result verbatim to the authorization endpoint, so every value must be one this IdP will actually grant — start-up refuses a scope that is not in `oauth.scopes`. Empty, the default, is the right answer for a resource that needs no scope of its own.",
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "additionalProperties": false
+          }
+        },
         "reconcile": {
           "default": {},
           "type": "object",

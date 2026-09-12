@@ -58,13 +58,44 @@ export interface Runtime {
 
 let pending: Promise<Runtime> | undefined
 
-export function getRuntime(): Promise<Runtime> {
-  pending ??= buildRuntime().catch((error: unknown) => {
-    // Do not cache a failure: an operator who fixes the config expects the
-    // next request to pick it up without restarting the container.
-    pending = undefined
-    throw error
+/**
+ * The last start-up failure that was logged.
+ *
+ * `getRuntime()` rethrows to its caller, and until 2026-09-11 that was all:
+ * a page's root loader failed, the document shell then crashed on the data it
+ * never got, and the log showed that `TypeError` in place of the reason —
+ * `relation "account" already exists`, the day the working tree went LF. Only
+ * `/readyz` ever said why, and nobody was asking it. Logged here instead, so
+ * every caller's failure names its cause, and once per distinct message,
+ * because every request retries a failed start-up.
+ */
+let lastLoggedFailure: string | undefined
+
+function logStartupFailure(error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error)
+  if (message === lastLoggedFailure) return
+  lastLoggedFailure = message
+  // Its own logger: the runtime is the thing that could not be built. The
+  // defaults are what the edge uses before configuration is known.
+  createLogger({ base: { service: "idp" } }).error("start-up failed", {
+    reason: message,
   })
+}
+
+export function getRuntime(): Promise<Runtime> {
+  pending ??= buildRuntime().then(
+    (runtime) => {
+      lastLoggedFailure = undefined
+      return runtime
+    },
+    (error: unknown) => {
+      // Do not cache a failure: an operator who fixes the config expects the
+      // next request to pick it up without restarting the container.
+      pending = undefined
+      logStartupFailure(error)
+      throw error
+    }
+  )
   return pending
 }
 

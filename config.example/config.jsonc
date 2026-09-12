@@ -260,6 +260,39 @@
       //   "accessTokenTtl": "5m" }
     ],
 
+    // RFC 9728 protected-resource metadata for a resource server that shares
+    // this origin — PostgREST at `/rest`, an MCP endpoint at `/mcp`. A client
+    // handed nothing but a hostname reads this document FIRST and follows
+    // `authorization_servers` to the IdP; without it the walk stops at a 404
+    // and discovery never reaches the RFC 8414 document below it. Empty — the
+    // default — 404s `/.well-known/oauth-protected-resource`, which is right
+    // for a deployment that fronts no resource server.
+    //
+    // A PATH, not a URL: the `resource` published is the issuer's ORIGIN plus
+    // this path, so it follows `server.dynamicIssuer` and stays byte-for-byte
+    // consistent with the `authorization_servers` entry beside it — which is
+    // the pair a client checks. A resource on another origin cannot be
+    // published from here at all; RFC 9728 documents live at the resource's
+    // own host.
+    //
+    // Each entry is served twice: at `/.well-known/oauth-protected-resource`
+    // for the FIRST entry, which is the URL every CLI and MCP client reads,
+    // and at `/.well-known/oauth-protected-resource<path>` for every entry,
+    // which is the location §3.1 derives. Under a sub-path deployment both
+    // are above the mount point and belong to the reverse proxy —
+    // `Caddyfile.subpath` routes them.
+    //
+    // `scopes` is published as `scopes_supported` and APPENDED by the client
+    // to the scopes it already asks for, then sent verbatim to
+    // /oauth2/authorize, where an unknown scope fails the authorization. So
+    // every value must be in `oauth.scopes` above; start-up refuses one that
+    // is not. Leave it empty unless the resource really needs a scope of its
+    // own.
+    "protectedResources": [
+      // { "path": "/rest" },
+      // { "path": "/mcp", "scopes": [] }
+    ],
+
     // false: a client removed from oauth_clients.jsonc is disabled and its
     // tokens revoked. true: its rows are deleted instead.
     "reconcile": { "prune": false }

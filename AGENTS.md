@@ -24,7 +24,7 @@ Four files, in this order. Read them before proposing anything.
 | File | What it is |
 | --- | --- |
 | [status.md](status.md) | The handoff. Done, not-done, and why — the ground truth between sessions. |
-| [spec-v1.md](spec-v1.md) | Signed off, amended through **D127**. Numbered requirements, and §12.1's decision log with the reasoning. |
+| [spec-v1.md](spec-v1.md) | Signed off, amended through **D129**. Numbered requirements, and §12.1's decision log with the reasoning. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | The gates, the style, and how to amend the spec. |
 | [docs/release.md](docs/release.md) | What is left before v1.0.0, and it is the owner's, not yours. |
 
@@ -256,36 +256,71 @@ showing, and Playwright's strict mode fails the *test*. The e2e helpers export
 `modal(page)`, which selects `[data-slot="dialog-content"]` — what
 `DialogContent` stamps and the toast does not. Use it, never the role.
 
-**`--destructive` diverges from the shadcn preset on purpose.** The preset's
-own value made `variant="destructive"` — `bg-destructive/10 text-destructive` —
-a 3.98:1 pairing, under R-1's 4.5:1 floor, and the axe gate failed on every
-page with a destructive dialog trigger. Both themes are darkened, with the
-measurements in `globals.css` beside the token. **Re-applying a preset resets
-it**, so re-measure after any `shadcn apply`.
+**The palette is two files, and the order between them is the mechanism**
+(**D128**). `packages/ui/src/styles/globals.css` is stock shadcn output and
+stays that way: it is the `tailwind.css` target of both `components.json`
+files, so `shadcn apply --preset` rewrites its token blocks, and the three
+corrections that used to live there — `--destructive`, `--input`,
+`--muted-foreground` — would have gone back to the preset's values on the next
+run without a word. They live in `theme-a11y.css`, which the CLI does not know
+exists, and `app.css` imports it after `globals.css`. `app.css` is what
+`__root.tsx` loads and the only stylesheet `@workspace/ui` exports. Both files'
+blocks are unlayered `:root` / `.dark` at (0,1,0), so the corrections win on
+source order alone. The vendored shadcn skill says to put variables in the
+`tailwind.css` file and never to create another; for a correction to the
+preset's own tokens, that advice is what D128 undid. Three things follow:
 
-**`--input` is a *fill* in this style, and it arrived holding a hairline
-color** (**D96**). `input`, `textarea`, `native-select` and `checkbox` are all
-`border-transparent bg-input/50` — `/90` for the checkbox — so a control's fill
-is the only thing on screen that says it is there, while the stone base color
-ships `--input` equal to `--border`. At 50 % over a white card that is
-`#f3f2f1`: **1.11:1**, invisible on a dim panel and perfectly visible in a
-screenshot, which is how it survived weeks. Both themes are darkened, with the
-numbers beside the token. Two things follow. **A border is not the fix here**,
-however much it should be: `border-transparent` is set by four registry
-components and an edit there is undone by the next `shadcn add`. And
-**darkening a ground moves the floor of anything drawn on it** —
-`--muted-foreground` had to move with it for the one placeholder in the
-application, and its own measurements in `neon-supplement.css` had to be
-restated. **Re-applying a preset resets all of it.**
+- **Never correct a token in `globals.css`**, and set a correction in *both*
+  of `theme-a11y.css`'s blocks. Its `:root` also comes after `globals.css`'s
+  `.dark`, and `<html class="dark">` matches both, so a token set in `:root`
+  alone replaces the dark value too. semantius-app shipped exactly that: a
+  light placeholder ink on its dark theme, 2.72:1.
+- **`src/tests/unit/token-contrast.test.ts` measures the palette the browser
+  gets**: both files, resolved in cascade order, against every pair the kit
+  paints. That covers the focus ring, the control boundary, the placeholder,
+  and destructive text on its own hover tints. It is the only gate that reaches
+  a hover tint or a placeholder, since axe sees neither. It also asserts the
+  wiring, because losing the import order breaks no build.
+- **Every pair is measured twice.** The preset's reds and greens are outside
+  sRGB. axe clips them (axe-core 4.13's `parseString`), CSS Color 4 gamut-maps
+  them, and the two can disagree by half a ratio point; the test takes the
+  lower. That is why this repository's `--destructive` and `--sidebar-primary`
+  are not semantius-app's: its values clear only under the mapping. Write a
+  correction *in* gamut, where the two agree. `a11y:tokens` does.
+
+**A control's boundary is a border, not a darker fill** (**D128**, replacing
+**D96**'s fix). Every control in this style is `border-transparent
+bg-input/50`, `/90` for the checkbox, so the fill is the only thing that says it
+is there: 1.12:1 on white. D96 darkened the fill to 1.41:1, which is visible and
+still under 1.4.11's 3:1, on the belief that the border could not be reached
+without editing registry files. It can. A `[data-slot=…]` rule in
+`theme-a11y.css`'s `@layer utilities` is level with the registry's
+`.border-transparent` at (0,1,0) and later in the layer, so it wins at rest,
+while `focus-visible:` and `aria-invalid:` compile to (0,2,0) and still beat it.
+**A `data-*` variant compiles through `:where()` and does not**:
+`data-checked:border-primary` is (0,1,0), so the checkbox is excluded by
+matching rather than out-ranked. Raising the rule's specificity instead would
+strip every focus indicator in the application. Verify a change here in the
+built stylesheet, never by reading class names. The token test fails when a
+registry component with a `border-transparent bg-input/*` control arrives
+without its slot in the rule.
+
+**A token the preset does not define is a utility that does not exist.**
+Until D128, `text-destructive-foreground` compiled to nothing: this style's
+preset has no `--destructive-foreground` and maps no
+`--color-destructive-foreground`, and Tailwind drops a color utility it has no
+color for, silently. So the impersonation banner painted `--foreground` on red,
+3.46:1 light and 2.69:1 dark, and nothing noticed, because no scanned page
+impersonates anybody. The mapping is in `theme-a11y.css`'s `@theme inline`, and
+the test fails for any palette token a class names without one.
 
 **A preset token that carries an *icon* well may not carry *text* at all.**
-`--sidebar-primary` against `--sidebar-primary-foreground` measures **3.07:1**
-light and **2.12:1** dark. semantius-app's brand and avatar squares use it and
-are fine, because what sits on them is a white SVG. The same classes copied
-onto a square holding an initial would have failed R-1 on every page of both
-signed-in areas; `nav-user.tsx` uses the accent surface instead (16.04:1 /
-14.56:1) and records the numbers beside the class. **Measure before you copy a
-pairing from the reference app**, and re-measure after a preset.
+`--sidebar-primary` against `--sidebar-primary-foreground` measured **3.07:1**
+light and **2.12:1** dark at the preset's value. semantius-app's brand squares
+use the pair for a white SVG; `nav-user.tsx` draws an initial, so it uses the
+accent surface instead (16.04:1 / 14.56:1). D128 corrects the token to 4.74:1
+anyway, but the rule stands: **measure before you copy a pairing from the
+reference app.**
 
 **A control inside a `role="tree"` has to be inside a `treeitem`, not beside
 one** (**D84**). `/admin/database`'s run button is in the schema tree, and axe
@@ -471,6 +506,31 @@ builds its own `postgres()` handle takes its TLS setting from
 `testDatabaseSsl()`, never from `url.includes("localhost")` — that spelling is
 the `127.0.0.1` trap D57 and D68 each cost a day to, and here it surfaces as
 "Client network socket disconnected", which reads like a network fault.
+
+**`oauth.resources` and `oauth.protectedResources` are different facts, and
+the first one is the trap** (**D129**). `oauth.resources[]` is the RFC 8707
+audience registry: entries are *identifiers*, reconciled into `oauth_resource`
+and linked to every client, so adding one changes what `aud` the tokens carry.
+`oauth.protectedResources[]` is RFC 9728: where a resource server *lives*, so
+a client can discover this issuer from it. In the reference stack the two
+values for one API are `semantius://api` and `/rest` — an opaque URN and a
+path on the issuer's origin — so neither key can be derived from the other. A
+protected resource is a **path** and never a URI, because the document asserts
+`authorization_servers: [issuer]` and a client requires the metadata at that
+issuer to name the same issuer back; `{origin}{path}` moves with the issuer
+under `server.dynamicIssuer` and a literal URI does not. It is also the only
+shape that can be right: RFC 9728 documents live at the resource's own host,
+so a resource on another origin is not this deployment's to publish.
+
+**A new `/.well-known/*` document needs a reverse-proxy rule as well as a
+route** (**D129**, the same shape as **D2**). Under a sub-path the URL clients
+fetch is at the *origin root*, above this app's mount point, so
+`docker/Caddyfile.subpath` has to rewrite it onto the mount path —
+`Caddyfile` (host root) needs nothing, because it proxies everything. The
+sibling `semantius` stack's front door has a general `/.well-known/*` rule
+already, which is why an unrouted well-known path there answers with **this
+app's** `notFound()` page rather than the SPA's: `data-base-path="/idp"` in the
+HTML is how to tell the two apart.
 
 **A field's `id` is generated, never its `name`.** `name` is unique in a form
 and emphatically not in a document: `/account/security` has three fields called
@@ -697,6 +757,46 @@ request for `auth.handler` — the gateway mint does — sets that header, never
 `x-forwarded-for`. Rate-limit keys read `currentRequest().clientIp` through
 `rateLimitKeyAddress`, not `ipAddress`, which is already a /24.
 
+**Under `vite dev` the entry's request is not a Request, so never copy it with
+`new Request(request)`.** TanStack Start's dev middleware wraps Node's request
+in srvx's `NodeRequest`, which sets its prototype to the native one so that
+`instanceof Request` passes, but it has none of undici's internal state. Node's
+constructor then throws `Cannot read properties of undefined (reading
+'window')`, which reads like a missing browser global. That is what the edge's
+copy in `resolveClientAddress` did, on every page, for four days after D115,
+while every gate stayed green. Bun's server hands over a native Request, so the
+image cannot show it, and `dev-server.test.ts` only fetched Vite's own paths.
+Copy from the parts instead (`copyWithHeaders` in `client-ip.ts`), and
+`dev-server.test.ts` now sends `/healthz` through the entry.
+`serve.ts`'s copy is Bun-only and fine as it is.
+
+**A migration is identified by its hash, so a migration that has run anywhere
+is frozen.** `db/migrate.ts` records the SHA-256 of each file and treats
+anything unrecorded as pending. Two things broke that on the persistent dev
+schema, and both surfaced on 2026-09-11 as `relation "account" already exists`:
+
+- **Line endings.** Before `.gitattributes`, this machine checked the SQL out
+  CRLF, and 0000 and 0001 were recorded under CRLF hashes. The runner now
+  records the LF hash and accepts the CRLF form too, so this cannot recur.
+- **A migration rewritten in place.** `0003_strange_wallop` ran on 2026-08-29
+  as `ADD COLUMN "trust_proxy"`. The column was reverted, and the same tag was
+  regenerated as `ADD COLUMN "audience"`. A database that ran the first version
+  keeps its row and its column, and needs the second as a new migration. The
+  runner applies it, because its hash is new, and `trust_proxy` stays behind,
+  harmless but orphaned. The drift gate cannot see this, because it compares
+  the files with the schema and never with a database. **Change a migration
+  that has left your machine by generating another one, never by editing it.**
+
+`integration/migrate.test.ts` replays that schema's exact state.
+
+**A failed start-up surfaces as `start-up failed` in the log and a 500 page**,
+and nothing else, so read the log before the page. `getRuntime()` used to
+rethrow in silence. Then the root route's shell destructured loader data that
+never arrived, and all you saw was `Cannot destructure property 'ui' of
+'Route.useLoaderData(...)'`, a bug in the error path standing in front of the
+real error. The shell now renders with defaults, and the reason is logged once
+per distinct message. `/readyz` still names the failing check as well.
+
 **A test that signs in with a temporary password must change it before
 touching `/account/*`, `/admin/*` or any cookie-bearing write** (**D107**).
 `mustChangePassword` is a wall now, not a page: `requireSession` and both
@@ -768,8 +868,11 @@ The CLI **prompts** before overwriting a component that already exists, and a
 non-interactive shell hangs on that prompt and writes nothing at all — no
 error, no files, exit 0. `yes n |` declines them; the run then reports what it
 skipped. Afterwards check `git status`: the only changes should be the new
-files. Nothing under `apps/web`, no `package.json`, and no `globals.css` — if
-the CLI touched the stylesheet, revert any hunk near `--destructive`.
+files. Nothing under `apps/web` and no `package.json`. A hunk in `globals.css`
+can no longer undo a contrast correction, since those live in `theme-a11y.css`
+and win on order (**D128**). But a new control drawn `border-transparent
+bg-input/*` needs its `data-slot` in that file's boundary rule, and
+`token-contrast.test.ts` fails until it has one.
 
 ### Applying a preset
 
@@ -806,10 +909,21 @@ npx shadcn@latest info --json -c packages/ui
 npx shadcn@latest info --json -c apps/web
 ```
 
-Then `pnpm install`, `pnpm lint`, `pnpm typecheck`, and — because a restyle is
-only really verified in a browser — rebuild the image and run `test:e2e`. The
-axe scans in `e2e/a11y.spec.ts` are what catch a contrast regression from a
-changed `baseColor`.
+Then re-derive the contrast corrections, because they were derived against the
+old preset's surfaces (**D128**):
+
+```bash
+pnpm --filter web run a11y:tokens
+```
+
+It measures the new palette with `theme-a11y.css` over it and prints, for any
+token that misses its floor, the nearest value that clears every pair, written
+in gamut. It does not edit the file, since a value wants a human look, and
+`pnpm test` fails until the file clears. Then `pnpm install`, `pnpm lint`,
+`pnpm typecheck`, and, because a restyle is only really verified in a browser,
+rebuild the image and run `test:e2e`. The axe scans in `e2e/a11y.spec.ts` catch
+what the token test cannot: a call site that puts the wrong two tokens
+together.
 
 ---
 

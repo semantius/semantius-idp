@@ -105,6 +105,24 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ### Added
 
+- **`/.well-known/oauth-protected-resource` — RFC 9728 metadata for a resource
+  server on this deployment's origin** (**D129**, FR-OIDC-18). A CLI or MCP
+  client discovers an instance by walking RFC 9728 to RFC 8414: this document
+  first, then the authorization server it names. The second hop has worked
+  since M8c and the first did not exist, so `semantius login --host <host>`
+  stopped at a 404. `oauth.protectedResources[]` declares each resource as
+  `{ path, scopes? }` — a **path**, so the published `resource` is
+  `{origin}{path}` and follows `server.dynamicIssuer` together with
+  `authorization_servers[0]`, which a client requires to be the issuer
+  byte-for-byte. Served at RFC 9728 §3.1's derived location
+  (`…/oauth-protected-resource<path>`) for every entry and at the bare
+  `…/oauth-protected-resource` for the first, which is the URL clients read.
+  **Empty is the default and 404s both**, so nothing changes for a deployment
+  that fronts no resource server. Start-up refuses a scope that is not in
+  `oauth.scopes` — a client appends `scopes_supported` to what it already
+  requests — and two entries on one path. `Caddyfile.subpath` gains the
+  origin-root route; `/admin/system` lists the URL when one is configured.
+  Distinct from `oauth.resources`, which is the RFC 8707 audience registry.
 - **`gateways.<name>.audience` — an opt-in audience per gateway** (**D118**).
   When set, the JWT minted for an API key or a session presented to that
   gateway carries the audience as `aud` instead of `jwt.audience`, for an
@@ -119,6 +137,21 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ### Changed
 
+- **The contrast corrections moved out of the preset's stylesheet, so a
+  `shadcn apply --preset` can no longer undo them** (**D128**). `globals.css`
+  is stock shadcn output again. The corrections are in
+  `packages/ui/src/styles/theme-a11y.css`, which `app.css` imports after it.
+  `app.css` is what the application loads and the only stylesheet
+  `@workspace/ui` exports, so `@workspace/ui/globals.css` is gone. What shows:
+  form fields go back to the preset's light fill and gain a visible gray border
+  in place of D96's darker fill, focus rings are darker, destructive red is
+  darker in light (#b0000f) and lighter in dark (#ffa29e), and the loading
+  skeletons on `/admin/database` are a shade darker. The arrangement follows
+  semantius-app's, except that every pair also has to clear under the channel
+  clip axe measures with, which its `--destructive` does not.
+  `src/tests/unit/token-contrast.test.ts` measures the resolved palette against
+  every pair the kit paints, and `pnpm --filter web run a11y:tokens` prints what
+  a new preset needs.
 - **The local test database container no longer outlives the test run.**
   `test-database.ts` stops `idp-test-db` when the command it started it for
   exits, instead of leaving it running indefinitely. The container is kept
@@ -158,6 +191,43 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ### Fixed
 
+- **A migration recorded from a CRLF checkout is no longer run again.** The
+  runner identified a migration by the SHA-256 of its file as it sat on disk.
+  A Windows checkout under `core.autocrlf=true` without `.gitattributes` had
+  recorded 0000 and 0001 with CRLF hashes. Once `523ecfe` made the working tree
+  LF, the next boot saw them as pending, re-ran 0000 and failed with
+  `relation "account" already exists` on a fully migrated database. The runner
+  now records the LF hash and accepts the CRLF form and the raw file as already
+  run. Deployments built from a clean checkout are unaffected: their files
+  were always LF.
+- **A failed start-up says why, and the page says 500.** `getRuntime()`
+  rethrew to its caller without logging. A page's root loader then failed, and
+  the document shell crashed destructuring the loader data it never got. The
+  log showed that `TypeError` (`Cannot destructure property 'ui'`) and nothing
+  about the start-up error behind it. The failure is now logged as
+  `start-up failed`, once per distinct reason, and the shell renders
+  `ErrorPage` with defaults when the root's own loader has failed.
+- **`vite dev` answers pages again.** Since the edge started resolving the
+  client address once (**D115**), every request through the dev server failed
+  with `TypeError: Cannot read properties of undefined (reading 'window')`.
+  The edge copied the request with `new Request(request)`, and under Vite the
+  request is srvx's `NodeRequest`, which passes `instanceof Request` without
+  being one that Node's constructor can copy. The copy is built from its parts
+  now. The image was never affected, because Bun hands over a native Request.
+  `dev-server.test.ts` sends a request through the server entry, which no gate
+  did before.
+- **Form controls, focus indicators and destructive hover states now meet WCAG
+  2.1 AA contrast** (**D128**). FR-ACCT-2 requires AA, and the palette missed
+  it where the axe gate never looks. A field's only boundary was a 1.41:1 fill,
+  against the 3:1 that 1.4.11 asks. The focus ring was 2.59:1 on white.
+  `text-destructive` was 3.81:1 on its hover tint in light and 3.78:1 in dark.
+  Controls now have a 3:1 border (`--input-border`), the focus ring is 7.46:1,
+  and destructive text clears 4.5:1 on every tint the kit paints it on, in both
+  themes.
+- **The impersonation banner is readable** (**D128**).
+  `text-destructive-foreground` named a token this preset does not define, so
+  Tailwind dropped the utility and the banner painted body text on red: 3.46:1
+  light, 2.69:1 dark. The token and its mapping exist now: 7.05:1 and 10.25:1.
 - **A Windows checkout no longer breaks the shell scripts.** The repository
   had no `.gitattributes`, so under `core.autocrlf=true` git checked text out
   CRLF — `docker/idp-*.sh` then stopped at `$'\r': command not found`, and a

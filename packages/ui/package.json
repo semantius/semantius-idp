@@ -44,7 +44,7 @@
     "typescript": "6.0.3"
   },
   "exports": {
-    "./globals.css": "./src/styles/globals.css",
+    "./app.css": "./src/styles/app.css",
     "./lib/*": "./src/lib/*.ts",
     "./components/*": "./src/components/*.tsx",
     "./hooks/*": "./src/hooks/*.ts"

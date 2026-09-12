@@ -1,10 +1,11 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-09-02 · **Branch:** `main` · **Head:** the security-review
-working tree on top of `45e02da` (uncommitted, awaiting the owner's review —
-see "The pre-1.0 security review" below), last tag **v0.6.5**
-**Plan:** `~/.claude/plans/we-are-close-to-cozy-wand.md` (the security review)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D127**
+**As of:** 2026-09-12 · **Branch:** `main` · **Head:** the contrast,
+dev-server, migration and protected-resource working tree on top of `523ecfe`
+(uncommitted — see the first four sections below), last tag **v0.6.6**
+**Plan:** none; the owner's requests of 2026-09-11 (**D128**) and 2026-09-12
+(**D129**)
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D129**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
 gate; API gateways (FR-GW, **D91**/**D92**) landed on 2026-08-29, and the
@@ -121,11 +122,335 @@ README quick start against it, and confirming `latest` from outside.
 
 ### 2. Open, non-blocking
 
-- Nothing. The one item that stood here — the stranded dev login on the
-  persistent `idp` schema — is resolved by **D52**: drop that schema and the
-  next boot serves the first-run setup page, which is now the only way an
-  administrator is ever created. No credential to recover, and no command that
-  changes one.
+- **Four focus indicators are halos with nothing solid under them** (**D128**,
+  left open). Measured with the corrected `--ring`: `schema-explorer.tsx`'s
+  search row and `sql-runner.tsx`'s editor use `ring-ring/40` (1.92:1 light,
+  2.48:1 dark on the card), their buttons use `ring-ring/50` (2.32:1 / 3.15:1),
+  and the password field's reveal toggle in `form-parts.tsx` uses `ring-ring/50`
+  over the field (2.24:1 / 2.91:1). 1.4.11 asks for 3:1. None is a palette
+  pair, so the token test cannot reach them. The two forks could be corrected
+  in `neon-supplement.css` the way their low-alpha inks are, and the toggle at
+  its call site. Each changes what a focused control looks like, so each is
+  the owner's call.
+- **`database.spec.ts`'s "the schema selector moves the tree" can race
+  hydration.** It waits for the tree, which is server-rendered, and then
+  selects `public`. When that lands before hydration, the SSR `<select>` takes
+  the value, no `onChange` exists yet to fetch anything, and React puts its
+  controlled `idp` back. The trace of the one failure (2026-09-11, subpath)
+  shows no `/_serverFn/` request at all. It passed 4 of 4 on a rerun. The fix
+  is test-only: wrap the select and the tree assertion in
+  `expect(async () => …).toPass()`, so the interaction retries until the
+  round trip happens.
+- **The admin axe scan can beat `/admin/database`'s layout** (2026-09-11,
+  once in four full runs, under load). react-resizable-panels sets a
+  separator's `aria-valuenow` after it measures the group, and a scan that
+  lands first sees `role="separator" tabindex="0"` without it: critical
+  `aria-required-attr`. The fix is test-only. Before scanning that page, wait
+  for `[data-slot="resizable-handle"][aria-valuenow]`.
+- **The persistent dev schema keeps two leftovers from the rewritten 0003**
+  (2026-09-11). One is `idp.gateway.trust_proxy` (boolean, nullable, default
+  false), which no code reads. The other is the bookkeeping row for the version
+  that added it (`id 4`). Both are harmless. Dropping them is a write to the
+  persistent schema, so it is the owner's call. The same database also holds
+  an `idp_timing_probe` schema that this session did not create and left alone.
+- **The v0.6.6 tag did not cut a CHANGELOG section.** `release.sh` bumped the
+  three version files, and everything since v0.6.5 still sits under
+  `[Unreleased]`, including what v0.6.6 shipped.
+- The stranded dev login on the persistent `idp` schema, which used to stand
+  here, is resolved by **D52**: drop that schema and the next boot serves the
+  first-run setup page, which is now the only way an administrator is ever
+  created. No credential to recover, and no command that changes one.
+
+---
+
+## The CLI's first discovery hop exists now (2026-09-12, **D129**)
+
+**Uncommitted, on top of `523ecfe` with the three sections below it.**
+
+The owner's request: `semantius login --host localhost:3000` stopped at
+
+```
+Error [HOST_RESOLUTION_FAILED]: http://localhost:3000/.well-known/oauth-protected-resource returned 404
+```
+
+and nothing else was missing — they had verified the rest by serving that one
+document from a local stub pointed at the real IdP. A CLI or MCP client
+discovers an instance by walking **RFC 9728 → RFC 8414**: the protected-resource
+document first, then the authorization server it names. The second hop has
+worked here since M8c. The first did not exist.
+
+**Where the 404 was coming from, because the request said "the SPA".** The
+`semantius` stack's Caddy has a general `handle /.well-known/*` that rewrites
+onto `/idp{uri}`, so the path reached *this app* and fell through to its own
+`notFound()` — `data-base-path="/idp"` and the IdP's CSP in the HTML are how to
+tell that page from the SPA's. So the whole fix is here and the stack's front
+door needs no change. `docker/Caddyfile.subpath` did need one, because it
+rewrites only the two RFC 8414 spellings and lets everything else fall to its
+404 (rule 3 there now, beside rule 2, for the same reason).
+
+**The four decisions, asked before anything was written** (the config default,
+the paths served, the admin surface, the spec shape), all answered with the
+recommendation:
+
+- **`oauth.protectedResources[]`, entries `{ path, scopes? }`.** A *path*, so
+  the published `resource` is `{origin}{path}`: it then follows
+  `server.dynamicIssuer` together with `authorization_servers[0]`, and that
+  pair is exactly what a client checks byte-for-byte — it derives
+  `<origin>/.well-known/oauth-authorization-server<path>` from the second and
+  requires that document to name the same issuer back. A literal URI would
+  name a fixed host while the issuer followed the request. A list, so the
+  managed cloud's root + `/mcp` shape needs no config migration.
+- **`oauth.resources` was the tempting home and is the wrong one.** Those are
+  RFC 8707 resource *indicators*, seeded into `oauth_resource` and linked to
+  every client, so declaring `/rest` there would change what `aud` the tokens
+  carry. In this stack the two values for one API are genuinely different:
+  `semantius://api` and `/rest`. AGENTS.md now says so.
+- **Both paths.** §3.1 derives `…/oauth-protected-resource<path>` for a
+  resource with a path; the bare `…/oauth-protected-resource` is what the CLI
+  and the cloud read. Both are served with the identical body, from the first
+  configured entry for the bare one.
+- **Empty is the default and 404s both**, so a deployment that fronts no
+  resource server is unchanged. There is no defensible fallback: the only
+  derivable value, the origin itself, would assert that the IdP is the
+  protected resource.
+- **Two start-up refusals**, because each failure otherwise lands a long way
+  from its cause: a `scopes` value not in `oauth.scopes` (a client *appends*
+  `scopes_supported` to what it already requests and sends the result to
+  `/oauth2/authorize`, so a typo here fails a stranger's login), and two
+  entries on one path (which would let list order decide what a URL serves).
+
+**What it looks like.** Verified live against `vite dev` on a throwaway
+`idp_check_prm` schema and a throwaway config folder, at
+`IDP_BASE_URL=http://localhost:3100/idp` — the sub-path shape, where the
+origin-vs-issuer distinction is visible:
+
+```
+$ curl -s http://localhost:3100/idp/.well-known/oauth-protected-resource
+{"resource":"http://localhost:3100/rest",
+ "authorization_servers":["http://localhost:3100/idp"],
+ "scopes_supported":[],"bearer_methods_supported":["header"]}
+```
+
+`200`, `content-type: application/json`, `cache-control: private, max-age=300`
+(`private` for the reason `forwardDiscovery` gives — the body varies by host
+under `dynamicIssuer`), `access-control-allow-origin: *`, no redirect. The
+§3.1 form `…/oauth-protected-resource/rest` returns the same bytes;
+`…/nope` and `…/..%2fadmin` are `404` with `no-store`;
+`authorization_servers[0]` is byte-equal to the RFC 8414 document's `issuer`.
+Re-run with the key absent, both paths are a clean `404` with an empty body.
+The schema was dropped afterwards (P0'.2); the persistent `idp` schema was
+never opened.
+
+**Gates.** Green: `lint`, `typecheck`, the unit suite (1064, of which 23 are
+new — fourteen in `protected-resource.test.ts`, two in
+`discovery-urls.test.ts`, seven in `config-cross-checks.test.ts`),
+`test:coverage` across both projects (1458 tests over 103 files, every
+threshold met; `server/oidc` at 90.06 % branches and the new module at 100 %
+of 8), `config:schemas --check`, `docs:config --check`,
+`db:generate-schema --check`, `check-pinned-deps`, `check-bun-version`,
+`check-client-bundle` and `docker:smoke`. The route tree was rebuilt by the
+build, which is what `typecheck` needed. **Not run: `test:e2e`** — nothing in
+this change is reachable from it, and what it uniquely reads is a rendered
+document response, where this is a plain `Response` on a route.
+
+**The smoke test is where this is gated in the image** (TST-8 amended). Its
+generated config now declares `protectedResources: [{ "path": "/rest" }]` —
+`/rest` is a fiction on that stack, and a document that describes a location
+never calls it — and it asserts the root form, the §3.1 form, a 404 below
+them, and `authorization_servers[0]` byte-equal to the issuer the discovery
+document just reported. That is the only gate that drives the **built image**,
+so it is the one that would catch a route missing from the production route
+tree, which `vite dev` cannot tell you. It passed:
+
+```
+ok  protected-resource metadata names the resource and this issuer
+    — http://127.0.0.1:3399/rest → http://127.0.0.1:3399
+ok  the RFC 9728 path form serves the same document, and only it — 200 / 404
+```
+
+**What the owner still has to do, outside this repository**, for the CLI walk
+to complete end to end:
+
+1. **Declare the resource in the stack's own `idp-config/config.jsonc`** —
+   `"protectedResources": [{ "path": "/rest" }]` in the `oauth` block. This
+   repository ships the key and documents it; it cannot know that stack has a
+   `/rest`.
+2. **Run an image that has this change.** The stack's `semantius-idp` is
+   `ghcr.io/semantius/semantius-idp:latest`, so it needs a release (or a local
+   build swapped in) before the endpoint exists there.
+3. **Then the brief's own check**: `semantius login --host localhost:3000`,
+   `whoami` (expect `auth_method: oauth`), and one `call crud
+   postgrestRequest`. If that last one fails with *"required audience not
+   found"*, the fix is server-side and is **not** this change: the instance
+   advertises no `resource_indicators_supported`, so the CLI cannot ask for an
+   audience, and whatever `jwt.audience` mints — `semantius://api` in that
+   stack — has to be one PostgREST accepts.
+
+---
+
+## The dev start's second failure: migrations that no longer matched (2026-09-11)
+
+With the edge fixed, the owner's next dev start failed again, at `/`, with
+`Cannot destructure property 'ui' of 'Route.useLoaderData(...)'`. That was the
+error path, not the error. Running the dev server exactly as the owner does,
+against the persistent schema with GET requests only, `/readyz` named the
+cause: `relation "account" already exists`. The failed migration ran in its
+own transaction, rolled back, and changed nothing.
+
+The persistent schema's bookkeeping was read without writing to it. It holds 4
+rows. 0000 and 0001 are recorded under the hash of a CRLF checkout, 0002 under
+LF, and 0003 under a version of `0003_strange_wallop` that added `trust_proxy`
+on 2026-08-29, was reverted on 2026-08-30 (`f806cad`), and was regenerated
+under the same tag to add `audience` (`faa5f83`). `523ecfe` made the working
+tree LF, so the runner, which hashed files as they sat on disk, saw all four as
+pending. The schema also genuinely lacks `audience`, which the gateway code
+reads.
+
+Three fixes, each with a test that fails against HEAD and passes with it:
+
+- `db/migrate.ts` records the LF hash and accepts the CRLF form and the raw
+  file as run (`integration/migrate.test.ts`, which replays the schema's exact
+  state and expects only 0003 to be applied).
+- `runtime.ts` logs a failed start-up as `start-up failed`, once per distinct
+  reason (`unit/runtime-startup-failure.test.ts`).
+- `__root.tsx`'s shell renders with defaults when the root loader failed, so
+  the page is `ErrorPage` and not a crash (`dev-server.test.ts`, which fails
+  start-up on purpose with the database URLs pointed at a closed port).
+
+A read-only dry run of the fixed runner against the persistent schema's rows
+reports 0000–0002 as run and exactly one statement pending:
+`ALTER TABLE "idp"."gateway" ADD COLUMN "audience" text;`. **The owner's next
+dev start applies it.** It was not applied from here, because the persistent
+schema is not for this session to write. The whole sequence was then replayed
+end to end on a throwaway local schema put into that exact state: first boot,
+setup, the drift written in, and a fresh start. The start applied only 0003,
+reported `startup complete`, and `/` and `/login` answered without an error.
+The throwaway schemas this took, `idp_check_devserver`, `idp_check_devroot`,
+`idp_check_drift` locally and `idp_check_neon` on the owner's database, are
+all dropped.
+
+Gates on the final working tree: lint, typecheck, unit (1,041), coverage over
+both projects (1,435 across 102 files), the build with the client-bundle check,
+the smoke test, and the full end-to-end suite at 101 of 101 against the rebuilt
+image. One earlier end-to-end run, made while coverage was loading the machine,
+failed the admin axe scan on `/admin/database` (see Pending); the axe spec
+then passed 9 of 9, and the full suite passed unloaded.
+
+---
+
+## `vite dev` answered every page with a 500 (2026-09-11)
+
+The owner's first dev start after D128 failed at the first request, with
+`TypeError: Cannot read properties of undefined (reading 'window')` thrown from
+`resolveClientAddress`. D128 did not cause it. The line was `faa5f83`'s
+(2026-09-07, **D115**): `new Request(request)` to copy the request before
+rewriting `x-idp-socket-address`. Under Vite the request is srvx's
+`NodeRequest`, which passes `instanceof Request` by prototype but carries none
+of undici's state, and Node's constructor reads that state to copy it. This was
+reproduced in isolation with srvx 0.11.16. The copy is built from its parts now
+(`copyWithHeaders`), with the body streamed across.
+
+Nothing caught it because nothing sent a page through the dev server on Node.
+The image runs Bun and gets native requests, and `dev-server.test.ts` fetched
+only paths Vite answers itself. It now fetches `/healthz` through the entry,
+which fails with a 500 against `faa5f83`'s line and passes with the fix. Two
+unit cases in `client-ip.test.ts` build a srvx-shaped request, GET and POST,
+and the POST's body has to arrive intact.
+
+Verified by starting the real dev server with the repository's config against
+a throwaway `idp_check_devserver` schema on the local test container, not the
+persistent one. `/healthz` answered 200, `/login` redirected to `/setup`, and
+`/setup` rendered with no console errors. The schema was dropped afterwards.
+The edge copy also runs under Bun in production, so the image was rebuilt and
+the gates re-run. Lint, typecheck, unit and coverage (1,431 across 100 files)
+are green, and so is the smoke test, which signs a user in through the new copy.
+The full end-to-end run passed 97 of 98, with 3 skipped. The one failure,
+`[subpath] the schema selector moves the tree`, is a pre-existing race (see
+Pending), and the spec then passed four times out of four against the same
+image, round trip included.
+
+---
+
+## Contrast, the updateable way (2026-09-11, **D128**)
+
+The owner asked for the sibling semantius-app's accessibility setup, which had
+fixed its contrast "in an updateable way", and called this repository's
+earlier contrast fixes poor. Measured, they were, in two ways.
+
+**Where they were.** `--destructive`, `--input` and `--muted-foreground` were
+corrected inside `globals.css`'s `:root` / `.dark`, the blocks
+`shadcn apply --preset` rewrites. The next preset would have restored all three
+and said nothing.
+
+**What they missed.** FR-ACCT-2 asks for WCAG 2.1 AA, which includes 1.4.11's
+3:1 for a control's boundary and its focus indicator, and the palette met
+neither:
+
+| Pair | Before | After |
+| --- | --- | --- |
+| focus ring on white | 2.59:1 | 7.46:1 |
+| focus ring around a checkbox on the sidebar | 1.34:1 | 6.05:1 |
+| a field's boundary (was the D96 fill) | 1.41:1 | 3.79:1, a border |
+| `text-destructive` on its `/20` hover tint, on white | 3.81:1 | 4.99:1 |
+| dark `text-destructive` on its `/30` hover tint, card | 3.78:1 | 4.64:1 |
+| impersonation banner, light / dark | 3.46:1 / 2.69:1 | 7.05:1 / 10.25:1 |
+
+axe saw none of these. It never renders a hover or sees a placeholder, and no
+scanned page impersonates anybody. The banner was a different kind of bug:
+`text-destructive-foreground` names a token this preset does not define, so
+Tailwind dropped the utility and the banner painted body text on red.
+
+**What changed.**
+
+- `packages/ui/src/styles/globals.css` is stock again, with a header saying so.
+- `theme-a11y.css` holds the corrections in both theme blocks, the
+  `--color-destructive-foreground` mapping, the skeleton routing and the
+  control-boundary rule. `app.css` imports `globals.css`, then
+  `theme-a11y.css`, then `neon-supplement.css`, which moved out of
+  `globals.css`.
+- `@workspace/ui` exports only `app.css`, and `__root.tsx` loads it.
+  `.prettierrc`'s `tailwindStylesheet` points there too, which re-sorted the
+  banner's classes now that the plugin knows the token.
+- `apps/web/src/tests/fixtures/palette.ts` parses the stylesheets in cascade
+  order and holds the color math and the requirement list.
+  `unit/token-contrast.test.ts` asserts it (189 cases).
+  `scripts/derive-a11y-tokens.ts` is `pnpm --filter web run a11y:tokens`.
+  `integration/dev-server.test.ts` follows the entry and checks that
+  `--input-border` is compiled into what it serves.
+
+**Where it parts from semantius-app, which is worth passing on.** semantius-app
+derived its values under CSS Color 4 gamut mapping (colorjs.io's
+`toGamut css`), but axe-core 4.13 clips out-of-gamut colors (its
+`parseString`), and on the preset's reds the two differ by up to half a ratio
+point. Measured the way axe measures, semantius-app's light `--destructive` is
+4.19:1 on its hover tint over the sidebar and its dark one 4.16:1 on the `/30`
+hover over a card. Its `--sidebar-primary` pair is 4.47:1 light and 4.33:1
+dark. All of those clear under the mapping, which is all its
+`tokenContrast.test.ts` measures. Here every pair must clear under both, so
+`--destructive` and `--sidebar-primary` keep semantius-app's lightness but are
+written in gamut, where the two paint one color. **semantius-app has the same
+latent miss**, and nothing here changes it.
+
+**How it was verified.** The color math was cross-checked against colorjs.io
+0.7.1 in a scratch directory: 2,015 colors, both mappings, worst difference
+2.5e-8 per channel and 5.8e-9 per ratio. Eight mutations were tried against the
+test (a reverted ring, a dropped dark restatement, a dropped or reordered
+import, a dropped `@theme` line, a dropped slot, `__root.tsx` back on
+`globals.css`, and semantius-app's red) and each turned it red. In the built
+stylesheet the stock `--ring` lands at byte 104377 and the corrected one at
+106341. The boundary rule sits in `@layer utilities` after
+`.border-transparent`, with `focus-visible:border-ring` (0,2,0) in the same
+layer. In real Chromium against that file, computed border colors come out as
+designed in both themes: `--input-border` at rest, `--ring` on focus,
+`--destructive` when invalid, `--primary` on a checked checkbox with no gray
+line, and `--destructive-foreground` on the banner.
+
+Every gate is green on this working tree: lint, typecheck, unit (1,038 across
+64 files), coverage over both projects (1,428 across 100 files, thresholds
+held), pinned deps, the Bun pin, the schema, config-reference and drift checks,
+the build with the client-bundle check, the TST-8 smoke test on a rebuilt image
+(89.8 MiB), and TST-6's 101 end-to-end tests against that image in both
+deployment shapes, the three axe scans included.
 
 ---
 

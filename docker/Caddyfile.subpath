@@ -1,8 +1,8 @@
 # The IdP under a path on a hostname it shares.
 #
 # `https://apps.example.com/idp` — the rest of the hostname belongs to another
-# application. Two rules make this work, and both are easy to get wrong in ways
-# that fail quietly.
+# application. Three rules make this work, and each is easy to get wrong in
+# ways that fail quietly.
 #
 #   1. **Proxy `/idp/*` without stripping the prefix.** The IdP is told its own
 #      mount path through `server.baseUrl` and renders every link, cookie
@@ -19,6 +19,12 @@
 #      so it has to be routed here explicitly. Nothing else does this for you,
 #      and the symptom is a client that cannot discover an IdP which is
 #      otherwise working perfectly.
+#
+#   3. **Serve the RFC 9728 protected-resource document from the ORIGIN ROOT
+#      too**, for the same reason and one more: that document is about a
+#      resource server on this origin rather than about the IdP, so a client
+#      asks for it before it has any idea where the IdP is mounted. See the
+#      block below.
 #
 # Set `server.baseUrl` to `https://{$IDP_DOMAIN}{$IDP_BASE_PATH}` and
 # `server.trustProxy` to true in config.jsonc, and mount this file instead of
@@ -49,6 +55,31 @@
 
 	handle /.well-known/openid-configuration{$IDP_BASE_PATH:/idp}* {
 		rewrite * {$IDP_BASE_PATH:/idp}/.well-known/openid-configuration
+		reverse_proxy idp:3000 {
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto {scheme}
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
+	# --- rule 3: the RFC 9728 protected-resource document ------------------
+	#
+	# `oauth.protectedResources` in config.jsonc documents a resource server on
+	# THIS origin — `https://apps.example.com/rest` — and RFC 9728 puts that
+	# document at the origin root, not under the issuer's path: a client handed
+	# nothing but a hostname asks for `/.well-known/oauth-protected-resource`
+	# before it knows the issuer exists. So it is above the mount point, like
+	# rule 2, and routed here for the same reason. Both spellings: the root form
+	# every CLI and MCP client reads, and §3.1's suffix form, which inserts the
+	# well-known segment between the host and the RESOURCE's path
+	# (`/.well-known/oauth-protected-resource/rest`) — the same body, at the
+	# location the RFC derives.
+	#
+	# Harmless when `oauth.protectedResources` is empty: the idp 404s the path,
+	# which is what it did before this rule existed. Delete it only if the
+	# origin root belongs to something that must answer these itself.
+	handle /.well-known/oauth-protected-resource* {
+		rewrite * {$IDP_BASE_PATH:/idp}{uri}
 		reverse_proxy idp:3000 {
 			header_up X-Forwarded-For {remote_host}
 			header_up X-Forwarded-Proto {scheme}

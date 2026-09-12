@@ -584,6 +584,71 @@ const oauthResourceSchema = z.union([
   }),
 ])
 
+/**
+ * One entry of `oauth.protectedResources` — a resource server on this
+ * deployment's own origin, published as RFC 9728 metadata.
+ *
+ * A **path**, not an absolute URI, and that is the whole design. The document
+ * asserts `authorization_servers: [issuer]`, a client fetches that issuer's
+ * RFC 8414 metadata and requires it to name the same issuer back, and under
+ * `server.dynamicIssuer` the issuer follows the arriving host — so a literal
+ * absolute URI would name a host the request did not arrive on the moment the
+ * flag is turned on, while `{origin}{path}` cannot. It is also the only shape
+ * RFC 9728 can mean: the document lives at the *resource's* own host, so a
+ * resource on somebody else's origin is not this deployment's to publish.
+ *
+ * Deliberately **not** an `oauth.resources` entry. Those are RFC 8707
+ * resource indicators, seeded into `oauth_resource` and linked to every client
+ * (FR-OIDC-6), so declaring `/rest` under that name would change what `aud`
+ * the tokens carry. What a resource server is *called* and where it *lives*
+ * are two different facts, and in the reference stack they are two different
+ * values — `semantius://api` and `/rest`.
+ */
+const protectedResourceSchema = z.strictObject({
+  path: z
+    .string()
+    .superRefine((value, ctx) => {
+      const problem = resourcePathProblem(value)
+      if (problem === undefined) return
+      ctx.addIssue({ code: "custom", message: problem })
+    })
+    .describe(
+      "Path of the resource server on this deployment's own origin, e.g. `/rest`. Leading slash, no trailing slash, no query or fragment; the published `resource` is the issuer's origin plus this path, so it follows `server.dynamicIssuer`."
+    ),
+  scopes: flexArray(z.string().min(1))
+    .default([])
+    .describe(
+      "Published as `scopes_supported`. A client appends these to the scopes it already asks for and sends the result verbatim to the authorization endpoint, so every value must be one this IdP will actually grant — start-up refuses a scope that is not in `oauth.scopes`. Empty, the default, is the right answer for a resource that needs no scope of its own."
+    ),
+})
+
+export type ProtectedResourceConfig = z.infer<typeof protectedResourceSchema>
+
+/**
+ * The operator-facing sentence for an unusable `protectedResources[].path`,
+ * or `undefined` when it is fine.
+ *
+ * The last check is the one that is easy to leave out: a path that does not
+ * survive a round trip through the URL parser is one the published `resource`
+ * and the RFC 9728 §3.1 document location would spell differently, and a
+ * client compares `resource` byte-for-byte.
+ */
+function resourcePathProblem(value: string): string | undefined {
+  if (!value.startsWith("/"))
+    return `\`${value}\` must start with \`/\`. This is a path on this deployment's own origin, not an absolute URI — the origin comes from the issuer.`
+  if (value === "/")
+    return "`/` is the whole origin, which is this IdP itself rather than a resource server behind it. Name the resource's own path, such as `/rest`."
+  if (value.endsWith("/"))
+    return `\`${value}\` must not end with a trailing slash — \`resource\` is compared byte-for-byte.`
+  if (/[?#]/.test(value))
+    return `\`${value}\` must not contain a query string or a fragment (RFC 9728 \`resource\` is a URI without either).`
+  if (value.slice(1).split("/").some((segment) => segment === "" || segment === "." || segment === ".."))
+    return `\`${value}\` must not contain an empty, \`.\` or \`..\` segment.`
+  if (new URL(value, "http://placeholder.invalid").pathname !== value)
+    return `\`${value}\` is not already percent-encoded; write the path exactly as it appears in the URL.`
+  return undefined
+}
+
 const oauthSchema = z.strictObject({
   accessTokenTtl: duration({ min: 60 })
     .prefault("15m")
@@ -611,6 +676,11 @@ const oauthSchema = z.strictObject({
     .default([])
     .describe(
       "Extra RFC 8707 resources beyond `jwt.audience` and the per-client ones, each optionally with its own allowed scopes and token lifetime."
+    ),
+  protectedResources: flexArray(protectedResourceSchema)
+    .default([])
+    .describe(
+      'Publish RFC 9728 protected-resource metadata for each resource server that shares this origin, e.g. `[{ "path": "/rest" }]`. The first entry is also served at `/.well-known/oauth-protected-resource`, which is the document an MCP or CLI client reads first. Empty — the default — 404s that path, which is what a deployment that fronts no resource server wants.'
     ),
   reconcile: z
     .strictObject({

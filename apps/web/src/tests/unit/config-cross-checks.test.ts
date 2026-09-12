@@ -654,4 +654,86 @@ describe("cross-checks", () => {
       }
     })
   })
+
+  /**
+   * `oauth.protectedResources` (FR-OIDC-18, **D129**).
+   *
+   * Both checks exist because the failure they prevent happens a long way
+   * from its cause. An undeclared scope is published, *appended* by every
+   * client that reads the document, and refused at `/oauth2/authorize` — so
+   * the symptom is somebody else's login, and the cause is a typo in this
+   * file. Two entries on one path publish two bodies at one URL and let list
+   * order decide which.
+   */
+  describe("protected resources", () => {
+    const withResources = (resources: unknown) => ({
+      ...baseConfig(),
+      oauth: { protectedResources: resources },
+    })
+
+    it("accepts a path on this origin and defaults its scopes to none", () => {
+      const { config } = load({ config: withResources([{ path: "/rest" }]) })
+      expect(config.file.oauth.protectedResources).toEqual([
+        { path: "/rest", scopes: [] },
+      ])
+    })
+
+    it("is empty by default, which is what 404s the well-known path", () => {
+      const { config } = load()
+      expect(config.file.oauth.protectedResources).toEqual([])
+    })
+
+    it("refuses a path that is not a path on this origin", () => {
+      for (const path of [
+        "rest",
+        "https://api.example.com/rest",
+        "/",
+        "/rest/",
+        "/rest?select=*",
+        "/rest#x",
+        "/rest/../admin",
+        "/a//b",
+        "/a b",
+      ]) {
+        expect(
+          messages({ config: withResources([{ path }]) }),
+          path
+        ).toContain("/oauth/protectedResources/0/path")
+      }
+    })
+
+    it("refuses a scope the deployment does not declare", () => {
+      expect(
+        messages({
+          config: withResources([{ path: "/rest", scopes: ["write:all"] }]),
+        })
+      ).toContain("publishes undeclared scope `write:all`")
+    })
+
+    it("accepts a scope that is declared", () => {
+      const { config } = load({
+        config: withResources([{ path: "/rest", scopes: ["profile"] }]),
+      })
+      expect(config.file.oauth.protectedResources[0]?.scopes).toEqual([
+        "profile",
+      ])
+    })
+
+    it("refuses two entries on one path", () => {
+      expect(
+        messages({
+          config: withResources([{ path: "/rest" }, { path: "/rest" }]),
+        })
+      ).toContain("Duplicate protected-resource path `/rest`")
+    })
+
+    it("allows several distinct resources, root form first", () => {
+      const { config } = load({
+        config: withResources([{ path: "/rest" }, { path: "/mcp" }]),
+      })
+      expect(
+        config.file.oauth.protectedResources.map((entry) => entry.path)
+      ).toEqual(["/rest", "/mcp"])
+    })
+  })
 })

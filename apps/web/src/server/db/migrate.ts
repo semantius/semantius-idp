@@ -43,9 +43,17 @@ interface JournalEntry {
 
 interface Migration {
   tag: string
+  /** What this runner records: the file's hash with LF line endings. */
   hash: string
+  /**
+   * Every hash the migration may already be recorded under, `hash` included.
+   * A match on any of them means it has run.
+   */
+  knownHashes: string[]
   statements: string[]
 }
+
+const sha256 = (text: string) => createHash("sha256").update(text).digest("hex")
 
 /**
  * Where the committed SQL lives. Resolved from this module so it works from
@@ -116,18 +124,35 @@ export function readMigrations(folder: string): Migration[] {
     .slice()
     .sort((left, right) => left.idx - right.idx)
     .map((entry) => {
-      const sql = readFileSync(join(folder, `${entry.tag}.sql`), "utf8")
+      const raw = readFileSync(join(folder, `${entry.tag}.sql`), "utf8")
+      const sql = raw.replace(/\r\n/g, "\n")
+      // **The line endings are not the migration.** This hashed the file as
+      // it sat on disk, and a checkout decides that: under `core.autocrlf=true`
+      // with no `.gitattributes`, Windows got CRLF, so the persistent dev
+      // schema recorded 0000 and 0001 as CRLF. `523ecfe` added the attributes,
+      // the working tree went LF, the hashes stopped matching, and the next
+      // boot re-ran 0000 — `relation "account" already exists` on a database
+      // that was fully migrated. LF is what is recorded now: it is the
+      // committed form, and the hash drizzle's own migrator records from a
+      // clean checkout. The CRLF form and the raw file still count as run.
+      const hash = sha256(sql)
       return {
         tag: entry.tag,
-        // Same hash drizzle's own migrator records, so the two agree on which
-        // migrations have already run.
-        hash: createHash("sha256").update(sql).digest("hex"),
+        hash,
+        knownHashes: [
+          ...new Set([hash, sha256(sql.replace(/\n/g, "\r\n")), sha256(raw)]),
+        ],
         statements: sql
           .split(STATEMENT_BREAKPOINT)
           .map((statement) => statement.trim())
           .filter((statement) => statement !== ""),
       }
     })
+}
+
+/** Whether `applied` records this migration under any form it may have had. */
+function hasRun(migration: Migration, applied: Set<string>): boolean {
+  return migration.knownHashes.some((hash) => applied.has(hash))
 }
 
 export interface MigrateOptions {
@@ -150,7 +175,7 @@ export async function runMigrations(
 
     const applied = await appliedHashes(handle)
     const pending = migrations.filter(
-      (migration) => !applied.has(migration.hash)
+      (migration) => !hasRun(migration, applied)
     )
 
     if (pending.length === 0) {
@@ -217,7 +242,7 @@ export async function migrationsAreCurrent(
 
   try {
     const applied = await appliedHashes(handle)
-    return expected.every((migration) => applied.has(migration.hash))
+    return expected.every((migration) => hasRun(migration, applied))
   } catch {
     // The bookkeeping table does not exist yet: nothing has been migrated.
     return false

@@ -20,7 +20,8 @@
     "db:studio": "drizzle-kit studio",
     "drizzle:reset": "bun run scripts/reset-database.ts",
     "config:schemas": "bun run scripts/export-json-schemas.ts",
-    "docs:config": "bun run scripts/generate-config-reference.ts"
+    "docs:config": "bun run scripts/generate-config-reference.ts",
+    "a11y:tokens": "bun run scripts/derive-a11y-tokens.ts"
   },
   "dependencies": {
     "@better-auth/api-key": "1.7.1",

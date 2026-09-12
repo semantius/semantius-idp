@@ -130,10 +130,40 @@ export function resolveClientAddress(
   const ipAddress = clientIpFrom(request, trustProxy, {
     socketAddress: request.headers.get(SOCKET_ADDRESS_HEADER),
   })
-  const next = new Request(request)
-  if (ipAddress) next.headers.set(SOCKET_ADDRESS_HEADER, ipAddress)
-  else next.headers.delete(SOCKET_ADDRESS_HEADER)
-  return { request: next, ipAddress }
+  const headers = new Headers(request.headers)
+  if (ipAddress) headers.set(SOCKET_ADDRESS_HEADER, ipAddress)
+  else headers.delete(SOCKET_ADDRESS_HEADER)
+  return { request: copyWithHeaders(request, headers), ipAddress }
+}
+
+/**
+ * A copy of `request` carrying `headers`, built from its parts.
+ *
+ * **Not `new Request(request)`**, which is what this was, and which broke
+ * every page under `vite dev`. There the request is srvx's `NodeRequest`: it
+ * passes `instanceof Request` because srvx sets its prototype to the native
+ * one, but it has none of undici's internal state, so Node's constructor reads
+ * a slot that is not there and throws `Cannot read properties of undefined
+ * (reading 'window')` — at the edge, before anything else runs. Bun's server
+ * hands over a native Request, which is why the image never showed it, and no
+ * gate sent a page through the dev server until `dev-server.test.ts` did.
+ *
+ * The body is streamed across, not read: `duplex: "half"` is what Node needs
+ * to accept a stream, and Bun ignores it. Nothing reads the original's body
+ * afterwards — the entry hands `inbound` to the handler.
+ */
+function copyWithHeaders(request: Request, headers: Headers): Request {
+  const hasBody =
+    request.body !== null &&
+    request.method !== "GET" &&
+    request.method !== "HEAD"
+  const init: RequestInit & { duplex?: "half" } = {
+    method: request.method,
+    headers,
+    signal: request.signal,
+    ...(hasBody ? { body: request.body, duplex: "half" } : {}),
+  }
+  return new Request(request.url, init)
 }
 
 /**
@@ -157,9 +187,7 @@ export function rateLimitKeyAddress(
   if (!bytes || bytes.length === 4) return ip
   const groups: string[] = []
   for (let index = 0; index < 4; index += 1) {
-    groups.push(
-      ((bytes[index * 2]! << 8) | bytes[index * 2 + 1]!).toString(16)
-    )
+    groups.push(((bytes[index * 2]! << 8) | bytes[index * 2 + 1]!).toString(16))
   }
   return `${groups.join(":")}::/64`
 }

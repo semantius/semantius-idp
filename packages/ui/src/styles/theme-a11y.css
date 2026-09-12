@@ -1,0 +1,196 @@
+/* Accessibility corrections to the shadcn palette (D128).
+   =======================================================
+
+   WHY THIS FILE EXISTS, AND WHY IT IS NOT `globals.css`.
+
+   `globals.css` is the `tailwind.css` target of both `components.json` files,
+   so `shadcn apply --preset` rewrites its `:root` and `.dark` blocks — that is
+   what applying a theme means. Corrections edited into those blocks (three were,
+   until D128) are restored to the preset's values by the next run, with nothing
+   to say it happened. The CLI does not know this file exists. `app.css` imports
+   it after `globals.css`, and both are unlayered `:root` / `.dark` at (0,1,0),
+   so these win on source order alone. `token-contrast.test.ts` asserts the
+   order, because losing it breaks no build.
+
+   THE ORDER CUTS BOTH WAYS. This file's `:root` also comes after `globals.css`'s
+   `.dark`, and `<html class="dark">` matches both, so a token set in `:root`
+   here and not in `.dark` replaces the *dark* value as well. Every token below
+   is set in both blocks, restating the stock value where dark needs nothing;
+   the test asserts that too. semantius-app shipped the other way once and put a
+   light-mode placeholder ink on its dark theme at 2.72:1.
+
+   EVERY PAIR CLEARS TWICE. The preset's reds and greens are outside sRGB, and
+   axe — the e2e gate — clips them, while CSS Color 4 gamut-maps them. The two
+   can differ by half a ratio point, so each value here clears its floor both
+   ways, and the three that were out of gamut are written in gamut, where the
+   two agree. This is the one place these values part from semantius-app's,
+   whose `--destructive` clears its hover tint only under the mapping.
+
+   WHAT IT DOES NOT GIVE YOU. These values were derived against this preset's
+   surfaces, the darkest ground being a `bg-input/90` checkbox on the sidebar.
+   Another preset moves those, and nothing promises these still clear. The test
+   says when (it recomputes the matrix from whatever the files hold), and
+   `pnpm --filter web run a11y:tokens` prints what each token needs instead.
+
+   The stock preset, measured on white, for reference — what is corrected here:
+
+     a field's fill, the only boundary a control has          1.12:1  (needs 3)
+     the focus ring, `--ring`, against the page               2.59:1  (needs 3)
+     the focus ring against a `bg-input/90` checkbox          2.11:1  (needs 3)
+     a placeholder on a field                                 4.30:1  (needs 4.5)
+     `--muted-foreground` on `--muted`                        4.41:1  (needs 4.5)
+     `text-destructive` on its own `/20` hover tint           3.31:1  (needs 4.5)
+*/
+
+/* Not a preset token in this style, and without a mapping the utility does not
+   exist: `text-destructive-foreground` compiled to nothing, so the impersonation
+   banner painted `--foreground` on `bg-destructive` — 3.46:1 light and 2.69:1
+   dark — and no gate noticed, because no scanned page impersonates anybody.
+   `@theme` is read from anywhere in the compile; `app.css` puts this file in it. */
+@theme inline {
+  --color-destructive-foreground: var(--destructive-foreground);
+}
+
+:root {
+  /* Secondary text, and every `::placeholder` — the pair axe cannot see, since a
+     pseudo-element has no node to inspect. The preset's 0.553 was 4.41:1 on
+     `--muted` and 4.30:1 on a field. 0.534 clears 4.5:1 on every surface: 5.21:1
+     on white, 4.78:1 on `--muted`, 4.55:1 on a field on the sidebar, the worst. */
+  --muted-foreground: oklch(0.534 0.013 58.071);
+
+  /* `text-destructive` is painted on its own tint: `bg-destructive/10` at rest,
+     `/20` on hover (button, badge, menu item). Darkening the token darkens the
+     ink far more than the tenth of it in the ground, which is why it converges.
+     The preset's 0.577 was 3.99:1 at rest and 3.31:1 on hover. 0.476 is
+     semantius-app's lightness; it is written at the chroma sRGB can show there,
+     so that a clip and a gamut map paint the same #b0000f — 6.09:1 at rest,
+     4.79:1 on hover over the sidebar, the worst. */
+  --destructive: oklch(0.476 0.194 27.325);
+
+  /* The ink on a `bg-destructive` fill; the impersonation banner is the one
+     call site. 7.05:1, and 6.30:1 under its stop button's `/10` hover tint. */
+  --destructive-foreground: oklch(0.985 0 0);
+
+  /* NEW TOKEN. The boundary of a form control (1.4.11). Every control in this
+     style is `border-transparent bg-input/50` (`/90` for the checkbox), so the
+     fill is the only thing that says it is there — 1.12:1, which is how the
+     owner came to report the fields as missing (D96). Not `--border`: that is
+     the hairline of every card, table and separator, and at 3:1 it would be a
+     heavy change everywhere. 0.61 is the first lightness clearing 3:1 against
+     every surface a control sits on *and* every fill it encloses — 3.79:1 on
+     white, 3.08:1 around a checkbox on the sidebar. Drawn by the `@layer
+     utilities` rule at the end of this file. */
+  --input-border: oklch(0.61 0.003 48.717);
+
+  /* The focus indicator: `focus-visible:border-ring`. The `ring-ring/30` halo
+     around it is decoration — a 30 % glow tops out near 2:1 whatever this holds —
+     and 1.4.11 asks for *an* indicator at 3:1, not for every layer to clear it.
+     The preset's 0.709 was 2.59:1 on the page and 2.11:1 against a checkbox.
+     0.45 is 7.46:1 on white and 6.05:1 around a checkbox on the sidebar, and
+     stays 1.97:1 from `--input-border`, so focus reads as a change rather than
+     the same line. */
+  --ring: oklch(0.45 0.01 56.259);
+
+  /* `--sidebar-primary-foreground` on this was 3.07:1 (2.12:1 dark), which is
+     why `nav-user.tsx` draws its initial on the accent surface instead.
+     semantius-app's module tile uses the pair; nothing here does yet. Corrected
+     anyway, so the next pairing copied from there is not a trap: 4.74:1, and
+     in gamut for the reason given at `--destructive`. */
+  --sidebar-primary: oklch(0.529 0.148 149.214);
+
+  /* The focus indicator inside the sidebar, where `sidebar.tsx` wires its
+     controls. The preset's value was `--ring`'s, and 2.48:1 on the sidebar. */
+  --sidebar-ring: oklch(0.45 0.01 56.259);
+
+  /* NEW TOKEN. The loading placeholder's fill — the two panes of /admin/database
+     while their chunks load. `Skeleton` is `bg-muted`, and `--muted` is 1.09:1 on
+     white (1.04:1 on the sidebar): a full-pane skeleton reads as a blank page,
+     which is how semantius-app had it reported. 1.39:1 here. No WCAG number
+     applies to a placeholder; this is the value semantius-app settled on. */
+  --skeleton: oklch(0.89 0.003 106.42);
+}
+
+.dark {
+  /* The stock value, restated — not a correction. See "the order cuts both
+     ways" above: without this line the light 0.534 would win on the dark theme.
+     5.49:1 on a field on the card, the worst. */
+  --muted-foreground: oklch(0.709 0.01 56.259);
+
+  /* Dark steps the button up a tint: `dark:bg-destructive/20` at rest and
+     `dark:hover:bg-destructive/30` on hover. The preset's 0.704 was 3.72:1 on
+     that hover over a card. 0.804 is semantius-app's lightness, in gamut as in
+     light — #ffa29e — and 4.64:1 there, the worst; every other pair gains as it
+     lightens. */
+  --destructive: oklch(0.804 0.111 22.216);
+
+  /* Near-black, not white: white on this `--destructive` is 1.85:1. 10.25:1. */
+  --destructive-foreground: oklch(0.147 0.004 49.25);
+
+  /* One value for both themes: a mid-gray is the band that clears 3:1 against
+     a white page and a near-black one. 5.21:1 on the page, 3.07:1 around a
+     checkbox on the card. */
+  --input-border: oklch(0.61 0.003 48.717);
+
+  /* The preset's 0.553 cleared the page but not what dialogs put their forms
+     on: 3.64:1 on a card and 2.42:1 around a checkbox there. 0.78 is 8.72:1 on
+     the card and 5.80:1 around that checkbox. */
+  --ring: oklch(0.78 0.013 58.071);
+
+  --sidebar-primary: oklch(0.529 0.147 149.579);
+
+  --sidebar-ring: oklch(0.78 0.013 58.071);
+
+  /* `--muted` is 1.30:1 on the dark page and 1.15:1 on the sidebar; this is
+     1.50:1 and 1.33:1. */
+  --skeleton: oklch(0.31 0.007 34.298);
+}
+
+/* Every skeleton's fill to `--skeleton`. `skeleton.tsx` is registry output and
+   hardcodes `bg-muted`, which `@theme inline` compiles to
+   `background-color: var(--muted)` — so shadowing the variable on the slot
+   moves the fill with no specificity to fight, and a call site's own `bg-*`
+   still wins. `--muted` is untouched everywhere else, and a skeleton has no
+   children to inherit it. */
+[data-slot="skeleton"] {
+  --muted: var(--skeleton);
+}
+
+/* 1.4.11 — a perceivable boundary on every filled form control.
+
+   Here rather than in the components, which are registry output: an edit there
+   is undone by the next `shadcn add`. D96 took that to mean the border was out
+   of reach and darkened the fill instead, which got a field to 1.41:1 — visible,
+   and still under the floor. The border was reachable all along: this rule and
+   the registry's `.border-transparent` are both (0,1,0) in the utilities layer,
+   and this file comes after `globals.css`, so the rule wins on source order.
+
+   Which variants still beat it, read from the built stylesheet rather than
+   from class names, because Tailwind v4 compiles them two ways:
+
+   - A pseudo-class or attribute variant appends a real compound and is (0,2,0):
+     `.focus-visible\:border-ring:focus-visible`,
+     `.aria-invalid\:border-destructive[aria-invalid=true]`. Focus and invalid
+     states override the boundary, as they must.
+   - A `data-*` variant compiles through `:where()`, which adds nothing:
+     `.data-checked\:border-primary:where([data-checked]:not([data-checked=false]))`
+     is (0,1,0), level with this rule and *earlier*, so this rule would win and
+     paint a gray line around a checked checkbox. The checkbox is therefore
+     excluded by matching, with the variant's own condition inside `:where()`,
+     which keeps the rule at (0,1,0). Raising it to (0,2,0) instead would
+     out-rank `focus-visible` and `aria-invalid` and strip both indicators.
+
+   What it defeats is a bare `border-*` utility passed at a call site to one of
+   these slots; none does today, and a variant or a descendant selector still
+   works. `token-contrast.test.ts` fails when a registry component with a
+   `border-transparent bg-input/*` control is added without its slot here. */
+@layer utilities {
+  [data-slot="input"],
+  [data-slot="textarea"],
+  [data-slot="native-select"],
+  [data-slot="sidebar-input"],
+  [data-slot="checkbox"]:not(
+      :where([data-checked]:not([data-checked="false"]), [data-state="checked"])
+    ) {
+    border-color: var(--input-border);
+  }
+}

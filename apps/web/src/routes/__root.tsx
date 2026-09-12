@@ -1,11 +1,14 @@
 import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router"
 
-import appCss from "@workspace/ui/globals.css?url"
+// Not `globals.css`: that is the stock preset, and the package no longer
+// exports it. `app.css` is the preset with theme-a11y.css's corrections after it.
+import appCss from "@workspace/ui/app.css?url"
 import { Toaster } from "@workspace/ui/components/toast"
 
-import { BASE_PATH_ATTRIBUTE, assetUrl } from "@/lib/base-path"
+import { BASE_PATH_ATTRIBUTE, assetUrl, runtimeBasePath } from "@/lib/base-path"
 import { fetchUiContext } from "@/server/functions/ui"
-import { getCatalog } from "@/server/i18n"
+import { DEFAULT_LOCALE, getCatalog } from "@/server/i18n"
+import type { UiContext } from "@/server/ui-context"
 
 /**
  * The document every page is rendered into.
@@ -50,14 +53,20 @@ export const Route = createRootRoute({
 })
 
 function RootDocument({ children }: { children: React.ReactNode }) {
-  const { ui } = Route.useLoaderData()
+  // Absent when this route's own `beforeLoad` threw — a failed start-up, most
+  // often — and the shell is then wrapping `ErrorPage`. The type says it is
+  // always there; destructuring it anyway threw a `TypeError` inside the
+  // shell, and that was the only thing the log showed, in place of the
+  // start-up error behind it. The defaults are enough to draw a 500 page.
+  const data: { ui?: UiContext } | undefined = Route.useLoaderData()
+  const ui = data?.ui
   return (
     <html
-      lang={ui.locale}
-      className={ui.theme === "dark" ? "dark" : undefined}
+      lang={ui?.locale ?? DEFAULT_LOCALE}
+      className={ui?.theme === "dark" ? "dark" : undefined}
       // How the mount path reaches the browser bundle:
       // already parsed by the time the client entry builds its router.
-      {...{ [BASE_PATH_ATTRIBUTE]: ui.basePath }}
+      {...{ [BASE_PATH_ATTRIBUTE]: ui?.basePath ?? runtimeBasePath() }}
     >
       <head>
         <HeadContent />

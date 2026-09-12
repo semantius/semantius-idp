@@ -337,6 +337,8 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
         // the sub-path forms are not derivable from the issuer by hand.
         discovery: discoveryUrls(createBasePaths(deps.config.base), {
           securityTxt: deps.context?.securityTxt ?? false,
+          protectedResource:
+            deps.config.file.oauth.protectedResources.length > 0,
         }),
         // masked, positionally, by the same function `idp config
         // validate` prints through.

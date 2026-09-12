@@ -260,6 +260,39 @@ export function runCrossChecks(input: CrossCheckInput): CrossCheckResult {
     }
   })
 
+  // ------------------------------------------- protected resources (RFC 9728) --
+  //
+  // Both of these turn a failure that happens at the far end of somebody
+  // else's login into a refusal at boot. A scope published in
+  // `scopes_supported` is *appended* to what the client already asks for and
+  // sent verbatim to `/oauth2/authorize`, so an undeclared one fails the
+  // authorization of every client that read the document — a long way from
+  // the typo that caused it. And two entries on one path publish two
+  // different documents at one URL, where the only thing deciding which one
+  // a client gets is the order they happen to be written in.
+  const resourcePaths = new Set<string>()
+  config.oauth.protectedResources.forEach((resource, index) => {
+    if (resourcePaths.has(resource.path)) {
+      issues.push({
+        file: "config.json",
+        pointer: `/oauth/protectedResources/${index}/path`,
+        message: `Duplicate protected-resource path \`${resource.path}\`.`,
+      })
+    }
+    resourcePaths.add(resource.path)
+
+    for (const scope of resource.scopes) {
+      if (!declaredScopes.has(scope)) {
+        issues.push({
+          file: "config.json",
+          pointer: `/oauth/protectedResources/${index}/scopes`,
+          message: `Protected resource \`${resource.path}\` publishes undeclared scope \`${scope}\`, which every client that reads the document would then request and be refused.`,
+          hint: "Add it to `oauth.scopes` first, or leave `scopes` empty.",
+        })
+      }
+    }
+  })
+
   // ---------------------------------------------------------------- social --
   for (const [providerId, provider] of Object.entries(config.social)) {
     if (providerId === "microsoft") {

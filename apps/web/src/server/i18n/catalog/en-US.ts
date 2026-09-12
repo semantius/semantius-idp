@@ -817,6 +817,13 @@ export const enUS = {
           "OAuth authorization server metadata (RFC 8414 root form — served by the reverse proxy)",
         openidConfigurationRoot:
           "OpenID Provider configuration (root form — served by the reverse proxy)",
+        // RFC 9728, listed only when `oauth.protectedResources` names one.
+        // The root form is what a client that was handed nothing but a
+        // hostname asks for first, which is why it earns a row of its own
+        // under a sub-path.
+        protectedResource: "Protected resource metadata (RFC 9728)",
+        protectedResourceRoot:
+          "Protected resource metadata (RFC 9728 root form — served by the reverse proxy)",
         jwks: "JSON Web Key Set",
         // The URL is registered under RFC 8615; the behavior is a W3C
         // change-password specification, which is what an operator recognizes.

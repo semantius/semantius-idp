@@ -61,6 +61,41 @@ describe("discoveryUrls", () => {
     ).toContain("securityTxt")
   })
 
+  it("names the protected-resource document only when one is configured", () => {
+    const base = createBasePaths(parseBasePath("https://idp.example.com"))
+    expect(discoveryUrls(base).map((entry) => entry.key)).not.toContain(
+      "protectedResource"
+    )
+    expect(
+      discoveryUrls(base, {
+        securityTxt: false,
+        protectedResource: true,
+      }).map((entry) => entry.url)
+    ).toContain("https://idp.example.com/.well-known/oauth-protected-resource")
+  })
+
+  it("adds the protected-resource root form under a sub-path", () => {
+    // A client handed nothing but `apps.example.com` asks the ORIGIN root for
+    // this document, before it has any idea the IdP is mounted at /idp — so
+    // the URL that matters is above the mount point and is the reverse
+    // proxy's to route (**D129**). Only the root URL is listed, not the §3.1
+    // suffix form: that one carries the identical body, and a row per
+    // configured resource answers no question an operator has.
+    const subPath = discoveryUrls(
+      createBasePaths(parseBasePath("https://apps.example.com/idp")),
+      { securityTxt: false, protectedResource: true }
+    )
+    expect(subPath.map((entry) => entry.url)).toEqual(
+      expect.arrayContaining([
+        "https://apps.example.com/idp/.well-known/oauth-protected-resource",
+        "https://apps.example.com/.well-known/oauth-protected-resource",
+      ])
+    )
+    expect(
+      subPath.filter((entry) => entry.key === "protectedResourceRoot")
+    ).toHaveLength(1)
+  })
+
   it("emits no key the catalog cannot label", () => {
     // The page falls back to the raw key, which is a bad label and a fine
     // outcome; this is what keeps that fallback from being the normal case.
@@ -68,7 +103,7 @@ describe("discoveryUrls", () => {
       getCatalog("en-US").admin.system.discoveryUrls
     for (const entry of discoveryUrls(
       createBasePaths(parseBasePath("https://apps.example.com/idp")),
-      { securityTxt: true }
+      { securityTxt: true, protectedResource: true }
     )) {
       expect(labels[entry.key], entry.key).toBeTruthy()
     }
@@ -77,7 +112,7 @@ describe("discoveryUrls", () => {
   it("carries a key for every entry, because the label is translated", () => {
     for (const entry of discoveryUrls(
       createBasePaths(parseBasePath("https://apps.example.com/idp")),
-      { securityTxt: true }
+      { securityTxt: true, protectedResource: true }
     )) {
       expect(entry.key).not.toBe("")
       expect(entry.url.startsWith("https://")).toBe(true)

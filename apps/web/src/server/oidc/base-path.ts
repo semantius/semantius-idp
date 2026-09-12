@@ -126,6 +126,11 @@ export const PROTOCOL_ROUTES = {
   jwksWellKnown: "/.well-known/jwks.json",
   changePassword: "/.well-known/change-password",
   /**
+   * RFC 9728. Served only when `oauth.protectedResources` names a resource;
+   * the route 404s otherwise, like `securityTxt` below.
+   */
+  protectedResource: "/.well-known/oauth-protected-resource",
+  /**
    * Served only when the config folder has one; the route 404s otherwise. Here
    * rather than as a literal in `discoveryUrls`, because this object exists so
    * that a rename cannot half-happen.
@@ -156,15 +161,20 @@ export interface DiscoveryUrl {
  * missing, and listing only the RFC 8414 one would have them add half of what
  * the reference deployment does.
  *
- * The two origin-root entries are labeled as the reverse proxy's, because
- * they sit *above* this app's mount point and therefore cannot be routes here.
+ * The origin-root entries are labeled as the reverse proxy's, because they sit
+ * *above* this app's mount point and therefore cannot be routes here. RFC
+ * 9728's protected-resource document (**D129**) is a third of them: a client
+ * that starts from the bare host asks the origin root for it, whatever path
+ * the issuer is mounted under.
  *
  * `securityTxt` is included only when the file exists, because the route 404s
  * when it does not and a listed link that 404s is worse than no link.
  */
 export function discoveryUrls(
   base: BasePaths,
-  options: { securityTxt: boolean } = { securityTxt: false }
+  options: { securityTxt: boolean; protectedResource?: boolean } = {
+    securityTxt: false,
+  }
 ): DiscoveryUrl[] {
   const urls: DiscoveryUrl[] = [
     {
@@ -188,6 +198,25 @@ export function discoveryUrls(
         url: `${base.origin}${PROTOCOL_ROUTES.openidConfiguration}${base.basePath}`,
       }
     )
+  }
+
+  // RFC 9728, and only the **root** URL of it. The §3.1 suffix form
+  // (`…/oauth-protected-resource/rest`) is served as well and carries the
+  // identical body, so listing one row per configured resource would answer
+  // no question an operator has — it is the root document every client reads
+  // first, and the configuration reference is where the derivation is
+  // explained (**D129**).
+  if (options.protectedResource === true) {
+    urls.push({
+      key: "protectedResource",
+      url: `${base.issuer}${PROTOCOL_ROUTES.protectedResource}`,
+    })
+    if (base.basePath !== "") {
+      urls.push({
+        key: "protectedResourceRoot",
+        url: `${base.origin}${PROTOCOL_ROUTES.protectedResource}`,
+      })
+    }
   }
 
   urls.push(

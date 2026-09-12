@@ -36,7 +36,7 @@ export function ImpersonationBanner({
     <div
       role="status"
       className={cn(
-        "text-destructive-foreground bg-destructive flex flex-wrap items-center justify-center gap-x-3 gap-y-1 px-4 py-2 text-center text-sm font-medium",
+        "flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-destructive px-4 py-2 text-center text-sm font-medium text-destructive-foreground",
         className
       )}
     >

@@ -204,6 +204,12 @@ function makeStack(dir: string): { configDir: string; envFile: string } {
         },
         site: { name: "Smoke IdP" },
         jwt: { audience: `http://127.0.0.1:${PORT}` },
+        // FR-OIDC-18. Declared here because this is the only gate that drives
+        // the real image, and what it proves is that the two new routes are in
+        // the built route tree at all — a thing `vite dev` cannot tell you.
+        // `/rest` is a fiction on this stack; the document describes a
+        // location and never calls it.
+        oauth: { protectedResources: [{ path: "/rest" }] },
         auth: { requireEmailVerification: false },
         // The whole point is one clean first run; a limiter here would only
         // measure how fast this script types.
@@ -386,6 +392,38 @@ async function main(): Promise<void> {
       "JWKS publishes a signing key",
       jwksResponse.status === 200 && keyCount > 0,
       `${keyCount} key(s)`
+    )
+
+    // RFC 9728, the first hop of the discovery walk a CLI or MCP client
+    // makes. `authorization_servers[0]` has to be byte-equal to the issuer
+    // above: the client derives the RFC 8414 metadata URL from it and then
+    // requires that document to name the same issuer back, so a pair that
+    // drifts is a login that fails with nothing useful in it.
+    const resourceDoc = await fetch(
+      `${ORIGIN}/.well-known/oauth-protected-resource`
+    )
+    const resourceMetadata = await asJson<{
+      resource: string
+      authorization_servers: string[]
+    }>(resourceDoc)
+    check(
+      "protected-resource metadata names the resource and this issuer",
+      resourceDoc.status === 200 &&
+        resourceMetadata?.resource === `${ORIGIN}/rest` &&
+        resourceMetadata.authorization_servers[0] === metadata?.issuer,
+      `${String(resourceMetadata?.resource)} → ${String(resourceMetadata?.authorization_servers[0])}`
+    )
+    // RFC 9728 §3.1's derived location, same body; and nothing else under it.
+    const suffixDoc = await fetch(
+      `${ORIGIN}/.well-known/oauth-protected-resource/rest`
+    )
+    const unknownDoc = await fetch(
+      `${ORIGIN}/.well-known/oauth-protected-resource/nope`
+    )
+    check(
+      "the RFC 9728 path form serves the same document, and only it",
+      suffixDoc.status === 200 && unknownDoc.status === 404,
+      `${suffixDoc.status} / ${unknownDoc.status}`
     )
 
     // ---- 4. the first-run wizard ----------------------------------

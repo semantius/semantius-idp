@@ -1,0 +1,17 @@
+/* The stylesheet the application loads. `__root.tsx` imports this file, never
+   `globals.css` on its own.
+
+   The order is the mechanism. `globals.css` is stock shadcn output, and
+   `theme-a11y.css` restates some of its tokens in blocks of the same
+   specificity, so the corrections win only because they come second. Tailwind
+   inlines each import where it stands, which is what makes the order hold in
+   the built file. `src/tests/unit/token-contrast.test.ts` asserts it, and that
+   `__root.tsx` still loads this file rather than the stock palette (D128).
+
+   `neon-supplement.css` is the vendored Neon components' own two tokens and
+   their contrast corrections. It used to be imported from inside `globals.css`,
+   the one file here the shadcn CLI rewrites. */
+
+@import "./globals.css";
+@import "./theme-a11y.css";
+@import "./neon-supplement.css";

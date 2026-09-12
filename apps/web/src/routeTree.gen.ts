@@ -50,6 +50,7 @@ import { Route as AccountConsentsRouteImport } from './routes/account/consents'
 import { Route as AccountApiKeysRouteImport } from './routes/account/api-keys'
 import { Route as DotwellKnownSecurityDottxtRouteImport } from './routes/[.]well-known.security[.]txt'
 import { Route as DotwellKnownOpenidConfigurationRouteImport } from './routes/[.]well-known.openid-configuration'
+import { Route as DotwellKnownOauthProtectedResourceRouteImport } from './routes/[.]well-known.oauth-protected-resource'
 import { Route as DotwellKnownOauthAuthorizationServerRouteImport } from './routes/[.]well-known.oauth-authorization-server'
 import { Route as DotwellKnownJwksDotjsonRouteImport } from './routes/[.]well-known.jwks[.]json'
 import { Route as DotwellKnownChangePasswordRouteImport } from './routes/[.]well-known.change-password'
@@ -61,6 +62,7 @@ import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as AdminUsersNewRouteImport } from './routes/admin/users/new'
 import { Route as AdminGatewaysNewRouteImport } from './routes/admin/gateways/new'
 import { Route as AdminClientsNewRouteImport } from './routes/admin/clients/new'
+import { Route as DotwellKnownOauthProtectedResourceSplatRouteImport } from './routes/[.]well-known.oauth-protected-resource.$'
 import { Route as AdminUsersUserIdIndexRouteImport } from './routes/admin/users/$userId/index'
 import { Route as AdminUsersUserIdEditRouteImport } from './routes/admin/users/$userId/edit'
 import { Route as AdminGatewaysNameEditRouteImport } from './routes/admin/gateways/$name/edit'
@@ -273,6 +275,12 @@ const DotwellKnownOpenidConfigurationRoute =
     path: '/.well-known/openid-configuration',
     getParentRoute: () => rootRouteImport,
   } as any)
+const DotwellKnownOauthProtectedResourceRoute =
+  DotwellKnownOauthProtectedResourceRouteImport.update({
+    id: '/.well-known/oauth-protected-resource',
+    path: '/.well-known/oauth-protected-resource',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const DotwellKnownOauthAuthorizationServerRoute =
   DotwellKnownOauthAuthorizationServerRouteImport.update({
     id: '/.well-known/oauth-authorization-server',
@@ -330,6 +338,12 @@ const AdminClientsNewRoute = AdminClientsNewRouteImport.update({
   path: '/clients/new',
   getParentRoute: () => AdminRoute,
 } as any)
+const DotwellKnownOauthProtectedResourceSplatRoute =
+  DotwellKnownOauthProtectedResourceSplatRouteImport.update({
+    id: '/$',
+    path: '/$',
+    getParentRoute: () => DotwellKnownOauthProtectedResourceRoute,
+  } as any)
 const AdminUsersUserIdIndexRoute = AdminUsersUserIdIndexRouteImport.update({
   id: '/users/$userId/',
   path: '/users/$userId/',
@@ -377,6 +391,7 @@ export interface FileRoutesByFullPath {
   '/.well-known/change-password': typeof DotwellKnownChangePasswordRoute
   '/.well-known/jwks.json': typeof DotwellKnownJwksDotjsonRoute
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
+  '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
   '/.well-known/openid-configuration': typeof DotwellKnownOpenidConfigurationRoute
   '/.well-known/security.txt': typeof DotwellKnownSecurityDottxtRoute
   '/account/api-keys': typeof AccountApiKeysRoute
@@ -397,6 +412,7 @@ export interface FileRoutesByFullPath {
   '/oauth2/userinfo': typeof Oauth2UserinfoRoute
   '/account/': typeof AccountIndexRoute
   '/admin/': typeof AdminIndexRoute
+  '/.well-known/oauth-protected-resource/$': typeof DotwellKnownOauthProtectedResourceSplatRoute
   '/admin/clients/new': typeof AdminClientsNewRoute
   '/admin/gateways/new': typeof AdminGatewaysNewRoute
   '/admin/users/new': typeof AdminUsersNewRoute
@@ -433,6 +449,7 @@ export interface FileRoutesByTo {
   '/.well-known/change-password': typeof DotwellKnownChangePasswordRoute
   '/.well-known/jwks.json': typeof DotwellKnownJwksDotjsonRoute
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
+  '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
   '/.well-known/openid-configuration': typeof DotwellKnownOpenidConfigurationRoute
   '/.well-known/security.txt': typeof DotwellKnownSecurityDottxtRoute
   '/account/api-keys': typeof AccountApiKeysRoute
@@ -453,6 +470,7 @@ export interface FileRoutesByTo {
   '/oauth2/userinfo': typeof Oauth2UserinfoRoute
   '/account': typeof AccountIndexRoute
   '/admin': typeof AdminIndexRoute
+  '/.well-known/oauth-protected-resource/$': typeof DotwellKnownOauthProtectedResourceSplatRoute
   '/admin/clients/new': typeof AdminClientsNewRoute
   '/admin/gateways/new': typeof AdminGatewaysNewRoute
   '/admin/users/new': typeof AdminUsersNewRoute
@@ -492,6 +510,7 @@ export interface FileRoutesById {
   '/.well-known/change-password': typeof DotwellKnownChangePasswordRoute
   '/.well-known/jwks.json': typeof DotwellKnownJwksDotjsonRoute
   '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
+  '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRouteWithChildren
   '/.well-known/openid-configuration': typeof DotwellKnownOpenidConfigurationRoute
   '/.well-known/security.txt': typeof DotwellKnownSecurityDottxtRoute
   '/account/api-keys': typeof AccountApiKeysRoute
@@ -512,6 +531,7 @@ export interface FileRoutesById {
   '/oauth2/userinfo': typeof Oauth2UserinfoRoute
   '/account/': typeof AccountIndexRoute
   '/admin/': typeof AdminIndexRoute
+  '/.well-known/oauth-protected-resource/$': typeof DotwellKnownOauthProtectedResourceSplatRoute
   '/admin/clients/new': typeof AdminClientsNewRoute
   '/admin/gateways/new': typeof AdminGatewaysNewRoute
   '/admin/users/new': typeof AdminUsersNewRoute
@@ -552,6 +572,7 @@ export interface FileRouteTypes {
     | '/.well-known/change-password'
     | '/.well-known/jwks.json'
     | '/.well-known/oauth-authorization-server'
+    | '/.well-known/oauth-protected-resource'
     | '/.well-known/openid-configuration'
     | '/.well-known/security.txt'
     | '/account/api-keys'
@@ -572,6 +593,7 @@ export interface FileRouteTypes {
     | '/oauth2/userinfo'
     | '/account/'
     | '/admin/'
+    | '/.well-known/oauth-protected-resource/$'
     | '/admin/clients/new'
     | '/admin/gateways/new'
     | '/admin/users/new'
@@ -608,6 +630,7 @@ export interface FileRouteTypes {
     | '/.well-known/change-password'
     | '/.well-known/jwks.json'
     | '/.well-known/oauth-authorization-server'
+    | '/.well-known/oauth-protected-resource'
     | '/.well-known/openid-configuration'
     | '/.well-known/security.txt'
     | '/account/api-keys'
@@ -628,6 +651,7 @@ export interface FileRouteTypes {
     | '/oauth2/userinfo'
     | '/account'
     | '/admin'
+    | '/.well-known/oauth-protected-resource/$'
     | '/admin/clients/new'
     | '/admin/gateways/new'
     | '/admin/users/new'
@@ -666,6 +690,7 @@ export interface FileRouteTypes {
     | '/.well-known/change-password'
     | '/.well-known/jwks.json'
     | '/.well-known/oauth-authorization-server'
+    | '/.well-known/oauth-protected-resource'
     | '/.well-known/openid-configuration'
     | '/.well-known/security.txt'
     | '/account/api-keys'
@@ -686,6 +711,7 @@ export interface FileRouteTypes {
     | '/oauth2/userinfo'
     | '/account/'
     | '/admin/'
+    | '/.well-known/oauth-protected-resource/$'
     | '/admin/clients/new'
     | '/admin/gateways/new'
     | '/admin/users/new'
@@ -725,6 +751,7 @@ export interface RootRouteChildren {
   DotwellKnownChangePasswordRoute: typeof DotwellKnownChangePasswordRoute
   DotwellKnownJwksDotjsonRoute: typeof DotwellKnownJwksDotjsonRoute
   DotwellKnownOauthAuthorizationServerRoute: typeof DotwellKnownOauthAuthorizationServerRoute
+  DotwellKnownOauthProtectedResourceRoute: typeof DotwellKnownOauthProtectedResourceRouteWithChildren
   DotwellKnownOpenidConfigurationRoute: typeof DotwellKnownOpenidConfigurationRoute
   DotwellKnownSecurityDottxtRoute: typeof DotwellKnownSecurityDottxtRoute
   BrandingSplatRoute: typeof BrandingSplatRoute
@@ -1027,6 +1054,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DotwellKnownOpenidConfigurationRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/.well-known/oauth-protected-resource': {
+      id: '/.well-known/oauth-protected-resource'
+      path: '/.well-known/oauth-protected-resource'
+      fullPath: '/.well-known/oauth-protected-resource'
+      preLoaderRoute: typeof DotwellKnownOauthProtectedResourceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/.well-known/oauth-authorization-server': {
       id: '/.well-known/oauth-authorization-server'
       path: '/.well-known/oauth-authorization-server'
@@ -1103,6 +1137,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/clients/new'
       preLoaderRoute: typeof AdminClientsNewRouteImport
       parentRoute: typeof AdminRoute
+    }
+    '/.well-known/oauth-protected-resource/$': {
+      id: '/.well-known/oauth-protected-resource/$'
+      path: '/$'
+      fullPath: '/.well-known/oauth-protected-resource/$'
+      preLoaderRoute: typeof DotwellKnownOauthProtectedResourceSplatRouteImport
+      parentRoute: typeof DotwellKnownOauthProtectedResourceRoute
     }
     '/admin/users/$userId/': {
       id: '/admin/users/$userId/'
@@ -1192,6 +1233,21 @@ const AdminRouteChildren: AdminRouteChildren = {
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
+interface DotwellKnownOauthProtectedResourceRouteChildren {
+  DotwellKnownOauthProtectedResourceSplatRoute: typeof DotwellKnownOauthProtectedResourceSplatRoute
+}
+
+const DotwellKnownOauthProtectedResourceRouteChildren: DotwellKnownOauthProtectedResourceRouteChildren =
+  {
+    DotwellKnownOauthProtectedResourceSplatRoute:
+      DotwellKnownOauthProtectedResourceSplatRoute,
+  }
+
+const DotwellKnownOauthProtectedResourceRouteWithChildren =
+  DotwellKnownOauthProtectedResourceRoute._addFileChildren(
+    DotwellKnownOauthProtectedResourceRouteChildren,
+  )
+
 interface GatewayNameRouteChildren {
   GatewayNameSplatRoute: typeof GatewayNameSplatRoute
 }
@@ -1230,6 +1286,8 @@ const rootRouteChildren: RootRouteChildren = {
   DotwellKnownJwksDotjsonRoute: DotwellKnownJwksDotjsonRoute,
   DotwellKnownOauthAuthorizationServerRoute:
     DotwellKnownOauthAuthorizationServerRoute,
+  DotwellKnownOauthProtectedResourceRoute:
+    DotwellKnownOauthProtectedResourceRouteWithChildren,
   DotwellKnownOpenidConfigurationRoute: DotwellKnownOpenidConfigurationRoute,
   DotwellKnownSecurityDottxtRoute: DotwellKnownSecurityDottxtRoute,
   BrandingSplatRoute: BrandingSplatRoute,

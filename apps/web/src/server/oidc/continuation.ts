@@ -32,7 +32,11 @@ import { createBasePaths } from "./base-path"
 export const OAUTH_QUERY_FIELD = "oauth_query"
 
 export interface ResumeResult {
-  /** Where to send the browser: the client's redirect URI, or the consent page. */
+  /**
+   * Where to send the browser: the client's redirect URI, or the consent page.
+   * Browser-ready as given — the page form is `${consentPage}?…`, and
+   * `consentPage` is configured with the mount path already on it (D130).
+   */
   destination?: string
   /** Set when the signed request has expired or been tampered with. */
   invalid?: boolean

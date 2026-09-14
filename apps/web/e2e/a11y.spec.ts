@@ -37,6 +37,22 @@ import type { Page } from "@playwright/test"
  */
 
 async function scan(page: Page, where: string): Promise<void> {
+  // A page is not scannable until its widgets have finished building
+  // themselves. react-resizable-panels renders a separator with
+  // `role="separator"` and `tabindex="0"` on the first pass and writes
+  // `aria-valuenow` only after it has measured the group, from a layout
+  // effect that runs after hydration. axe reads the DOM as it finds it, so a
+  // scan that landed first reported a critical `aria-required-attr` on
+  // `/admin/database` — once in four full runs on 2026-09-11, twice on
+  // 2026-09-14 under load, and never twice in a row. The wait is a no-op on a
+  // page with no panel group; on one whose group never measures (an
+  // auto-height parent, D87's failure) it times out, which is the right
+  // answer too.
+  await expect(
+    page.locator('[data-slot="resizable-handle"]:not([aria-valuenow])'),
+    `resizable handles on ${where} have not measured their group`
+  ).toHaveCount(0)
+
   const results = await new AxeBuilder({ page }).analyze()
   const blocking = results.violations.filter(
     (violation) =>

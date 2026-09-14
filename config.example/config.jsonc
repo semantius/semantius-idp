@@ -244,7 +244,9 @@
   "oauth": {
     "accessTokenTtl": "15m",
     "idTokenTtl": "1h",
-    "codeTtl": "60s",
+    // Also the time a user has on the sign-in page, and again on the consent
+    // page, before the pending authorization expires.
+    "codeTtl": "5m",
     "refreshTokenTtl": "30d",
     "refreshTokenMaxLifetime": "90d",
 

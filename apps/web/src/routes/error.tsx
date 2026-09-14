@@ -80,9 +80,15 @@ function explain(
     case "invalid_redirect":
     case "invalid_redirect_uri":
       return t.errors.oauth.invalidRedirect
-    case "invalid_request":
+    // Two codes, two sentences: `expired` is what `/consent` sends when the
+    // signed request's `exp` had passed, and `invalid_request` is everything
+    // else the provider refused. They used to share the "took too long"
+    // wording, which told a user with a tampered or re-serialized request to
+    // hurry (D130).
     case "expired":
       return t.errors.oauth.expired
+    case "invalid_request":
+      return t.errors.oauth.invalidRequest
     default:
       return (
         messageForErrorCode(error, t, passwordMinLength) ??

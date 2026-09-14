@@ -162,6 +162,48 @@ test.describe("a relying party signs a user in", () => {
     }
   })
 
+  test("a client that does not skip consent is reached from a cold sign-in", async ({
+    page,
+    app,
+    stack,
+  }) => {
+    test.slow()
+    // Deliberately NOT signed in first. The consent test below starts from an
+    // existing session, so `/oauth2/authorize` redirects to the consent page
+    // itself — a relative `Location` the browser resolves correctly. A sign-in
+    // that came from an authorization goes another way: the login handler
+    // resumes it through `/oauth2/continue` and redirects to the URL that
+    // answers, and that URL already carried the mount path. Under a sub-path
+    // it landed on `/idp/idp/consent` until D130, and no test went this way.
+    const user = await createVerifiedUser(page, app, stack, "cold-consent")
+    const rp = await startRelyingParty(stack, CONSENT_CLIENT)
+
+    try {
+      await page.goto(rp.url)
+      await page.getByRole("link", { name: "Sign in with the IdP" }).click()
+
+      await expect(page).toHaveURL(new RegExp(`${app.basePath}/login`))
+      await page.getByLabel("E-mail address").fill(user.email)
+      await page.getByLabel("Password", { exact: true }).fill(user.password)
+      await submit(page, "Sign in")
+
+      // The path, byte for byte — a regex on `/consent` would also match the
+      // doubled one.
+      expect(new URL(page.url()).pathname, "where the sign-in landed").toBe(
+        `${app.basePath}/consent`
+      )
+      await expect(
+        page.getByRole("heading", { name: /wants to access your account/ })
+      ).toBeVisible()
+
+      await submit(page, "Allow")
+      await expect(page.locator("#signed-in")).toBeVisible()
+      await expect(page.locator("#email")).toHaveText(user.email)
+    } finally {
+      await rp.stop()
+    }
+  })
+
   test("a client that does not skip consent asks, and Deny means no", async ({
     page,
     app,

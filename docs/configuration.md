@@ -86,7 +86,7 @@ the process; there is no hot reload and `SIGHUP` is ignored.
 | `jwt.sessionToken.ttl` | number \| string | `3600` | Lifetime of a JWT from `GET /api/auth/token`, the first-party session exchange. |
 | `oauth.accessTokenTtl` | number \| string | `15m` | Also the window in which a revoked token still verifies for a stateless resource server. |
 | `oauth.idTokenTtl` | number \| string | `1h` |  |
-| `oauth.codeTtl` | number \| string | `60s` | Authorization codes are single-use as well as short-lived. |
+| `oauth.codeTtl` | number \| string | `5m` | Authorization codes are single-use as well as short-lived. Also how long the sign-in and consent pages stay valid: the provider signs the pending authorization with this lifetime, restarted at each page. |
 | `oauth.refreshTokenTtl` | number \| string | `30d` | Sliding: every use rotates the token and restarts this clock. |
 | `oauth.refreshTokenMaxLifetime` | number \| string | `90d` | The ceiling the sliding window cannot pass. After this the user signs in again. |
 | `oauth.scopes` | string[] | `["openid","profile","email","offline_access"]` | Every scope any client may request. A client's own `scopes` must be a subset. |

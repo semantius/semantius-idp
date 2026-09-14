@@ -532,6 +532,24 @@ already, which is why an unrouted well-known path there answers with **this
 app's** `notFound()` page rather than the SPA's: `data-base-path="/idp"` in the
 HTML is how to tell the two apart.
 
+**The provider's continuation URL already carries the mount path, and
+`oauth.codeTtl` is also the sign-in and consent pages' clock** (**D130**).
+`/oauth2/continue` answers `${consentPage}?<signed request>`, and
+`consentPage` is configured through `paths.path()`, so under a sub-path the
+answer is `/idp/consent?…` already. `resolveSignInDestination` re-based it
+and every cold sign-in from an authorization landed on `/idp/idp/consent`,
+while a retry with a session worked, because that path is the provider's own
+relative `Location`. Never prefix a `pendingContinuation`; and when a test is
+about the sub-path, assert the pathname byte for byte, since a regex on
+`/consent` matches the doubled one too. The other half: 1.7.1's `signParams`
+stamps the signed request with `exp = now + codeExpiresIn`, restarted at each
+interstitial, so the code's lifetime is also how long a user may sit on
+`/login` and again on `/consent`. There is no separate knob, and the verifier
+answers one `400 invalid_signature` for expired and tampered alike —
+`/consent` tells them apart by the request's own `exp` before it picks a
+message, and `resumeAuthorization` cannot, so a slow *sign-in* falls through
+to the default post-login page with only a log line.
+
 **A field's `id` is generated, never its `name`.** `name` is unique in a form
 and emphatically not in a document: `/account/security` has three fields called
 `password` — the change-password dialog's and the two the second-factor forms

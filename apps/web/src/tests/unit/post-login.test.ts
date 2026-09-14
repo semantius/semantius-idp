@@ -49,6 +49,28 @@ describe("resolveSignInDestination — precedence", () => {
       })
     ).toBe("/oauth2/authorize?client_id=web&state=abc")
   })
+
+  it("does not re-base a continuation under a sub-path — the provider's page URL already carries it", () => {
+    // `consentPage` is configured as `/idp/consent`, and the provider answers
+    // `/oauth2/continue` with `${consentPage}?…`. Prefixing again is how
+    // every cold sign-in from an authorization landed on `/idp/idp/consent`
+    // (D130).
+    expect(
+      resolveSignInDestination({
+        config: atSubPath(),
+        pendingContinuation: "/idp/consent?client_id=web&sig=abc",
+      })
+    ).toBe("/idp/consent?client_id=web&sig=abc")
+  })
+
+  it("passes a client's absolute redirect URI through, under a sub-path too", () => {
+    expect(
+      resolveSignInDestination({
+        config: atSubPath(),
+        pendingContinuation: "http://127.0.0.1:53682/callback?code=x&state=abc",
+      })
+    ).toBe("http://127.0.0.1:53682/callback?code=x&state=abc")
+  })
 })
 
 describe("resolveSignInDestination — the configured default", () => {

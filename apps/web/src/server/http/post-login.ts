@@ -36,7 +36,8 @@ export interface SignInDestinationInput {
    * Either the client's own redirect URI carrying an authorization code, or
    * the consent page — both decided by the provider, never by the browser, so
    * unlike `returnTo` this is not user input and an absolute URL here is not
-   * an open redirect.
+   * an open redirect. Browser-ready as given: the provider's page URLs are
+   * built from the configured `consentPage`, which includes the mount path.
    */
   pendingContinuation?: string | null
 }
@@ -53,11 +54,16 @@ export function resolveSignInDestination({
   const basePath = config.base.basePath
 
   if (pendingContinuation) {
-    // Absolute when the provider resolved the request to a client's redirect
-    // URI; relative when it resolved to a page of ours.
-    return pendingContinuation.startsWith("/")
-      ? withBasePath(basePath, pendingContinuation)
-      : pendingContinuation
+    // Never re-based. Absolute when the provider resolved the request to a
+    // client's redirect URI; relative when it resolved to a page of ours —
+    // and that relative form ALREADY carries the mount path, because
+    // `loginPage` and `consentPage` are handed to the provider through
+    // `paths.path()` and it builds the URL as `${consentPage}?${signed}`.
+    // Prefixing it here again produced `/idp/idp/consent` for every sign-in
+    // that came from an authorization under a sub-path (D130); the direct
+    // route — an existing session hitting `/oauth2/authorize` — never went
+    // through this function, which is why the retry "worked".
+    return pendingContinuation
   }
 
   const validated = safeReturnTo(returnTo, "")

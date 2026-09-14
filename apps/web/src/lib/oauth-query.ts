@@ -88,3 +88,23 @@ export function readOauthQuery({
   }
   return rawSearch(search) || undefined
 }
+
+/**
+ * Whether the signed request's own `exp` has passed.
+ *
+ * Read from the unverified string on purpose: by the time this is asked the
+ * provider has already refused the request — and it answers one
+ * `400 invalid_signature` for an expired request and a tampered one alike —
+ * so the only question left is which sentence to show. A missing or
+ * unparseable `exp` is not "expired": that request was never one the provider
+ * signed (D130).
+ */
+export function signedRequestExpired(
+  oauthQuery: string,
+  now: number = Date.now()
+): boolean {
+  const raw = new URLSearchParams(oauthQuery).get("exp")
+  if (raw === null || raw === "") return false
+  const exp = Number(raw)
+  return Number.isFinite(exp) && exp * 1000 < now
+}

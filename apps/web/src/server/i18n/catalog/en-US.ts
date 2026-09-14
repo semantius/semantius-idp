@@ -266,6 +266,8 @@ export const enUS = {
         "Nothing was shared. Go back to the application and try again.",
       expired:
         "This sign-in request took too long. Start again from the application.",
+      invalidRequest:
+        "This sign-in request could not be verified. Start again from the application.",
     },
   },
 

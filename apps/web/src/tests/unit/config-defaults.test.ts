@@ -82,7 +82,7 @@ describe("the spec defaults", () => {
         accessTokenTtl: 15 * 60,
         idTokenTtl: 3600,
         protectedResources: [],
-        codeTtl: 60,
+        codeTtl: 300,
         refreshTokenTtl: 30 * 86_400,
         refreshTokenMaxLifetime: 90 * 86_400,
         scopes: ["openid", "profile", "email", "offline_access"],

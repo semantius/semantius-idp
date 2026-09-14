@@ -137,6 +137,18 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ### Changed
 
+- **`oauth.codeTtl` defaults to five minutes, and its description says what
+  else it bounds** (**D130**). The provider signs the pending authorization
+  with `codeExpiresIn` as its lifetime, so the value is also how long a user
+  has on the sign-in page, and again on the consent page, before the request
+  expires. At the old `60s` a consent screen read for longer than a minute
+  ended on the error page; a deployment that sets the key explicitly is
+  unchanged.
+- **`/consent` tells an expired request apart from one that could not be
+  verified** (**D130**). The provider answers `400 invalid_signature` for
+  both; the page now reads the request's own `exp` and sends `?error=expired`
+  only when it has passed. `invalid_request` gets its own sentence
+  ("could not be verified") instead of "took too long".
 - **The contrast corrections moved out of the preset's stylesheet, so a
   `shadcn apply --preset` can no longer undo them** (**D128**). `globals.css`
   is stock shadcn output again. The corrections are in
@@ -191,6 +203,19 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ### Fixed
 
+- **The admin accessibility scan no longer races `/admin/database`'s panel
+  layout.** react-resizable-panels writes a separator's `aria-valuenow` after
+  it has measured its group, and a scan that arrived first reported a
+  critical `aria-required-attr` once in four runs. `scan()` in `a11y.spec.ts`
+  waits for every resizable handle to carry the attribute before axe runs.
+- **A sign-in that came from an authorization no longer lands on
+  `/idp/idp/consent` under a sub-path** (**D130**). `resolveSignInDestination`
+  prefixed the mount path onto the continuation URL `/oauth2/continue`
+  answered, and that URL is built from the configured `consentPage`, which
+  carries the prefix already. Only the cold path did it — an existing session
+  reaches the consent page through the provider's own redirect — which is why
+  a retry appeared to work. The e2e suite now reaches consent from a cold
+  sign-in in both deployment shapes.
 - **A migration recorded from a CRLF checkout is no longer run again.** The
   runner identified a migration by the SHA-256 of its file as it sat on disk.
   A Windows checkout under `core.autocrlf=true` without `.gitattributes` had

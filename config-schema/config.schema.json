@@ -614,8 +614,8 @@
           ]
         },
         "codeTtl": {
-          "description": "Authorization codes are single-use as well as short-lived.",
-          "default": "60s",
+          "description": "Authorization codes are single-use as well as short-lived. Also how long the sign-in and consent pages stay valid: the provider signs the pending authorization with this lifetime, restarted at each page.",
+          "default": "5m",
           "anyOf": [
             {
               "type": "number"

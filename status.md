@@ -1,11 +1,11 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-09-12 · **Branch:** `main` · **Head:** the contrast,
-dev-server, migration and protected-resource working tree on top of `523ecfe`
-(uncommitted — see the first four sections below), last tag **v0.6.6**
-**Plan:** none; the owner's requests of 2026-09-11 (**D128**) and 2026-09-12
-(**D129**)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D129**
+**As of:** 2026-09-14 · **Branch:** `main` · **Head:** the consent-page working
+tree on top of `5fd0b45` (uncommitted — see the first section below), last tag
+**v0.6.7**
+**Plan:** none; the owner's requests of 2026-09-11 (**D128**), 2026-09-12
+(**D129**) and 2026-09-14 (**D130**)
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D130**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
 gate; API gateways (FR-GW, **D91**/**D92**) landed on 2026-08-29, and the
@@ -141,12 +141,11 @@ README quick start against it, and confirming `latest` from outside.
   is test-only: wrap the select and the tree assertion in
   `expect(async () => …).toPass()`, so the interaction retries until the
   round trip happens.
-- **The admin axe scan can beat `/admin/database`'s layout** (2026-09-11,
-  once in four full runs, under load). react-resizable-panels sets a
-  separator's `aria-valuenow` after it measures the group, and a scan that
-  lands first sees `role="separator" tabindex="0"` without it: critical
-  `aria-required-attr`. The fix is test-only. Before scanning that page, wait
-  for `[data-slot="resizable-handle"][aria-valuenow]`.
+- ~~**The admin axe scan can beat `/admin/database`'s layout**~~ — done
+  2026-09-14: `scan()` in `a11y.spec.ts` waits until no
+  `[data-slot="resizable-handle"]` is without `aria-valuenow` before it runs
+  axe, on every page (a no-op where there is no panel group). It had hit
+  twice more that day under load.
 - **The persistent dev schema keeps two leftovers from the rewritten 0003**
   (2026-09-11). One is `idp.gateway.trust_proxy` (boolean, nullable, default
   false), which no code reads. The other is the bookkeeping row for the version
@@ -162,6 +161,75 @@ README quick start against it, and confirming `latest` from outside.
   created. No credential to recover, and no command that changes one.
 
 ---
+
+## The consent page under a sub-path, and its sixty seconds (2026-09-14, **D130**)
+
+**Uncommitted, on top of `5fd0b45`.**
+
+The owner ran `semantius login` against the self-hosted stack, whose IdP is
+mounted at `/idp`, and reported three things: the first attempt redirected to
+`/idp/idp/consent`, a retry did not, and the consent that followed answered
+"This sign-in request took too long". Asked to find the causes first and
+change nothing; then approved all three fixes with a five-minute window.
+
+**The double prefix** was `resolveSignInDestination` in
+`server/http/post-login.ts`. The provider answers `/oauth2/continue` with
+`${consentPage}?<signed request>`, and `consentPage` is configured through
+`paths.path()`, so the answer is `/idp/consent?…` already; the resolver
+prefixed the mount path onto anything that started with `/`. Only the cold
+path — login page, sign in, resume — went through it. An existing session
+reaches consent through the provider's own redirect, a relative `Location`
+the browser resolves against the origin, which is why the retry worked.
+Nothing had seen it because the one consent e2e signed in first, the
+`pendingContinuation` unit test used a root config, and the integration suite
+runs at the root. The resolver passes a continuation through untouched now;
+`post-login.test.ts` has a sub-path case, and `oidc.spec.ts` reaches consent
+from a cold sign-in, asserting the pathname byte for byte because a regex on
+`/consent` would also match the doubled one.
+
+**The window** was `oauth.codeTtl`. 1.7.1's `signParams` sets the signed
+request's `exp` to `now + codeExpiresIn`, restarted at each interstitial, so
+the 60 s chosen for the authorization *code* was also how long a user had on
+the sign-in page and again on the consent page. The URL the owner pasted
+showed it: `ba_iat` and `exp` sixty seconds apart. There is no separate knob
+in 1.7.1 and the schema caps the key at 600 s. The default is `5m` now, the
+describe text says what else it bounds, and `config.example` carries the
+same. **An explicit `codeTtl` is unchanged** — the sibling
+`semantius-self-hosted` sets `"codeTtl": "60s"` in `idp-config/config.jsonc`
+and in its dokploy compose, so that stack keeps sixty seconds until its own
+file changes; not this repository's to edit.
+
+**The sentence** was a collapse. The provider answers `400 invalid_signature`
+for an expired request and a tampered one alike, `/consent` mapped every
+refusal to `invalid_request`, and `/error` rendered that as "took too long".
+`signedRequestExpired` in `lib/oauth-query.ts` reads the request's own `exp`
+— unverified on purpose; the provider has already refused it — and the page
+sends `expired` only when it has passed. `invalid_request` has its own
+catalog sentence now ("could not be verified").
+
+**The flaky axe scan is closed the way the 2026-09-11 note said.** It failed
+twice more during this session's e2e runs, both times under load and never
+twice in a row: react-resizable-panels writes a separator's `aria-valuenow`
+from a layout effect after measuring the group, and a scan that lands first
+sees `role="separator" tabindex="0"` without it. `scan()` in `a11y.spec.ts`
+now waits until no `[data-slot="resizable-handle"]` lacks the attribute, for
+every page it scans; three consecutive runs of the admin scan passed.
+
+**The sibling's line endings.** `semantius-self-hosted`'s `.gitattributes`
+covered the Caddyfile, `*.sh` and `*.cmd` and nothing else, so on this
+machine's `autocrlf=true` every other file was CRLF when git wrote it and LF
+when a generator did, and git warned on each of the three files this session
+touched there. It carries the same `* text=auto eol=lf` catch-all as this
+repository now, the tree was renormalized and re-checked out, and
+`git ls-files --eol` shows `w/crlf` on the nine `.cmd` files and nothing else.
+
+Two things noticed and left alone. The `ba_param=["ba_iat",…]` JSON array in
+the pasted URL is the router's re-serialized form of the provider's repeated
+key, which `lib/oauth-query.ts` already documents; the `Location` header
+itself carries the repeated form. And a sign-in slower than the window fails
+more quietly than consent does: `resumeAuthorization` logs a warning and the
+user lands on the default post-login page as if no client had asked. That is
+a separate question and stays open.
 
 ## The CLI's first discovery hop exists now (2026-09-12, **D129**)
 

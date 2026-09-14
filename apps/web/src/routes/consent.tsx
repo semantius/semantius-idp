@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import { AuthShell } from "@/components/auth/auth-shell"
 import { FormAlert } from "@/components/auth/form-parts"
 import { messageForErrorCode } from "@/lib/auth-errors"
-import { readOauthQuery } from "@/lib/oauth-query"
+import { readOauthQuery, signedRequestExpired } from "@/lib/oauth-query"
 import { searchString } from "@/lib/search-params"
 import { getCatalog } from "@/server/i18n"
 import {
@@ -91,9 +91,16 @@ export const Route = createFileRoute("/consent")({
 
         if (!response.ok || !destination) {
           // An expired or tampered request cannot be redirected anywhere the
-          // client named, so it lands on our own error page instead.
+          // client named, so it lands on our own error page instead. The
+          // provider answers `400 invalid_signature` for both, so the two are
+          // told apart here, by the `exp` the signed request carries: past
+          // means the user was slower than `oauth.codeTtl`, and the page can
+          // say so; anything else was never a valid request (D130).
           return redirectWithCookies(
-            withError(`${paths.basePath}${APP_ROUTES.error}`, "invalid_request")
+            withError(
+              `${paths.basePath}${APP_ROUTES.error}`,
+              signedRequestExpired(oauthQuery) ? "expired" : "invalid_request"
+            )
           )
         }
 

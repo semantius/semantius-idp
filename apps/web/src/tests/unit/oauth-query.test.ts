@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest"
 
-import { readOauthQuery, rawSearch } from "@/lib/oauth-query"
+import {
+  rawSearch,
+  readOauthQuery,
+  signedRequestExpired,
+} from "@/lib/oauth-query"
 
 /**
  * Carrying a signed authorization request across an interstitial.
@@ -93,5 +97,29 @@ describe("readOauthQuery", () => {
     expect(
       readOauthQuery({ search: { error: "invalid_credentials" } })
     ).toBeUndefined()
+  })
+})
+
+describe("signedRequestExpired", () => {
+  const now = 1_789_374_500_000 // ms
+
+  it("is true once the request's own exp has passed", () => {
+    expect(signedRequestExpired("client_id=x&exp=1789374482&sig=s", now)).toBe(
+      true
+    )
+  })
+
+  it("is false while exp is still ahead", () => {
+    expect(signedRequestExpired("client_id=x&exp=1789374782&sig=s", now)).toBe(
+      false
+    )
+  })
+
+  it("is false — not expired — for a request that carries no usable exp", () => {
+    // A tampered or hand-built string is refused by the provider either way;
+    // it just must not be described as "took too long".
+    expect(signedRequestExpired("client_id=x&sig=s", now)).toBe(false)
+    expect(signedRequestExpired("client_id=x&exp=&sig=s", now)).toBe(false)
+    expect(signedRequestExpired("client_id=x&exp=soon&sig=s", now)).toBe(false)
   })
 })

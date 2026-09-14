@@ -657,8 +657,10 @@ const oauthSchema = z.strictObject({
     ),
   idTokenTtl: duration({ min: 60 }).prefault("1h"),
   codeTtl: duration({ min: 10, max: 600 })
-    .prefault("60s")
-    .describe("Authorization codes are single-use as well as short-lived."),
+    .prefault("5m")
+    .describe(
+      "Authorization codes are single-use as well as short-lived. Also how long the sign-in and consent pages stay valid: the provider signs the pending authorization with this lifetime, restarted at each page."
+    ),
   refreshTokenTtl: duration({ min: 60 })
     .prefault("30d")
     .describe("Sliding: every use rotates the token and restarts this clock."),

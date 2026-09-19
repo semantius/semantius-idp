@@ -72,6 +72,7 @@ jobs:
       version: ${{ steps.derive.outputs.version }}
       prerelease: ${{ steps.derive.outputs.prerelease }}
       publish: ${{ steps.derive.outputs.publish }}
+      is_highest: ${{ steps.derive.outputs.is_highest }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -115,14 +116,42 @@ jobs:
             *) prerelease=false ;;
           esac
 
+          # `latest` means the highest version published, pre-releases included
+          # (**D131**). So it is not a property of *this* tag — it is this tag
+          # compared against every other one, and it has to be computed here
+          # because `metadata-action` cannot ask that question: its `flavor`
+          # knob only knows `auto` (skip a pre-release) and a constant.
+          #
+          # Asked of git, which OPS-1 already makes the source of truth for a
+          # version, and of the **remote** rather than the checkout, because
+          # this job clones shallow and would otherwise see one tag: its own.
+          # `--refs` drops the `^{}` peeled entries annotated tags produce.
+          #
+          # `sort -V` is **not** semver ordering: it puts `v0.5.0` *before*
+          # `v0.5.0-beta1`, because the shorter string is a prefix of the
+          # longer one. Mapping the first `-` to `~` fixes exactly that —
+          # version sort ranks `~` below the empty string, which is semver's
+          # own rule that a pre-release precedes the release it leads to.
+          # Do not drop the `sed`s; without them a beta outranks its release.
+          highest="$(
+            {
+              git ls-remote --tags --refs origin 'v*' | sed 's#.*refs/tags/##'
+              printf '%s\n' "$tag"
+            } |
+              grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$' |
+              sed 's/-/~/' | sort -V | sed 's/~/-/' | tail -1
+          )"
+          if [ "$highest" = "$tag" ]; then is_highest=true; else is_highest=false; fi
+
           {
             echo "tag=$tag"
             echo "version=$version"
             echo "prerelease=$prerelease"
             echo "publish=$publish"
+            echo "is_highest=$is_highest"
           } >> "$GITHUB_OUTPUT"
 
-          echo "\`$tag\` — version \`$version\`, prerelease \`$prerelease\`, publish \`$publish\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`$tag\` — version \`$version\`, prerelease \`$prerelease\`, publish \`$publish\`, takes \`latest\` \`$is_highest\` (highest tag: \`$highest\`)" >> "$GITHUB_STEP_SUMMARY"
 
   # -------------------------------------------------------------------------
   # Build, prove, publish.
@@ -159,16 +188,24 @@ jobs:
           images: ${{ env.IMAGE }}
           # `value=` rather than the ref, so a dispatched rehearsal derives the
           # same tag set from its input that a tag derives from itself.
-          # `{{major}}.{{minor}}`, `{{major}}` and `latest` are skipped for a
-          # pre-release by `metadata-action` itself: 0.1.0-rc1 must not become
-          # `0.1`, and it must certainly not become `latest`.
+          # `{{major}}.{{minor}}` and `{{major}}` are skipped for a
+          # pre-release by `metadata-action` itself, and that is still what is
+          # wanted: `0.5` names the 0.5 **line**, and a beta must not own the
+          # tag an operator pins to in order to avoid betas.
+          #
+          # `latest` is the opposite case (**D131**) and is therefore *not*
+          # left to `flavor`'s `auto`: it goes to the highest version that
+          # exists, pre-release or not, which the guard job resolved. `auto`
+          # would mean "the last non-pre-release pushed", which is neither the
+          # highest version nor even monotonic — a 0.4.1 backport cut after
+          # 0.5.0 would have dragged `latest` backwards onto it.
           tags: |
             type=semver,pattern={{version}},value=${{ needs.guard.outputs.tag }}
             type=semver,pattern={{major}}.{{minor}},value=${{ needs.guard.outputs.tag }}
             type=semver,pattern={{major}},value=${{ needs.guard.outputs.tag }}
             type=sha,prefix=sha-,format=short
           flavor: |
-            latest=${{ needs.guard.outputs.prerelease == 'false' }}
+            latest=${{ needs.guard.outputs.is_highest }}
 
       # amd64 first, into the local daemon, because the smoke test drives a
       # real container and the runner is amd64. The multi-architecture build

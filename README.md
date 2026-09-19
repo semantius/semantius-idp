@@ -729,7 +729,25 @@ exactly. [CONTRIBUTING.md](CONTRIBUTING.md) has the rest.
 ## Versioning
 
 Semantic versioning, with the image tagged `X.Y.Z`, `X.Y`, `X`, `latest` and an
-immutable `sha-<commit>`. What is checked before a release is
+immutable `sha-<commit>`.
+
+**`latest` is the highest version published, pre-releases included** — so it
+moves to a `0.5.0-beta1` while `0.4.x` is still the newest stable release, and
+a `0.4.1` published afterwards does not take it back. `X.Y` and `X` never name
+a pre-release. So:
+
+| Pull | To follow |
+| --- | --- |
+| `0.4` | the 0.4 line — patches only, never a pre-release |
+| `0` | any 0.x release, never a pre-release |
+| `0.4.1` or `sha-<commit>` | exactly one build, immutable |
+| `latest` | whatever is newest, **including pre-releases** |
+
+[`docker/docker-compose.yml`](docker/docker-compose.yml) defaults to `latest`;
+`IDP_IMAGE` in `.env` overrides it, and a deployment that must not see a
+pre-release sets it to an `X.Y` tag.
+
+What is checked before a release is
 [docs/release.md](docs/release.md). Migrations apply automatically on upgrade and are
 forward-only: take a backup before upgrading, because there is no downgrade
 path. [CHANGELOG.md](CHANGELOG.md) records what changed.

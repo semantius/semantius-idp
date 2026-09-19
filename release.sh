@@ -21,8 +21,9 @@
 #
 #   * a **pre-release is allowed** here (`v0.2.0-rc.1`). That script refuses
 #     one because its workflow tags `latest` unconditionally; this workflow
-#     derives `latest` from whether the version is a pre-release, so a release
-#     candidate publishes as itself and takes neither `0.2`, `0` nor `latest`;
+#     gives `latest` to the highest version published, pre-releases included
+#     (**D131**), so a release candidate publishes as itself, takes neither
+#     `0.2` nor `0`, and takes `latest` only while nothing higher exists;
 #   * **three files are bumped**, not one — the root manifest the workflow
 #     checks, `apps/web`'s, and `version.ts`'s development fallback, which is
 #     what a non-image run of `idp version` reports;
@@ -81,9 +82,26 @@ if [ -n "$(git ls-remote --tags origin "refs/tags/$VERSION")" ]; then
   die "tag $VERSION already exists on origin"
 fi
 
-LATEST="$(git tag --list 'v*' | sort -V | tail -1)"
-if [ -n "$LATEST" ] && [ "$(printf '%s\n%s\n' "$LATEST" "$VERSION" | sort -V | tail -1)" != "$VERSION" ]; then
-  die "$VERSION is not newer than the latest tag $LATEST"
+# `sort -V` is **not** semver ordering: it puts `v0.5.0` *before*
+# `v0.5.0-beta1`, because the shorter string is a prefix of the longer one.
+# Mapping the first `-` to `~` fixes exactly that — version sort ranks `~`
+# below the empty string, which is semver's own rule that a pre-release
+# precedes the release it leads to. Without the two `sed`s, tagging
+# `v0.5.0-beta1` makes `./release.sh v0.5.0` refuse its own release as "not
+# newer than the latest tag" — latent until the day a pre-release is cut, and
+# no pre-release had been cut here when it was found (**D131**).
+semver_max() { sed 's/-/~/' | sort -V | sed 's/~/-/' | tail -1; }
+
+# Not a refusal any more. `latest` goes to the highest version published
+# (**D131**), so releasing below the highest tag is a legitimate thing to do —
+# a backport onto an older line while a beta of the next one is out is the
+# case that made this a warning, and it is exactly the case the old `die`
+# made impossible. The plan below prints what this takes and what it does not,
+# and the confirmation prompt is where a mistake gets caught.
+LATEST="$(git tag --list 'v*' | semver_max)"
+TAKES_LATEST=1
+if [ -n "$LATEST" ] && [ "$(printf '%s\n%s\n' "$LATEST" "$VERSION" | semver_max)" != "$VERSION" ]; then
+  TAKES_LATEST=0
 fi
 
 pkg_version() { sed -n 's/^  "version": "\(.*\)",$/\1/p' "$1" | head -1; }
@@ -119,10 +137,19 @@ fi
 # No concrete `sha-<commit>` here on purpose: a version bump below adds a
 # commit, so the tag lands on something this line cannot yet name. Printing
 # today's HEAD would be a plan that quietly disagrees with what gets published.
+#
+# `latest` is listed from `TAKES_LATEST`, never from `PRERELEASE`: a
+# pre-release that is the highest version does take it (**D131**), and a
+# release that is not the highest does not.
 if [ "$PRERELEASE" -eq 1 ]; then
-  IMAGE_TAGS=":$NUMBER :sha-<commit> only (pre-release: no $CORE, no ${CORE%.*}, no latest)"
+  IMAGE_TAGS=":$NUMBER :sha-<commit> (pre-release: no ${CORE%.*}, no ${CORE%%.*})"
 else
-  IMAGE_TAGS=":$NUMBER :${NUMBER%.*} :${NUMBER%%.*} :latest :sha-<commit>"
+  IMAGE_TAGS=":$NUMBER :${NUMBER%.*} :${NUMBER%%.*} :sha-<commit>"
+fi
+if [ "$TAKES_LATEST" -eq 1 ]; then
+  IMAGE_TAGS="$IMAGE_TAGS + :latest (highest version published)"
+else
+  IMAGE_TAGS="$IMAGE_TAGS + NO :latest — $LATEST is higher and keeps it"
 fi
 
 printf '\n  release    %s%s\n  commit     %s  %s\n  branch     %s (in sync with %s)\n  version    package.json %s -> %s\n  ci         %s\n  notes      %s\n  publishes  ghcr.io/<owner>/semantius-idp %s\n             + GitHub Release %s, amd64 and arm64\n\n' \

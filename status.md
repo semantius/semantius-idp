@@ -5,7 +5,7 @@ tree on top of `5fd0b45` (uncommitted — see the first section below), last tag
 **v0.6.7**
 **Plan:** none; the owner's requests of 2026-09-11 (**D128**), 2026-09-12
 (**D129**) and 2026-09-14 (**D130**)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D130**
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D131**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
 gate; API gateways (FR-GW, **D91**/**D92**) landed on 2026-08-29, and the

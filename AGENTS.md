@@ -666,6 +666,19 @@ inlined and is a candidate for the prune list. Prove a prune with
 *compressed* size** (89.5 MiB here against 374.8 MiB on a runner), so the size
 gate cannot fail locally and never could.
 
+**`latest` is the highest version published, pre-releases included**
+(**D131**) — not "the newest stable". A `0.5.0-beta1` takes it while `0.4.x` is
+the newest stable, and a `0.4.1` backport released afterwards does not take it
+back. `X.Y` and `X` are the opposite answer on purpose and still skip a
+pre-release: `0.5` names the 0.5 *line*, and pinning to it is how an operator
+avoids betas — which `docker/docker-compose.yml`'s `latest` default does not.
+The comparison is semver's and **not `sort -V`'s**, which ranks a release below
+its own pre-release; the why is commented where it is implemented, in
+`release.sh`'s `semver_max` and in `release.yml`'s `guard` job. Read one before
+changing the other: the same pipeline is written twice because their inputs
+differ — the guard clones shallow and has to ask `git ls-remote`, the script
+has already fetched and reads `git tag --list`.
+
 **A tag never reaches `ci.yml`, and `release.yml` is what publishes** (**D73**).
 `ci.yml` triggers on `push: branches: [main]`; a tag push does not match a
 branch filter. The whole of OPS-1's publish path used to live there behind

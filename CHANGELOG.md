@@ -137,6 +137,22 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ### Changed
 
+- **`latest` now points at the highest version published, pre-releases
+  included** (**D131**). It used to go to whichever non-pre-release tag was
+  pushed most recently, which meant `latest` stayed on `0.4.0` while
+  `0.5.0-beta1` was out, and would have moved *backwards* onto a `0.4.1`
+  backport cut after `0.5.0`. `release.yml`'s `guard` job compares the tag
+  against every tag on the remote and decides from that. `X.Y` and `X` are
+  unchanged and still skip a pre-release, so pin to `X.Y` for a deployment
+  that must not see one — `docker/docker-compose.yml` still defaults to
+  `latest` and will now track pre-releases.
+- **`release.sh` compares versions the way semver does, and no longer refuses
+  a backport** (**D131**). `sort -V` ranks `v0.5.0` *below* `v0.5.0-beta1`, so
+  after tagging a beta the script refused `./release.sh v0.5.0` as "not newer
+  than the latest tag" — it could not promote a beta to its own release. The
+  comparison maps the first `-` to `~` first. Releasing below the highest tag
+  is allowed now and reported in the plan, naming the tag that keeps `latest`.
+
 - **`oauth.codeTtl` defaults to five minutes, and its description says what
   else it bounds** (**D130**). The provider signs the pending authorization
   with `codeExpiresIn` as its lifetime, so the value is also how long a user

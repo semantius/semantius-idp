@@ -162,8 +162,16 @@ pushes amd64 and arm64 from the same layer cache as `1.0.0`, `1.0`, `1`,
 `latest` and `sha-<commit>`, and opens a GitHub release whose notes are the
 changelog's section for the version. A merge to `main` does none of that.
 
-A pre-release tag (`v1.0.0-rc1`) publishes as `1.0.0-rc1` only — no `1.0`, no
-`1`, no `latest` — and the GitHub release is marked as a pre-release.
+A pre-release tag (`v1.0.0-rc1`) publishes as `1.0.0-rc1` and `sha-<commit>` —
+no `1.0`, no `1` — and the GitHub release is marked as a pre-release.
+
+`latest` is not decided by that, though: **it goes to the highest version
+published, pre-releases included** (**D131**). With `0.4.0` released and
+`0.5.0-beta1` out, `latest` is `0.5.0-beta1`; a `0.4.1` backport cut afterwards
+publishes `0.4.1`, `0.4`, `0` and its sha tag and leaves `latest` where it is.
+The guard job prints which way it decided, and `./release.sh` prints it in the
+plan before it asks. Pin to `X.Y` — never to `latest` — for a deployment that
+must not see a pre-release; `docker/docker-compose.yml` defaults to `latest`.
 
 > Until 2026-08-27 this section described behavior that did not exist: the
 > publish steps lived in `ci.yml`, guarded on `refs/tags/v*`, in a workflow
@@ -173,6 +181,7 @@ A pre-release tag (`v1.0.0-rc1`) publishes as `1.0.0-rc1` only — no `1.0`, no
 
 - [ ] Pull the published image on a clean machine and run the README's quick
       start against it, end to end.
-- [ ] Confirm the tag set is on the registry and `latest` points where it
-      should.
+- [ ] Confirm the tag set is on the registry and `latest` points at the
+      highest version published — which is this release only if no higher tag,
+      pre-release included, already exists.
 - [ ] Open the next `## [Unreleased]` section in the changelog.

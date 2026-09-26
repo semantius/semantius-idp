@@ -13,7 +13,6 @@ import { createHash, randomBytes } from "node:crypto"
 
 import { and, eq, isNull } from "drizzle-orm"
 
-import { createLocalAccountIssuer } from "@better-auth/core/db"
 
 import { createUserWithoutRequest } from "@/server/auth/provisioning"
 import { reconcileClients } from "@/server/oidc/reconcile"
@@ -236,7 +235,6 @@ describe("an administrator revoking sessions", () => {
     await inner.internalAdapter.createAccount({
       userId: user.id,
       providerId: "credential",
-      issuer: createLocalAccountIssuer("credential"),
       accountId: user.id,
       password: await inner.password.hash(PASSWORD),
     })

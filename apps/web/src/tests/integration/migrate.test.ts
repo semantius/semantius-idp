@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url"
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
+import { createUserWithoutRequest } from "@/server/auth/provisioning"
 import { quoteIdentifier } from "@/server/db/client"
 import {
   MIGRATIONS_TABLE,
@@ -131,5 +132,91 @@ describe("migrations already recorded under another form", () => {
     await expect(
       migrationsAreCurrent(context.database, { migrationsFolder: FOLDER })
     ).resolves.toBe(true)
+  })
+})
+
+/**
+ * Leaving the account shape Better Auth 1.7.0–1.7.2 had.
+ *
+ * Every deployment up to v0.6.8 ran 1.7.1, whose `account` carried a NOT NULL
+ * `issuer` and a unique index on `(issuer, account_id)`; 1.7.3 reverted both,
+ * and the migration that follows drops them and puts a unique index on
+ * `(provider_id, account_id)` in their place. Every other test starts from an
+ * empty schema, so none of them shows that the new index can be built over the
+ * rows a live deployment already holds — which is the only way it can fail,
+ * and it would fail at boot.
+ */
+describe("the account issuer column, on a database that has accounts", () => {
+  let context: TestContext
+
+  beforeEach(async () => {
+    context = await createTestContext("migrate-issuer")
+  })
+
+  afterEach(async () => {
+    await context.teardown()
+  })
+
+  it("drops it, keeps every row, and refuses a second account for one identity", async () => {
+    const schema = quoteIdentifier(context.schemaName)
+    const sql = context.database.sql
+    const migration = readMigrations(FOLDER).find(
+      (entry) => entry.tag === "0004_wet_gambit"
+    )
+    if (!migration) throw new Error("0004_wet_gambit is not in the journal")
+
+    // The table as 1.7.1 left it, and 0004 not yet recorded.
+    await sql.unsafe(
+      `drop index ${schema}."account_providerId_accountId_uidx";
+       alter table ${schema}."account" add column "issuer" text;
+       create unique index "account_issuer_accountId_uidx"
+         on ${schema}."account" ("issuer", "account_id");
+       delete from ${schema}.${quoteIdentifier(MIGRATIONS_TABLE)}
+         where hash = '${migration.hash}'`
+    )
+
+    const auth = await context.auth.$context
+    const user = await createUserWithoutRequest(auth, {
+      email: "issuer@example.com",
+      name: "Issuer",
+      emailVerified: true,
+    })
+    // A password account and a social one, with the issuer values 1.7.1 wrote.
+    await sql.unsafe(
+      `insert into ${schema}."account"
+         (id, account_id, provider_id, user_id, issuer, created_at, updated_at)
+       values
+         ('acc-credential', $1, 'credential', $1, 'local:credential', now(), now()),
+         ('acc-social', 'oid-123', 'microsoft',
+          $1, 'https://login.microsoftonline.com/tenant/v2.0', now(), now())`,
+      [user.id]
+    )
+    await sql.unsafe(
+      `alter table ${schema}."account" alter column "issuer" set not null`
+    )
+
+    await runMigrations(context.database, {
+      migrationsFolder: FOLDER,
+      unlocked: true,
+    })
+
+    const accountColumns = await sql<{ column_name: string }[]>`
+      select column_name from information_schema.columns
+      where table_schema = ${context.schemaName} and table_name = 'account'`
+    expect(accountColumns.map((row) => row.column_name)).not.toContain("issuer")
+    const rows = await sql.unsafe<{ id: string }[]>(
+      `select id from ${schema}."account" order by id`
+    )
+    expect(rows.map((row) => row.id)).toEqual(["acc-credential", "acc-social"])
+
+    // The race the index exists for: the same identity linked twice.
+    await expect(
+      sql.unsafe(
+        `insert into ${schema}."account"
+           (id, account_id, provider_id, user_id, created_at, updated_at)
+         values ('acc-twice', 'oid-123', 'microsoft', $1, now(), now())`,
+        [user.id]
+      )
+    ).rejects.toMatchObject({ code: "23505" })
   })
 })

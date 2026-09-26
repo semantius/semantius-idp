@@ -15,7 +15,6 @@ import { describe, expect, it } from "vitest"
 
 import { and, eq, like } from "drizzle-orm"
 
-import { createLocalAccountIssuer } from "@better-auth/core/db"
 
 import { createUserWithoutRequest } from "@/server/auth/provisioning"
 import {
@@ -383,7 +382,6 @@ describe("trusted devices die with the enrollment", () => {
     await inner.internalAdapter.createAccount({
       userId: user.id,
       providerId: "credential",
-      issuer: createLocalAccountIssuer("credential"),
       accountId: user.id,
       password: await inner.password.hash(PASSWORD),
     })

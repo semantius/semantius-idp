@@ -44,7 +44,6 @@ describe("approval endpoints", () => {
       await context.internalAdapter.createAccount({
         userId: user.id,
         providerId: "credential",
-        issuer: "local:credential",
         accountId: user.id,
         password: await context.password.hash(password),
       })

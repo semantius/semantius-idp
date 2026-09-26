@@ -12,7 +12,6 @@
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest"
 
-import { createLocalAccountIssuer } from "@better-auth/core/db"
 import { eq } from "drizzle-orm"
 
 import { checkGatewayUrl } from "@/lib/gateway-rules"
@@ -67,7 +66,6 @@ async function adminCookie(): Promise<string> {
   await context.internalAdapter.createAccount({
     userId: user.id,
     providerId: "credential",
-    issuer: createLocalAccountIssuer("credential"),
     accountId: user.id,
     password: await context.password.hash(PASSWORD),
   })

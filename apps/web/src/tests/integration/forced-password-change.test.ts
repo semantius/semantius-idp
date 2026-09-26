@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
-import { createLocalAccountIssuer } from "@better-auth/core/db"
 import { eq } from "drizzle-orm"
 
 import { createUserWithoutRequest } from "@/server/auth/provisioning"
@@ -65,7 +64,6 @@ describe("forced password change", () => {
     await context.internalAdapter.createAccount({
       userId: created.id,
       providerId: "credential",
-      issuer: createLocalAccountIssuer("credential"),
       accountId: created.id,
       password: await context.password.hash(temporary),
     })

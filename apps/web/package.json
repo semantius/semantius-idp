@@ -24,9 +24,9 @@
     "a11y:tokens": "bun run scripts/derive-a11y-tokens.ts"
   },
   "dependencies": {
-    "@better-auth/api-key": "1.7.1",
-    "@better-auth/core": "1.7.1",
-    "@better-auth/oauth-provider": "1.7.1",
+    "@better-auth/api-key": "1.7.6",
+    "@better-auth/core": "1.7.6",
+    "@better-auth/oauth-provider": "1.7.6",
     "@tailwindcss/vite": "4.3.0",
     "@tanstack/react-devtools": "0.10.5",
     "@tanstack/react-router": "1.170.16",
@@ -34,7 +34,7 @@
     "@tanstack/react-start": "1.168.26",
     "@tanstack/router-plugin": "1.168.18",
     "@workspace/ui": "workspace:*",
-    "better-auth": "1.7.1",
+    "better-auth": "1.7.6",
     "drizzle-orm": "0.45.2",
     "jose": "6.2.10",
     "jsonc-parser": "3.3.1",

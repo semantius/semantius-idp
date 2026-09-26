@@ -29,8 +29,6 @@
  * statement promoting an existing user. That trade is recorded in the spec.
  */
 
-import { createLocalAccountIssuer } from "@better-auth/core/db"
-
 import type { Audit } from "../audit"
 import type { Auth } from "../auth/instance"
 import { createUserWithoutRequest } from "../auth/provisioning"
@@ -181,9 +179,6 @@ export async function createFirstUser(
       await context.internalAdapter.createAccount({
         userId: created.id,
         providerId: CREDENTIAL_PROVIDER_ID,
-        // Better Auth namespaces local credentials so a provider id can never
-        // collide with an OAuth identity.
-        issuer: createLocalAccountIssuer(CREDENTIAL_PROVIDER_ID),
         accountId: created.id,
         // the same hashing the sign-in path verifies with.
         password: await context.password.hash(input.password),

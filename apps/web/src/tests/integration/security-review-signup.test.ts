@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 
-import { createLocalAccountIssuer } from "@better-auth/core/db"
 import { eq, like } from "drizzle-orm"
 
 import { Route as NewClientRoute } from "@/routes/admin/clients/new"
@@ -307,7 +306,6 @@ describe("a client registered from the form asks for consent", () => {
     await inner.internalAdapter.createAccount({
       userId: admin.id,
       providerId: "credential",
-      issuer: createLocalAccountIssuer("credential"),
       accountId: admin.id,
       password: await inner.password.hash(PASSWORD),
     })

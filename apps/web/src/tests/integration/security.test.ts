@@ -17,7 +17,6 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest"
 import { createHash, randomBytes } from "node:crypto"
 import { eq } from "drizzle-orm"
 
-import { createLocalAccountIssuer } from "@better-auth/core/db"
 import { createUserWithoutRequest } from "@/server/auth/provisioning"
 import { createLogger } from "@/server/logger"
 import { withStandardRetryAfter } from "@/server/http/security-headers"
@@ -92,7 +91,6 @@ async function makeUser(
   await context.internalAdapter.createAccount({
     userId: user.id,
     providerId: "credential",
-    issuer: createLocalAccountIssuer("credential"),
     accountId: user.id,
     password: await context.password.hash(PASSWORD),
   })
@@ -796,7 +794,6 @@ describe("the breach check", () => {
     await context.internalAdapter.createAccount({
       userId: user.id,
       providerId: "credential",
-      issuer: createLocalAccountIssuer("credential"),
       accountId: user.id,
       password: await context.password.hash(BREACHED),
     })
@@ -866,7 +863,6 @@ describe("e-mail links stay canonical under server.dynamicIssuer", () => {
       await context.internalAdapter.createAccount({
         userId: user.id,
         providerId: "credential",
-        issuer: createLocalAccountIssuer("credential"),
         accountId: user.id,
         password: await context.password.hash(PASSWORD),
       })

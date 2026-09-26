@@ -25,7 +25,6 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
 import { decodeJwt } from "jose"
 import { eq } from "drizzle-orm"
 
-import { createLocalAccountIssuer } from "@better-auth/core/db"
 import { createUserWithoutRequest } from "@/server/auth/provisioning"
 import {
   proxyGatewayRequest,
@@ -129,7 +128,6 @@ beforeAll(async () => {
   await context.internalAdapter.createAccount({
     userId: user.id,
     providerId: "credential",
-    issuer: createLocalAccountIssuer("credential"),
     accountId: user.id,
     password: await context.password.hash(PASSWORD),
   })

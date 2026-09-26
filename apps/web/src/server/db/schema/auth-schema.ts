@@ -95,7 +95,6 @@ export function createAuthSchema(schemaName: string) {
     "account",
     {
       id: text("id").primaryKey(),
-      issuer: text("issuer").notNull(),
       accountId: text("account_id").notNull(),
       providerId: text("provider_id").notNull(),
       userId: text("user_id")
@@ -114,8 +113,8 @@ export function createAuthSchema(schemaName: string) {
         .notNull(),
     },
     (table) => [
-      uniqueIndex("account_issuer_accountId_uidx").on(
-        table.issuer,
+      uniqueIndex("account_providerId_accountId_uidx").on(
+        table.providerId,
         table.accountId
       ),
       index("account_userId_idx").on(table.userId),

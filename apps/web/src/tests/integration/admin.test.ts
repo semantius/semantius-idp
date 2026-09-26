@@ -22,7 +22,6 @@ import { eq } from "drizzle-orm"
 
 import { createResetLink } from "@/server/auth/reset-link"
 import { createUserWithoutRequest } from "@/server/auth/provisioning"
-import { createLocalAccountIssuer } from "@better-auth/core/db"
 import type { TestContext } from "./harness"
 import { adminErrorCodeFor } from "@/server/http/auth-proxy"
 import { authRequest, createTestContext, sessionCookie } from "./harness"
@@ -76,7 +75,6 @@ async function makeUser(
   await context.internalAdapter.createAccount({
     userId: user.id,
     providerId: "credential",
-    issuer: createLocalAccountIssuer("credential"),
     accountId: user.id,
     password: await context.password.hash(PASSWORD),
   })

@@ -11,6 +11,16 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ### Security
 
+- **Better Auth 1.7.6, and one sign-in identity can belong to only one
+  account** (**D132**). The upgrade from 1.7.1 brings upstream's fixes for a
+  permanent ban keeping a stale expiry, for TOTP re-enrollment replacing the
+  active authenticator and its backup codes, and for over-long passwords.
+  1.7.3 also reverted the `account.issuer` column 1.7.0 added, and with it the
+  only unique index on a sign-in identity; migration `0004` drops the column
+  and adds a unique index on `account(provider_id, account_id)` in its place,
+  so two concurrent first sign-ins with the same social identity can no longer
+  both succeed. The index builds over any existing database — every row
+  already satisfies it — and nothing outside the IdP read `issuer`.
 - **The bundled Postgres no longer runs the IdP as its superuser** (**D109**).
   `POSTGRES_USER` is `postgres`; `docker/initdb/10-idp-role.sh` creates `idp`
   NOSUPERUSER with `CONNECT, CREATE` on the database on a fresh data directory.

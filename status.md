@@ -1,11 +1,11 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-09-14 · **Branch:** `main` · **Head:** the consent-page working
-tree on top of `5fd0b45` (uncommitted — see the first section below), last tag
-**v0.6.7**
-**Plan:** none; the owner's requests of 2026-09-11 (**D128**), 2026-09-12
-(**D129**) and 2026-09-14 (**D130**)
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D131**
+**As of:** 2026-09-26 · **Branch:** `main` · **Head:** the Better Auth 1.7.6
+upgrade on top of `9baa379`, last tag **v0.6.8**
+**Plan:** the owner's request of 2026-09-26 — the RFC 8628 device grant for
+`semantius login` on a headless box; decisions below, amendment **D133** not
+yet written
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D132**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
 gate; API gateways (FR-GW, **D91**/**D92**) landed on 2026-08-29, and the
@@ -161,6 +161,52 @@ README quick start against it, and confirming `latest` from outside.
   created. No credential to recover, and no command that changes one.
 
 ---
+
+## Better Auth 1.7.6, and the device grant's decisions (2026-09-26, **D132**)
+
+**The upgrade is done and every gate is green on it**: lint, typecheck, unit,
+integration (395), coverage, the three generator checks, pinning, build +
+client bundle, the smoke test, and e2e (103). It was asked for as "use
+latest" while planning the device grant, and it is its own commit because it
+has its own consequence: 1.7.3 reverted `account.issuer` and its unique index,
+so migration `0004` drops both and adds **our** unique index on
+`account(provider_id, account_id)` — the owner's choice, over following
+upstream with no constraint. Why, and how it is declared without touching a
+generated file, is D132 and AGENTS.md. `integration/migrate.test.ts` builds it
+over 1.7.1-shaped rows. The first e2e run lost "the schema selector moves the
+tree" to the hydration race recorded under Pending; the spec passed 6 of 6 on
+a rerun and the full suite 103 of 103.
+
+**Not done**: about forty comments still say "1.7.1 answers …". The suites
+that assert those behaviors pass on 1.7.6, so the claims hold; the version in
+the sentence is stale, and was left rather than rewritten blind.
+
+**The device grant, decided by the owner and not yet built.** The plan came
+from `semantius-cli/docs/plans/device-code-semantius-idp.md`; checked against
+1.7.6's source, its central claim holds — D26 never mentions device code, so
+enabling it is a first decision, not a reversal. The owner's answers:
+
+- a global `oauth.deviceAuthorization.enabled`, default **off**: the page, the
+  `/device/*` endpoints and the discovery entry are absent, not refused;
+- only `native` clients may list `urn:ietf:params:oauth:grant-type:device_code`,
+  and start-up **refuses** it without `authorization_code` beside it — the
+  provider issues refresh tokens only to clients allowed that grant;
+- `/device` **always** shows Approve/Deny naming the client and its scopes,
+  `skipConsent` or not — that screen is the defense against device-code
+  phishing, which rate limiting does not touch;
+- `oauth.deviceCodeTtl`, default **10 min**.
+
+What the plan missed, all to be in D133's commit: the plugin resolves its
+default `verification_uri` with `new URL("/device", baseURL)` and drops the
+mount path (pass `paths.path(...)`); nothing re-checks a ban or a pending
+status at redemption (the refresh grant's before-hook does; this grant needs
+the same); an impersonating administrator could approve a code and mint a
+30-day refresh token as the user (`/device/approve` joins
+`IMPERSONATION_REFUSED_PATHS`); approve/deny want audit events, expired
+`device_code` rows want the cleanup sweep, and the plugin's first-party
+`/device/token` wants denying. The CLI's client is not in this repository —
+it is `semantius-cli` in `semantius-self-hosted`'s template, and reconcile
+already owns `grantTypes`, so enabling it there is a file edit.
 
 ## The consent page under a sub-path, and its sixty seconds (2026-09-14, **D130**)
 

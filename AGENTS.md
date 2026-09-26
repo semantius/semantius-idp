@@ -24,7 +24,7 @@ Four files, in this order. Read them before proposing anything.
 | File | What it is |
 | --- | --- |
 | [status.md](status.md) | The handoff. Done, not-done, and why — the ground truth between sessions. |
-| [spec-v1.md](spec-v1.md) | Signed off, amended through **D129**. Numbered requirements, and §12.1's decision log with the reasoning. |
+| [spec-v1.md](spec-v1.md) | Signed off, amended through **D132**. Numbered requirements, and §12.1's decision log with the reasoning. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | The gates, the style, and how to amend the spec. |
 | [docs/release.md](docs/release.md) | What is left before v1.0.0, and it is the owner's, not yours. |
 
@@ -443,6 +443,16 @@ declaration lives in `server/gateways/schema.ts` and is spread into the
 plugin's `schema` from there; `getAuthTables()`, the DM-1 generator and the
 drift gate see no difference. `admin/endpoints.ts`'s header already said this
 about that file — believe it for schemas too.
+
+**The unique index on `account(provider_id, account_id)` is ours, not Better
+Auth's** (**D132**). 1.7.3 reverted 1.7.0's `account.issuer` and its unique
+index, and declares nothing in their place, so the library's
+look-up-then-insert was the only thing keeping one identity to one account.
+`server/auth/account-identity-schema.ts` declares the index and the local
+plugin contributes it: a plugin's `schema` may add `indexes` to a *core*
+table, and `getAuthTables()` merges them, so the generator and the drift gate
+see it like any other. If a Better Auth upgrade ever declares the same index
+itself, delete ours rather than keeping two.
 
 **`src/server/oidc/**` has an 85 % *branch* gate and no headroom, and the
 integration suite will not carry a new guard over it.** It sat at 84.82 % the

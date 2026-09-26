@@ -26,6 +26,7 @@ import type { IdpConfig } from "../../config/derive"
 import type { Mailer } from "../../email/mailer"
 import { NOT_AN_ADMIN, requireAdmin } from "../../admin/gate"
 import { actorTypeFor } from "../options/api-key-gate"
+import { accountIdentitySchema } from "../account-identity-schema"
 import { gatewaySchema } from "../../gateways/schema"
 import { registerHostTemplateDiscovery } from "../../oidc/host-template-clients"
 
@@ -271,6 +272,7 @@ export function idpPlugin(options: IdpPluginOptions): BetterAuthPlugin {
       ...auditLogSchema,
       ...pendingAuthorizationSchema,
       ...gatewaySchema,
+      ...accountIdentitySchema,
     },
     endpoints: {
       approveUser,

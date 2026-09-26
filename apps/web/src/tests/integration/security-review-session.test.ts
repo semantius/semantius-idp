@@ -21,7 +21,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
 import { createHash, randomBytes } from "node:crypto"
 
-import { createLocalAccountIssuer } from "@better-auth/core/db"
 import { and, desc, eq } from "drizzle-orm"
 
 import { Route as ProfileRoute } from "@/routes/account/index"
@@ -119,7 +118,6 @@ async function makeUser(
   await auth.internalAdapter.createAccount({
     userId: user.id,
     providerId: "credential",
-    issuer: createLocalAccountIssuer("credential"),
     accountId: user.id,
     password: await auth.password.hash(PASSWORD),
   })

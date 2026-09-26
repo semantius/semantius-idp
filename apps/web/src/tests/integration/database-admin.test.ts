@@ -22,7 +22,6 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest"
 
 import { desc, eq } from "drizzle-orm"
 
-import { createLocalAccountIssuer } from "@better-auth/core/db"
 
 import { createUserWithoutRequest } from "@/server/auth/provisioning"
 import { authRequest, createTestContext, sessionCookie } from "./harness"
@@ -45,7 +44,6 @@ async function makeUser(
   await context.internalAdapter.createAccount({
     userId: user.id,
     providerId: "credential",
-    issuer: createLocalAccountIssuer("credential"),
     accountId: user.id,
     password: await context.password.hash(PASSWORD),
   })

@@ -20,7 +20,6 @@ import { afterEach, describe, expect, it } from "vitest"
 import { createHash, randomBytes } from "node:crypto"
 import { like } from "drizzle-orm"
 
-import { createLocalAccountIssuer } from "@better-auth/core/db"
 import { Route as SetupRoute } from "@/routes/setup"
 import { Route as TokenRoute } from "@/routes/oauth2/token"
 import { createUserWithoutRequest } from "@/server/auth/provisioning"
@@ -92,7 +91,6 @@ async function makeUser(email: string, role = "user"): Promise<string> {
   await context.internalAdapter.createAccount({
     userId: user.id,
     providerId: "credential",
-    issuer: createLocalAccountIssuer("credential"),
     accountId: user.id,
     password: await context.password.hash(PASSWORD),
   })

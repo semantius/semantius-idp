@@ -78,11 +78,13 @@ every other gate in this repository reads HTML, JSON or a database row.
   device URN beside `authorization_code` — a separate repository, so not done
   here. Until it ships, `semantius login` on a headless box against that stack
   gets `unsupported_grant_type`, the CLI plan's "honest failure" path.
-- **`/admin/clients` can still overflow on a narrow window with only file
-  clients**, and then axe's `scrollable-region-focusable` fires: the wrapping
-  Scopes cell fixed the 1280 px case the scan runs at, not the general one.
-  The general fix is a focusable scroll region (`tabindex="0"`, a label) —
-  a new tab stop on every visit, so it is the owner's call.
+- **Four admin tables share the shape `/admin/clients` was fixed out of**:
+  `/admin/users`, `/admin/gateways`, `/admin/roles` and `/admin/audit` all put
+  a registry `Table` in an `overflow-x-auto` Card. The owner chose to make the
+  clients table a keyboard-reachable scroll region (a tab stop, a label, the
+  inner registry scroller flattened); the others were not asked about. Any of
+  them whose overflowing rows hold nothing focusable has the same
+  `scrollable-region-focusable` finding at a narrow width.
 - **About forty comments still say "1.7.1 answers …"** (D132). The suites that
   assert those behaviors pass on 1.7.6, so the claims hold; the version in the
   sentence is stale and was left rather than rewritten blind.

@@ -215,7 +215,22 @@ function ClientsPage() {
           </EmptyHeader>
         </Empty>
       ) : (
-        <Card className="overflow-x-auto py-0">
+        // The one scroll region, and a keyboard can reach it. The table
+        // overflows sideways by design (the pinned actions column exists for
+        // that), and a region that scrolls with nothing focusable inside —
+        // every row a file client, so no link and no menu — cannot be scrolled
+        // without a pointer (WCAG 2.1.1; axe's `scrollable-region-focusable`).
+        // The registry's `table-container` is a second scroller inside this
+        // one, and its props are not reachable without editing registry
+        // output, so it is flattened here — `[&_…]` compiles to (0,2,0), which
+        // beats its `overflow-x-auto` — and this Card, which is ours, takes
+        // the tab stop and the name.
+        <Card
+          tabIndex={0}
+          role="region"
+          aria-label={t.admin.clients.title}
+          className="overflow-x-auto py-0 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 [&_[data-slot=table-container]]:overflow-visible"
+        >
           <Table>
             <TableHeader>
               <TableRow>

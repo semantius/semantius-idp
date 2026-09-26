@@ -238,4 +238,37 @@ test.describe("accessibility", () => {
 
     await signOut(page, app)
   })
+
+  // The table overflows sideways by design, and with every row a file client
+  // there is nothing focusable inside it — so at a width where it overflows,
+  // the scroll region itself has to take the keyboard. The 1280 px scans
+  // above never see this: the table fits there.
+  test("the applications table is a scroll region a keyboard can reach", async ({
+    page,
+    app,
+  }) => {
+    await page.setViewportSize({ width: 900, height: 800 })
+    await signInAsAdmin(page, app)
+    await app.goto("/admin/clients")
+
+    const region = page.getByRole("region", { name: "Applications" })
+    // It has to really overflow here, or the scan below proves nothing.
+    expect(
+      await region.evaluate((element) => element.scrollWidth > element.clientWidth),
+      "the table overflows at 900 px"
+    ).toBe(true)
+    await scan(page, "/admin/clients in a narrow window")
+
+    await region.focus()
+    await expect(region).toBeFocused()
+    // The arrow keys are how a keyboard scrolls a focused region sideways;
+    // `End` would only scroll it vertically.
+    await page.keyboard.press("ArrowRight")
+    await page.keyboard.press("ArrowRight")
+    await expect
+      .poll(() => region.evaluate((element) => element.scrollLeft))
+      .toBeGreaterThan(0)
+
+    await signOut(page, app)
+  })
 })

@@ -115,6 +115,18 @@ export const CONSENT_CLIENT = {
   postLogoutRedirectUri: CLIENT.postLogoutRedirectUri,
 }
 
+/**
+ * A command-line tool with the device grant: public, `native`, and the grant
+ * beside the authorization code, the way `semantius-cli` is registered.
+ * `skipConsent` is left at its default of `true` on purpose — `/device` has to
+ * ask anyway, and this is the client that proves it.
+ */
+export const DEVICE_CLIENT = {
+  clientId: "e2e-cli",
+  name: "E2E CLI",
+  redirectUri: "http://127.0.0.1:53682/callback",
+}
+
 function docker(args: string[], env: Record<string, string>) {
   const result = spawnSync("docker", args, {
     cwd: REPO_ROOT,
@@ -294,6 +306,9 @@ function writeConfig(
             fromfile: { url: "http://upstream.invalid" },
           },
           jwt: { audience: stack.baseURL },
+          // On suite-wide: `/device` is a page every shape has to serve, and
+          // the a11y scan visits it.
+          oauth: { deviceAuthorization: { enabled: true } },
           // No `admin.bootstrap`: it no longer exists. The first
           // administrator is created by `completeSetup` below, at the page.
           //
@@ -335,6 +350,19 @@ function writeConfig(
             skipConsent: false,
             enableEndSession: true,
             postLogoutRedirectUris: [CONSENT_CLIENT.postLogoutRedirectUri],
+          },
+          {
+            clientId: DEVICE_CLIENT.clientId,
+            type: "native",
+            name: DEVICE_CLIENT.name,
+            redirectUris: [DEVICE_CLIENT.redirectUri],
+            scopes: ["openid", "profile", "email", "offline_access"],
+            grantTypes: [
+              "authorization_code",
+              "refresh_token",
+              "urn:ietf:params:oauth:grant-type:device_code",
+            ],
+            enableEndSession: false,
           },
         ],
       },

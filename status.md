@@ -1,11 +1,10 @@
 # semantius-idp — where the plan stands
 
-**As of:** 2026-09-26 · **Branch:** `main` · **Head:** the Better Auth 1.7.6
-upgrade on top of `9baa379`, last tag **v0.6.8**
-**Plan:** the owner's request of 2026-09-26 — the RFC 8628 device grant for
-`semantius login` on a headless box; decisions below, amendment **D133** not
-yet written
-**Spec:** [spec-v1.md](spec-v1.md) — amended through **D132**
+**As of:** 2026-09-26 · **Branch:** `main` · **Head:** the device grant on top
+of `8102b76` (Better Auth 1.7.6), last tag **v0.6.8**
+**Plan:** none; the owner's request of 2026-09-26 — the RFC 8628 device grant
+for `semantius login` on a headless box (**D133**), and "use latest" (**D132**)
+**Spec:** [spec-v1.md](spec-v1.md) — amended through **D133**
 
 **S3, M6–M14 and owner review rounds 1, 2 and 3 are done, up to the release
 gate; API gateways (FR-GW, **D91**/**D92**) landed on 2026-08-29, and the
@@ -72,6 +71,21 @@ every other gate in this repository reads HTML, JSON or a database row.
 ---
 
 ## Pending
+
+- **`semantius-self-hosted`'s template does not turn the device grant on yet.**
+  Its `templates/semantius-idp-config/config.jsonc` needs
+  `oauth.deviceAuthorization.enabled: true` and its `semantius-cli` entry the
+  device URN beside `authorization_code` — a separate repository, so not done
+  here. Until it ships, `semantius login` on a headless box against that stack
+  gets `unsupported_grant_type`, the CLI plan's "honest failure" path.
+- **`/admin/clients` can still overflow on a narrow window with only file
+  clients**, and then axe's `scrollable-region-focusable` fires: the wrapping
+  Scopes cell fixed the 1280 px case the scan runs at, not the general one.
+  The general fix is a focusable scroll region (`tabindex="0"`, a label) —
+  a new tab stop on every visit, so it is the owner's call.
+- **About forty comments still say "1.7.1 answers …"** (D132). The suites that
+  assert those behaviors pass on 1.7.6, so the claims hold; the version in the
+  sentence is stale and was left rather than rewritten blind.
 
 Everything not yet done, in the order it should be done. Nothing else in this
 file is a to-do list.
@@ -162,7 +176,37 @@ README quick start against it, and confirming `latest` from outside.
 
 ---
 
-## Better Auth 1.7.6, and the device grant's decisions (2026-09-26, **D132**)
+## The device grant (2026-09-26, **D133**)
+
+**Built, and every gate green**: FR-OIDC-19. The plan came from
+`semantius-cli/docs/plans/device-code-semantius-idp.md`; checked against 1.7.6's
+source, its central claim held — D26 never mentions device code, so this was a
+first decision rather than a reversal — and D133 records the PKCE carve-out on
+the merits. The owner's answers, each asked with its alternatives:
+`oauth.deviceAuthorization.enabled` **off** by default; `native` clients only,
+and start-up **refuses** the grant without `authorization_code` beside it; a
+file client listing it with the switch off **refuses** start-up; `/device`
+**always** asks, `skipConsent` or not; `oauth.deviceCodeTtl` **10 min**; and a
+**checkbox** on native clients in `/admin/clients`.
+
+What the plan missed, all fixed and all in D133: the plugin's default
+`verification_uri` dropped the mount path; nothing answered at the
+`{issuer}/device/code` discovery advertises; a ban between approval and poll
+still issued a refresh token; an impersonating administrator could approve;
+`user_id` let a client pre-bind a code to an account; `/device/token` minted a
+session token; the default resource injected at the token endpoint turned every
+redemption into `invalid_target` until it was bound at `/device/code` too; the
+D112 attempt bucket counted `authorization_pending` polls; and no sweep removed
+an expired code.
+
+**The client-bundle ceiling moved** to 1266 kB (`check-client-bundle.ts` says
+why: the tree was 197 bytes under the old one and the page was the next 6 kB).
+**`/admin/clients` lets the Scopes cell wrap**: the e2e stack's first public
+client pushed the table past 1280 px, and an overflowing table of file clients
+has nothing focusable in it — axe's `scrollable-region-focusable`. Latent
+before, since any public client on a file-only deployment does it; see Pending.
+
+## Better Auth 1.7.6 (2026-09-26, **D132**)
 
 **The upgrade is done and every gate is green on it**: lint, typecheck, unit,
 integration (395), coverage, the three generator checks, pinning, build +
@@ -180,33 +224,6 @@ a rerun and the full suite 103 of 103.
 **Not done**: about forty comments still say "1.7.1 answers …". The suites
 that assert those behaviors pass on 1.7.6, so the claims hold; the version in
 the sentence is stale, and was left rather than rewritten blind.
-
-**The device grant, decided by the owner and not yet built.** The plan came
-from `semantius-cli/docs/plans/device-code-semantius-idp.md`; checked against
-1.7.6's source, its central claim holds — D26 never mentions device code, so
-enabling it is a first decision, not a reversal. The owner's answers:
-
-- a global `oauth.deviceAuthorization.enabled`, default **off**: the page, the
-  `/device/*` endpoints and the discovery entry are absent, not refused;
-- only `native` clients may list `urn:ietf:params:oauth:grant-type:device_code`,
-  and start-up **refuses** it without `authorization_code` beside it — the
-  provider issues refresh tokens only to clients allowed that grant;
-- `/device` **always** shows Approve/Deny naming the client and its scopes,
-  `skipConsent` or not — that screen is the defense against device-code
-  phishing, which rate limiting does not touch;
-- `oauth.deviceCodeTtl`, default **10 min**.
-
-What the plan missed, all to be in D133's commit: the plugin resolves its
-default `verification_uri` with `new URL("/device", baseURL)` and drops the
-mount path (pass `paths.path(...)`); nothing re-checks a ban or a pending
-status at redemption (the refresh grant's before-hook does; this grant needs
-the same); an impersonating administrator could approve a code and mint a
-30-day refresh token as the user (`/device/approve` joins
-`IMPERSONATION_REFUSED_PATHS`); approve/deny want audit events, expired
-`device_code` rows want the cleanup sweep, and the plugin's first-party
-`/device/token` wants denying. The CLI's client is not in this repository —
-it is `semantius-cli` in `semantius-self-hosted`'s template, and reconcile
-already owns `grantTypes`, so enabling it there is a file edit.
 
 ## The consent page under a sub-path, and its sixty seconds (2026-09-14, **D130**)
 

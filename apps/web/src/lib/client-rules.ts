@@ -26,6 +26,29 @@ export type ClientType = (typeof CLIENT_TYPES)[number]
 /** Public client types cannot keep a secret, so they must use PKCE. */
 export const PUBLIC_CLIENT_TYPES: readonly ClientType[] = ["spa", "native"]
 
+/**
+ * RFC 8628's grant, for a client with no browser of its own.
+ *
+ * Here rather than beside the other grant types because `/admin/clients`
+ * offers it as a checkbox and has to know the value without importing zod.
+ */
+export const DEVICE_CODE_GRANT_TYPE =
+  "urn:ietf:params:oauth:grant-type:device_code"
+
+/**
+ * Only a `native` client may use the device grant.
+ *
+ * The grant exists for a program running where nobody can open a browser — a
+ * CLI on a server, an agent in a container — and that is what `native` means
+ * here. A `spa` *is* a browser, so it would only be using the grant to skip
+ * the redirect it can already do; a `web` client has a server that can
+ * receive one. Refusing both keeps the one grant that carries no PKCE on the
+ * one client type that needs it.
+ */
+export function deviceGrantAllowedFor(type: string): boolean {
+  return type === "native"
+}
+
 export type RedirectUriProblem =
   | "wildcard"
   | "not_absolute"
@@ -204,6 +227,7 @@ export const NEW_CLIENT_DEFAULTS = {
   type: "spa",
   requireConsent: true,
   enableEndSession: false,
+  deviceGrant: false,
 } as const
 
 export interface ClientFormValues {
@@ -214,6 +238,8 @@ export interface ClientFormValues {
   redirectUris: string
   postLogoutRedirectUris: string
   enableEndSession: boolean
+  /** "Sign-in from devices without a browser" — the device grant. */
+  deviceGrant: boolean
 }
 
 /**
@@ -275,6 +301,11 @@ export function validateClientForm(values: ClientFormValues): ClientFormErrors {
     errors.postLogoutRedirectUris === undefined
   ) {
     errors.postLogoutRedirectUris = "endSessionNeedsUri"
+  }
+  // The schema refuses it on anything but `native`; saying so under the box
+  // beats a refusal after the round trip that names the grant by its URN.
+  if (values.deviceGrant && !deviceGrantAllowedFor(type)) {
+    errors.deviceGrant = "nativeOnly"
   }
 
   return errors

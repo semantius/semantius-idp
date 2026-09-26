@@ -124,6 +124,7 @@ export const Route = createFileRoute("/admin/clients/$clientId/edit")({
             scopes: valuesOf("scopes"),
             skipConsent: skipConsentFromForm(form.requireConsent),
             enableEndSession: form.enableEndSession === "on",
+            deviceGrant: form.deviceGrant === "on",
           },
           request
         )
@@ -136,6 +137,7 @@ export const Route = createFileRoute("/admin/clients/$clientId/edit")({
             scopes: valuesOf("scopes"),
             requireConsent: form.requireConsent,
             enableEndSession: form.enableEndSession,
+            deviceGrant: form.deviceGrant,
           })
           return redirectWithCookies(
             withError(withDraft(here, draft), adminErrorCodeFor(result))
@@ -186,6 +188,7 @@ function EditClientPage() {
     // inversions in two places is how a triple negative gets shipped.
     requireConsent: !client.skipConsent,
     enableEndSession: client.enableEndSession,
+    deviceGrant: client.deviceGrant,
   })
 
   return (

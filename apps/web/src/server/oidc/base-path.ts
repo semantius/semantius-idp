@@ -96,6 +96,11 @@ export const APP_ROUTES = {
   verifyEmail: "/verify-email",
   twoFactor: "/two-factor",
   consent: "/consent",
+  /**
+   * Where a device-grant user types the code their CLI printed. The page, not
+   * the endpoint: the plugin's own `GET /device` lives under `/api/auth`.
+   */
+  device: "/device",
   pendingApproval: "/pending-approval",
   banned: "/banned",
   changePassword: "/change-password",
@@ -120,6 +125,12 @@ export const PROTOCOL_ROUTES = {
   introspect: "/oauth2/introspect",
   revoke: "/oauth2/revoke",
   endSession: "/oauth2/end-session",
+  /**
+   * RFC 8628's device authorization endpoint. Discovery moves every
+   * `{auth base}/x` to `{issuer}/x`, so the address it advertises is this one
+   * and something has to answer there.
+   */
+  deviceCode: "/device/code",
   jwks: `${AUTH_BASE_PATH}/jwks`,
   openidConfiguration: "/.well-known/openid-configuration",
   oauthAuthorizationServer: "/.well-known/oauth-authorization-server",

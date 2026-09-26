@@ -146,6 +146,7 @@ export function errorCodeFor(result: AuthCallResult): string {
     case "CLIENT_NOT_FOUND":
     case "INVALID_CLIENT_DEFINITION":
     case "SCOPE_NOT_ALLOWED":
+    case "DEVICE_GRANT_DISABLED":
     case "GATEWAY_ALREADY_EXISTS":
     case "GATEWAY_MANAGED_BY_FILE":
     case "GATEWAY_NOT_FOUND":

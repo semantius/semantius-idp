@@ -24,7 +24,7 @@ Four files, in this order. Read them before proposing anything.
 | File | What it is |
 | --- | --- |
 | [status.md](status.md) | The handoff. Done, not-done, and why — the ground truth between sessions. |
-| [spec-v1.md](spec-v1.md) | Signed off, amended through **D132**. Numbered requirements, and §12.1's decision log with the reasoning. |
+| [spec-v1.md](spec-v1.md) | Signed off, amended through **D133**. Numbered requirements, and §12.1's decision log with the reasoning. |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | The gates, the style, and how to amend the spec. |
 | [docs/release.md](docs/release.md) | What is left before v1.0.0, and it is the owner's, not yours. |
 
@@ -453,6 +453,23 @@ plugin contributes it: a plugin's `schema` may add `indexes` to a *core*
 table, and `getAuthTables()` merges them, so the generator and the drift gate
 see it like any other. If a Better Auth upgrade ever declares the same index
 itself, delete ours rather than keeping two.
+
+**The device grant is a second authorize, and it has to be treated as one**
+(**D133**). Three things about `oauthDeviceAuthorization` that read fine and
+are wrong:
+
+- **`/device/code` binds the resource**, the way `/oauth2/authorize` binds it
+  into a code, and the redemption refuses any `resource` the code was not bound
+  to. `injectDefaultResource` covers both paths for that reason; a hook that
+  adds a default at the token endpoint alone turns every device sign-in into
+  `invalid_target`.
+- **Mutating `ctx.body` in a before hook does not reach the plugin for a form
+  post.** It re-reads `client_id`, `user_id` and `scope` from the raw request
+  after the hooks have run, so a field has to be *refused* there, not deleted.
+- **The plugin's `verificationUri` is resolved against the origin and never
+  follows `server.dynamicIssuer`.** It is configured as `paths.path("/device")`
+  and `forwardToAuth` moves the answer onto the request's host; its default of
+  `/device` pointed at the host root under a sub-path.
 
 **`src/server/oidc/**` has an 85 % *branch* gate and no headroom, and the
 integration suite will not carry a new guard over it.** It sat at 84.82 % the

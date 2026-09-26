@@ -14,7 +14,7 @@ import type { ConfigIssue, ConfigWarning } from "./errors"
 import { isLocalhostUrl } from "./derive"
 import { looksLikeShippedSecret } from "./shipped-defaults"
 import { looksPooled } from "../db/client"
-import { hasHostTemplate } from "../../lib/client-rules"
+import { DEVICE_CODE_GRANT_TYPE, hasHostTemplate } from "../../lib/client-rules"
 import {
   RESERVED_CLAIM_NAMES,
   REJECTED_ENTRA_TENANTS,
@@ -381,6 +381,22 @@ export function runCrossChecks(input: CrossCheckInput): CrossCheckResult {
       warnings.push({
         code: "client.shipped_default_secret",
         message: `Client \`${client.clientId}\`'s secret looks like a shipped default or a placeholder (\`example\`, \`change-me\`, …); anyone who read the example can present it. Generate one (\`openssl rand -base64 48\`) and reconcile.`,
+      })
+    }
+
+    // With the switch off the grant's endpoints are not registered at all, so
+    // this client would be told `unsupported_grant_type` by a deployment whose
+    // own file says it may use the grant. The operator meant one of the two;
+    // which one is theirs to say.
+    if (
+      !config.oauth.deviceAuthorization.enabled &&
+      client.grantTypes?.includes(DEVICE_CODE_GRANT_TYPE)
+    ) {
+      issues.push({
+        file: "oauth_clients.json",
+        pointer: `/clients/${index}/grantTypes`,
+        message: `Client \`${client.clientId}\` lists the device grant, but \`oauth.deviceAuthorization.enabled\` is false.`,
+        hint: "Turn the device grant on in config.jsonc, or remove it from this client's `grantTypes`.",
       })
     }
 

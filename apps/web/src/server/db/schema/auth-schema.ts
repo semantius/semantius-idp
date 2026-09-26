@@ -395,6 +395,28 @@ export function createAuthSchema(schemaName: string) {
     expiresAt: timestamp("expires_at").notNull(),
   })
 
+  const deviceCode = idpSchema.table(
+    "device_code",
+    {
+      id: text("id").primaryKey(),
+      deviceCode: text("device_code").notNull(),
+      userCode: text("user_code").notNull(),
+      userId: text("user_id"),
+      expiresAt: timestamp("expires_at").notNull(),
+      status: text("status").notNull(),
+      lastPolledAt: timestamp("last_polled_at"),
+      pollingInterval: integer("polling_interval"),
+      clientId: text("client_id"),
+      scope: text("scope"),
+      resources: text("resources").array(),
+      oauthClientId: text("oauth_client_id"),
+    },
+    (table) => [
+      uniqueIndex("deviceCode_deviceCode_uidx").on(table.deviceCode),
+      uniqueIndex("deviceCode_userCode_uidx").on(table.userCode),
+    ]
+  )
+
   const auditLog = idpSchema.table(
     "audit_log",
     {
@@ -476,6 +498,7 @@ export function createAuthSchema(schemaName: string) {
     oauthAccessToken,
     oauthConsent,
     oauthClientAssertion,
+    deviceCode,
     auditLog,
     pendingAuthorization,
     gateway,
@@ -510,6 +533,7 @@ export const {
   oauthAccessToken,
   oauthConsent,
   oauthClientAssertion,
+  deviceCode,
   auditLog,
   pendingAuthorization,
   gateway,

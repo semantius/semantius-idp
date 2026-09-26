@@ -832,3 +832,76 @@ describe("removing a client", () => {
     expect(JSON.stringify(rows)).not.toMatch(/[A-Za-z0-9_-]{64}/)
   })
 })
+
+/**
+ * `/admin/clients`'s "sign-in from devices without a browser" box, on the
+ * server side: the same rules `oauth_clients.jsonc` gets, plus the switch.
+ */
+describe("the device grant from the admin form", () => {
+  const DEVICE = "urn:ietf:params:oauth:grant-type:device_code"
+  const NATIVE = {
+    type: "native",
+    redirectUris: ["http://127.0.0.1:53682/callback"],
+  }
+
+  async function grantTypesOf(clientId = "registered-app"): Promise<string[]> {
+    const [row] = await ctx.database.db
+      .select({ grantTypes: ctx.database.schema.oauthClient.grantTypes })
+      .from(ctx.database.schema.oauthClient)
+      .where(eq(ctx.database.schema.oauthClient.clientId, clientId))
+    return row?.grantTypes ?? []
+  }
+
+  it("is refused while the deployment has the grant switched off", async () => {
+    const cookie = await adminCookie()
+    const response = await create(cookie, { ...NATIVE, deviceGrant: true })
+    expect(response.status).toBe(400)
+    expect((await response.json()).code).toBe("DEVICE_GRANT_DISABLED")
+  })
+
+  describe("with the grant switched on", () => {
+    beforeEach(async () => {
+      await ctx.teardown()
+      ctx = await createTestContext("client-admin-device", {
+        config: {
+          auth: { requireEmailVerification: false },
+          oauth: {
+            scopes: ["openid", "profile", "email", "offline_access"],
+            deviceAuthorization: { enabled: true },
+          },
+        },
+      })
+    })
+
+    it("adds the grant beside the default pair, and an edit that unticks it takes it away", async () => {
+      const cookie = await adminCookie()
+      expect(
+        (await create(cookie, { ...NATIVE, deviceGrant: true })).status
+      ).toBe(200)
+      // Beside, never instead: the provider issues refresh tokens only to a
+      // client allowed the authorization-code grant.
+      expect(await grantTypesOf()).toEqual([
+        "authorization_code",
+        "refresh_token",
+        DEVICE,
+      ])
+
+      // A full replace: the box the edit form does not tick is a grant the
+      // row no longer has.
+      expect((await update(cookie, { ...NATIVE })).status).toBe(200)
+      expect(await grantTypesOf()).toEqual([
+        "authorization_code",
+        "refresh_token",
+      ])
+    })
+
+    it("is refused on anything but a native client", async () => {
+      const cookie = await adminCookie()
+      const response = await create(cookie, { type: "spa", deviceGrant: true })
+      expect(response.status).toBe(400)
+      const body = (await response.json()) as { code: string; message: string }
+      expect(body.code).toBe("INVALID_CLIENT_DEFINITION")
+      expect(body.message).toContain('`type: "native"` clients only')
+    })
+  })
+})

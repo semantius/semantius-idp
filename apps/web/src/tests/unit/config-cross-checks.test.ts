@@ -737,3 +737,32 @@ describe("cross-checks", () => {
     })
   })
 })
+
+describe("the device grant switch", () => {
+  const DEVICE = "urn:ietf:params:oauth:grant-type:device_code"
+  const cli = {
+    clientId: "cli",
+    type: "native",
+    redirectUris: ["http://127.0.0.1:53682/callback"],
+    enableEndSession: false,
+    grantTypes: ["authorization_code", "refresh_token", DEVICE],
+  }
+
+  it("refuses a client that lists the grant while it is off", () => {
+    expect(messages({ clients: { clients: [cli] } })).toContain(
+      "lists the device grant, but `oauth.deviceAuthorization.enabled` is false"
+    )
+  })
+
+  it("accepts the same client once it is on", () => {
+    expect(
+      messages({
+        config: {
+          ...baseConfig(),
+          oauth: { deviceAuthorization: { enabled: true } },
+        },
+        clients: { clients: [cli] },
+      })
+    ).toBe("")
+  })
+})

@@ -36,6 +36,13 @@
       "when": 1790431789316,
       "tag": "0004_wet_gambit",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790445189728,
+      "tag": "0005_red_kate_bishop",
+      "breakpoints": true
     }
   ]
 }

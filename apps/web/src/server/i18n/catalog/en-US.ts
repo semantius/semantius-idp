@@ -229,6 +229,42 @@ export const enUS = {
       "This application is asking for more than you previously allowed.",
   },
 
+  // `/device`, where somebody types the code a command-line tool printed.
+  // The page is the whole defense against a code handed over by someone
+  // else, so it says whose account this is and what is being allowed.
+  device: {
+    title: "Sign in on another device",
+    description:
+      "Enter the code shown by the application you are signing in to.",
+    codeLabel: "Code",
+    continue: "Continue",
+    confirmTitle: (clientName: string) =>
+      `Allow ${clientName} to sign in as you?`,
+    confirmDescription: (email: string) =>
+      `It will act as ${email} on the device that showed you this code.`,
+    warning:
+      "Only continue if you started this sign-in yourself, just now. If somebody sent you this code or this link, deny it — approving hands them your account.",
+    codeShown: (code: string) => `Code: ${code}`,
+    allow: "Allow",
+    deny: "Deny",
+    approvedTitle: "You are signed in",
+    approvedDescription:
+      "Go back to your device — it will continue on its own. You can close this page.",
+    deniedTitle: "Sign-in denied",
+    deniedDescription:
+      "Nothing was signed in. If you did not start this, you do not need to do anything else.",
+    invalidCode:
+      "That code is not valid. Check it against the one your device shows, including any dashes.",
+    expiredCode:
+      "That code has expired. Start the sign-in again on your device to get a new one.",
+    alreadyUsed:
+      "That code has already been used. Start the sign-in again on your device if you need a new one.",
+    otherAccount:
+      "Somebody else signed in started approving that code. Start the sign-in again on your device to get a new one.",
+    tooManyAttempts:
+      "Too many codes were tried from here. Wait a few minutes, then try again.",
+  },
+
   endSession: {
     title: "Sign out?",
     description: (clientName: string) =>
@@ -672,6 +708,13 @@ export const enUS = {
         `${uri} misuses the {host} template. {host} must stand for the entire host, exactly once — https://{host}/callback.`,
       endSessionNeedsUri:
         "RP-initiated logout needs at least one post-logout redirect URI. Add one, or turn the option off.",
+      // The device grant, asked the way an administrator decides it: can
+      // this program sign people in from a machine with no browser?
+      deviceGrantLabel: "Allow sign-in from devices without a browser",
+      deviceGrantHelp:
+        "For a command-line tool or anything else that runs where nobody can open a browser. It shows the user a code, and they approve it here from another device. Desktop and mobile applications only.",
+      deviceGrantNativeOnly:
+        "Only a desktop or mobile application can sign in from a device without a browser. Change the type, or leave this off.",
     },
     gateways: {
       title: "API gateways",
@@ -885,6 +928,8 @@ export const enUS = {
         "The application could not be registered. Check the redirect URIs and the scopes.",
       clientNoSecret:
         "That application is a public client and has no secret to rotate. Change its type to a web application first.",
+      deviceGrantDisabled:
+        "Sign-in from devices without a browser is switched off for this server, so no application can be given it. Untick it, or ask the operator to turn it on.",
       // an administrator can list every account, so naming the duplicate
       // is not the disclosure anti-enumeration guards against on `/signup` — and the
       // sentence it replaced was about a password the dialog never asked for.

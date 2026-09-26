@@ -99,12 +99,61 @@ export async function forwardToAuth(
       )
     case "/oauth2/token":
       return withNoStore(response)
+    case PROTOCOL_ROUTES.deviceCode:
+      return withRequestVerificationUris(
+        response,
+        paths.issuer,
+        currentRequestIssuer() ?? paths.issuer
+      )
     case "/oauth2/userinfo":
     case "/oauth2/introspect":
       return withNoStore(mapCrossHostTokenError(response))
     default:
       return response
   }
+}
+
+/**
+ * The device-code answer, with its verification URIs on the host the request
+ * arrived on.
+ *
+ * The plugin resolves `verification_uri` against `ctx.context.baseURL`, which
+ * is the boot origin and does not follow `server.dynamicIssuer`. A CLI that
+ * reached this deployment on another host would print an address on the
+ * canonical one, and the user would sign in there — a different issuer from
+ * the one the CLI will then trust. Only a URI under the boot issuer is moved,
+ * so a configured absolute one elsewhere is left alone.
+ */
+async function withRequestVerificationUris(
+  response: Response,
+  bootIssuer: string,
+  issuer: string
+): Promise<Response> {
+  if (!response.ok || bootIssuer === issuer) return response
+  const body = (await response.json()) as Record<string, unknown>
+  const headers = new Headers(response.headers)
+  // The body changed length; the provider's count would truncate it.
+  headers.delete("content-length")
+  return Response.json(rebaseVerificationUris(body, bootIssuer, issuer), {
+    status: response.status,
+    headers,
+  })
+}
+
+/** Pure, and exported so the mapping is testable without a server. */
+export function rebaseVerificationUris(
+  body: Record<string, unknown>,
+  bootIssuer: string,
+  issuer: string
+): Record<string, unknown> {
+  const rebased = { ...body }
+  for (const key of ["verification_uri", "verification_uri_complete"]) {
+    const value = rebased[key]
+    if (typeof value === "string" && value.startsWith(`${bootIssuer}/`)) {
+      rebased[key] = `${issuer}${value.slice(bootIssuer.length)}`
+    }
+  }
+  return rebased
 }
 
 /**

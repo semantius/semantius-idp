@@ -24,6 +24,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as HealthzRouteImport } from './routes/healthz'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as ErrorRouteImport } from './routes/error'
+import { Route as DeviceRouteImport } from './routes/device'
 import { Route as ConsentRouteImport } from './routes/consent'
 import { Route as ChangePasswordRouteImport } from './routes/change-password'
 import { Route as BannedRouteImport } from './routes/banned'
@@ -39,6 +40,7 @@ import { Route as Oauth2IntrospectRouteImport } from './routes/oauth2/introspect
 import { Route as Oauth2EndSessionRouteImport } from './routes/oauth2/end-session'
 import { Route as Oauth2AuthorizeRouteImport } from './routes/oauth2/authorize'
 import { Route as GatewayNameRouteImport } from './routes/gateway/$name'
+import { Route as DeviceCodeRouteImport } from './routes/device_.code'
 import { Route as BrandingSplatRouteImport } from './routes/branding.$'
 import { Route as AdminSystemRouteImport } from './routes/admin/system'
 import { Route as AdminRolesRouteImport } from './routes/admin/roles'
@@ -143,6 +145,11 @@ const ErrorRoute = ErrorRouteImport.update({
   path: '/error',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DeviceRoute = DeviceRouteImport.update({
+  id: '/device',
+  path: '/device',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ConsentRoute = ConsentRouteImport.update({
   id: '/consent',
   path: '/consent',
@@ -216,6 +223,11 @@ const Oauth2AuthorizeRoute = Oauth2AuthorizeRouteImport.update({
 const GatewayNameRoute = GatewayNameRouteImport.update({
   id: '/gateway/$name',
   path: '/gateway/$name',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DeviceCodeRoute = DeviceCodeRouteImport.update({
+  id: '/device_/code',
+  path: '/device/code',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BrandingSplatRoute = BrandingSplatRouteImport.update({
@@ -373,6 +385,7 @@ export interface FileRoutesByFullPath {
   '/banned': typeof BannedRoute
   '/change-password': typeof ChangePasswordRoute
   '/consent': typeof ConsentRoute
+  '/device': typeof DeviceRoute
   '/error': typeof ErrorRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/healthz': typeof HealthzRoute
@@ -403,6 +416,7 @@ export interface FileRoutesByFullPath {
   '/admin/roles': typeof AdminRolesRoute
   '/admin/system': typeof AdminSystemRoute
   '/branding/$': typeof BrandingSplatRoute
+  '/device/code': typeof DeviceCodeRoute
   '/gateway/$name': typeof GatewayNameRouteWithChildren
   '/oauth2/authorize': typeof Oauth2AuthorizeRoute
   '/oauth2/end-session': typeof Oauth2EndSessionRoute
@@ -431,6 +445,7 @@ export interface FileRoutesByTo {
   '/banned': typeof BannedRoute
   '/change-password': typeof ChangePasswordRoute
   '/consent': typeof ConsentRoute
+  '/device': typeof DeviceRoute
   '/error': typeof ErrorRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/healthz': typeof HealthzRoute
@@ -461,6 +476,7 @@ export interface FileRoutesByTo {
   '/admin/roles': typeof AdminRolesRoute
   '/admin/system': typeof AdminSystemRoute
   '/branding/$': typeof BrandingSplatRoute
+  '/device/code': typeof DeviceCodeRoute
   '/gateway/$name': typeof GatewayNameRouteWithChildren
   '/oauth2/authorize': typeof Oauth2AuthorizeRoute
   '/oauth2/end-session': typeof Oauth2EndSessionRoute
@@ -492,6 +508,7 @@ export interface FileRoutesById {
   '/banned': typeof BannedRoute
   '/change-password': typeof ChangePasswordRoute
   '/consent': typeof ConsentRoute
+  '/device': typeof DeviceRoute
   '/error': typeof ErrorRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/healthz': typeof HealthzRoute
@@ -522,6 +539,7 @@ export interface FileRoutesById {
   '/admin/roles': typeof AdminRolesRoute
   '/admin/system': typeof AdminSystemRoute
   '/branding/$': typeof BrandingSplatRoute
+  '/device_/code': typeof DeviceCodeRoute
   '/gateway/$name': typeof GatewayNameRouteWithChildren
   '/oauth2/authorize': typeof Oauth2AuthorizeRoute
   '/oauth2/end-session': typeof Oauth2EndSessionRoute
@@ -554,6 +572,7 @@ export interface FileRouteTypes {
     | '/banned'
     | '/change-password'
     | '/consent'
+    | '/device'
     | '/error'
     | '/forgot-password'
     | '/healthz'
@@ -584,6 +603,7 @@ export interface FileRouteTypes {
     | '/admin/roles'
     | '/admin/system'
     | '/branding/$'
+    | '/device/code'
     | '/gateway/$name'
     | '/oauth2/authorize'
     | '/oauth2/end-session'
@@ -612,6 +632,7 @@ export interface FileRouteTypes {
     | '/banned'
     | '/change-password'
     | '/consent'
+    | '/device'
     | '/error'
     | '/forgot-password'
     | '/healthz'
@@ -642,6 +663,7 @@ export interface FileRouteTypes {
     | '/admin/roles'
     | '/admin/system'
     | '/branding/$'
+    | '/device/code'
     | '/gateway/$name'
     | '/oauth2/authorize'
     | '/oauth2/end-session'
@@ -672,6 +694,7 @@ export interface FileRouteTypes {
     | '/banned'
     | '/change-password'
     | '/consent'
+    | '/device'
     | '/error'
     | '/forgot-password'
     | '/healthz'
@@ -702,6 +725,7 @@ export interface FileRouteTypes {
     | '/admin/roles'
     | '/admin/system'
     | '/branding/$'
+    | '/device_/code'
     | '/gateway/$name'
     | '/oauth2/authorize'
     | '/oauth2/end-session'
@@ -733,6 +757,7 @@ export interface RootRouteChildren {
   BannedRoute: typeof BannedRoute
   ChangePasswordRoute: typeof ChangePasswordRoute
   ConsentRoute: typeof ConsentRoute
+  DeviceRoute: typeof DeviceRoute
   ErrorRoute: typeof ErrorRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   HealthzRoute: typeof HealthzRoute
@@ -755,6 +780,7 @@ export interface RootRouteChildren {
   DotwellKnownOpenidConfigurationRoute: typeof DotwellKnownOpenidConfigurationRoute
   DotwellKnownSecurityDottxtRoute: typeof DotwellKnownSecurityDottxtRoute
   BrandingSplatRoute: typeof BrandingSplatRoute
+  DeviceCodeRoute: typeof DeviceCodeRoute
   GatewayNameRoute: typeof GatewayNameRouteWithChildren
   Oauth2AuthorizeRoute: typeof Oauth2AuthorizeRoute
   Oauth2EndSessionRoute: typeof Oauth2EndSessionRoute
@@ -872,6 +898,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ErrorRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/device': {
+      id: '/device'
+      path: '/device'
+      fullPath: '/device'
+      preLoaderRoute: typeof DeviceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/consent': {
       id: '/consent'
       path: '/consent'
@@ -975,6 +1008,13 @@ declare module '@tanstack/react-router' {
       path: '/gateway/$name'
       fullPath: '/gateway/$name'
       preLoaderRoute: typeof GatewayNameRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/device_/code': {
+      id: '/device_/code'
+      path: '/device/code'
+      fullPath: '/device/code'
+      preLoaderRoute: typeof DeviceCodeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/branding/$': {
@@ -1267,6 +1307,7 @@ const rootRouteChildren: RootRouteChildren = {
   BannedRoute: BannedRoute,
   ChangePasswordRoute: ChangePasswordRoute,
   ConsentRoute: ConsentRoute,
+  DeviceRoute: DeviceRoute,
   ErrorRoute: ErrorRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   HealthzRoute: HealthzRoute,
@@ -1291,6 +1332,7 @@ const rootRouteChildren: RootRouteChildren = {
   DotwellKnownOpenidConfigurationRoute: DotwellKnownOpenidConfigurationRoute,
   DotwellKnownSecurityDottxtRoute: DotwellKnownSecurityDottxtRoute,
   BrandingSplatRoute: BrandingSplatRoute,
+  DeviceCodeRoute: DeviceCodeRoute,
   GatewayNameRoute: GatewayNameRouteWithChildren,
   Oauth2AuthorizeRoute: Oauth2AuthorizeRoute,
   Oauth2EndSessionRoute: Oauth2EndSessionRoute,

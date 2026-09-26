@@ -85,7 +85,7 @@ export const Route = createFileRoute("/oauth2/token")({
           providerPath: "/oauth2/token",
         })
 
-        if (limiting) {
+        if (limiting && !(await isDevicePollWait(response))) {
           // The provider's answer decides whose request this was. Its own
           // decision is irrelevant here — the response is already the answer;
           // this is what the next `peek` reads.
@@ -130,6 +130,27 @@ const TOKEN_RULE = { window: 60, max: 600 }
  * users behind it is not a thousand attempts.
  */
 const ATTEMPT_RULE = { window: 60, max: 30 }
+
+/**
+ * A device-grant poll that was told to keep waiting.
+ *
+ * RFC 8628 has the client ask every five seconds until the user approves,
+ * and the provider answers each premature poll with a 400 — which the attempt
+ * bucket would count as a refused request. One device spends twelve of its
+ * thirty a minute that way, so three people behind one address running
+ * `semantius login` at once would be throttled for doing exactly what the
+ * protocol tells them to. Neither answer is a guess at anything: the device
+ * code is a forty-character secret, and a wrong one is `invalid_grant`, which
+ * still counts. The per-IP rule still applies to every poll.
+ */
+async function isDevicePollWait(response: Response): Promise<boolean> {
+  if (response.status !== 400) return false
+  const body = (await response
+    .clone()
+    .json()
+    .catch(() => undefined)) as { error?: unknown } | undefined
+  return body?.error === "authorization_pending" || body?.error === "slow_down"
+}
 
 /**
  * The client id, from wherever this grant put it.

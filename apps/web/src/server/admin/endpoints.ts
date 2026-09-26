@@ -35,7 +35,12 @@ import type { Logger } from "../logger"
 import type { Mailer } from "../email/mailer"
 import { createBasePaths, discoveryUrls } from "../oidc/base-path"
 import { refreshDatabaseClientOrigins } from "../oidc/client-origins"
-import { isPublic, resourceLinksFor, toClientRow } from "../oidc/client-mapping"
+import {
+  DEFAULT_GRANT_TYPES,
+  isPublic,
+  resourceLinksFor,
+  toClientRow,
+} from "../oidc/client-mapping"
 import { revokeTokensFor, syncResourceLinks } from "../oidc/reconcile"
 import { rotateKeys } from "../oidc/rotate-keys"
 import { revokeAllForUser } from "../oidc/revoke-user-tokens"
@@ -55,6 +60,7 @@ import {
 } from "./database"
 import { resetGatewayTokenCache } from "../gateways/proxy"
 import { resetGatewayRegistry } from "../gateways/registry"
+import { DEVICE_CODE_GRANT_TYPE } from "../../lib/client-rules"
 import { isValidGatewayName } from "../../lib/gateway-rules"
 import { requireAdmin } from "./gate"
 
@@ -452,6 +458,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
         scopes: z.array(z.string()).optional(),
         skipConsent: z.boolean().optional(),
         enableEndSession: z.boolean().optional(),
+        deviceGrant: z.boolean().optional(),
       }),
       requireHeaders: true,
       use: [gate],
@@ -459,6 +466,8 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
     async (ctx) => {
       const handle = db(deps)
       const actor = ctx.context.session.user
+
+      assertDeviceGrantAvailable(deps.config, ctx.body.deviceGrant)
 
       // Public clients keep no secret; the schema refuses one outright, so it
       // is generated only where it belongs.
@@ -480,6 +489,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
         ...(ctx.body.enableEndSession === undefined
           ? {}
           : { enableEndSession: ctx.body.enableEndSession }),
+        ...grantTypesFor(ctx.body.deviceGrant),
         ...(secret ? { clientSecret: secret } : {}),
       })
       if (!parsed.success) {
@@ -555,7 +565,11 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
         actorUserId: actor.id,
         target: { type: "client", id: entry.clientId },
         // Never the secret.
-        metadata: { type: entry.type, redirectUris: entry.redirectUris.length },
+        metadata: {
+          type: entry.type,
+          redirectUris: entry.redirectUris.length,
+          deviceGrant: ctx.body.deviceGrant === true,
+        },
       })
 
       // The only time the secret is ever readable. The row holds a hash.
@@ -620,6 +634,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
         scopes: z.array(z.string()).optional(),
         skipConsent: z.boolean().optional(),
         enableEndSession: z.boolean().optional(),
+        deviceGrant: z.boolean().optional(),
       }),
       requireHeaders: true,
       use: [gate],
@@ -628,6 +643,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
       const handle = db(deps)
       const actor = ctx.context.session.user
       await assertMutableClient(handle, ctx.body.clientId)
+      assertDeviceGrantAvailable(deps.config, ctx.body.deviceGrant)
 
       let freshSecret: string | undefined
       let publicAfter = false
@@ -691,6 +707,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
               ...(ctx.body.enableEndSession === undefined
                 ? {}
                 : { enableEndSession: ctx.body.enableEndSession }),
+              ...grantTypesFor(ctx.body.deviceGrant),
               // The stored hash stands in for the secret the schema demands of
               // a `web` client. Never the plaintext — there is none to have.
               ...(hashedSecret ? { clientSecret: hashedSecret } : {}),
@@ -768,6 +785,7 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
           redirectUris: ctx.body.redirectUris.length,
           isPublic: publicAfter,
           secretIssued: freshSecret !== undefined,
+          deviceGrant: ctx.body.deviceGrant === true,
         },
       })
 
@@ -1514,6 +1532,39 @@ export function buildAdminEndpoints(deps: AdminEndpointDeps) {
  */
 function generateClientSecret(): string {
   return randomBytes(48).toString("base64url")
+}
+
+/**
+ * The form's "sign-in from devices without a browser" as `grantTypes`.
+ *
+ * **Added to the default pair, never instead of it**: the provider issues a
+ * refresh token only to a client allowed `authorization_code`, and the schema
+ * refuses the device grant without it. Unticked, the field is omitted, so the
+ * row gets the default pair back — `/idp/update-client` is a full replace, and
+ * an edit that unticks the box has to take the grant away.
+ */
+function grantTypesFor(deviceGrant: boolean | undefined): {
+  grantTypes?: string[]
+} {
+  return deviceGrant
+    ? { grantTypes: [...DEFAULT_GRANT_TYPES, DEVICE_CODE_GRANT_TYPE] }
+    : {}
+}
+
+/**
+ * The same contradiction start-up refuses for a file client: a client that may
+ * use a grant this deployment does not serve.
+ */
+function assertDeviceGrantAvailable(
+  config: IdpConfig,
+  deviceGrant: boolean | undefined
+): void {
+  if (!deviceGrant || config.file.oauth.deviceAuthorization.enabled) return
+  throw new APIError("BAD_REQUEST", {
+    code: "DEVICE_GRANT_DISABLED",
+    message:
+      "The device grant is switched off (`oauth.deviceAuthorization.enabled`).",
+  })
 }
 
 function totalFor(

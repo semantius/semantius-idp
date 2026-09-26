@@ -113,6 +113,7 @@ export const Route = createFileRoute("/admin/clients/new")({
             // is unchanged (finding 10).
             skipConsent: skipConsentFromForm(form.requireConsent),
             enableEndSession: form.enableEndSession === "on",
+            deviceGrant: form.deviceGrant === "on",
           },
           request
         )
@@ -131,6 +132,7 @@ export const Route = createFileRoute("/admin/clients/new")({
             scopes: valuesOf("scopes"),
             requireConsent: form.requireConsent,
             enableEndSession: form.enableEndSession,
+            deviceGrant: form.deviceGrant,
           })
           return redirectWithCookies(
             withError(withDraft(here, draft), adminErrorCodeFor(result))

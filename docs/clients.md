@@ -121,6 +121,54 @@ Private-use schemes are allowed for `native` and nowhere else. Loopback with an
 ephemeral port is the other accepted pattern — register
 `http://127.0.0.1/callback` and the port is not matched.
 
+## A tool with no browser: the device grant
+
+A command-line tool on a server, or anything else running where nobody can open
+a browser, can sign a person in with RFC 8628's device grant: it shows a short
+code, the person opens `{baseUrl}/device` on their phone or laptop, signs in,
+and approves; the tool polls the token endpoint and receives the same tokens an
+authorization-code sign-in would, refresh token included.
+
+It is **off** until the deployment turns it on, and then only for the clients
+that list it:
+
+```jsonc
+// config.jsonc
+{ "oauth": { "deviceAuthorization": { "enabled": true } } }
+```
+
+```jsonc
+// oauth_clients.jsonc
+{
+  "clientId": "semantius-cli",
+  "name": "Semantius CLI",
+  "type": "native",
+  "redirectUris": ["http://127.0.0.1:53682/callback"],
+  "scopes": ["openid", "profile", "email", "offline_access"],
+  "grantTypes": [
+    "authorization_code",
+    "refresh_token",
+    "urn:ietf:params:oauth:grant-type:device_code"
+  ]
+}
+```
+
+- **`native` only.** A browser application can take the redirect, and the
+  device grant is the one grant here without PKCE.
+- **Keep `authorization_code` in the list.** The provider issues a refresh
+  token only to a client allowed that grant, so a device-only client would
+  sign in once per access token. Start-up refuses the entry without it.
+- **The person is always asked.** `/device` names the application and the
+  account and warns that approving hands the account to whoever started the
+  sign-in — whatever `skipConsent` says, because a code somebody else started
+  and sent over is how this grant is attacked.
+- A code lives `oauth.deviceCodeTtl`, ten minutes by default. The tool finds
+  the endpoint as `device_authorization_endpoint` in discovery.
+
+An application added from `/admin/clients` gets the same thing from the
+"Allow sign-in from devices without a browser" box, offered on every type and
+accepted on `native` only.
+
 ## A first-party application
 
 `firstParty` means the application runs on the **same host** as the IdP, so it
@@ -300,7 +348,7 @@ there is a person to ask.
 | `postLogoutRedirectUris` | `[]` | Required if `enableEndSession` is on. The `{host}` template works here too, so RP-initiated logout follows the request host as well. |
 | `scopes` | — | A subset of `oauth.scopes`. |
 | `audience` | — | Overrides `jwt.audience` for this client. String or array. |
-| `grantTypes` | `["authorization_code", "refresh_token"]` | The only two there are. |
+| `grantTypes` | `["authorization_code", "refresh_token"]` | Add `urn:ietf:params:oauth:grant-type:device_code` beside them for a `native` client once `oauth.deviceAuthorization.enabled` is on. Nothing else is accepted. |
 | `responseTypes` | `["code"]` | The only one there is. |
 | `requirePKCE` | `true` | |
 | `skipConsent` | `true` | File and API default. A client added from `/admin/clients/new` starts at `false`. |

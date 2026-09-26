@@ -47,6 +47,7 @@ import type {
   QuerySuccess,
   SchemaTable,
 } from "../admin/database"
+import { DEVICE_CODE_GRANT_TYPE } from "../../lib/client-rules"
 import { maskGatewayTarget } from "../config/mask"
 import { claimDraft } from "../http/draft"
 import type { Draft } from "../http/draft"
@@ -181,6 +182,11 @@ export interface AdminClientRow {
    * here before.
    */
   enableEndSession: boolean
+  /**
+   * Whether the client may use the device grant, for the edit form's
+   * checkbox — a full replace again, so an edit that cannot see it clears it.
+   */
+  deviceGrant: boolean
   /**
    * File-managed clients cannot be edited here: the next
    * restart would undo it. Database ones can.
@@ -656,6 +662,7 @@ export const fetchClients = createServerFn({ method: "GET" }).handler(
         .map((link) => link.resourceId),
       skipConsent: row.skipConsent === true,
       enableEndSession: row.enableEndSession === true,
+      deviceGrant: (row.grantTypes ?? []).includes(DEVICE_CODE_GRANT_TYPE),
       // the file marker is `userId === null`, and it is what decides
       // whether this row may be edited here at all — not merely how it is
       // labeled. A row whose id also appears in the file is shown as

@@ -649,6 +649,29 @@
             }
           ]
         },
+        "deviceAuthorization": {
+          "default": {},
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "description": "The RFC 8628 device grant, for a client that has no browser of its own — `semantius login` on a server, a CLI in a container. Off, the `/device` page, the device endpoints and the discovery entry do not exist. On, a client still has to list `urn:ietf:params:oauth:grant-type:device_code` in its `grantTypes`; only `native` clients may, and only beside `authorization_code`.",
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        "deviceCodeTtl": {
+          "description": "How long a device code lives, which is also how long the user has to open the verification page, sign in and approve. Short on purpose: a code handed to someone else is the attack this grant has, and its lifetime is the window.",
+          "default": "10m",
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
         "scopes": {
           "description": "Every scope any client may request. A client's own `scopes` must be a subset.",
           "type": "array",

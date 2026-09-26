@@ -125,11 +125,29 @@ describe("validateClientForm", () => {
     redirectUris: "https://app.example.com/cb",
     postLogoutRedirectUris: "",
     enableEndSession: false,
+    deviceGrant: false,
     ...over,
   })
 
   it("passes a well-formed registration", () => {
     expect(validateClientForm(values())).toEqual({})
+  })
+
+  // The file schema refuses the device grant on anything but `native`; the
+  // form says so under the box, before a round trip that could only answer
+  // with the grant's URN.
+  it("offers the device grant to native clients only", () => {
+    expect(
+      validateClientForm(
+        values({ type: "native", deviceGrant: true, redirectUris: "http://127.0.0.1:53682/callback" })
+      )
+    ).toEqual({})
+    expect(validateClientForm(values({ type: "spa", deviceGrant: true }))).toEqual({
+      deviceGrant: "nativeOnly",
+    })
+    expect(validateClientForm(values({ type: "web", deviceGrant: true }))).toEqual({
+      deviceGrant: "nativeOnly",
+    })
   })
 
   it("requires at least one redirect URI", () => {

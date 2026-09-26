@@ -12,7 +12,11 @@ import { describe, expect, it } from "vitest"
 
 import { clientOrigins, corsFor } from "@/server/http/cors"
 import { withRequestContext } from "@/server/http/request-log"
-import { forwardToAuth, rewriteDiscovery } from "@/server/oidc/protocol-proxy"
+import {
+  forwardToAuth,
+  rebaseVerificationUris,
+  rewriteDiscovery,
+} from "@/server/oidc/protocol-proxy"
 import { deriveConfig, parseBasePath } from "@/server/config/derive"
 import type { IdpConfig } from "@/server/config/derive"
 import type { Runtime } from "@/server/runtime"
@@ -423,5 +427,95 @@ describe("normalizeRevocation (RFC 7009 §2.2)", () => {
   it("leaves a success alone", async () => {
     const ok = await revoke(new Response(null, { status: 200 }), "token=abc")
     expect(ok.status).toBe(200)
+  })
+})
+
+/**
+ * `/device/code`'s answer, moved to the host the request arrived on.
+ *
+ * The plugin resolves `verification_uri` against the boot origin, so under
+ * `server.dynamicIssuer` a CLI that reached this deployment on another host
+ * would print an address on the canonical one — and the user would approve
+ * on a different issuer from the one the CLI then trusts.
+ */
+describe("the device authorization answer", () => {
+  const OTHER = "https://login.other.example"
+  const deviceAnswer = (status = 200) =>
+    Response.json(
+      {
+        device_code: "d",
+        user_code: "ABCDEFGH",
+        verification_uri: `${ISSUER}/device`,
+        verification_uri_complete: `${ISSUER}/device?user_code=ABCDEFGH`,
+        expires_in: 600,
+        interval: 5,
+      },
+      { status, headers: { "cache-control": "no-store" } }
+    )
+
+  async function forwardDevice(response: Response, issuer?: string) {
+    return withRequestContext(
+      { requestId: "test", ...(issuer ? { issuer } : {}) },
+      () =>
+        forwardToAuth(
+          runtimeAnswering(response),
+          new Request(`${ISSUER}/device/code`, {
+            method: "POST",
+            body: "client_id=cli",
+          }),
+          { providerPath: "/device/code" }
+        )
+    )
+  }
+
+  it("moves both URIs onto the request's issuer", async () => {
+    const response = await forwardDevice(deviceAnswer(), OTHER)
+    expect(response.status).toBe(200)
+    expect(response.headers.get("cache-control")).toBe("no-store")
+    expect(await response.json()).toMatchObject({
+      verification_uri: `${OTHER}/device`,
+      verification_uri_complete: `${OTHER}/device?user_code=ABCDEFGH`,
+      user_code: "ABCDEFGH",
+    })
+  })
+
+  it("passes the answer through untouched on the boot issuer", async () => {
+    const original = deviceAnswer()
+    expect(await forwardDevice(original)).toBe(original)
+  })
+
+  it("passes a refusal through untouched", async () => {
+    const refusal = Response.json({ error: "invalid_client" }, { status: 400 })
+    expect(await forwardDevice(refusal, OTHER)).toBe(refusal)
+  })
+})
+
+describe("rebaseVerificationUris", () => {
+  it("leaves a URI that is not under the boot issuer alone", () => {
+    // An operator could point `verificationUri` at an absolute address on
+    // another origin; moving that would send the user somewhere else again.
+    expect(
+      rebaseVerificationUris(
+        {
+          verification_uri: "https://elsewhere.example/device",
+          verification_uri_complete: 42,
+        },
+        ISSUER,
+        "https://login.other.example"
+      )
+    ).toEqual({
+      verification_uri: "https://elsewhere.example/device",
+      verification_uri_complete: 42,
+    })
+  })
+
+  it("does not match a sibling host that merely shares the prefix", () => {
+    expect(
+      rebaseVerificationUris(
+        { verification_uri: `${ISSUER}.evil/device` },
+        ISSUER,
+        "https://login.other.example"
+      )
+    ).toEqual({ verification_uri: `${ISSUER}.evil/device` })
   })
 })

@@ -12,8 +12,10 @@ import { z } from "zod"
 import { absoluteUri, absoluteUrl, flexArray, flexBoolean } from "../zod-helpers"
 import {
   CLIENT_TYPES,
+  DEVICE_CODE_GRANT_TYPE,
   PUBLIC_CLIENT_TYPES,
   checkRedirectUri,
+  deviceGrantAllowedFor,
   isReservedClientId,
 } from "@/lib/client-rules"
 import type { ClientType } from "@/lib/client-rules"
@@ -35,6 +37,7 @@ export type { ClientType }
 export const SUPPORTED_GRANT_TYPES = [
   "authorization_code",
   "refresh_token",
+  DEVICE_CODE_GRANT_TYPE,
 ] as const
 export const TOKEN_ENDPOINT_AUTH_METHODS = [
   "client_secret_basic",
@@ -284,6 +287,29 @@ export const clientSchema = baseClientSchema.superRefine((client, ctx) => {
       })
     )
   })
+  if (client.grantTypes?.includes(DEVICE_CODE_GRANT_TYPE)) {
+    if (!deviceGrantAllowedFor(type)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["grantTypes"],
+        message: `The device grant is for \`type: "native"\` clients only — a program with no browser of its own. A \`${type}\` client can take the redirect.`,
+      })
+    }
+    // The provider issues a refresh token only to a client it considers
+    // allowed the authorization-code grant — its own rule, which treats
+    // `refresh_token` as implied by `authorization_code` and by nothing
+    // else. A device-only client therefore signs in, receives no refresh
+    // token whatever it asked for, and sends its user through the whole
+    // device flow again every fifteen minutes. Nothing would say why.
+    if (!client.grantTypes.includes("authorization_code")) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["grantTypes"],
+        message:
+          'A client with the device grant must also list `"authorization_code"`: the provider issues refresh tokens only to clients allowed that grant, so without it every device sign-in would last one access token.',
+      })
+    }
+  }
   if (client.enableEndSession && client.postLogoutRedirectUris.length === 0) {
     ctx.addIssue({
       code: "custom",

@@ -85,6 +85,9 @@ describe("the spec defaults", () => {
         codeTtl: 300,
         refreshTokenTtl: 30 * 86_400,
         refreshTokenMaxLifetime: 90 * 86_400,
+        // Off: an upgrade must not start serving a grant nobody asked for.
+        deviceAuthorization: { enabled: false },
+        deviceCodeTtl: 600,
         scopes: ["openid", "profile", "email", "offline_access"],
         resources: [],
         reconcile: { prune: false },
@@ -116,6 +119,7 @@ describe("the spec defaults", () => {
       parsed.oauth.codeTtl,
       parsed.oauth.refreshTokenTtl,
       parsed.oauth.refreshTokenMaxLifetime,
+      parsed.oauth.deviceCodeTtl,
     ]
     for (const value of durations) {
       expect(typeof value).toBe("number")

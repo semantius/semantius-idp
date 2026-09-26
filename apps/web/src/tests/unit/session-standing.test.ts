@@ -14,6 +14,7 @@ import { APIError } from "better-auth/api"
 import { describe, expect, it, vi } from "vitest"
 
 import {
+  assertDeviceOwnerMaySignIn,
   assertRefreshOwnerMaySignIn,
   assertSessionStanding,
   hashStoredToken,
@@ -167,6 +168,18 @@ describe("assertSessionStanding", () => {
     await expect(
       assertSessionStanding(contextFor("/update-user"), { resolveSession })
     ).resolves.toBeUndefined()
+  })
+
+  // A device approval mints a thirty-day refresh token for whichever account
+  // approves it, so an administrator signed in as somebody must not be able
+  // to hand a program that account — the same reason as the key mint above.
+  it("refuses an impersonating administrator's device approval", async () => {
+    const resolveSession = vi.fn().mockResolvedValue(impersonated)
+    await expect(
+      codeOf(
+        assertSessionStanding(contextFor("/device/approve"), { resolveSession })
+      )
+    ).resolves.toBe("IMPERSONATED_SESSION")
   })
 
   it("passes an ordinary session", async () => {
@@ -429,5 +442,89 @@ describe("actorMetadata", () => {
         session: { ...own.session, impersonatedBy: "admin-1" },
       })
     ).toEqual({ impersonatedBy: "admin-1" })
+  })
+})
+
+describe("assertDeviceOwnerMaySignIn", () => {
+  function databaseAnswering(owner: Record<string, unknown> | undefined): {
+    database: DbHandle
+    where: ReturnType<typeof vi.fn>
+  } {
+    const where = vi.fn().mockReturnValue({
+      limit: async () => (owner ? [owner] : []),
+    })
+    const chain = {
+      select: () => chain,
+      from: () => chain,
+      innerJoin: () => chain,
+      where,
+    }
+    return {
+      where,
+      database: {
+        db: chain,
+        schema: {
+          deviceCode: {
+            deviceCode: "deviceCode",
+            userId: "userId",
+            status: "status",
+          },
+          user: {
+            id: "id",
+            status: "status",
+            banned: "banned",
+            banExpires: "banExpires",
+          },
+        },
+      } as unknown as DbHandle,
+    }
+  }
+
+  it("asks nothing without a code or a database", async () => {
+    const { database, where } = databaseAnswering({ status: "pending" })
+    await assertDeviceOwnerMaySignIn({ device_code: "" }, { database })
+    await assertDeviceOwnerMaySignIn({}, { database })
+    await assertDeviceOwnerMaySignIn({ device_code: "dc" }, {})
+    expect(where).not.toHaveBeenCalled()
+  })
+
+  it("leaves a code that is not approved to the provider", async () => {
+    const { database } = databaseAnswering(undefined)
+    await expect(
+      assertDeviceOwnerMaySignIn({ device_code: "dc" }, { database })
+    ).resolves.toBeUndefined()
+  })
+
+  // Suspended between approving and the CLI's next poll: without this the
+  // poll collects a thirty-day refresh token for an account that is banned.
+  it("answers access_denied for an approver who may no longer sign in", async () => {
+    for (const owner of [
+      { status: "pending", banned: false, banExpires: null },
+      { status: "active", banned: true, banExpires: null },
+    ]) {
+      const { database } = databaseAnswering(owner)
+      const error = await assertDeviceOwnerMaySignIn(
+        { device_code: "dc" },
+        { database }
+      ).then(
+        () => undefined,
+        (thrown: unknown) => thrown
+      )
+      expect(error, JSON.stringify(owner)).toBeInstanceOf(APIError)
+      expect((error as { body?: { error?: string } }).body?.error).toBe(
+        "access_denied"
+      )
+    }
+  })
+
+  it("passes an approver in good standing", async () => {
+    const { database } = databaseAnswering({
+      status: "active",
+      banned: false,
+      banExpires: null,
+    })
+    await expect(
+      assertDeviceOwnerMaySignIn({ device_code: "dc" }, { database })
+    ).resolves.toBeUndefined()
   })
 })

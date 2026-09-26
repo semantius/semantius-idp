@@ -55,6 +55,7 @@ export interface ClientFormValues {
   scopes: string[]
   requireConsent: boolean
   enableEndSession: boolean
+  deviceGrant: boolean
 }
 
 /**
@@ -91,6 +92,7 @@ export function resolveClientFormValues(
     scopes: (values.scopes ?? "").split("\n").filter((scope) => scope !== ""),
     requireConsent: ticked("requireConsent"),
     enableEndSession: ticked("enableEndSession"),
+    deviceGrant: ticked("deviceGrant"),
   }
 }
 
@@ -358,6 +360,43 @@ export function ClientFormFields({
             </span>
           </span>
         </Label>
+        {/* Only when the deployment serves the grant: offering a box the
+          server would refuse is a form that cannot be saved. Shown for every
+          type rather than toggled on the select, because the form is
+          uncontrolled and a box that appears and disappears under the
+          pointer is worse than one refusal that says `native` only. */}
+        {ui.deviceAuthorization ? (
+          <Field>
+            <Label className="flex items-start gap-2 text-sm font-normal">
+              <Checkbox
+                name="deviceGrant"
+                value="on"
+                defaultChecked={values.deviceGrant}
+                aria-label={t.admin.clients.deviceGrantLabel}
+                aria-invalid={errors.deviceGrant ? true : undefined}
+                aria-describedby={
+                  errors.deviceGrant
+                    ? field("device-grant-error")
+                    : field("device-grant-help")
+                }
+              />
+              <span>
+                {t.admin.clients.deviceGrantLabel}
+                <span
+                  id={field("device-grant-help")}
+                  className="block text-xs text-muted-foreground"
+                >
+                  {t.admin.clients.deviceGrantHelp}
+                </span>
+              </span>
+            </Label>
+            <FieldError id={field("device-grant-error")}>
+              {errors.deviceGrant
+                ? t.admin.clients.deviceGrantNativeOnly
+                : undefined}
+            </FieldError>
+          </Field>
+        ) : null}
       </AdminCard>
     </>
   )
@@ -407,6 +446,7 @@ export function useClientForm(): {
       redirectUris: read("redirectUris"),
       postLogoutRedirectUris: read("postLogoutRedirectUris"),
       enableEndSession: ticked("enableEndSession"),
+      deviceGrant: ticked("deviceGrant"),
     })
 
     setErrors(found)
@@ -425,6 +465,15 @@ export function useClientForm(): {
       const field = form.elements.namedItem(name)
       if (field instanceof HTMLElement) field.focus()
       return
+    }
+    // The checkbox is a Base UI `role="checkbox"` span; the hidden input
+    // behind it cannot take focus, so the span is what is focused.
+    if (found.deviceGrant) {
+      const box = form
+        .querySelector('input[name="deviceGrant"]')
+        ?.closest("label")
+        ?.querySelector<HTMLElement>('[role="checkbox"]')
+      box?.focus()
     }
   }, [])
 

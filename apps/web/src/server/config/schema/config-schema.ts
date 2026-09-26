@@ -669,6 +669,20 @@ const oauthSchema = z.strictObject({
     .describe(
       "The ceiling the sliding window cannot pass. After this the user signs in again."
     ),
+  deviceAuthorization: z
+    .strictObject({
+      enabled: flexBoolean()
+        .default(false)
+        .describe(
+          "The RFC 8628 device grant, for a client that has no browser of its own — `semantius login` on a server, a CLI in a container. Off, the `/device` page, the device endpoints and the discovery entry do not exist. On, a client still has to list `urn:ietf:params:oauth:grant-type:device_code` in its `grantTypes`; only `native` clients may, and only beside `authorization_code`."
+        ),
+    })
+    .prefault({}),
+  deviceCodeTtl: duration({ min: 60, max: 1800 })
+    .prefault("10m")
+    .describe(
+      "How long a device code lives, which is also how long the user has to open the verification page, sign in and approve. Short on purpose: a code handed to someone else is the attack this grant has, and its lifetime is the window."
+    ),
   scopes: flexArray(z.string().min(1))
     .default(["openid", "profile", "email", "offline_access"])
     .describe(

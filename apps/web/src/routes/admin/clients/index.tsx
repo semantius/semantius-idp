@@ -298,7 +298,13 @@ function ClientsPage() {
                       </code>
                     ))}
                   </TableCell>
-                  <TableCell className="text-xs">
+                  {/* Allowed to wrap, unlike the registry's cell default: a
+                      public client's type reads "Public — no client secret",
+                      and with the scopes on one line that row alone pushed the
+                      table past a 1280 px window. An overflowing table of
+                      file clients has nothing focusable in it, which axe
+                      rightly calls a scroll region no keyboard can reach. */}
+                  <TableCell className="min-w-32 text-xs whitespace-normal">
                     {client.scopes.join(" ") || "—"}
                   </TableCell>
                   {/* One affordance for both answers. It was a Badge for yes

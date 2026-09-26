@@ -44,7 +44,7 @@
 import { createHash } from "node:crypto"
 
 import { APIError, getAuthoritativeSessionFromCtx } from "better-auth/api"
-import { eq } from "drizzle-orm"
+import { and, eq } from "drizzle-orm"
 
 import type { DbHandle } from "../../db/client"
 import { assertUserMaySignIn } from "./database-hooks"
@@ -87,7 +87,7 @@ const FORCED_CHANGE_EXEMPT_PREFIXES = [
 const MINTING_GET_PATHS = new Set(["/token"])
 
 /** What an impersonating administrator may not do as the user. */
-const IMPERSONATION_REFUSED_PATHS = new Set(["/api-key/create"])
+const IMPERSONATION_REFUSED_PATHS = new Set(["/api-key/create", "/device/approve"])
 
 export function isExemptFromForcedChange(path: string): boolean {
   if (FORCED_CHANGE_EXEMPT_PATHS.has(path)) return true
@@ -211,6 +211,61 @@ export async function assertRefreshOwnerMaySignIn(
     throw new APIError("BAD_REQUEST", {
       error: "invalid_grant",
       error_description: "The account this token belongs to is not available.",
+    })
+  }
+}
+
+/**
+ * Refuses a device-code redemption whose approver may no longer sign in.
+ *
+ * The approval and the redemption are two moments minutes apart: the user
+ * approves in a browser, the CLI's next poll collects the tokens. The plugin
+ * then looks the approving user up and reads nothing about their standing, so
+ * an account suspended — or sent back to `pending` — in between would still
+ * receive a thirty-day refresh token. The refresh grant has the same gap and
+ * the same fix above; this is its twin for the other grant that issues one
+ * without a browser in the room.
+ *
+ * Only an **approved** code is looked at. A pending one answers
+ * `authorization_pending` whoever it belongs to, and a denied or unknown one
+ * is the provider's to answer; guessing at either here would be a second
+ * place to keep those shapes. The code is not consumed, for the reason the
+ * refresh check gives: a later unban lets the same poll succeed.
+ */
+export async function assertDeviceOwnerMaySignIn(
+  body: Record<string, unknown> | undefined,
+  deps: RefreshOwnerDeps
+): Promise<void> {
+  const presented = body?.device_code
+  if (typeof presented !== "string" || presented === "" || !deps.database) {
+    return
+  }
+
+  const { deviceCode, user } = deps.database.schema
+  const [owner] = await deps.database.db
+    .select({
+      status: user.status,
+      banned: user.banned,
+      banExpires: user.banExpires,
+    })
+    .from(deviceCode)
+    .innerJoin(user, eq(user.id, deviceCode.userId))
+    .where(
+      and(
+        eq(deviceCode.deviceCode, presented),
+        eq(deviceCode.status, "approved")
+      )
+    )
+    .limit(1)
+  if (!owner) return
+
+  try {
+    assertUserMaySignIn(owner)
+  } catch (error) {
+    if (!(error instanceof APIError)) throw error
+    throw new APIError("BAD_REQUEST", {
+      error: "access_denied",
+      error_description: "The account that approved this device is not available.",
     })
   }
 }

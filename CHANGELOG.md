@@ -115,6 +115,21 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ### Added
 
+- **Sign-in from a device without a browser — the RFC 8628 device grant**
+  (**D133**, FR-OIDC-19). For `semantius login` on a server: the tool shows a
+  code, the person approves it at `/device` from any browser, and the tool
+  receives the same tokens an authorization-code sign-in gets, refresh token
+  included. **Off by default** — `oauth.deviceAuthorization.enabled` turns on
+  the page, `{issuer}/device/code` and the discovery entry — and then only for
+  `native` clients that list `urn:ietf:params:oauth:grant-type:device_code`
+  beside `authorization_code` (start-up refuses anything else), in the file or
+  with the new box on `/admin/clients`. `/device` always asks, naming the
+  application and the account, whatever `skipConsent` says. A code lives
+  `oauth.deviceCodeTtl`, ten minutes. The redemption re-checks the approver's
+  ban and approval status, an impersonating administrator cannot approve, the
+  verification address stays inside a sub-path mount, a device poll told to
+  wait no longer counts against the token endpoint's refused-request bucket,
+  and expired codes are swept. Adds migration `0005` (`device_code`).
 - **`/.well-known/oauth-protected-resource` — RFC 9728 metadata for a resource
   server on this deployment's origin** (**D129**, FR-OIDC-18). A CLI or MCP
   client discovers an instance by walking RFC 9728 to RFC 8414: this document

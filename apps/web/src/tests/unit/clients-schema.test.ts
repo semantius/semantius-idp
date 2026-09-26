@@ -188,3 +188,39 @@ describe("a file-declared secret has to look generated", () => {
     )
   })
 })
+
+describe("the device grant", () => {
+  const DEVICE = "urn:ietf:params:oauth:grant-type:device_code"
+  const cli = (grantTypes: string[], type = "native") => ({
+    clientId: "cli",
+    type,
+    redirectUris: ["http://127.0.0.1:53682/callback"],
+    enableEndSession: false,
+    grantTypes,
+  })
+
+  it("is accepted on a native client beside the authorization code", () => {
+    expect(
+      errorsFor(cli(["authorization_code", "refresh_token", DEVICE]))
+    ).toBe("")
+  })
+
+  it("is refused on a browser or server application", () => {
+    for (const type of ["spa", "web"]) {
+      const client =
+        type === "web"
+          ? { ...cli(["authorization_code", DEVICE], type), clientSecret: "7b3e9f1a5c2d8e4f6a0b9c1d3e5f7a2b4c6d8e0f" }
+          : cli(["authorization_code", DEVICE], type)
+      expect(errorsFor(client), type).toContain('`type: "native"` clients only')
+    }
+  })
+
+  // The provider's own rule: a refresh token only for a client allowed the
+  // authorization-code grant. Device-only would silently mean a sign-in that
+  // lasts one access token.
+  it("is refused without the authorization code beside it", () => {
+    expect(errorsFor(cli([DEVICE]))).toContain(
+      'must also list `"authorization_code"`'
+    )
+  })
+})

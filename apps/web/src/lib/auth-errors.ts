@@ -114,6 +114,10 @@ export function messageForErrorCode(
     case "invalid_client_definition":
     case "scope_not_allowed":
       return t.admin.refusals.clientInvalid
+    // Reachable only when the switch went off after the form was rendered —
+    // the checkbox is not offered otherwise — so it says what changed.
+    case "device_grant_disabled":
+      return t.admin.refusals.deviceGrantDisabled
     // the same three shapes the client endpoints answer
     // with, for the same three reasons.
     case "gateway_already_exists":

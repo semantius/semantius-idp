@@ -207,6 +207,26 @@ describe("what the sweep removes, and what it must not", () => {
       },
     ])
 
+    // An abandoned `semantius login`: the CLI was closed, so nothing ever
+    // polls the code again and the plugin never deletes it itself. Approved
+    // or not makes no difference once it has expired.
+    await db.insert(schema.deviceCode).values([
+      {
+        id: "device-dead",
+        deviceCode: "dc-dead",
+        userCode: "DEADCODE",
+        status: "approved",
+        expiresAt: ago(HOUR),
+      },
+      {
+        id: "device-live",
+        deviceCode: "dc-live",
+        userCode: "LIVECODE",
+        status: "pending",
+        expiresAt: ahead(HOUR),
+      },
+    ])
+
     await db.insert(schema.rateLimit).values([
       {
         id: "rl-stale",
@@ -277,11 +297,12 @@ describe("what the sweep removes, and what it must not", () => {
       refreshTokens: 1,
       clientAssertions: 1,
       pendingAuthorizations: 1,
+      deviceCodes: 1,
       rateLimits: 1,
       signingKeys: 1,
       auditEvents: 1,
     })
-    expect(cleanupTotal(counts!)).toBe(9)
+    expect(cleanupTotal(counts!)).toBe(10)
 
     const ids = async (
       rows: Promise<{ id: string }[]>
@@ -357,6 +378,15 @@ describe("what the sweep removes, and what it must not", () => {
           )
       )
     ).toEqual(["pending-live"])
+
+    expect(
+      await ids(
+        db
+          .select({ id: schema.deviceCode.id })
+          .from(schema.deviceCode)
+          .where(inArray(schema.deviceCode.id, ["device-dead", "device-live"]))
+      )
+    ).toEqual(["device-live"])
 
     expect(
       await ids(

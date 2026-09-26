@@ -1,7 +1,7 @@
 /**
  * The retention job.
  *
- * Nine tables in this schema grow without bound and nothing has ever emptied
+ * Ten tables in this schema grow without bound and nothing has ever emptied
  * them. Most are small; two are not. `verification` takes a row for every
  * password-reset link, every e-mail verification **and every authorization
  * code** — 1.7.1's oauth-provider stores codes through
@@ -20,6 +20,7 @@
  * | `oauth_refresh_token`      | dead ≥ 30 days (expired or revoked)             |
  * | `oauth_client_assertion`   | expired — the JTI replay window is over         |
  * | `pending_authorization`    | expired (written by nothing, swept anyway) |
+ * | `device_code`              | expired — approved or not, it can no longer be redeemed |
  * | `rate_limit`               | untouched for a day, so past every window       |
  * | `jwks`                     | expired **plus** `jwt.gracePeriod`              |
  * | `audit_log`                | older than `audit.retentionDays`                |
@@ -69,6 +70,8 @@ export interface CleanupCounts {
   refreshTokens: number
   clientAssertions: number
   pendingAuthorizations: number
+  /** Device-grant codes past their lifetime, whatever their state. */
+  deviceCodes: number
   rateLimits: number
   signingKeys: number
   auditEvents: number
@@ -90,6 +93,7 @@ const EMPTY: CleanupCounts = {
   refreshTokens: 0,
   clientAssertions: 0,
   pendingAuthorizations: 0,
+  deviceCodes: 0,
   rateLimits: 0,
   signingKeys: 0,
   auditEvents: 0,
@@ -186,6 +190,13 @@ async function sweep(deps: CleanupDeps, now: Date): Promise<CleanupCounts> {
     db
       .delete(schema.pendingAuthorization)
       .where(lt(schema.pendingAuthorization.expiresAt, now))
+  )
+
+  // The plugin deletes an expired code only when a client polls it after
+  // expiry, and a CLI that was closed never polls again — so without this
+  // every abandoned `semantius login` would leave a row behind for ever.
+  counts.deviceCodes = await removed(
+    db.delete(schema.deviceCode).where(lt(schema.deviceCode.expiresAt, now))
   )
 
   // `last_request` is epoch milliseconds in a bigint, not a timestamp — the

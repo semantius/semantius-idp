@@ -350,6 +350,9 @@ export type AuditAction =
   | "impersonation.stopped"
   | "consent.granted"
   | "consent.revoked"
+  // A device-grant approval or refusal on `/device`: the moment a user lets a
+  // program they are not sitting at act as them. `outcome` says which.
+  | "device.authorized"
   | "token.issued"
   | "token.revoked"
   | "client.reconciled"

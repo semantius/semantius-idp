@@ -36,6 +36,7 @@ import type { Audit, AuditOutcome } from "../../audit"
 import type { IdpConfig } from "../../config/derive"
 import type { DbHandle } from "../../db/client"
 import type { Logger } from "../../logger"
+import { DEVICE_CODE_GRANT_TYPE } from "../../../lib/client-rules"
 import { revokeExpiredRefreshFamilies } from "../../oidc/refresh-lifetime"
 import type { AuditAction } from "../plugins/idp-plugin"
 import { signUpCreatedNothing } from "../sign-up-outcome"
@@ -43,6 +44,7 @@ import { checkPasswordBreach } from "../password-breach"
 import { clearTrustedDevices } from "../trusted-devices"
 import type { BreachCheckDeps } from "../password-breach"
 import {
+  assertDeviceOwnerMaySignIn,
   assertRefreshOwnerMaySignIn,
   assertSessionStanding,
 } from "./session-standing"
@@ -121,6 +123,25 @@ export function buildBeforeHook(
       // itself only looks the user *up*.
       await assertRefreshOwnerMaySignIn(body, deps)
       await revokeExpiredRefreshFamilies(deps)
+    }
+    if (
+      ctx.path === "/oauth2/token" &&
+      body?.grant_type === DEVICE_CODE_GRANT_TYPE
+    ) {
+      await assertDeviceOwnerMaySignIn(body, deps)
+    }
+    if (ctx.path === "/device/code" && body?.user_id !== undefined) {
+      // Not RFC 8628: the plugin lets the *client* name the user a code is
+      // for, and only that user can then approve it. A public client is
+      // anyone, so the field is a way for anyone to put a pending request in
+      // front of a chosen account. The flow never needs it — the user who
+      // types the code is the user it is for. Refused rather than stripped,
+      // because stripping cannot work: the plugin re-reads a form body from
+      // the raw request after this hook has run.
+      throw new APIError("BAD_REQUEST", {
+        error: "invalid_request",
+        error_description: "user_id is not supported.",
+      })
     }
   })
 }
@@ -283,9 +304,15 @@ async function assertPasswordNotBreached(
  * - **token** — covers a refresh token minted before this hook existed, and a
  *   client that posts to the token endpoint without ever having been through
  *   `/oauth2/authorize`.
+ *
+ * And a third, **`/device/code`**, which is the device grant's authorize: the
+ * plugin binds the resource into the code there, and the redemption refuses
+ * any `resource` the code was not bound to. Injected only at the token
+ * endpoint, the default arrived at redemption as a resource "the user never
+ * authorized" and every device sign-in ended in `invalid_target`.
  */
 const RESOURCE_QUERY_PATHS = new Set(["/oauth2/authorize"])
-const RESOURCE_BODY_PATHS = new Set(["/oauth2/token"])
+const RESOURCE_BODY_PATHS = new Set(["/oauth2/token", "/device/code"])
 
 interface ResourceContext {
   path: string

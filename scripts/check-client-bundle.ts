@@ -74,12 +74,19 @@ const SERVER_ONLY_MARKERS = [
  * because the router splits by route. Raised again to the measured total plus
  * the same ~40 kB of headroom.
  *
+ * **1226 kB today**, up from 1220 kB, and this raise was not for a large
+ * dependency: the bundle had drifted to 197 bytes under the old ceiling, and
+ * the device grant's page (a 2.3 kB route chunk), its catalog strings in the
+ * shared chunk and one admin checkbox were the next 6 kB of ordinary UI. What
+ * grew was checked before the number moved. Raised to the measured total plus
+ * the same ~40 kB of headroom.
+ *
  * The point stands: **the markers above are the real gate.** This number is
  * the shape of one incident, and re-raising it for a deliberate, chunked,
  * lazily-loaded addition is what it is for. Re-raising it because "the bundle
  * grew again" is not — check what grew first.
  */
-const MAX_CLIENT_BYTES = 1_220_000
+const MAX_CLIENT_BYTES = 1_266_000
 
 function jsFiles(dir: string): string[] {
   let entries: string[]

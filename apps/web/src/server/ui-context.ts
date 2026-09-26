@@ -105,6 +105,13 @@ export interface UiContext {
    * re-checks the list, so this decides which boxes exist and nothing else.
    */
   oauthScopes: string[]
+  /**
+   * `oauth.deviceAuthorization.enabled`. Decides whether `/device` exists and
+   * whether `/admin/clients` offers the grant; the endpoints are absent either
+   * way when it is off, so this only keeps the UI from offering what the
+   * server would refuse. Not sensitive: discovery says the same thing.
+   */
+  deviceAuthorization: boolean
   /** only providers that are actually configured render a button. */
   socialProviders: SocialProviderView[]
 }
@@ -218,6 +225,7 @@ export function buildUiContext(
     ),
     passwordMinLength: file.auth.password.minLength,
     oauthScopes: [...file.oauth.scopes],
+    deviceAuthorization: file.oauth.deviceAuthorization.enabled,
 
     socialProviders: Object.entries(file.social)
       .filter(([, provider]) => provider.enabled)

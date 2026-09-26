@@ -94,6 +94,9 @@ const ACCOUNT_PAGES = [
   "/account/sessions",
   "/account/api-keys",
   "/account/consents",
+  // Signed-in only — the page sends anybody else to `/login` first. The code
+  // entry form; the approval screen is scanned in `device.spec.ts`.
+  "/device",
 ]
 
 const ADMIN_PAGES = [

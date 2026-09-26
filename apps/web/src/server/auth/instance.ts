@@ -11,7 +11,10 @@
  */
 
 import { apiKey } from "@better-auth/api-key"
-import { oauthProvider } from "@better-auth/oauth-provider"
+import {
+  oauthDeviceAuthorization,
+  oauthProvider,
+} from "@better-auth/oauth-provider"
 import { betterAuth } from "better-auth"
 import { drizzleAdapter } from "better-auth/adapters/drizzle"
 import { admin } from "better-auth/plugins/admin"
@@ -474,9 +477,12 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
         loginPage: paths.path(APP_ROUTES.login),
         consentPage: paths.path(APP_ROUTES.consent),
 
-        // these two grants and nothing else. `client_credentials`
-        // is absent here, so the token endpoint rejects it and discovery never
-        // advertises it.
+        // The provider's *own* grants. This list is not the whole policy: the
+        // provider unions it with every grant an extension registers, for
+        // both discovery and the token endpoint, so the device grant is on
+        // exactly when `oauthDeviceAuthorization` below is registered and
+        // nowhere else. `client_credentials` is on neither list, so the token
+        // endpoint refuses it and discovery never advertises it.
         grantTypes: ["authorization_code", "refresh_token"],
         accessTokenExpiresIn: file.oauth.accessTokenTtl,
         idTokenExpiresIn: file.oauth.idTokenTtl,
@@ -568,6 +574,30 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
         },
       }),
 
+      // RFC 8628, for a client with no browser: the plugin owns the codes and
+      // the approval, the provider validates the client and issues the
+      // tokens through the same path the authorization code takes, so a
+      // device sign-in gets the same claims, audience and refresh rules.
+      // Absent when switched off — no page, no endpoint, no discovery entry —
+      // and present for schema generation, because its table must exist in
+      // every deployment or the drift gate would follow an operator's config.
+      ...(file.oauth.deviceAuthorization.enabled || deps.forSchema
+        ? [
+            oauthDeviceAuthorization({
+              expiresIn: `${file.oauth.deviceCodeTtl}s`,
+              interval: "5s",
+              // Relative on purpose. The plugin resolves this with
+              // `new URL(uri, baseURL)`, and its default of `/device` is
+              // origin-relative — so under a sub-path it pointed at the
+              // origin root, not at this page. A path that already carries
+              // the mount resolves right in both shapes, and stays relative
+              // so the route that forwards `/device/code` can move it to the
+              // host the request arrived on.
+              verificationUri: paths.path(APP_ROUTES.device),
+            }),
+          ]
+        : []),
+
       // contributes `audit_log` and `pending_authorization` to the
       // generated schema, plus the approval endpoints Better Auth has no
       // equivalent for.
@@ -610,6 +640,14 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
         }),
       }),
     ],
+
+    // The device plugin's first-party redemption, which answers a device code
+    // with a raw *session* token rather than an OAuth token set. Every code
+    // here is bound to an OAuth client, and the plugin already refuses those
+    // at this path — but a session token is a credential that bypasses every
+    // client, audience and scope rule, and an endpoint that mints one should
+    // not exist to be refused at.
+    disabledPaths: ["/device/token"],
 
     // the approval gate, the domain restriction and
     // e-mail normalization, enforced beneath every path that creates a user or

@@ -239,34 +239,47 @@ test.describe("accessibility", () => {
     await signOut(page, app)
   })
 
-  // The table overflows sideways by design, and with every row a file client
-  // there is nothing focusable inside it — so at a width where it overflows,
-  // the scroll region itself has to take the keyboard. The 1280 px scans
-  // above never see this: the table fits there.
-  test("the applications table is a scroll region a keyboard can reach", async ({
+  // The admin lists overflow sideways by design, and a scroll region with
+  // nothing focusable inside — a clients list of file clients, a roles table,
+  // an audit table — cannot be scrolled without a pointer. So every list is a
+  // named region that takes the tab stop itself. The 1280 px scans above
+  // never see the overflow: the tables fit there.
+  test("every admin list is a scroll region a keyboard can reach", async ({
     page,
     app,
   }) => {
     await page.setViewportSize({ width: 900, height: 800 })
     await signInAsAdmin(page, app)
+
+    for (const [path, name] of [
+      ["/admin/users", "Users"],
+      ["/admin/clients", "Applications"],
+      ["/admin/gateways", "API gateways"],
+      ["/admin/roles", "Roles"],
+      ["/admin/audit", "Audit"],
+    ] as const) {
+      await app.goto(path)
+      const region = page.getByRole("region", { name, exact: true })
+      await region.focus()
+      await expect(region, `${path} takes focus`).toBeFocused()
+      await scan(page, `${path} in a narrow window`)
+    }
+
+    // One of them demonstrably overflowing, so the check above is about a
+    // region that really scrolls: every row here is a file client.
     await app.goto("/admin/clients")
-
-    const region = page.getByRole("region", { name: "Applications" })
-    // It has to really overflow here, or the scan below proves nothing.
+    const clients = page.getByRole("region", { name: "Applications" })
     expect(
-      await region.evaluate((element) => element.scrollWidth > element.clientWidth),
-      "the table overflows at 900 px"
+      await clients.evaluate((element) => element.scrollWidth > element.clientWidth),
+      "the clients table overflows at 900 px"
     ).toBe(true)
-    await scan(page, "/admin/clients in a narrow window")
-
-    await region.focus()
-    await expect(region).toBeFocused()
+    await clients.focus()
     // The arrow keys are how a keyboard scrolls a focused region sideways;
     // `End` would only scroll it vertically.
     await page.keyboard.press("ArrowRight")
     await page.keyboard.press("ArrowRight")
     await expect
-      .poll(() => region.evaluate((element) => element.scrollLeft))
+      .poll(() => clients.evaluate((element) => element.scrollLeft))
       .toBeGreaterThan(0)
 
     await signOut(page, app)

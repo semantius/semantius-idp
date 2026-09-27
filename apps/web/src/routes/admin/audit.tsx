@@ -1,7 +1,6 @@
 import { Link, createFileRoute } from "@tanstack/react-router"
 
 import { buttonVariants } from "@workspace/ui/components/button"
-import { Card } from "@workspace/ui/components/card"
 import {
   Empty,
   EmptyDescription,
@@ -18,6 +17,7 @@ import {
   TableRow,
 } from "@workspace/ui/components/table"
 
+import { TableRegion } from "@/components/admin/table-region"
 import { AdminShell } from "@/components/admin/admin-shell"
 import { searchString } from "@/lib/search-params"
 import { crumbTrail } from "@/components/common/breadcrumbs"
@@ -150,7 +150,7 @@ function AuditPage() {
           </EmptyHeader>
         </Empty>
       ) : (
-        <Card className="overflow-x-auto py-0">
+        <TableRegion label={t.admin.audit.title}>
           <Table>
             <TableHeader>
               <TableRow>
@@ -193,7 +193,7 @@ function AuditPage() {
               ))}
             </TableBody>
           </Table>
-        </Card>
+        </TableRegion>
       )}
 
       {page.nextBefore ? (

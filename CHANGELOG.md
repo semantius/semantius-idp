@@ -244,14 +244,15 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ### Fixed
 
-- **`/admin/clients`' table can be scrolled with a keyboard.** It overflows
-  sideways by design, and on a deployment whose clients all come from
-  `oauth_clients.jsonc` no row has a link or a menu, so nothing inside the
-  overflow could take focus and the hidden columns were reachable by pointer
-  only (WCAG 2.1.1; axe's `scrollable-region-focusable`). The table's Card is
-  now the one scroll region, named "Applications", with its own tab stop and
-  focus ring; the arrow keys scroll it. The Scopes cell also wraps, which keeps
-  the table inside a 1280 px window when a public client is listed.
+- **Every admin list can be scrolled with a keyboard.** The tables on
+  `/admin/users`, `/admin/clients`, `/admin/gateways`, `/admin/roles` and
+  `/admin/audit` overflow sideways by design, and where the rows hold nothing
+  focusable — a clients list of file clients, the roles and audit tables
+  always — the hidden columns were reachable by pointer only (WCAG 2.1.1;
+  axe's `scrollable-region-focusable`). Each list is now one scroll region
+  named after its page, with its own tab stop and focus ring; the arrow keys
+  scroll it. The clients table's Scopes cell also wraps, which keeps it inside
+  a 1280 px window when a public client is listed.
 
 - **The admin accessibility scan no longer races `/admin/database`'s panel
   layout.** react-resizable-panels writes a separator's `aria-valuenow` after

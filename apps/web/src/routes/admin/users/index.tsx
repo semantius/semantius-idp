@@ -1,7 +1,6 @@
 import { Link, createFileRoute } from "@tanstack/react-router"
 
 import { Badge } from "@workspace/ui/components/badge"
-import { Card } from "@workspace/ui/components/card"
 import { buttonVariants } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import {
@@ -20,6 +19,7 @@ import {
   TableRow,
 } from "@workspace/ui/components/table"
 
+import { TableRegion } from "@/components/admin/table-region"
 import { AdminShell } from "@/components/admin/admin-shell"
 import { SecretDialog } from "@/components/common/dialogs"
 import { UserBadges } from "@/components/admin/user-badges"
@@ -210,7 +210,7 @@ function UsersPage() {
           </EmptyHeader>
         </Empty>
       ) : (
-        <Card className="overflow-x-auto py-0">
+        <TableRegion label={t.admin.users.title}>
           <Table>
             <TableHeader>
               <TableRow>
@@ -258,7 +258,7 @@ function UsersPage() {
               ))}
             </TableBody>
           </Table>
-        </Card>
+        </TableRegion>
       )}
 
       <nav

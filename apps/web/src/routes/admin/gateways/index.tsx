@@ -2,7 +2,6 @@ import { Link, createFileRoute } from "@tanstack/react-router"
 
 import { Badge } from "@workspace/ui/components/badge"
 import { buttonVariants } from "@workspace/ui/components/button"
-import { Card } from "@workspace/ui/components/card"
 import {
   Empty,
   EmptyDescription,
@@ -17,6 +16,7 @@ import {
   TableRow,
 } from "@workspace/ui/components/table"
 
+import { TableRegion } from "@/components/admin/table-region"
 import { AdminShell } from "@/components/admin/admin-shell"
 import { GatewayRowActions } from "@/components/admin/gateway-row-actions"
 import { FormRefusal } from "@/components/auth/form-parts"
@@ -175,7 +175,7 @@ function GatewaysPage() {
           </EmptyHeader>
         </Empty>
       ) : (
-        <Card className="overflow-x-auto py-0">
+        <TableRegion label={t.admin.gateways.title}>
           <Table>
             <TableHeader>
               <TableRow>
@@ -257,7 +257,7 @@ function GatewaysPage() {
               ))}
             </TableBody>
           </Table>
-        </Card>
+        </TableRegion>
       )}
     </AdminShell>
   )

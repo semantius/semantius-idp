@@ -6,7 +6,6 @@ import {
   AlertTitle,
 } from "@workspace/ui/components/alert"
 import { Badge } from "@workspace/ui/components/badge"
-import { Card } from "@workspace/ui/components/card"
 import {
   Table,
   TableBody,
@@ -16,6 +15,7 @@ import {
   TableRow,
 } from "@workspace/ui/components/table"
 
+import { TableRegion } from "@/components/admin/table-region"
 import { AdminShell } from "@/components/admin/admin-shell"
 import { LocalTime } from "@/components/common/local-time"
 import { crumbTrail } from "@/components/common/breadcrumbs"
@@ -76,7 +76,7 @@ function RolesPage() {
         </Alert>
       ) : null}
 
-      <Card className="overflow-x-auto py-0">
+      <TableRegion label={t.admin.roles.title}>
         <Table>
           <TableHeader>
             <TableRow>
@@ -109,7 +109,7 @@ function RolesPage() {
             ))}
           </TableBody>
         </Table>
-      </Card>
+      </TableRegion>
     </AdminShell>
   )
 }

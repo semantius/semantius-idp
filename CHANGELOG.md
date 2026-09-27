@@ -9,6 +9,8 @@ Decisions that changed a numbered requirement carry their `D` number from
 
 ## [Unreleased]
 
+## [0.6.9] — 2026-09-27
+
 ### Security
 
 - **Better Auth 1.7.6, and one sign-in identity can belong to only one
@@ -21,97 +23,6 @@ Decisions that changed a numbered requirement carry their `D` number from
   so two concurrent first sign-ins with the same social identity can no longer
   both succeed. The index builds over any existing database — every row
   already satisfies it — and nothing outside the IdP read `issuer`.
-- **The bundled Postgres no longer runs the IdP as its superuser** (**D109**).
-  `POSTGRES_USER` is `postgres`; `docker/initdb/10-idp-role.sh` creates `idp`
-  NOSUPERUSER with `CONNECT, CREATE` on the database on a fresh data directory.
-  `IDP_DB_PASSWORD` names its password and falls back to `POSTGRES_PASSWORD`.
-  Existing volumes are unchanged and, with the console enabled, warned about
-  at start-up; `idp-destroy` + `idp-create` moves a deployment across.
-- **`/admin/update-user` can no longer park the last administrator, or the
-  caller, by setting `status`** (**D108**). Any `status` other than `active`
-  is now a rejection to the last-admin and self-action invariants, and the
-  body is refused whole (`400 UPDATE_USER_FIELD_NOT_ALLOWED`) when it names
-  a column outside the twelve the admin API writes — `twoFactorEnabled`,
-  `approvedAt`, `approvedBy`, the timestamps and the id were all reachable
-  with an admin key.
-- **Start-up warns when the SQL console runs as a Postgres superuser**
-  (**D109**). A READ ONLY transaction refuses writes; it does not stop a
-  superuser from `pg_read_file` or `COPY … TO PROGRAM`. The warning
-  (`database.console_as_superuser`) reaches the log, `/admin` and
-  `/admin/system` and names the fix; the deployment still boots.
-- **The recorded console statement is scrubbed before it reaches the audit
-  trail and stdout** (**D113**): long string literals, every literal after a
-  `password`/`secret`/`token` keyword, dollar-quoted bodies and comments are
-  replaced; identifiers stay. The comment saying `redactFields` did this was
-  wrong — it masks by field name.
-- **Admin audit rows now say `api-key` when an API key made the call**
-  (**D113**), on every `/idp/*` endpoint, the approval endpoints and the
-  guard's rows; they all said `session`.
-- **The first administrator's e-mail address is no longer written to the log**
-  by the setup page; the line carries the user id.
-- **The anonymous sign-in page no longer reveals that a SQL console exists**:
-  `adminDatabaseEnabled` is `false` for a visitor without a session.
-- **The audit writer no longer accepts a caller-supplied `ipAddress`**; the
-  row's address is only ever the one the edge resolved under
-  `server.trustProxy`.
-- **A gateway sub-path can no longer climb out of its target** (**D110**).
-  The router hands the splat over decoded, so `..%2fadmin` on a gateway
-  scoped to `…/v1` reached `…/admin`; the built URL is now normalized and
-  must stay under `<url>/`, else `400 invalid_path`. Plain paths are
-  forwarded byte for byte, as before.
-- **A gateway cannot reach a link-local address** (**D111**) — `169.254.0.0/16`
-  (the cloud metadata service) and `fe80::/10`, refused as a literal at
-  configuration time and per request against the resolved address (`502`,
-  with its own log line). Private addresses stay reachable, as D91 accepts.
-- **More upstream response headers are stripped on `/gateway/*`** (**D118**):
-  `Access-Control-*`, HSTS, `X-Frame-Options`, `Permissions-Policy`,
-  `Clear-Site-Data`, `Refresh`, `Report-To`/`NEL`, `Alt-Svc`, HPKP — every
-  header that states a policy for the issuer's origin. PostgREST's headers
-  and `Link` pass as before.
-- **The token endpoint's per-client rate bucket can no longer be emptied by
-  anyone who can name the client** (**D112**). `oauth2_token:<client_id>`
-  counts successful grants only; refused requests are counted per address
-  and client (30/min), so a wrong secret from one place is throttled and a
-  NAT full of users is not.
-- **One address resolution for every rate limiter** (**D115**). Behind two
-  proxy hops under `trustProxy: true` every user shared one sign-in bucket,
-  because Better Auth resolved `X-Forwarded-For` a second time and
-  differently; the edge now resolves once and every limiter reads that.
-  `/setup` keys on the real address instead of an anonymized /24; IPv6 keys
-  are /64; `/reset-password` has its own limit (10 per 5 min).
-- **`server.allowedHosts`** (**D106**): the hosts `dynamicIssuer` may follow
-  (`idp.example.com`, `*.example.net`). Optional with a start-up warning; an
-  off-list host is answered as `baseUrl`. **D105** records the flag itself,
-  which shipped in 0.6.5 without a decision row.
-- **File-declared client secrets must look generated** (**D125**): at least 8
-  distinct characters, because the stored form is an unsalted digest; one
-  carrying an `example`/`change-me`-style marker boots with a start-up
-  warning naming the client. The env generator writes real values.
-- **Start-up warns about `rateLimit.enabled: false` and
-  `server.allowInsecureHttp: true`** (**D114**).
-- **The admin plugin now enforces the role catalog on write.**
-  `/admin/set-role` and `/admin/update-user` refuse a role that is not in
-  `roles.jsonc`, including a comma-joined pair that used to become two roles.
-- **RFC 7009 normalization keys on the error code**, not on the provider's
-  wording, so a revoked or malformed token is a 200 like an unknown one.
-- **The reset and invitation page no longer names the account.** An unspent
-  link showed whose address and display name it belonged to; the page now
-  reports only whether the link is still valid.
-- **Self-service sign-up without e-mail is refused on a production
-  deployment** (**D127**). Without e-mail no address is verified and no
-  password can be reset; a development deployment keeps the warning.
-- **Start-up warns when the SQL console and two-factor authentication are
-  both on** (**D127**): the console reads the rows that hold the encrypted
-  TOTP secrets and backup codes.
-- **The nightly SEC-9 audit went red on five `moderate` advisories** in two
-  packages, both reached only through the shadcn CLI's MCP server —
-  `@workspace/ui → shadcn → @modelcontextprotocol/sdk → express → qs@6.15.3`
-  (GHSA-x5fp-wj9c-mxmx, GHSA-4mjr-xmp4-gh2g) and `… → hono@4.13.3`
-  (GHSA-gqvv-2mrq-wpjv, GHSA-g6gw-c38x-mqfc, GHSA-crvj-82cr-hjcx). One
-  version of each in the tree, dev-only, nothing in the image. Closed per
-  **D85** with exact global overrides, `qs: 6.16.0` and `hono: 4.13.7`, both
-  inside their parents' declared ranges. The `low` on
-  `drizzle-kit>tsx>esbuild` remains the one advisory D85 leaves by name.
 
 ### Added
 
@@ -130,6 +41,77 @@ Decisions that changed a numbered requirement carry their `D` number from
   verification address stays inside a sub-path mount, a device poll told to
   wait no longer counts against the token endpoint's refused-request bucket,
   and expired codes are swept. Adds migration `0005` (`device_code`).
+
+### Changed
+
+- **`latest` now points at the highest version published, pre-releases
+  included** (**D131**). It used to go to whichever non-pre-release tag was
+  pushed most recently, which meant `latest` stayed on `0.4.0` while
+  `0.5.0-beta1` was out, and would have moved *backwards* onto a `0.4.1`
+  backport cut after `0.5.0`. `release.yml`'s `guard` job compares the tag
+  against every tag on the remote and decides from that. `X.Y` and `X` are
+  unchanged and still skip a pre-release, so pin to `X.Y` for a deployment
+  that must not see one — `docker/docker-compose.yml` still defaults to
+  `latest` and will now track pre-releases.
+
+- **`release.sh` compares versions the way semver does, and no longer refuses
+  a backport** (**D131**). `sort -V` ranks `v0.5.0` *below* `v0.5.0-beta1`, so
+  after tagging a beta the script refused `./release.sh v0.5.0` as "not newer
+  than the latest tag" — it could not promote a beta to its own release. The
+  comparison maps the first `-` to `~` first. Releasing below the highest tag
+  is allowed now and reported in the plan, naming the tag that keeps `latest`.
+
+### Fixed
+
+- **Every admin list can be scrolled with a keyboard.** The tables on
+  `/admin/users`, `/admin/clients`, `/admin/gateways`, `/admin/roles` and
+  `/admin/audit` overflow sideways by design, and where the rows hold nothing
+  focusable — a clients list of file clients, the roles and audit tables
+  always — the hidden columns were reachable by pointer only (WCAG 2.1.1;
+  axe's `scrollable-region-focusable`). Each list is now one scroll region
+  named after its page, with its own tab stop and focus ring; the arrow keys
+  scroll it. The clients table's Scopes cell also wraps, which keeps it inside
+  a 1280 px window when a public client is listed.
+
+## [0.6.8] — 2026-09-14
+
+### Changed
+
+- **`oauth.codeTtl` defaults to five minutes, and its description says what
+  else it bounds** (**D130**). The provider signs the pending authorization
+  with `codeExpiresIn` as its lifetime, so the value is also how long a user
+  has on the sign-in page, and again on the consent page, before the request
+  expires. At the old `60s` a consent screen read for longer than a minute
+  ended on the error page; a deployment that sets the key explicitly is
+  unchanged.
+
+- **`/consent` tells an expired request apart from one that could not be
+  verified** (**D130**). The provider answers `400 invalid_signature` for
+  both; the page now reads the request's own `exp` and sends `?error=expired`
+  only when it has passed. `invalid_request` gets its own sentence
+  ("could not be verified") instead of "took too long".
+
+### Fixed
+
+- **The admin accessibility scan no longer races `/admin/database`'s panel
+  layout.** react-resizable-panels writes a separator's `aria-valuenow` after
+  it has measured its group, and a scan that arrived first reported a
+  critical `aria-required-attr` once in four runs. `scan()` in `a11y.spec.ts`
+  waits for every resizable handle to carry the attribute before axe runs.
+
+- **A sign-in that came from an authorization no longer lands on
+  `/idp/idp/consent` under a sub-path** (**D130**). `resolveSignInDestination`
+  prefixed the mount path onto the continuation URL `/oauth2/continue`
+  answered, and that URL is built from the configured `consentPage`, which
+  carries the prefix already. Only the cold path did it — an existing session
+  reaches the consent page through the provider's own redirect — which is why
+  a retry appeared to work. The e2e suite now reaches consent from a cold
+  sign-in in both deployment shapes.
+
+## [0.6.7] — 2026-09-12
+
+### Added
+
 - **`/.well-known/oauth-protected-resource` — RFC 9728 metadata for a resource
   server on this deployment's origin** (**D129**, FR-OIDC-18). A CLI or MCP
   client discovers an instance by walking RFC 9728 to RFC 8414: this document
@@ -148,48 +130,9 @@ Decisions that changed a numbered requirement carry their `D` number from
   requests — and two entries on one path. `Caddyfile.subpath` gains the
   origin-root route; `/admin/system` lists the URL when one is configured.
   Distinct from `oauth.resources`, which is the RFC 8707 audience registry.
-- **`gateways.<name>.audience` — an opt-in audience per gateway** (**D118**).
-  When set, the JWT minted for an API key or a session presented to that
-  gateway carries the audience as `aud` instead of `jwt.audience`, for an
-  upstream that checks `aud` against its own identifier; the token cache
-  keeps one entry per such gateway. Unset is byte-for-byte the old
-  behavior, and the direct `GET /api/auth/token` still mints `jwt.audience`.
-  A nullable `audience` column on `gateway` (migration `0003`, additive) and
-  a field on `/admin/gateways/new` and edit.
-- **`server.maxRequestBodyBytes`** (default 64 MiB) caps what `/gateway/*`
-  forwards: a declared oversize body is `413 payload_too_large` before the
-  upstream is called, a streamed one is cut off at the cap. Never buffered.
 
 ### Changed
 
-- **`latest` now points at the highest version published, pre-releases
-  included** (**D131**). It used to go to whichever non-pre-release tag was
-  pushed most recently, which meant `latest` stayed on `0.4.0` while
-  `0.5.0-beta1` was out, and would have moved *backwards* onto a `0.4.1`
-  backport cut after `0.5.0`. `release.yml`'s `guard` job compares the tag
-  against every tag on the remote and decides from that. `X.Y` and `X` are
-  unchanged and still skip a pre-release, so pin to `X.Y` for a deployment
-  that must not see one — `docker/docker-compose.yml` still defaults to
-  `latest` and will now track pre-releases.
-- **`release.sh` compares versions the way semver does, and no longer refuses
-  a backport** (**D131**). `sort -V` ranks `v0.5.0` *below* `v0.5.0-beta1`, so
-  after tagging a beta the script refused `./release.sh v0.5.0` as "not newer
-  than the latest tag" — it could not promote a beta to its own release. The
-  comparison maps the first `-` to `~` first. Releasing below the highest tag
-  is allowed now and reported in the plan, naming the tag that keeps `latest`.
-
-- **`oauth.codeTtl` defaults to five minutes, and its description says what
-  else it bounds** (**D130**). The provider signs the pending authorization
-  with `codeExpiresIn` as its lifetime, so the value is also how long a user
-  has on the sign-in page, and again on the consent page, before the request
-  expires. At the old `60s` a consent screen read for longer than a minute
-  ended on the error page; a deployment that sets the key explicitly is
-  unchanged.
-- **`/consent` tells an expired request apart from one that could not be
-  verified** (**D130**). The provider answers `400 invalid_signature` for
-  both; the page now reads the request's own `exp` and sends `?error=expired`
-  only when it has passed. `invalid_request` gets its own sentence
-  ("could not be verified") instead of "took too long".
 - **The contrast corrections moved out of the preset's stylesheet, so a
   `shadcn apply --preset` can no longer undo them** (**D128**). `globals.css`
   is stock shadcn output again. The corrections are in
@@ -205,68 +148,9 @@ Decisions that changed a numbered requirement carry their `D` number from
   `src/tests/unit/token-contrast.test.ts` measures the resolved palette against
   every pair the kit paints, and `pnpm --filter web run a11y:tokens` prints what
   a new preset needs.
-- **The local test database container no longer outlives the test run.**
-  `test-database.ts` stops `idp-test-db` when the command it started it for
-  exits, instead of leaving it running indefinitely. The container is kept
-  (stopped) so the next run's start is a second or two rather than an
-  `initdb`; one that was already running when the script arrived — a
-  concurrent run, or a deliberate manual start — is left untouched.
-- **Every workflow action is pinned to a commit SHA, and `check-pinned-deps.ts`
-  refuses a tag** (**D121**). `anchore/sbom-action@v0` turned out to resolve to
-  v0.24.0 with v0.24.2 released; it is pinned to v0.24.2. Both workflows now
-  start with `permissions: contents: read`; the `docker` and `image` jobs keep
-  their widenings.
-- **`idp-create` generates `.env` instead of copying it** (**D122**). New
-  `docker/idp-setup-env.{sh,cmd,ps1}` write a fresh `IDP_SECRET`,
-  `POSTGRES_PASSWORD`, `IDP_DB_PASSWORD` (also inside `DATABASE_URL`) and the
-  two example-client secrets; an existing `.env` is never touched. A fresh
-  checkout boots with no edit. `idp-create` refuses to build when a generated
-  `.env` sits beside a kept `semantius-idp_pgdata` volume, and says what to do.
-- **"Require consent" starts ticked when an application is added from
-  `/admin/clients/new`** (**D120**). File clients, the API default and every
-  existing row are unchanged; the edit form shows the stored value.
-- **A sign-up for an address that already has an account tells its owner**
-  (**D116**). With e-mail on the page answers exactly as it does for a new
-  address — Better Auth 1.7.1 already did that — and the existing owner gets a
-  "someone tried to register with your address" notice (at most one an hour
-  per address, linking only to the reset page); the attempt is on the audit
-  trail as `signup.duplicate`. Without e-mail the page refuses, as documented.
-- **A trusted browser now has a hard ceiling** (**D124**): three
-  `twoFactor.trustDeviceDays` windows from the day the box was ticked,
-  however often the trust was renewed. `/account/security`'s "trusted since"
-  is now the first trust, not the last renewal.
-- **`/branding/*` responses carry `Content-Security-Policy: default-src
-  'none'; sandbox`**, and the branding folder is resolved once per process
-  instead of re-reading the configuration per request (**D126**).
-- **The refresh-lifetime sweep is bounded in SQL** (**D119**): only families
-  with a live token older than the ceiling are scanned, instead of grouping
-  the whole table on every refresh grant. Same tokens revoked.
 
 ### Fixed
 
-- **Every admin list can be scrolled with a keyboard.** The tables on
-  `/admin/users`, `/admin/clients`, `/admin/gateways`, `/admin/roles` and
-  `/admin/audit` overflow sideways by design, and where the rows hold nothing
-  focusable — a clients list of file clients, the roles and audit tables
-  always — the hidden columns were reachable by pointer only (WCAG 2.1.1;
-  axe's `scrollable-region-focusable`). Each list is now one scroll region
-  named after its page, with its own tab stop and focus ring; the arrow keys
-  scroll it. The clients table's Scopes cell also wraps, which keeps it inside
-  a 1280 px window when a public client is listed.
-
-- **The admin accessibility scan no longer races `/admin/database`'s panel
-  layout.** react-resizable-panels writes a separator's `aria-valuenow` after
-  it has measured its group, and a scan that arrived first reported a
-  critical `aria-required-attr` once in four runs. `scan()` in `a11y.spec.ts`
-  waits for every resizable handle to carry the attribute before axe runs.
-- **A sign-in that came from an authorization no longer lands on
-  `/idp/idp/consent` under a sub-path** (**D130**). `resolveSignInDestination`
-  prefixed the mount path onto the continuation URL `/oauth2/continue`
-  answered, and that URL is built from the configured `consentPage`, which
-  carries the prefix already. Only the cold path did it — an existing session
-  reaches the consent page through the provider's own redirect — which is why
-  a retry appeared to work. The e2e suite now reaches consent from a cold
-  sign-in in both deployment shapes.
 - **A migration recorded from a CRLF checkout is no longer run again.** The
   runner identified a migration by the SHA-256 of its file as it sat on disk.
   A Windows checkout under `core.autocrlf=true` without `.gitattributes` had
@@ -276,6 +160,7 @@ Decisions that changed a numbered requirement carry their `D` number from
   now records the LF hash and accepts the CRLF form and the raw file as already
   run. Deployments built from a clean checkout are unaffected: their files
   were always LF.
+
 - **A failed start-up says why, and the page says 500.** `getRuntime()`
   rethrew to its caller without logging. A page's root loader then failed, and
   the document shell crashed destructuring the loader data it never got. The
@@ -283,6 +168,7 @@ Decisions that changed a numbered requirement carry their `D` number from
   about the start-up error behind it. The failure is now logged as
   `start-up failed`, once per distinct reason, and the shell renders
   `ErrorPage` with defaults when the root's own loader has failed.
+
 - **`vite dev` answers pages again.** Since the edge started resolving the
   client address once (**D115**), every request through the dev server failed
   with `TypeError: Cannot read properties of undefined (reading 'window')`.
@@ -292,6 +178,7 @@ Decisions that changed a numbered requirement carry their `D` number from
   now. The image was never affected, because Bun hands over a native Request.
   `dev-server.test.ts` sends a request through the server entry, which no gate
   did before.
+
 - **Form controls, focus indicators and destructive hover states now meet WCAG
   2.1 AA contrast** (**D128**). FR-ACCT-2 requires AA, and the palette missed
   it where the axe gate never looks. A field's only boundary was a 1.41:1 fill,
@@ -300,10 +187,12 @@ Decisions that changed a numbered requirement carry their `D` number from
   Controls now have a 3:1 border (`--input-border`), the focus ring is 7.46:1,
   and destructive text clears 4.5:1 on every tint the kit paints it on, in both
   themes.
+
 - **The impersonation banner is readable** (**D128**).
   `text-destructive-foreground` named a token this preset does not define, so
   Tailwind dropped the utility and the banner painted body text on red: 3.46:1
   light, 2.69:1 dark. The token and its mapping exist now: 7.05:1 and 10.25:1.
+
 - **A Windows checkout no longer breaks the shell scripts.** The repository
   had no `.gitattributes`, so under `core.autocrlf=true` git checked text out
   CRLF — `docker/idp-*.sh` then stopped at `$'\r': command not found`, and a
@@ -311,9 +200,191 @@ Decisions that changed a numbered requirement carry their `D` number from
   Every text file is now LF in the working tree as well as in the index
   (`* text=auto eol=lf`), except `*.cmd`/`*.bat`, which are CRLF for
   cmd.exe. The index was already all LF; no content changed.
+
+## [0.6.6] — 2026-09-11
+
+### Security
+
+- **The bundled Postgres no longer runs the IdP as its superuser** (**D109**).
+  `POSTGRES_USER` is `postgres`; `docker/initdb/10-idp-role.sh` creates `idp`
+  NOSUPERUSER with `CONNECT, CREATE` on the database on a fresh data directory.
+  `IDP_DB_PASSWORD` names its password and falls back to `POSTGRES_PASSWORD`.
+  Existing volumes are unchanged and, with the console enabled, warned about
+  at start-up; `idp-destroy` + `idp-create` moves a deployment across.
+
+- **`/admin/update-user` can no longer park the last administrator, or the
+  caller, by setting `status`** (**D108**). Any `status` other than `active`
+  is now a rejection to the last-admin and self-action invariants, and the
+  body is refused whole (`400 UPDATE_USER_FIELD_NOT_ALLOWED`) when it names
+  a column outside the twelve the admin API writes — `twoFactorEnabled`,
+  `approvedAt`, `approvedBy`, the timestamps and the id were all reachable
+  with an admin key.
+
+- **Start-up warns when the SQL console runs as a Postgres superuser**
+  (**D109**). A READ ONLY transaction refuses writes; it does not stop a
+  superuser from `pg_read_file` or `COPY … TO PROGRAM`. The warning
+  (`database.console_as_superuser`) reaches the log, `/admin` and
+  `/admin/system` and names the fix; the deployment still boots.
+
+- **The recorded console statement is scrubbed before it reaches the audit
+  trail and stdout** (**D113**): long string literals, every literal after a
+  `password`/`secret`/`token` keyword, dollar-quoted bodies and comments are
+  replaced; identifiers stay. The comment saying `redactFields` did this was
+  wrong — it masks by field name.
+
+- **Admin audit rows now say `api-key` when an API key made the call**
+  (**D113**), on every `/idp/*` endpoint, the approval endpoints and the
+  guard's rows; they all said `session`.
+
+- **The first administrator's e-mail address is no longer written to the log**
+  by the setup page; the line carries the user id.
+
+- **The anonymous sign-in page no longer reveals that a SQL console exists**:
+  `adminDatabaseEnabled` is `false` for a visitor without a session.
+
+- **The audit writer no longer accepts a caller-supplied `ipAddress`**; the
+  row's address is only ever the one the edge resolved under
+  `server.trustProxy`.
+
+- **A gateway sub-path can no longer climb out of its target** (**D110**).
+  The router hands the splat over decoded, so `..%2fadmin` on a gateway
+  scoped to `…/v1` reached `…/admin`; the built URL is now normalized and
+  must stay under `<url>/`, else `400 invalid_path`. Plain paths are
+  forwarded byte for byte, as before.
+
+- **A gateway cannot reach a link-local address** (**D111**) — `169.254.0.0/16`
+  (the cloud metadata service) and `fe80::/10`, refused as a literal at
+  configuration time and per request against the resolved address (`502`,
+  with its own log line). Private addresses stay reachable, as D91 accepts.
+
+- **More upstream response headers are stripped on `/gateway/*`** (**D118**):
+  `Access-Control-*`, HSTS, `X-Frame-Options`, `Permissions-Policy`,
+  `Clear-Site-Data`, `Refresh`, `Report-To`/`NEL`, `Alt-Svc`, HPKP — every
+  header that states a policy for the issuer's origin. PostgREST's headers
+  and `Link` pass as before.
+
+- **The token endpoint's per-client rate bucket can no longer be emptied by
+  anyone who can name the client** (**D112**). `oauth2_token:<client_id>`
+  counts successful grants only; refused requests are counted per address
+  and client (30/min), so a wrong secret from one place is throttled and a
+  NAT full of users is not.
+
+- **One address resolution for every rate limiter** (**D115**). Behind two
+  proxy hops under `trustProxy: true` every user shared one sign-in bucket,
+  because Better Auth resolved `X-Forwarded-For` a second time and
+  differently; the edge now resolves once and every limiter reads that.
+  `/setup` keys on the real address instead of an anonymized /24; IPv6 keys
+  are /64; `/reset-password` has its own limit (10 per 5 min).
+
+- **`server.allowedHosts`** (**D106**): the hosts `dynamicIssuer` may follow
+  (`idp.example.com`, `*.example.net`). Optional with a start-up warning; an
+  off-list host is answered as `baseUrl`. **D105** records the flag itself,
+  which shipped in 0.6.5 without a decision row.
+
+- **File-declared client secrets must look generated** (**D125**): at least 8
+  distinct characters, because the stored form is an unsalted digest; one
+  carrying an `example`/`change-me`-style marker boots with a start-up
+  warning naming the client. The env generator writes real values.
+
+- **Start-up warns about `rateLimit.enabled: false` and
+  `server.allowInsecureHttp: true`** (**D114**).
+
+- **The admin plugin now enforces the role catalog on write.**
+  `/admin/set-role` and `/admin/update-user` refuse a role that is not in
+  `roles.jsonc`, including a comma-joined pair that used to become two roles.
+
+- **RFC 7009 normalization keys on the error code**, not on the provider's
+  wording, so a revoked or malformed token is a 200 like an unknown one.
+
+- **The reset and invitation page no longer names the account.** An unspent
+  link showed whose address and display name it belonged to; the page now
+  reports only whether the link is still valid.
+
+- **Self-service sign-up without e-mail is refused on a production
+  deployment** (**D127**). Without e-mail no address is verified and no
+  password can be reset; a development deployment keeps the warning.
+
+- **Start-up warns when the SQL console and two-factor authentication are
+  both on** (**D127**): the console reads the rows that hold the encrypted
+  TOTP secrets and backup codes.
+
+- **The nightly SEC-9 audit went red on five `moderate` advisories** in two
+  packages, both reached only through the shadcn CLI's MCP server —
+  `@workspace/ui → shadcn → @modelcontextprotocol/sdk → express → qs@6.15.3`
+  (GHSA-x5fp-wj9c-mxmx, GHSA-4mjr-xmp4-gh2g) and `… → hono@4.13.3`
+  (GHSA-gqvv-2mrq-wpjv, GHSA-g6gw-c38x-mqfc, GHSA-crvj-82cr-hjcx). One
+  version of each in the tree, dev-only, nothing in the image. Closed per
+  **D85** with exact global overrides, `qs: 6.16.0` and `hono: 4.13.7`, both
+  inside their parents' declared ranges. The `low` on
+  `drizzle-kit>tsx>esbuild` remains the one advisory D85 leaves by name.
+
+### Added
+
+- **`gateways.<name>.audience` — an opt-in audience per gateway** (**D118**).
+  When set, the JWT minted for an API key or a session presented to that
+  gateway carries the audience as `aud` instead of `jwt.audience`, for an
+  upstream that checks `aud` against its own identifier; the token cache
+  keeps one entry per such gateway. Unset is byte-for-byte the old
+  behavior, and the direct `GET /api/auth/token` still mints `jwt.audience`.
+  A nullable `audience` column on `gateway` (migration `0003`, additive) and
+  a field on `/admin/gateways/new` and edit.
+
+- **`server.maxRequestBodyBytes`** (default 64 MiB) caps what `/gateway/*`
+  forwards: a declared oversize body is `413 payload_too_large` before the
+  upstream is called, a streamed one is cut off at the cap. Never buffered.
+
+### Changed
+
+- **The local test database container no longer outlives the test run.**
+  `test-database.ts` stops `idp-test-db` when the command it started it for
+  exits, instead of leaving it running indefinitely. The container is kept
+  (stopped) so the next run's start is a second or two rather than an
+  `initdb`; one that was already running when the script arrived — a
+  concurrent run, or a deliberate manual start — is left untouched.
+
+- **Every workflow action is pinned to a commit SHA, and `check-pinned-deps.ts`
+  refuses a tag** (**D121**). `anchore/sbom-action@v0` turned out to resolve to
+  v0.24.0 with v0.24.2 released; it is pinned to v0.24.2. Both workflows now
+  start with `permissions: contents: read`; the `docker` and `image` jobs keep
+  their widenings.
+
+- **`idp-create` generates `.env` instead of copying it** (**D122**). New
+  `docker/idp-setup-env.{sh,cmd,ps1}` write a fresh `IDP_SECRET`,
+  `POSTGRES_PASSWORD`, `IDP_DB_PASSWORD` (also inside `DATABASE_URL`) and the
+  two example-client secrets; an existing `.env` is never touched. A fresh
+  checkout boots with no edit. `idp-create` refuses to build when a generated
+  `.env` sits beside a kept `semantius-idp_pgdata` volume, and says what to do.
+
+- **"Require consent" starts ticked when an application is added from
+  `/admin/clients/new`** (**D120**). File clients, the API default and every
+  existing row are unchanged; the edit form shows the stored value.
+
+- **A sign-up for an address that already has an account tells its owner**
+  (**D116**). With e-mail on the page answers exactly as it does for a new
+  address — Better Auth 1.7.1 already did that — and the existing owner gets a
+  "someone tried to register with your address" notice (at most one an hour
+  per address, linking only to the reset page); the attempt is on the audit
+  trail as `signup.duplicate`. Without e-mail the page refuses, as documented.
+
+- **A trusted browser now has a hard ceiling** (**D124**): three
+  `twoFactor.trustDeviceDays` windows from the day the box was ticked,
+  however often the trust was renewed. `/account/security`'s "trusted since"
+  is now the first trust, not the last renewal.
+
+- **`/branding/*` responses carry `Content-Security-Policy: default-src
+  'none'; sandbox`**, and the branding folder is resolved once per process
+  instead of re-reading the configuration per request (**D126**).
+
+- **The refresh-lifetime sweep is bounded in SQL** (**D119**): only families
+  with a live token older than the ceiling are scanned, instead of grouping
+  the whole table on every refresh grant. Same tokens revoked.
+
+### Fixed
+
 - The draft stash never keeps a field named like a one-time code, PIN or
   backup code (`otpCode`, `confirmPin`, `backup_codes`), alongside the
   password and secret names it already dropped.
+
 - **A temporary password no longer buys anything but the change page** (**D107**,
   FR-AUTH-4). `/login` set the cookie before redirecting to `/change-password`,
   and nothing under `/account/*`, `/admin/*` or `/api/auth/*` read the flag — a
@@ -321,33 +392,40 @@ Decisions that changed a numbered requirement carry their `D` number from
   key. The two layouts redirect, every form post refuses with the same
   redirect, and a before hook answers `403 PASSWORD_CHANGE_REQUIRED` on every
   cookie-bearing write or mint, all from the row rather than the cookie cache.
+
 - **Every form post is same-origin, or not from a browser** (**D117**, SEC-3).
   `assertSameOrigin` covered three account pages; it is now the first thing
   `requireSession` does, so `/account`, `/account/api-keys` and every
   `/admin/*` form refuse a sibling-subdomain or cross-site post that the
   `server.trustedOrigins` pattern would have let through. A post with neither
   `Origin` nor `Sec-Fetch-Site` is still accepted.
+
 - **A session read and a refresh grant re-check the user's standing** (FR-AUTH-5,
   FR-OIDC-12). `refresh_token` grants for an account flipped to `pending`,
   `rejected` or banned after the token was issued answer `invalid_grant`
   without consuming the token; `readSession` refuses the same states itself
   rather than relying on the JWT plugin's `set-auth-jwt` hook tripping the gate.
+
 - **Impersonation cannot mint an API key, and the trail names the administrator**
   (FR-ADMIN-5). `/account/api-keys` and `POST /api/auth/api-key/create` refuse an
   impersonated session; every `/account/*` audit row and every Better-Auth-owned
   row written under one carries `impersonatedBy`.
+
 - **The consent audit row names the client the provider verified** (FR-OIDC-10),
   read from the signed request after `/oauth2/consent` accepted it, not from a
   hidden form field.
+
 - **The audit trail no longer records `signup.created` for a duplicate sign-up**
   (**D116**): Better Auth's generic answer carries a synthetic user, and the
   after-hook now checks that a row was written before recording one.
+
 - **A request path containing an encoded slash no longer crashes the static
   asset handler.** `serve.ts` handed `..%2f…` to `Bun.file`, which throws on a
   `%2F` inside a `file:` URL, and the throw surfaced as a bare 500 before the
   request log or any route saw the request. Found by the review's traversal
   probe against the built image; such a path is now handed to the app, where
   the gateway answers its designed `400 invalid_path`.
+
 
 ## [0.6.5] — 2026-09-02
 
@@ -1814,7 +1892,11 @@ were questions, and one was "polish every page".
   says where it came from, so it was sending anyone who inspected it to a
   repository that is not this one.
 
-[Unreleased]: https://github.com/semantius/semantius-idp/compare/v0.6.5...main
+[Unreleased]: https://github.com/semantius/semantius-idp/compare/v0.6.9...main
+[0.6.9]: https://github.com/semantius/semantius-idp/compare/v0.6.8...v0.6.9
+[0.6.8]: https://github.com/semantius/semantius-idp/compare/v0.6.7...v0.6.8
+[0.6.7]: https://github.com/semantius/semantius-idp/compare/v0.6.6...v0.6.7
+[0.6.6]: https://github.com/semantius/semantius-idp/compare/v0.6.5...v0.6.6
 [0.6.5]: https://github.com/semantius/semantius-idp/compare/v0.6.1...v0.6.5
 [0.6.1]: https://github.com/semantius/semantius-idp/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/semantius/semantius-idp/compare/v0.5.0...v0.6.0

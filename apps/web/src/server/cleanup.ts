@@ -4,7 +4,7 @@
  * Ten tables in this schema grow without bound and nothing has ever emptied
  * them. Most are small; two are not. `verification` takes a row for every
  * password-reset link, every e-mail verification **and every authorization
- * code** — 1.7.1's oauth-provider stores codes through
+ * code** — the oauth-provider stores codes through
  * `createVerificationValue`, so on a busy deployment that table grows once per
  * sign-in through a client. `rate_limit` takes a row per key per window and
  * keeps it for ever.

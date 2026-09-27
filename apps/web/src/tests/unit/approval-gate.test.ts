@@ -130,7 +130,7 @@ describe("the local plugin's audit_log table", () => {
 
   it("gives createdAt a default that produces a Date", () => {
     // The generator now *evaluates* this thunk to decide whether to emit
-    // `.defaultNow()`, rather than matching its source text — 1.7.1 stringifies
+    // `.defaultNow()`, rather than matching its source text — Better Auth stringifies
     // `() => new Date` without parentheses, so the old test never matched
     // . If this stops returning a Date the column silently loses its
     // default.

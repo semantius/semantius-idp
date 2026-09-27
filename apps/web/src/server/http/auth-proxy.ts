@@ -211,7 +211,7 @@ export function adminErrorCodeFor(result: AuthCallResult): string {
  *
  * Only the admin mapping asks, and it asks for the fact rather
  * than the code because the public mapping collapses it into `signup_failed`.
- * `/signup` does not: with `autoSignIn: false` Better Auth 1.7.1 never
+ * `/signup` does not: with `autoSignIn: false` Better Auth never
  * refuses a duplicate at all, and the page tells the two apart afterwards
  * (`auth/sign-up-outcome.ts`).
  */

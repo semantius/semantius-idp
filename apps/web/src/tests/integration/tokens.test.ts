@@ -473,7 +473,7 @@ describe("revocation", () => {
 
     // RFC 7009 §2.2 is explicit that an *unknown* token is a success, so a
     // client cannot use the endpoint as an oracle for which tokens exist.
-    // 1.7.1 answers `400 invalid_request "token not found"`. This asserts the
+    // The provider answers `400 invalid_request "token not found"`. This asserts the
     // behavior as it stands so that M8c's issuer-root delegate, which
     // normalizes it to 200, is a visible change rather than a silent one.
     const unknown = await revoke("not-a-token")

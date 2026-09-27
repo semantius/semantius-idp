@@ -5,7 +5,7 @@
  * is hard to test against a live schema, so everything that can be decided
  * without one is decided here and asserted directly.
  *
- * Two things the mapping is *not* allowed to do, both read off the 1.7.1
+ * Two things the mapping is *not* allowed to do, both read off the provider's
  * sources rather than its documentation:
  *
  * - **`userId` stays `null` for a file client.** A config-synced client belongs
@@ -14,7 +14,7 @@
  *   `userId` survives every restart. An administrator
  *   registering a client through `/admin/clients` is the one caller that passes
  *   one: their own id.
- * - **`resourceServer` is not a column.** 1.7.1 decides introspection
+ * - **`resourceServer` is not a column.** The provider decides introspection
  *   authorization from the `oauth_client_resource` links, so the flag becomes
  *   a link at reconcile time — see {@link resourceLinksFor} — and is mirrored
  *   into `metadata` only so an operator reading the row can see what the file
@@ -146,7 +146,7 @@ export function toClientRow(
  * column of their own.
  *
  * `resourceServer` is mirrored here for legibility; the link is what actually
- * authorizes introspection. `firstParty` has no 1.7.1 equivalent
+ * authorizes introspection. `firstParty` has no provider equivalent
  * at all, so this is its only home.
  */
 function metadataFor(entry: ClientEntry): Record<string, unknown> | null {
@@ -163,7 +163,7 @@ function metadataFor(entry: ClientEntry): Record<string, unknown> | null {
  * Which resources a client may ask for.
  *
  * The deployment's default audience plus anything the client declares. The
- * link is not a convenience: with `enforcePerClientResources` on (the 1.7.1
+ * link is not a convenience: with `enforcePerClientResources` on (the provider's
  * default), a `resource` the client is not linked to is refused, and a
  * client with no links at all could never obtain a JWT access token.
  *

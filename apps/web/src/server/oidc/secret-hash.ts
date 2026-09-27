@@ -6,7 +6,7 @@
  * R4 was that those two would disagree — that the reconciler would compute one
  * digest and Better Auth's built-in `storeClientSecret: "hashed"` another, and
  * every confidential client would fail to authenticate with the secret its own
- * config file declares. 1.7.1 accepts an explicit `{ hash, verify }` pair, so
+ * config file declares. The provider accepts an explicit `{ hash, verify }` pair, so
  * the two sides are not merely compatible: they are the same function object,
  * and the risk disappears instead of being mitigated.
  *

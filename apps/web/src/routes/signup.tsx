@@ -39,7 +39,7 @@ import { PendingForm, SubmitButton } from "@/components/common/pending-form"
  * before the user commits: approval pending, confirm your address, or straight in.
  *
  * **With e-mail on, an address that already has an account lands on the same
- * page, and its owner is told**. Better Auth 1.7.1 answers
+ * page, and its owner is told**. Better Auth answers
  * that sign-up with a generic success — see `auth/sign-up-outcome.ts` for
  * how the page tells the two apart — so the *shape* was already uniform; what
  * was missing was the "someone tried to register with your address" notice to

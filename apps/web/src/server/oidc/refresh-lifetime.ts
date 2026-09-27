@@ -3,7 +3,7 @@
  *
  * "Refresh token 30 d sliding with 90 d absolute maximum." The sliding half is
  * the provider's: every rotation issues a new token expiring
- * `oauth.refreshTokenTtl` from now. The absolute half has no option in 1.7.1 —
+ * `oauth.refreshTokenTtl` from now. The absolute half has no provider option —
  * `refreshTokenExpiresIn` and `refreshTokenReuseInterval` are the only
  * lifetime knobs — so without this a client that refreshes once a week holds a
  * valid refresh token for ever, and the ceiling exists precisely so that it

@@ -3,7 +3,7 @@
  *
  * `social.ts` decides which providers exist and what options they get. This
  * module is the enforcement half, and it hangs off `user.validateUserInfo` —
- * the one seam Better Auth 1.7.1 gives that sees the **fresh provider profile**
+ * the one seam Better Auth gives that sees the **fresh provider profile**
  * on `create-user`, `link-account` *and* a returning `sign-in`, before any row
  * is written and before a session exists. A `databaseHooks.user.update.before`
  * hook cannot do this job: it receives the changed columns and no user id, so

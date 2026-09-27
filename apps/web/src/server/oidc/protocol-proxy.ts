@@ -22,7 +22,7 @@
  *   distribution into a load-bearing dependency.
  * - **RFC 7009.** A revocation request for an invalid token is a *success* —
  *   §2.2 is explicit — so a client cannot use the endpoint to find out which
- *   tokens exist. 1.7.1 answers `400 invalid_request` for one; that case is
+ *   tokens exist. The provider answers `400 invalid_request` for one; that case is
  *   normalized on the error code and on what the proxy knows about the
  *   request, never on the description's wording, and every other error is
  *   passed through.
@@ -274,7 +274,7 @@ export interface DiscoveryFacts {
  * The token-endpoint authentication methods this deployment really accepts
  *.
  *
- * 1.7.1 advertises `private_key_jwt`, which §1.3 deliberately does not use,
+ * The provider advertises `private_key_jwt`, which §1.3 deliberately does not use,
  * and omits `none`, which every public client needs. Both matter: a client
  * library reads this list and picks a method from it, so advertising one that
  * is unconfigured produces `invalid_client` at the worst possible moment, and

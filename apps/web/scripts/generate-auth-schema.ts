@@ -6,9 +6,9 @@
  * hand-written, with CI failing on drift, and names `@better-auth/cli generate`
  * as the tool. **That justification used to be recorded here as "the CLI is
  * version-stranded at 1.4.21". It was wrong** — `@better-auth/cli` is
- * deprecated and the CLI was renamed to `auth`, which publishes 1.7.1 and
- * depends on `better-auth@1.7.1` and `@better-auth/core@1.7.1`: exactly our
- * pins. Recorded in the spec.
+ * deprecated and the CLI was renamed to `auth`, which is published in
+ * lockstep with `better-auth` and `@better-auth/core` and depends on exactly
+ * the versions we pin. Recorded in the spec.
  *
  * The real reason this file survives is narrower and structural. Run against a
  * shim exporting our own option set, `auth generate` produces the same
@@ -144,7 +144,7 @@ function defaultClause(field: DBFieldAttribute): string {
   if (value === undefined || value === null) return ""
   if (typeof value === "function") {
     // Call it rather than match its source. The previous test looked for the
-    // literal `new Date()` and Better Auth 1.7.1 writes `() => new Date` —
+    // literal `new Date()` and Better Auth writes `() => new Date` —
     // no parentheses — so every `.defaultNow()` was being dropped on the
     // floor. These defaults are Better Auth's own thunks and have no side
     // effects; anything we cannot evaluate is something we cannot express as

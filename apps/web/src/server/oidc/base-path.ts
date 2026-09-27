@@ -21,7 +21,7 @@
  *
  * {@link BasePaths.authBasePath} is what Better Auth is configured with, and
  * {@link BasePaths.authBaseUrl} is where its endpoints answer. They are not
- * interchangeable: 1.7.1 appends `basePath` to `baseURL` only when `baseURL`
+ * interchangeable: Better Auth appends `basePath` to `baseURL` only when `baseURL`
  * has no path of its own, so the issuer must **not** be passed as `baseURL` —
  * see the comment on `createAuthOptions`.
  *

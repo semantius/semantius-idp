@@ -8,7 +8,7 @@
  * needs the link in their hand rather than in a queue.
  *
  * So this mints the same row the endpoint would. **It is coupled to Better
- * Auth 1.7.1's identifier convention** — `reset-password:<token>`, with the
+ * Auth's identifier convention** — `reset-password:<token>`, with the
  * user id as the value — and that coupling is deliberate rather than hidden:
  * `integration/admin.test.ts` mints a link this way and then *uses* it against
  * the real `/reset-password` endpoint, so if the convention ever changes the

@@ -2,7 +2,7 @@
  * Telling a registration that created an account from one that did not
  *.
  *
- * Better Auth 1.7.1 already answers a sign-up for an address that has an
+ * Better Auth already answers a sign-up for an address that has an
  * account with a **generic success**: whenever `requireEmailVerification` is
  * on or `autoSignIn` is off — and `instance.ts` sets the latter for every
  * deployment — `/sign-up/email` hashes the password for timing

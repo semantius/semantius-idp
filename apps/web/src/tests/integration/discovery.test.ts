@@ -136,7 +136,7 @@ describe("discovery at the host root", () => {
       expect(document.scopes_supported).toEqual(
         expect.arrayContaining(["openid", "profile", "email"])
       )
-      // `none` is what a public client uses; 1.7.1 omits it and advertises
+      // `none` is what a public client uses; the provider omits it and advertises
       // `private_key_jwt`, which §1.3 does not implement.
       expect(document.token_endpoint_auth_methods_supported).toEqual([
         "client_secret_basic",

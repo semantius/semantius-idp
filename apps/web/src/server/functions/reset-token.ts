@@ -48,7 +48,7 @@ export const fetchResetToken = createServerFn({ method: "GET" })
     const runtime = await getRuntime()
     const context = await runtime.auth.$context
 
-    // The identifier convention is Better Auth 1.7.1's, and the coupling is
+    // The identifier convention is Better Auth's, and the coupling is
     // the same one `server/auth/reset-link.ts` already documents and the
     // integration suite already exercises.
     const verification = await runWithEndpointContext({ context }, () =>

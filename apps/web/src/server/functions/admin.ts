@@ -154,7 +154,7 @@ export interface AdminStats {
   warnings: string[]
 }
 
-/** `web` | `spa` | `native`, reconstructed from the columns 1.7.1 stores. */
+/** `web` | `spa` | `native`, reconstructed from the columns the provider stores. */
 function clientTypeOf(row: {
   applicationType: string | null
   clientSecret: string | null

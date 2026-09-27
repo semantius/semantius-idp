@@ -621,7 +621,7 @@ describe("the endpoints this app adds", () => {
 })
 
 describe("the administrator's password-reset link", () => {
-  it("is accepted by the real reset endpoint (Better Auth 1.7.1 convention)", async () => {
+  it("is accepted by the real reset endpoint (Better Auth's convention)", async () => {
     // The point of this test is the coupling in `auth/reset-link.ts`: it mints
     // the verification row by hand, so something has to prove the convention
     // it mints against is still the one the endpoint reads.

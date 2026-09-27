@@ -119,7 +119,7 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
     // every absolute URL derives from `server.baseUrl`, never from a
     // request header.
     //
-    // The split matters. Better Auth 1.7.1's `withPath` appends `basePath`
+    // The split matters. Better Auth's `withPath` appends `basePath`
     // **only when `baseURL` has no path of its own** — give it the issuer
     // `https://host/idp` and it mounts every endpoint at `/idp/*` and ignores
     // `basePath` entirely, so `/idp/api/auth/sign-in/email` 404s and a
@@ -431,7 +431,7 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
             twoFactor({
               // the TOTP issuer label shown in the authenticator app.
               issuer: config.twoFactorIssuer,
-              // Config says days; 1.7.1 wants seconds. 0 disables the
+              // Config says days; the plugin wants seconds. 0 disables the
               // trust-this-device option rather than trusting for ever.
               trustDeviceMaxAge: days(file.twoFactor.trustDeviceDays),
             }),
@@ -490,7 +490,7 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
         refreshTokenExpiresIn: file.oauth.refreshTokenTtl,
         // the spec's reuse detection: zero seconds of tolerance, so any
         // second use of a rotated refresh token is replay and revokes the
-        // family. It is 1.7.1's default; stating it makes the requirement
+        // family. It is the provider's default; stating it makes the requirement
         // visible where the other lifetimes are, rather than depending on a
         // default that could change.
         refreshTokenReuseInterval: 0,
@@ -694,7 +694,7 @@ export function createAuthOptions(deps: AuthDeps): BetterAuthOptions {
  *
  * **The discriminator was wrong until M12.** It asked whether
  * `session.session.token` was a string, on the theory that a synthesised
- * session has no session token; in 1.7.1 the api-key plugin puts the *key
+ * session has no session token; the api-key plugin puts the *key
  * string* there, so the test was always false, every key-issued JWT claimed
  * `azp: "idp"`, and `apiKeys.tokenClientId` was configuration that did
  * nothing. Worse, it was invisible: `tokens.test.ts` asserted the behavior

@@ -2,7 +2,7 @@
  * Resuming an interrupted authorization.
  *
  * **The mechanism, which is the provider's and not ours.** When
- * `/oauth2/authorize` needs the user to do something first, 1.7.1 redirects to
+ * `/oauth2/authorize` needs the user to do something first, the provider redirects to
  * `loginPage` or `consentPage` with the whole authorization request in the
  * query string, signed with the server secret and stamped with an expiry. The
  * page hands that string back — as `oauth_query` in the body of
@@ -100,7 +100,7 @@ export async function resumeAuthorization(
     redirect_uri?: unknown
     url?: unknown
   }
-  // 1.7.1 answers `{ redirect: true, url }`; its own OpenAPI text says
+  // The provider answers `{ redirect: true, url }`; its own OpenAPI text says
   // `redirect_uri`. Reading both means a version that changes its mind does
   // not silently strand every sign-in that came from an authorization.
   const destination = firstString(body.url, body.redirect_uri)

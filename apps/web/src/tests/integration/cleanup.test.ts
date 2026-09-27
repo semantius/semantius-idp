@@ -113,7 +113,7 @@ describe("what the sweep removes, and what it must not", () => {
       },
     ])
 
-    // An authorization code is a `verification` row: 1.7.1's oauth-provider
+    // An authorization code is a `verification` row: the oauth-provider
     // stores them through `createVerificationValue`, so this case covers
     // the spec's "codes" as well as reset links.
     await db.insert(schema.verification).values([

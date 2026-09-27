@@ -78,7 +78,7 @@ export const Route = createFileRoute("/consent")({
           })
         )
 
-        // 1.7.1 answers `{ redirect: true, url }`; its own OpenAPI text says
+        // The provider answers `{ redirect: true, url }`; its own OpenAPI text says
         // `redirect_uri`. Both are read, because a version that changes its
         // mind should not silently produce a page that redirects nowhere.
         const body = (await response.json().catch(() => ({}))) as {

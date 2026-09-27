@@ -17,7 +17,7 @@
  * suite that needs it. The handler is still written against `Request` /
  * `Response`, so the Bun-hosted e2e run sees the same code.
  *
- * **The one thing that is not a listener.** Better Auth 1.7.1 hard-codes the
+ * **The one thing that is not a listener.** Better Auth hard-codes the
  * token endpoint of every built-in provider (`google` posts to
  * `oauth2.googleapis.com/token` whatever the options say); only
  * `authorizationEndpoint`, `getUserInfo` and `verifyIdToken` are overridable.

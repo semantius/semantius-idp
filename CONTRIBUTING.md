@@ -145,6 +145,12 @@ failure message does not tell you what broke is half a test.
   numbers and is the only place that resolves them. `FR-OIDC-9`, `SEC-4` or
   `D46` in a comment is an address nobody outside this repository can follow
   and no substitute for the reason.
+- **No dependency versions in a comment about current behavior.** "Better
+  Auth answers `{ redirect: true, url }`", not "1.7.1 answers …": the pin is
+  in `package.json` and a test pins the behavior, so the number only goes
+  stale at the next upgrade — forty of them did at 1.7.6, each making a true
+  sentence look doubtful. A comment about the *past* ("every deployment up to
+  v0.6.8 ran 1.7.1") keeps its version; that is what it is about.
 - **US English** throughout — prose, comments and identifiers alike.
   Not a preference: the message catalog is `en-US.ts` and the default
   locale *is* `en-US`, so a user-facing string spelled `recognise` under that

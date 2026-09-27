@@ -79,7 +79,7 @@ describe("rewriteDiscovery", () => {
       AUTH_BASE,
       { uiLocale: "en-US" }
     )
-    // `private_key_jwt` is advertised by 1.7.1 and deliberately unused here
+    // `private_key_jwt` is advertised by the provider and deliberately unused here
     // (§1.3); `none` is what every public client needs and is omitted.
     expect(document.token_endpoint_auth_methods_supported).toEqual([
       "client_secret_basic",

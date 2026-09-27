@@ -78,16 +78,6 @@ every other gate in this repository reads HTML, JSON or a database row.
   device URN beside `authorization_code` — a separate repository, so not done
   here. Until it ships, `semantius login` on a headless box against that stack
   gets `unsupported_grant_type`, the CLI plan's "honest failure" path.
-- **Four admin tables share the shape `/admin/clients` was fixed out of**:
-  `/admin/users`, `/admin/gateways`, `/admin/roles` and `/admin/audit` all put
-  a registry `Table` in an `overflow-x-auto` Card. The owner chose to make the
-  clients table a keyboard-reachable scroll region (a tab stop, a label, the
-  inner registry scroller flattened); the others were not asked about. Any of
-  them whose overflowing rows hold nothing focusable has the same
-  `scrollable-region-focusable` finding at a narrow width.
-- **About forty comments still say "1.7.1 answers …"** (D132). The suites that
-  assert those behaviors pass on 1.7.6, so the claims hold; the version in the
-  sentence is stale and was left rather than rewritten blind.
 
 Everything not yet done, in the order it should be done. Nothing else in this
 file is a to-do list.
@@ -223,9 +213,14 @@ over 1.7.1-shaped rows. The first e2e run lost "the schema selector moves the
 tree" to the hydration race recorded under Pending; the spec passed 6 of 6 on
 a rerun and the full suite 103 of 103.
 
-**Not done**: about forty comments still say "1.7.1 answers …". The suites
-that assert those behaviors pass on 1.7.6, so the claims hold; the version in
-the sentence is stale, and was left rather than rewritten blind.
+**The forty "1.7.1 answers …" comments are version-free since 2026-09-27**,
+after each claim was checked on 1.7.6 — by a passing test where one pins it,
+by reading the dist source for the five no test does (no absolute
+refresh-lifetime option, reuse interval `0`, `enforcePerClientResources`
+default `true`, `trustDeviceMaxAge` in seconds, `private_key_jwt`
+advertised). All held. CONTRIBUTING now says why a version does not belong in
+a comment about current behavior; the three in `migrate.test.ts` are about
+the past and keep theirs.
 
 ## The consent page under a sub-path, and its sixty seconds (2026-09-14, **D130**)
 

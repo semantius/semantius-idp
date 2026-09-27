@@ -568,7 +568,7 @@ and every cold sign-in from an authorization landed on `/idp/idp/consent`,
 while a retry with a session worked, because that path is the provider's own
 relative `Location`. Never prefix a `pendingContinuation`; and when a test is
 about the sub-path, assert the pathname byte for byte, since a regex on
-`/consent` matches the doubled one too. The other half: 1.7.1's `signParams`
+`/consent` matches the doubled one too. The other half: the provider's `signParams`
 stamps the signed request with `exp = now + codeExpiresIn`, restarted at each
 interstitial, so the code's lifetime is also how long a user may sit on
 `/login` and again on `/consent`. There is no separate knob, and the verifier
@@ -772,7 +772,7 @@ never refuses. And **`redactFields` masks by field name** — a value under
 it is a field.
 
 **`/sign-up/email` never refuses a duplicate here** (**D116**). Better Auth
-1.7.1 answers a taken address with a generic `200` and a synthetic user
+Better Auth answers a taken address with a generic `200` and a synthetic user
 whenever `autoSignIn` is off — which `instance.ts` sets for every deployment
 — so `errorCodeFor`'s `USER_ALREADY_EXISTS` arm is reachable only from
 `/admin/create-user`, and an after-hook keyed on the status would record

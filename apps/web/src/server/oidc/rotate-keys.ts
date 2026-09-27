@@ -7,7 +7,7 @@
  * has seen it. Neon caches a JWKS for up to an hour, so every token signed in
  * that window fails verification with `no applicable key found`, and nothing in
  * the IdP's logs says why. R11 was never spiked; this is the pre-decided
- * fallback, and reading 1.7.1's key selection confirms the hazard is real.
+ * fallback, and reading the jwt plugin's key selection confirms the hazard is real.
  *
  * **The mechanism: publish, then sign.** Rotation happens in one step but takes
  * effect in two, using the two columns the selection rule already reads.

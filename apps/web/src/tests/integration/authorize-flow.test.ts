@@ -148,7 +148,7 @@ async function post(
 /**
  * Where `/oauth2/continue` and `/oauth2/consent` say to go.
  *
- * 1.7.1 answers `{ redirect: true, url }`; the OpenAPI description in the same
+ * The provider answers `{ redirect: true, url }`; the OpenAPI description in the same
  * file says `redirect_uri`. Both are read, because a version that changes its
  * mind should not silently produce a page that redirects nowhere.
  */

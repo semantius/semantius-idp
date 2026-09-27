@@ -72,7 +72,7 @@ const auditLogSchema = {
  * It was designed for a server-side continuation store: an opaque handle in a
  * host-only cookie, the row bound to the browser session, a `stage` for the
  * resume decision. That is not how an interrupted authorization resumes.
- * Better Auth 1.7.1 signs the whole authorization request into the query
+ * Better Auth signs the whole authorization request into the query
  * string it sends the login and consent pages, and the page hands it back to
  * `/oauth2/continue` or `/oauth2/consent` — see `server/oidc/continuation.ts`
  * for the mechanism and for why the app drives the resume itself. **The
